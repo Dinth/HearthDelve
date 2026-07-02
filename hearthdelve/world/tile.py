@@ -157,4 +157,9 @@ GLOW_MOSS     = _add(TileType("glow_moss",      ",", (110, 196, 150), (26, 46, 4
 WISPWOOD      = _add(TileType("wispwood",       "♠", (120, 214, 170), (20, 34, 30), kind="wispwood"))
 GLOWCAP       = _add(TileType("glowcap",        "î", (150, 236, 222), (26, 44, 42), kind="glowcap"))
 
+# --- Construction ------------------------------------------------------------
+# A carpenter's building site: raised timber framing, blocked until the
+# outbuilding it becomes is finished (a day or two later).
+SCAFFOLD      = _add(TileType("scaffold",       "▦", (176, 148, 104), (44, 38, 30), walkable=False, kind="scaffold"))
+
 TILE_COUNT = len(TILES)

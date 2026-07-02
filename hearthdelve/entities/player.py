@@ -51,6 +51,7 @@ class Player:
     skills: dict = field(default_factory=dict)   # skill name -> xp
     level: int = 1                               # general character level
     xp: int = 0                                  # xp toward the next level
+    karma: int = 0                               # -100 villainous .. +100 saintly
 
     @property
     def active_tool(self) -> Item | None:

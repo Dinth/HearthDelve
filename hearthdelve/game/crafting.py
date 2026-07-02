@@ -95,6 +95,10 @@ def interact_machine(state: GameState, x: int, y: int) -> bool:
     if m.kind == "beehive":
         return _tend_beehive(state, m, mdef, x, y)
 
+    if m.kind in ("coop_small", "coop_big", "barn", "site"):
+        from . import husbandry
+        return husbandry.interact_building(state, m, x, y)
+
     if m.kind == "sprinkler":
         state.log.add("The sprinkler waters the soil around it each morning.", C.DIM)
         return True
@@ -172,6 +176,14 @@ def _load_machine(state: GameState, m: Machine, mdef) -> bool:
                 return True
             in_quality = inv.pop_quality(crop_item, 1)
             output = items.GRAPE_WINE if crop_item is items.GRAPE else items.WINE
+
+    elif mdef.accepts == "dairy":
+        # Churn: a pail of milk -> a wheel of cheese.
+        if inv.count(items.MILK) < 1:
+            state.log.add(f"The {mdef.name.lower()} needs milk.", C.DIM)
+            return True
+        in_quality = inv.pop_quality(items.MILK, 1)
+        output = items.CHEESE
 
     elif mdef.accepts == "crop":
         # Preserves Jar: fruit -> jam, vegetables -> pickles, eel -> jellied eel.

@@ -193,9 +193,12 @@ class MachineDef:
     glyph: str
     color: tuple[int, int, int]
     minutes: int                  # in-game minutes to process a batch
-    accepts: str                  # "ore" | "crop" | "" (sprinkler: none)
+    accepts: str                  # "ore" | "crop" | "dairy" | "" (sprinkler: none)
     output: Item | None
     desc: str = ""
+    capacity: int = 0             # animal housing: how many beasts it holds
+    houses: str = ""              # animal housing: which species ("chicken"|"cow")
+    footprint: tuple = ()         # carpenter outbuilding size (w, h); () = 1-tile
 
 
 MACHINES: dict[str, MachineDef] = {
@@ -213,6 +216,20 @@ MACHINES: dict[str, MachineDef] = {
                           items.SUNFLOWER_OIL, "Presses sunflowers into oil (2 sunflowers each)."),
     "sprinkler": MachineDef("sprinkler", "Sprinkler", "¤", (120, 188, 222), 0, "",
                             None, "Waters the 4 neighbouring tiles each morning."),
+    "churn":   MachineDef("churn", "Churn", "Ö", (206, 196, 176), 360, "dairy",
+                          items.CHEESE, "Churns milk into a wheel of cheese."),
+    # Animal housing. The little coop is a 1-tile placeable you build yourself;
+    # the roomy coop and barn are outbuildings the carpenter raises on your farm.
+    "coop_small": MachineDef("coop_small", "Little Coop", "n", (170, 130, 96), 0, "",
+                             None, "A hutch for a couple of hens.", capacity=2, houses="chicken"),
+    "coop_big":   MachineDef("coop_big", "Coop", "n", (196, 158, 110), 0, "",
+                             None, "A roomy henhouse.", capacity=6, houses="chicken",
+                             footprint=(4, 3)),
+    "barn":       MachineDef("barn", "Barn", "A", (176, 106, 82), 0, "",
+                             None, "A barn for the cattle.", capacity=4, houses="cow",
+                             footprint=(6, 4)),
+    "site":       MachineDef("site", "Building Site", "▦", (176, 148, 104), 0, "",
+                             None, "The carpenter's work, still going up."),
 }
 
 
@@ -244,6 +261,10 @@ RECIPES: list[Recipe] = [
            machine="press", desc="Presses sunflowers into oil."),
     Recipe("Sprinkler", "build", ((items.COPPER_BAR, 1),), machine="sprinkler",
            desc="Auto-waters nearby soil."),
+    Recipe("Little Coop", "build", ((items.TIMBER_PLANK, 6), (items.FIBER, 4)), machine="coop_small",
+           desc="A one-tile hutch; settle up to 2 chicks with 'g'."),
+    Recipe("Churn", "build", ((items.TIMBER_PLANK, 5), (items.COPPER_BAR, 1)), machine="churn",
+           desc="Churns milk into cheese."),
     Recipe("Bomb", "item", ((items.COAL, 1), (items.FIBER, 2)), output=items.BOMB, out_qty=1,
            desc="Throw with 'a' to harm monsters and shatter rock."),
     # --- Cooking: makes a carryable dish; eat it (x) for stamina -------------
@@ -452,9 +473,9 @@ def village_npcs() -> dict[str, list[NPC]]:
                 likes=(items.POTATO, items.TOMATO), dislikes=(items.STONE,),
                 gifts=(items.POTATO_SEEDS, items.CAULIFLOWER_SEEDS, items.PUMPKIN_SEEDS),
                 bio="Works the farmhouse fields at the edge of Mossford; salt of the earth."),
-            NPC("Tomas", "T", (196, 158, 110), shop=None, role="carpenter",
+            NPC("Tomas", "T", (196, 158, 110), shop="carpenter", role="carpenter",
                 blurbs=("Good timber, that — straight grain. I could build you\n"
-                        "something one day. A proper porch, maybe.",
+                        "a proper coop or a barn, if you've the materials.",
                         "Stone and wood, wood and stone. That's how a homestead\n"
                         "grows. Slow and honest."),
                 heart_blurbs=((3, "I've a drawing, folded in my apron, of a great\n"
@@ -728,6 +749,7 @@ GENERAL_STOCK: list[tuple[Item, int]] = [
     (items.CHERRY_SAPLING, 600), (items.PEACH_SAPLING, 600),
     (items.APPLE_SAPLING, 700), (items.ORANGE_SAPLING, 700),
     (items.TULIP_SEEDS, 40), (items.SUNFLOWER_SEEDS, 50), (items.ASTER_SEEDS, 50),
+    (items.CHICK, 120), (items.CALF, 400),
 ]
 # Blacksmith also sells fuel/metal: (item, buy price)
 BLACKSMITH_STOCK: list[tuple[Item, int]] = [
@@ -772,6 +794,17 @@ TAVERN_MENU: list[tuple[str, int, int, int]] = [
     ("Mug of Mead",     35,  45, 0),
     ("Roast & Veg",     80,  95, 8),
     ("Hearty Platter", 120, 140, 12),
+]
+
+
+# Outbuildings the carpenter (Tomas) will raise on your farm: he takes gold and
+# materials up front, then you choose where it stands and he builds it over a
+# couple of days.   (label, machine kind, gold, ((item, qty), ...))
+CARPENTER_JOBS: list = [
+    ("Coop (roomy henhouse)", "coop_big", 450,
+     ((items.TIMBER_PLANK, 20), (items.STONE, 8))),
+    ("Barn (for cattle)", "barn", 900,
+     ((items.TIMBER_PLANK, 32), (items.STONE, 18), (items.COPPER_BAR, 2))),
 ]
 
 

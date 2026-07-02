@@ -82,6 +82,14 @@ def try_move(state: GameState, dx: int, dy: int) -> None:
     p = state.player
     p.facing = (dx, dy)
     nx, ny = p.x + dx, p.y + dy
+    # bump a farm animal to pet it or collect its produce (never a strike)
+    if not state.world.is_dungeon:
+        from .game import husbandry
+        a = husbandry.animal_at(state, nx, ny)
+        if a is not None:
+            husbandry.interact_animal(state, a)
+            turns.advance_time(state, C.HARVEST_COST[1])
+            return
     # bump-attack a creature instead of moving onto it (dungeon monster or
     # surface wildlife — striking a critter is a choice, not an accident)
     m = combat.mob_at(state, nx, ny)
@@ -756,6 +764,9 @@ def main() -> None:
                         else:
                             do_grab(state)
                             check_faint(state)
+                    elif cmd == "place":
+                        from .game import husbandry
+                        husbandry.place_commission(state)
                     elif cmd == "ability":
                         combat.throw_bomb(state)
                         check_faint(state)
@@ -803,7 +814,7 @@ def main() -> None:
                         npc = village.npc_near(state)
                         if npc is None:
                             state.log.add("There's no one here to talk to.", C.DIM)
-                        elif npc.shop == "tavern":
+                        elif npc.shop in ("tavern", "carpenter"):
                             dialogue_line = village.talk(state, npc)   # greeting + friendship
                             mode, shop_sel = "shop", 0
                         elif npc.shop:
@@ -950,7 +961,7 @@ def main() -> None:
 
                 elif mode == "cheats":
                     locs = _cheat_locations(state)
-                    n = 2 + len(locs)
+                    n = 4 + len(locs)
                     if cmd in ("cancel", "quitgame"):
                         mode = "play"
                     elif cmd == "move" and action[2]:
@@ -960,8 +971,16 @@ def main() -> None:
                             state.cheats["freeze_hp"] = not state.cheats.get("freeze_hp")
                         elif cheat_sel == 1:
                             state.cheats["freeze_stamina"] = not state.cheats.get("freeze_stamina")
+                        elif cheat_sel == 2:
+                            state.player.gold += 1000
+                            state.log.add("A purse of 1000g appears.", (244, 216, 110))
+                        elif cheat_sel == 3:
+                            for mat in (items.WOOD, items.STONE, items.TIMBER_PLANK,
+                                        items.COPPER_BAR, items.BEESWAX):
+                                state.player.inventory.add(mat, 100)
+                            state.log.add("Building materials rain down (+100 each).", (200, 200, 240))
                         else:
-                            _cheat_go(state, locs[cheat_sel - 2][1])
+                            _cheat_go(state, locs[cheat_sel - 4][1])
                             state.log.add("You blink across the Vale.", (200, 180, 240))
                             mode = "play"
 

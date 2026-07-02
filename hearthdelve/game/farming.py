@@ -205,6 +205,11 @@ def new_day(state: GameState, rested: bool = True) -> None:
     # change over with the seasons (bare and fallow through winter).
     _tend_village_fields(state, season)
 
+    # farm animals grow, settle their mood, and leave the morning's produce;
+    # any carpenter outbuilding whose time is up is finished off
+    from . import husbandry
+    husbandry.new_day(state)
+
     # residents are open to a fresh chat and gift each day
     for npc in state.world.npcs:
         npc.gifted_today = False

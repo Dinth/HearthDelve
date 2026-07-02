@@ -67,6 +67,8 @@ def _sym_to_action(event: tcod.event.KeyDown):
         return ("look",)
     if sym == K.g:
         return ("grab",)
+    if sym == K.p:
+        return ("place",)
     if sym == K.s:
         return ("sleep",)
     if sym == K.c:

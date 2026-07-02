@@ -155,6 +155,15 @@ HONEY       = Item("Honey",       "*", "material", "Sweet golden honey from a hi
 BEESWAX     = Item("Beeswax",     "%", "material", "Wax from a honeycomb; used in building.", value=25)
 BEE_QUEEN   = Item("Bee Queen",   "Q", "material", "A live queen — install her in a beehive to start a colony.", value=220)
 
+# --- Animal husbandry --------------------------------------------------------
+# Livestock you buy young and settle into a coop/barn; their daily produce and
+# the cheese it makes carry quality tied to how well the animals are cared for.
+CHICK       = Item("Chick",       "b", "livestock", "A fluffy chick — settle it in a coop.", stackable=False, value=120)
+CALF        = Item("Calf",        "q", "livestock", "A young calf — settle it in a barn.", stackable=False, value=400)
+EGG         = Item("Egg",         "○", "animal",   "A fresh-laid egg.",           value=35, energy=6)
+MILK        = Item("Milk",        "◓", "animal",   "A pail of fresh milk.",       value=55, energy=10)
+CHEESE      = Item("Cheese",      "◍", "artisan",  "A wheel of farmhouse cheese.", value=140, energy=32)
+
 # --- Fish (caught with the rod at water; most are seasonal) -----------------
 MINNOW      = Item("Minnow",      "»", "fish", "A tiny river fish.",           value=15)
 PERCH       = Item("Perch",       "»", "fish", "A common river catch.",        value=30)

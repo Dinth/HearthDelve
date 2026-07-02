@@ -5,6 +5,7 @@ from ..data import content
 from ..engine import constants as C
 from ..entities import items
 from ..entities.npc import NPC, MAX_HEARTS
+from . import karma
 from .state import GameState
 
 
@@ -129,7 +130,8 @@ def talk(state: GameState, npc: NPC) -> str:
     npc.met = True
     if first:
         npc.talked_today = True
-        npc.friendship = min(MAX_HEARTS * 100, npc.friendship + 10)
+        gain = karma.scale(state.player.karma, 10)
+        npc.friendship = min(MAX_HEARTS * 100, npc.friendship + gain)
         treat = _festival_treat(state, npc)  # a nibble at the fair
         if treat:
             return treat
@@ -194,8 +196,11 @@ def gift(state: GameState, npc: NPC, item) -> None:
         return
     points, line = npc.gift_reaction(item)
     state.player.inventory.remove(item, 1)
+    points = karma.scale(state.player.karma, points)
     npc.friendship = max(0, min(MAX_HEARTS * 100, npc.friendship + points))
     npc.gifted_today = True
+    if points > 0:
+        karma.adjust(state, 1)  # a small kindness
     color = (180, 230, 160) if points >= 45 else (200, 160, 140) if points < 0 else C.WHITE
     state.log.add(line, color)
 
@@ -218,6 +223,9 @@ def shop_entries(shop: str):
     if shop == "tavern":
         return [("meal", label, price, stam, hp)
                 for (label, price, stam, hp) in content.TAVERN_MENU]
+    if shop == "carpenter":
+        return [("commission", label, kind, gold, mats)
+                for (label, kind, gold, mats) in content.CARPENTER_JOBS]
     return []
 
 
@@ -244,6 +252,26 @@ def purchase(state: GameState, entry) -> None:
         from ..engine import constants as _C
         turns.advance_time(state, _C.USE_SECONDS)
         state.log.add(f"You tuck into {label.lower()}. (+{stam} stamina)", (180, 230, 160))
+    elif entry[0] == "commission":
+        _, label, kind, gold, mats = entry
+        p = state.player
+        if state.pending_build:
+            state.log.add("You already have a building on order — set it down first.", C.DIM)
+            return
+        if p.gold < gold:
+            state.log.add("You can't afford that.", C.DIM)
+            return
+        missing = [f"{q}x {it.name}" for it, q in mats if p.inventory.count(it) < q]
+        if missing:
+            state.log.add(f"Tomas needs materials: {', '.join(missing)}.", C.DIM)
+            return
+        p.gold -= gold
+        for it, q in mats:
+            p.inventory.remove(it, q)
+        state.pending_build = kind
+        state.log.add(f"Tomas shakes on it. \"Head home and show me where the "
+                      f"{label.split('(')[0].strip().lower()} should go — press p to set the spot.\"",
+                      (200, 220, 160))
     elif entry[0] == "upgrade":
         upgrade_tool(state, entry[1])
 

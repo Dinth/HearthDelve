@@ -309,6 +309,22 @@ def render_world(con: tcod.console.Console, state: GameState, anim_time: float =
                 con.rgb["ch"][sx, sy] = ord(m.glyph)
                 con.rgb["fg"][sx, sy] = m.color
 
+        # farm animals amble the overworld too; young ones are drawn paler and
+        # a ready-to-collect animal glints.
+        from ..game.husbandry import SPECIES
+        for a in w.animals:
+            sx, sy = a.x - ox, a.y - oy
+            if not (0 <= sx < C.VIEW_W and 0 <= sy < C.VIEW_H):
+                continue
+            spec = SPECIES.get(a.kind)
+            col = a.color
+            if spec and a.age_days < spec.mature_days:
+                col = spec.young_color
+            elif a.produce_ready:
+                col = (250, 240, 170)
+            con.rgb["ch"][sx, sy] = ord(a.glyph)
+            con.rgb["fg"][sx, sy] = col
+
     # player, centered-ish
     px, py = state.player.x - ox, state.player.y - oy
     if 0 <= px < C.VIEW_W and 0 <= py < C.VIEW_H:
@@ -559,6 +575,10 @@ def _building_label(state: GameState, b: dict) -> str:
             return f"{owner}'s {flavour}"
     if kind == "hut":
         return "a forester's hut"
+    if kind == "coop_big":
+        return "your coop"
+    if kind == "barn":
+        return "your barn"
     return "a farmhouse" if kind == "farmhouse" else "a house"
 
 
@@ -581,6 +601,15 @@ def describe(state: GameState, x: int, y: int) -> str:
         if (npc.x, npc.y) == (x, y):
             role = {"general": "shopkeeper", "blacksmith": "blacksmith"}.get(npc.shop, "villager")
             return f"{npc.name}, the {role}. {'♥' * npc.hearts}{'·' * (10 - npc.hearts)} (t talk, f gift)"
+    from ..game.husbandry import animal_at, SPECIES, _is_adult
+    a = animal_at(state, x, y)
+    if a is not None:
+        spec = SPECIES[a.kind]
+        role = spec.grown_name if _is_adult(a) else spec.young_name
+        mood = ("content" if a.happiness >= 80 else "happy" if a.happiness >= 55
+                else "a little glum" if a.happiness >= 35 else "unhappy")
+        tail = " — has produce ready (bump to collect)" if a.produce_ready and _is_adult(a) else ""
+        return f"{a.name}, your {role} — {mood}{tail}. Bump to pet."
     # a village building? name it (community/commercial always; houses by owner)
     b = _building_at(state.world, x, y)
     if b is not None:
@@ -713,7 +742,9 @@ def render_eat(con: tcod.console.Console, state: GameState, sel: int) -> None:
 def render_cheats(con: tcod.console.Console, state: GameState, sel: int, locations) -> None:
     c = state.cheats
     rows = [f"Freeze Health:  {'ON ' if c.get('freeze_hp') else 'off'}",
-            f"Freeze Stamina: {'ON ' if c.get('freeze_stamina') else 'off'}"]
+            f"Freeze Stamina: {'ON ' if c.get('freeze_stamina') else 'off'}",
+            "Add 1000 gold",
+            "Add 100 of each building material"]
     rows += [f"Teleport → {name}" for name, _ in locations]
     h = len(rows) + 6
     x, y = _modal(con, 52, h, "★ Cheats (up up down down ...) ★")
@@ -768,6 +799,7 @@ def build_codex_pages(state: GameState):
         ("  g                gather / harvest / use a machine", C.WHITE),
         ("  a                throw a bomb (harms monsters, breaks rock)", C.WHITE),
         ("  c                craft, build machines, cook dishes", C.WHITE),
+        ("  p                place a building ordered from the carpenter", C.WHITE),
         ("  x                eat a cooked dish (restores stamina)", C.WHITE),
         ("  b                shipping bin (sell) — stand beside it", C.WHITE),
         ("  t                talk to a villager / open a shop", C.WHITE),
@@ -834,9 +866,18 @@ def build_codex_pages(state: GameState):
     craftp.append(("Machines  (g to load / collect)", _HDR))
     craftp.append(("", C.WHITE))
     for mdef in content.MACHINES.values():
+        if mdef.kind == "site":
+            continue                         # internal construction placeholder
         craftp.append((f" {mdef.glyph}  {mdef.name}", _KEY))
         extra = f"  (~{mdef.minutes // 60}h)" if mdef.minutes else ""
         craftp.append((f"      {mdef.desc}{extra}", C.DIM))
+    craftp.append(("", C.WHITE))
+    craftp.append(("Animals  (buy chicks/calves at the general store)", _HDR))
+    craftp.append(("  Build a little coop yourself, or have Tomas the carpenter", C.DIM))
+    craftp.append(("  raise a roomy coop or barn (order it, then press p to site it).", C.DIM))
+    craftp.append(("  Settle young animals with g; bump them to pet or collect.", C.DIM))
+    craftp.append(("  Pet daily to keep them happy — happier beasts give finer", C.DIM))
+    craftp.append(("  eggs & milk. Churn milk into cheese.", C.DIM))
     craftp.append(("", C.WHITE))
     craftp.append(("Gather wood (axe), stone & ore+coal (pickaxe).", C.DIM))
     craftp.append(("Value ladder: raw crop < jam < wine.", C.DIM))
@@ -1071,7 +1112,7 @@ def render_relationships(con: tcod.console.Console, state: GameState) -> None:
 
 
 def render_character(con: tcod.console.Console, state: GameState) -> None:
-    from ..game import skills
+    from ..game import skills, karma
     p = state.player
     w, h = 50, 18
     x, y = _modal(con, w, h, f"Character — Level {p.level}")
@@ -1082,6 +1123,9 @@ def render_character(con: tcod.console.Console, state: GameState) -> None:
     con.print(x + 2, y + 4, f"✦ Stamina {p.energy}/{p.max_energy}", fg=C.ENERGY_COLOR)
     con.print(x + 2, y + 5, f"⛁ Gold    {p.gold}g", fg=C.GOLD_COLOR)
     con.print(x + 2, y + 6, f"⚔ Weapon  {p.weapon.name if p.weapon else '-'}", fg=C.WHITE)
+    ksign = f"+{p.karma}" if p.karma > 0 else str(p.karma)
+    kcol = (160, 220, 160) if p.karma >= 8 else (220, 150, 140) if p.karma <= -8 else C.WHITE
+    con.print(x + 2, y + 7, f"☯ Karma   {ksign} ({karma.label(p.karma)})", fg=kcol)
     con.print(x + 2, y + 9, "Skills", fg=_HDR)
     for i, s in enumerate(skills.SKILLS):
         lvl = skills.skill_level(state, s)
@@ -1116,9 +1160,10 @@ def render_shop(con: tcod.console.Console, state: GameState, npc, sel: int, line
 
     entries = village.shop_entries(npc.shop)
     title = {"general": "General Store", "blacksmith": "Blacksmith",
-             "tavern": "Tavern"}.get(npc.shop, "Shop")
-    header = line.split("\n") if (npc.shop == "tavern" and line) else []
-    w, h = 56, len(entries) + 6 + len(header)
+             "tavern": "Tavern", "carpenter": "Carpentry"}.get(npc.shop, "Shop")
+    header = line.split("\n") if (npc.shop in ("tavern", "carpenter") and line) else []
+    w = 68 if npc.shop == "carpenter" else 56
+    h = len(entries) + 6 + len(header)
     x, y = _modal(con, w, h, f"{npc.name}'s {title}")
     p = state.player
     top = y + 2
@@ -1141,6 +1186,14 @@ def render_shop(con: tcod.console.Console, state: GameState, npc, sel: int, line
             _, item, price = e
             afford = p.gold >= price
             con.print(x + 2, yy, ("▸ " if i == sel else "  ") + item.name, fg=C.WHITE if afford else C.DIM, bg=rowbg)
+            con.print(x + w - 10, yy, f"{price}g", fg=C.GOLD_COLOR if afford else C.DIM, bg=rowbg)
+        elif e[0] == "commission":
+            _, label, kind, price, mats = e
+            matstr = ", ".join(f"{q} {it.name.split()[0].lower()}" for it, q in mats)
+            afford = p.gold >= price and all(p.inventory.count(it) >= q for it, q in mats)
+            con.print(x + 2, yy, ("▸ " if i == sel else "  ") + label,
+                      fg=C.WHITE if afford else C.DIM, bg=rowbg)
+            con.print(x + 28, yy, matstr[:w - 40], fg=(190, 180, 150) if afford else C.DIM, bg=rowbg)
             con.print(x + w - 10, yy, f"{price}g", fg=C.GOLD_COLOR if afford else C.DIM, bg=rowbg)
         else:  # upgrade
             tool = e[1]

@@ -21,3 +21,6 @@ def advance_time(state: GameState, minutes: int) -> None:
         # wildlife roams the overworld
         from .wildlife import act as wildlife_act
         wildlife_act(state)
+        # farm animals amble around their coop/barn
+        from .husbandry import act as husbandry_act
+        husbandry_act(state)

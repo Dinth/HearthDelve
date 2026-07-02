@@ -36,6 +36,9 @@ def player_attack(state: GameState, m) -> None:
     if m.hp <= 0:
         state.world.monsters = [x for x in state.world.monsters if x is not m]
         if wild:
+            if not getattr(m, "hostile", False):
+                from . import karma
+                karma.adjust(state, -2)  # slaying a peaceful creature is unkind
             state.log.add(f"You put down the {m.name.lower()}.", (200, 180, 150))
         else:
             state.bump("monsters_slain")

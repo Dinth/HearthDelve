@@ -43,6 +43,8 @@ class GameMap:
     npcs: list = field(default_factory=list)
     # live dungeon monsters
     monsters: list = field(default_factory=list)
+    # player's farm animals (persistent), keyed only by their own home anchor
+    animals: list = field(default_factory=list)
     # tilled tiles of village farmhouse fields, re-stocked seasonally
     village_fields: list = field(default_factory=list)
     # village buildings for look/identification: dicts {x,y,w,h,kind,village,owner}

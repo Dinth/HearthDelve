@@ -54,7 +54,7 @@ def save(state: GameState, path: str = SAVE_PATH) -> None:
             "x": px, "y": py, "facing": list(p.facing),
             "hp": p.hp, "energy": p.energy, "stamina": p.stamina, "gold": p.gold,
             "max_hp": p.max_hp, "max_energy": p.max_energy,
-            "level": p.level, "xp": p.xp,
+            "level": p.level, "xp": p.xp, "karma": p.karma,
             "active_slot": p.active_slot,
             "hotbar": [it.name for it in p.hotbar],
             "weapon": p.weapon.name if p.weapon else None,
@@ -65,6 +65,7 @@ def save(state: GameState, path: str = SAVE_PATH) -> None:
         },
         "ship_bin": [[it.name, q, ql] for it, q, ql in state.ship_bin.slots],
         "stats": dict(state.stats),
+        "pending_build": state.pending_build,
         "quests_done": list(state.quests_done),
         "mail": [{"sender": m["sender"], "body": m["body"],
                   "items": [[(it.name if hasattr(it, "name") else it), q, ql]
@@ -77,8 +78,11 @@ def save(state: GameState, path: str = SAVE_PATH) -> None:
         "trees": {f"{x},{y}": [t.name, t.age, t.has_fruit]
                   for (x, y), t in surf.trees.items()},
         "machines": {f"{x},{y}": [m.kind, m.loaded_output.name if m.loaded_output else None,
-                                   m.ready_at, m.has_queen, m.out_quality]
+                                   m.ready_at, m.has_queen, m.out_quality, m.build_kind]
                      for (x, y), m in surf.machines.items()},
+        "animals": [[a.kind, a.name, a.x, a.y, list(a.home),
+                     a.happiness, a.age_days, a.produce_ready]
+                    for a in surf.animals],
         "npcs": {n.name: [n.friendship, n.gifted_today, n.talked_today, n._blurb_i, n.met]
                  for n in surf.npcs},
     }
@@ -126,7 +130,21 @@ def load(path: str = SAVE_PATH) -> GameState:
             m.has_queen = rec[3]
         if len(rec) > 4:
             m.out_quality = rec[4]
+        if len(rec) > 5:
+            m.build_kind = rec[5]
         world.machines[(x, y)] = m
+
+    from ..entities.animal import Animal
+    from ..game.husbandry import SPECIES
+    world.animals = []
+    for rec in data.get("animals", []):
+        kind, name, ax, ay, home, happ, age, ready = rec
+        spec = SPECIES.get(kind)
+        if not spec:
+            continue
+        world.animals.append(Animal(kind=kind, name=name, glyph=spec.glyph, color=spec.color,
+                                    x=ax, y=ay, home=tuple(home),
+                                    happiness=happ, age_days=age, produce_ready=ready))
 
     for n in world.npcs:
         rec = data["npcs"].get(n.name)
@@ -146,6 +164,7 @@ def load(path: str = SAVE_PATH) -> GameState:
     player.max_energy = pd.get("max_energy", player.max_energy)
     player.level = pd.get("level", 1)
     player.xp = pd.get("xp", 0)
+    player.karma = pd.get("karma", 0)
     player.active_slot = pd["active_slot"]
     player.hotbar = [items.by_name(n) for n in pd["hotbar"] if items.by_name(n)]
     player.weapon = items.by_name(pd["weapon"]) if pd["weapon"] else None
@@ -165,4 +184,5 @@ def load(path: str = SAVE_PATH) -> GameState:
     state.stats = dict(data.get("stats", {}))
     state.quests_done = set(data.get("quests_done", []))
     state.mail = data.get("mail", [])
+    state.pending_build = data.get("pending_build", "")
     return state
