@@ -100,10 +100,12 @@ jobs:
       - uses: actions/checkout@v4
       - name: Build
         run: |
-          PY=/opt/python/cp312-cp312/bin/python
-          "$PY" -m pip install --upgrade pip
-          "$PY" -m pip install -r requirements.txt pyinstaller
-          "$PY" -m PyInstaller --noconfirm --onefile --name hearthdelve --collect-all tcod play.py
+          # manylinux's /opt/python builds are static (no libpython.so), which
+          # PyInstaller can't use — install a shared Python from AlmaLinux 8.
+          dnf install -y python3.11 python3.11-pip python3.11-devel
+          python3.11 -m pip install --upgrade pip
+          python3.11 -m pip install -r requirements.txt pyinstaller
+          python3.11 -m PyInstaller --noconfirm --onefile --name hearthdelve --collect-all tcod play.py
           mkdir -p out && cp dist/hearthdelve out/hearthdelve-linux
       - uses: actions/upload-artifact@v4
         with:
@@ -134,7 +136,7 @@ jobs:
 
           Download the build for your OS below — no Python needed.
 
-          * **Linux** — \`hearthdelve-linux\` (statically linked; \`chmod +x\` then run in a terminal)
+          * **Linux** — \`hearthdelve-linux\` (portable, glibc 2.28+; \`chmod +x\` then run in a terminal)
           * **macOS** — \`hearthdelve-macos\` (\`chmod +x\`; first run: right-click → Open, or \`xattr -dr com.apple.quarantine hearthdelve-macos\` to clear Gatekeeper)
           * **Windows** — \`hearthdelve-windows.zip\` (unzip, then run \`hearthdelve.exe\` inside the folder)
 
