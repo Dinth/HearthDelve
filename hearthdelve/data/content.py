@@ -244,26 +244,33 @@ RECIPES: list[Recipe] = [
            machine="press", desc="Presses sunflowers into oil."),
     Recipe("Sprinkler", "build", ((items.COPPER_BAR, 1),), machine="sprinkler",
            desc="Auto-waters nearby soil."),
-    Recipe("Parsnip Soup", "cook", ((items.PARSNIP, 2),), energy=45,
-           desc="A warming bowl. Restores energy."),
-    Recipe("Roasted Veg", "cook", ((items.PARSNIP, 1), (items.POTATO, 1)), energy=70,
-           desc="Hearty fare. Restores more energy."),
     Recipe("Bomb", "item", ((items.COAL, 1), (items.FIBER, 2)), output=items.BOMB, out_qty=1,
            desc="Throw with 'a' to harm monsters and shatter rock."),
-    Recipe("Fish Stew", "cook", ((items.PERCH, 1), (items.PARSNIP, 1)), energy=60,
-           desc="Hearty stew. Restores plenty of energy."),
-    Recipe("Grilled Trout", "cook", ((items.TROUT, 1),), energy=45,
-           desc="Simple and restorative."),
-    Recipe("Mushroom Stew", "cook", ((items.CAVE_MUSHROOM, 2),), energy=65,
-           desc="Earthy cave-fungus stew. Restores plenty of energy."),
-    Recipe("Glowcap Broth", "cook", ((items.GLOWCAP, 1),), energy=95,
-           desc="A radiant broth from Glimmerwood caps. Restores a great deal of energy."),
-    Recipe("Sauteed Mushrooms", "cook", ((items.BUTTON_MUSHROOM, 2),), energy=45,
-           desc="Wild field mushrooms in butter. Restores energy."),
-    Recipe("Chanterelle Saute", "cook", ((items.CHANTERELLE, 1),), energy=60,
-           desc="Golden chanterelles, gently fried. A forager's treat."),
-    Recipe("Bolete Broth", "cook", ((items.BOLETE, 1), (items.PARASOL_MUSHROOM, 1)), energy=70,
-           desc="A rich woodland mushroom broth. Very restorative."),
+    # --- Cooking: makes a carryable dish; eat it (x) for stamina -------------
+    Recipe("Parsnip Soup", "cook", ((items.PARSNIP, 2),), output=items.PARSNIP_SOUP,
+           desc="A warming bowl."),
+    Recipe("Roasted Veg", "cook", ((items.PARSNIP, 1), (items.POTATO, 1)), output=items.ROASTED_VEG,
+           desc="Hearty roasted vegetables."),
+    Recipe("Fish Stew", "cook", ((items.PERCH, 1), (items.PARSNIP, 1)), output=items.FISH_STEW,
+           desc="A rich fisherman's stew."),
+    Recipe("Grilled Fish", "cook", ((items.TROUT, 1),), output=items.GRILLED_FISH,
+           desc="Simply grilled fish."),
+    Recipe("Mushroom Stew", "cook", ((items.CAVE_MUSHROOM, 2),), output=items.MUSHROOM_STEW,
+           desc="Earthy cave-mushroom stew."),
+    Recipe("Glowcap Broth", "cook", ((items.GLOWCAP, 1),), output=items.GLOWCAP_BROTH,
+           desc="A radiant Glimmerwood broth."),
+    Recipe("Sauteed Mushrooms", "cook", ((items.BUTTON_MUSHROOM, 2),), output=items.SAUTEED_MUSH,
+           desc="Wild field mushrooms in butter."),
+    Recipe("Chanterelle Saute", "cook", ((items.CHANTERELLE, 1),), output=items.CHANTERELLE_SAUTE,
+           desc="Golden chanterelles, gently fried."),
+    Recipe("Bolete Broth", "cook", ((items.BOLETE, 1), (items.PARASOL_MUSHROOM, 1)), output=items.BOLETE_BROTH,
+           desc="A rich woodland mushroom broth."),
+    Recipe("Glazed Vegetables", "cook", ((items.POTATO, 1), (items.HONEY, 1)), output=items.GLAZED_VEG,
+           desc="Vegetables glazed in honey."),
+    Recipe("Fried Fish", "cook", ((items.PERCH, 1), (items.SUNFLOWER_OIL, 1)), output=items.FRIED_FISH,
+           desc="Fish fried in sunflower oil."),
+    Recipe("Candied Fruit", "cook", ((items.HONEY, 1), (items.STRAWBERRY, 1)), output=items.CANDIED_FRUIT,
+           desc="Fruit candied in honey."),
 ]
 
 
@@ -393,129 +400,295 @@ def village_npcs() -> dict[str, list[NPC]]:
     return {
         "Mossford": [
             NPC("Marda", "M", (236, 196, 150), shop="general", role="shopkeeper",
-                blurbs=("Welcome to Mossford! The store's always open by day.",
-                        "Drop goods in your bin and I'll have gold for you by morning.",
-                        "A little rain's good for the fields, dear."),
+                blurbs=("Welcome to Mossford! The store's always open by day —\n"
+                        "and the kettle's always on for a friendly face.",
+                        "Drop your goods in the bin; I'll have gold for you by\n"
+                        "morning. Better than lugging it to market, eh?"),
+                heart_blurbs=((3, "This shop was my mother's, and hers before that.\n"
+                                  "Three generations of Mossford's news, all under one roof."),
+                              (6, "My Edwin went down the Cinderhope shafts and never\n"
+                                  "came up. I keep a lamp in the window still. ...Tea?")),
                 loves=(items.JAM, items.PICKLES, items.WINE),
                 likes=(items.PARSNIP, items.POTATO, items.CAULIFLOWER, items.STRAWBERRY),
                 dislikes=(items.WOOD, items.STONE, items.COAL),
-                bio="Runs the Mossford general store on the market square."),
-            NPC("Hollis", "H", (224, 168, 96), shop=None, role="innkeeper",
-                blurbs=("Pull up a stool — the hearth's warm and the ale's cold.",
-                        "Storm brewing? Half the village'll be under my roof by dusk.",
-                        "A traveller hears everything, eventually."),
+                gifts=(items.CAULIFLOWER_SEEDS, items.PUMPKIN_SEEDS, items.TULIP_SEEDS, items.JAM),
+                bio="Runs the Mossford general store; warm and full of kindly gossip."),
+            NPC("Hollis", "H", (224, 168, 96), shop="tavern", role="innkeeper",
+                blurbs=("Pull up a stool — the hearth's warm and the ale's honest.\n"
+                        "Rest your feet a while.",
+                        "Storm brewing? Half the village'll be under my roof by dusk.\n"
+                        "The more the merrier, I always say."),
+                heart_blurbs=((3, "Twenty years I guarded caravans on the east road.\n"
+                                  "One night I just stopped. Best thing I ever did."),
+                              (6, "A traveller hears everything, eventually — and forgets\n"
+                                  "most of it on purpose. Your secrets are safe here.")),
                 loves=(items.WINE, items.GRAPE_WINE, items.JELLIED_EEL),
                 likes=(items.JAM, items.PICKLES), dislikes=(items.STONE,),
-                bio="Keeps the Mossford inn; tends the taproom day and night."),
+                gifts=(items.WINE, items.MEAD, items.JAM, items.PICKLES),
+                bio="Keeps the Mossford inn; a settled wanderer, full of stories."),
             NPC("Sister Ivy", "I", (214, 196, 224), shop=None, role="priest",
-                blurbs=("Peace to you, traveller. The shrine is always open.",
-                        "The seasons turn; be grateful for each in its turn.",
-                        "On the first of the season we gather to give thanks."),
+                blurbs=("Peace to you. The shrine is always open, and the seasons\n"
+                        "always turning. Be gentle with yourself.",
+                        "On the first of each season we gather to give thanks.\n"
+                        "Come, if you like — all are welcome at the altar."),
+                heart_blurbs=((3, "I came to Mossford with a grief I couldn't name.\n"
+                                  "The quiet of this place gave it somewhere to rest."),
+                              (6, "I tend the graves as well as the shrine, you know.\n"
+                                  "Someone should remember the names. I'm glad of you.")),
                 loves=(items.WINE, items.JAM, items.DIAMOND),
                 likes=(items.STRAWBERRY, items.BLUEBERRY), dislikes=(items.COAL,),
-                bio="Tends the shrine of Mossford; found at the altar by day."),
+                gifts=(items.AMETHYST, items.TOPAZ, items.JAM),
+                bio="Tends the shrine and churchyard of Mossford; serene and watchful."),
             NPC("Gilda", "G", (210, 176, 120), shop=None, role="farmer",
-                blurbs=("Weather permitting, I'm out in the rows till dusk.",
-                        "Nothing beats soil under your nails and sun on your back.",
-                        "Come winter there's little to do but mend and wait."),
+                blurbs=("Weather permitting, I'm out in the rows till dusk.\n"
+                        "Soil under the nails, sun on the back — that's living.",
+                        "Come winter there's little to do but mend and wait.\n"
+                        "A field needs its rest, same as folk."),
+                heart_blurbs=((3, "These were my father's fields. I was six, trailing\n"
+                                  "his plough. I'll not let them go to weeds."),
+                              (6, "Some days I talk to him out there, between the furrows.\n"
+                                  "Daft, maybe. But the crops don't seem to mind.")),
                 loves=(items.PARSNIP, items.CAULIFLOWER, items.PUMPKIN),
                 likes=(items.POTATO, items.TOMATO), dislikes=(items.STONE,),
-                bio="Works the farmhouse fields at the edge of Mossford."),
+                gifts=(items.POTATO_SEEDS, items.CAULIFLOWER_SEEDS, items.PUMPKIN_SEEDS),
+                bio="Works the farmhouse fields at the edge of Mossford; salt of the earth."),
             NPC("Tomas", "T", (196, 158, 110), shop=None, role="carpenter",
-                blurbs=("Good timber, that. I could build you something one day.",
-                        "Stone and wood — that's how a homestead grows."),
+                blurbs=("Good timber, that — straight grain. I could build you\n"
+                        "something one day. A proper porch, maybe.",
+                        "Stone and wood, wood and stone. That's how a homestead\n"
+                        "grows. Slow and honest."),
+                heart_blurbs=((3, "I've a drawing, folded in my apron, of a great\n"
+                                  "mead-hall. One day — when the right beams find me."),
+                              (6, "Don't laugh — I write a little verse for each tree\n"
+                                  "I fell. Seems only fair to say them a few words.")),
                 loves=(items.WOOD, items.TIMBER_PLANK), likes=(items.STONE,), dislikes=(items.JAM,),
-                bio="Mossford's carpenter; found among the timber and tools."),
+                gifts=(items.TIMBER_PLANK, items.WOOD),
+                bio="Mossford's carpenter; gruff, proud of his craft, secretly tender."),
             NPC("Wrenna", "W", (170, 200, 150), shop=None, role="forager",
-                blurbs=("The wild berries make the loveliest preserves.",
-                        "Forage the edges of the woods — you'll be surprised."),
+                blurbs=("The wild berries make the loveliest preserves.\n"
+                        "Forage the wood-edges — you'll be surprised what grows.",
+                        "Every plant has a use, if you know how to ask it.\n"
+                        "Most folk never think to ask."),
+                heart_blurbs=((3, "I apprenticed to a hermit on the moor as a girl.\n"
+                                  "She taught me the names of things. All of them."),
+                              (6, "She's gone now, the old woman. But gathering in the\n"
+                                  "fog-grass, I still feel her at my shoulder. Kindly.")),
                 loves=(items.RASPBERRY, items.GOOSEBERRY, items.CURRANT),
                 likes=(items.FIBER, items.CAULIFLOWER), dislikes=(items.STONE,),
-                bio="Mossford's herbalist; wanders the meadows and wood-edges."),
-            NPC("Pip", "p", (236, 214, 150), shop=None, role="villager",
-                blurbs=("Wanna see the frog I caught? ...Oh. Maybe later.",
-                        "When I grow up I'm gonna have the biggest farm ever!"),
+                gifts=(items.STRAWBERRY_SEEDS, items.BLUEBERRY_SEEDS, items.ASTER_SEEDS, items.RASPBERRY),
+                bio="Mossford's herbalist; dreamy, wise in green things."),
+            NPC("Pip", "p", (236, 214, 150), shop=None, role="child",
+                blurbs=("Wanna see the frog I caught? ...Oh. Maybe later then.\n"
+                        "He's a REALLY good frog.",
+                        "When I grow up I'm gonna have the BIGGEST farm ever!\n"
+                        "Bigger than yours. No offence."),
+                heart_blurbs=((3, "My big sister went off to the city last spring.\n"
+                                  "She said she'd write. ...She hasn't yet."),
+                              (6, "You're my best grown-up friend, you know.\n"
+                                  "Don't tell Tam. Actually, do — he'll be SO jealous.")),
                 loves=(items.STRAWBERRY, items.JAM),
-                likes=(items.RASPBERRY, items.BLUEBERRY), dislikes=(items.WOOD,),
-                bio="A village child, forever underfoot around the square."),
+                likes=(items.RASPBERRY, items.BLUEBERRY, items.TULIP), dislikes=(items.WOOD,),
+                gifts=(items.TULIP, items.STRAWBERRY, items.RASPBERRY),
+                bio="A Mossford child, forever underfoot around the square."),
+            NPC("Tam", "t", (232, 200, 130), shop=None, role="child",
+                blurbs=("Pip says HE'S faster but I can climb the well-house,\n"
+                        "so really I win.",
+                        "If you find a smooth flat stone, keep it for me?\n"
+                        "I'm collecting the good ones."),
+                heart_blurbs=((3, "Mum says I ask too many questions. But how ELSE\n"
+                                  "are you s'posed to find things out?"),
+                              (6, "When you're away I tell everyone I'm YOUR helper.\n"
+                                  "...That's alright, isn't it?")),
+                loves=(items.BLUEBERRY, items.JAM),
+                likes=(items.TULIP, items.STRAWBERRY), dislikes=(items.COAL,),
+                gifts=(items.TULIP, items.BLUEBERRY, items.ASTER_SEEDS),
+                bio="A Mossford child; Pip's rival and inseparable friend."),
         ],
         "Cinderhope": [
             NPC("Bron", "B", (224, 150, 110), shop="blacksmith", role="blacksmith",
-                blurbs=("Bring me ore and bars and I'll sharpen your tools.",
-                        "Wooden tools? We'll fix that. Bronze and up, that's my trade."),
+                blurbs=("Bring me ore and bars and I'll sharpen your tools!\n"
+                        "Wooden tools? We'll fix that. Bronze and up, that's my trade.",
+                        "Nothing like the ring of a hammer at dawn. Wakes the whole\n"
+                        "street — and I don't apologise for it."),
+                heart_blurbs=((3, "Burned my hand near to ruin, first forge I ever lit.\n"
+                                  "Almost gave it up. The anvil wouldn't let me."),
+                              (6, "A bit of me goes into every tool I make.\n"
+                                  "So mind you use mine well, friend. That's an order.")),
                 loves=(items.COPPER_BAR, items.COAL),
                 likes=(items.COPPER_ORE, items.STONE), dislikes=(items.WINE,),
-                bio="The Cinderhope blacksmith; upgrades tools at his forge."),
-            NPC("Mabel", "A", (232, 176, 132), shop=None, role="innkeeper",
-                blurbs=("Mind the step — floor's uneven since the old days.",
-                        "Miners drink deep after a long shift, bless them.",
-                        "There's always a bed and a bowl at the Cinderhope inn."),
+                gifts=(items.IRON_BAR, items.COPPER_BAR, items.COAL),
+                bio="The Cinderhope blacksmith; loud, big-hearted, married to his forge."),
+            NPC("Mabel", "A", (232, 176, 132), shop="tavern", role="innkeeper",
+                blurbs=("Mind the step — floor's uneven since the old days.\n"
+                        "Sit, sit. You look half-starved.",
+                        "Miners drink deep after a long shift, bless them.\n"
+                        "There's always a bed and a bowl at my taproom."),
+                heart_blurbs=((3, "Raised half the young ones in this outpost, I did.\n"
+                                  "Nursery, schoolroom, confessional — all my taproom."),
+                              (6, "My own two went off to the cities years back.\n"
+                                  "So I keep the lamp lit for everyone else's. Suits me.")),
                 loves=(items.GRAPE_WINE, items.WINE, items.JELLIED_EEL),
                 likes=(items.JAM, items.PICKLES), dislikes=(items.STONE,),
-                bio="Runs the Cinderhope taproom and lets its rooms."),
+                gifts=(items.MEAD, items.GRAPE_WINE, items.PICKLES),
+                bio="Runs the Cinderhope taproom; matron to the whole outpost."),
             NPC("Father Ansel", "F", (196, 200, 224), shop=None, role="priest",
-                blurbs=("The old chapel has stood longer than the outpost, they say.",
-                        "Rest a moment. Even miners must look up sometimes."),
+                blurbs=("The old chapel has stood longer than the outpost.\n"
+                        "Rest a moment. Even miners must look up sometimes.",
+                        "The stone remembers what folk forget.\n"
+                        "I just keep the dust off it."),
+                heart_blurbs=((3, "There are names on these graves older than any record.\n"
+                                  "Forty years I've spent learning who they were."),
+                              (6, "Between us — there's a vault beneath the chapel floor.\n"
+                                  "Some doors are best left shut. I trust you agree.")),
                 loves=(items.WINE, items.SAPPHIRE, items.JAM),
                 likes=(items.APPLE, items.CHERRY), dislikes=(items.COAL,),
-                bio="Keeps the old chapel of Cinderhope; found by its altar."),
+                gifts=(items.SAPPHIRE, items.EMERALD, items.WINE),
+                bio="Keeps the old chapel of Cinderhope; wry, and guards its secrets."),
             NPC("Old Pell", "P", (150, 180, 200), shop=None, role="fisher",
-                blurbs=("The river's kind to a patient soul.",
-                        "Cast a line sometime — once you've a rod, mind."),
+                blurbs=("The river's kind to a patient soul.\n"
+                        "Cast a line sometime — once you've a rod, mind.",
+                        "Fish bite best when you've stopped needing them to.\n"
+                        "There's a lesson in that, somewhere."),
+                heart_blurbs=((3, "Fished this water fifty years. Know every eddy and\n"
+                                  "snag like the back of my own wrinkled hand."),
+                              (6, "Lost a friend to the spring flood, long ago.\n"
+                                  "I fish the quiet pools he loved. Feels like company.")),
                 loves=(items.WINE, items.GRAPE_WINE),
                 likes=(items.RASPBERRY,), dislikes=(items.STONE,),
-                bio="An old fisher; usually by the water near Cinderhope."),
+                gifts=(items.TROUT, items.SALMON, items.GRAPE_WINE),
+                bio="An old fisher; quiet and patient, usually by the water."),
             NPC("Garret", "R", (200, 168, 132), shop=None, role="villager",
-                blurbs=("Twenty years down the shafts and my back knows every one.",
-                        "Copper's steady, but it's silver a man dreams of."),
+                blurbs=("Twenty years down the shafts and my back knows every one.\n"
+                        "Worth it for the glint, though.",
+                        "Copper's steady, but it's silver a man dreams of.\n"
+                        "Silver, and maybe a little peace."),
+                heart_blurbs=((3, "My father spoke of a silver seam under the grotto.\n"
+                                  "Never found it. I reckon it's still down there."),
+                              (6, "Strike that seam and I'll not hoard it — half to Mabel,\n"
+                                  "half to whoever's kind to an old digger. You, maybe.")),
                 loves=(items.COPPER_BAR, items.IRON_BAR, items.COAL),
                 likes=(items.STONE, items.COPPER_ORE), dislikes=(items.JAM,),
-                bio="A weathered miner; drinks at the taproom by the forge."),
+                gifts=(items.COPPER_ORE, items.IRON_ORE, items.RUBY),
+                bio="A weathered miner; chases his father's silver dream."),
             NPC("Nessa", "N", (206, 180, 200), shop=None, role="villager",
-                blurbs=("Fibre and patience — that's a good bolt of cloth.",
-                        "Winter's my busy season, at the loom by the fire."),
+                blurbs=("Fibre and patience — that's a good bolt of cloth.\n"
+                        "Rush it and you'll see the flaw for years.",
+                        "Winter's my busy season, at the loom by the fire.\n"
+                        "The cold's good for concentration."),
+                heart_blurbs=((3, "I grew up at Saltmere, on the coast. Miss the sound.\n"
+                                  "So I weave the waves into my patterns instead."),
+                              (6, "This one's for you, if you'll have it — don't argue.\n"
+                                  "A friend should have something made with them in mind.")),
                 loves=(items.FIBER, items.WINE),
                 likes=(items.WOOD, items.CURRANT), dislikes=(items.STONE,),
-                bio="The Cinderhope weaver; keeps a cottage off the square."),
+                gifts=(items.FIBER, items.TULIP, items.ASTER_SEEDS),
+                bio="The Cinderhope weaver; meticulous, and homesick for the sea."),
             NPC("Sable", "S", (200, 170, 220), shop=None, role="trader",
-                blurbs=("Rare goods, fair prices — when I'm passing through.",
-                        "A fine vintage fetches a fine coin out east."),
+                blurbs=("Rare goods, fair prices — when I'm passing through.\n"
+                        "A fine vintage fetches a fine coin out east.",
+                        "I keep moving. Bad habit, or good sense —\n"
+                        "depends who's asking."),
+                heart_blurbs=((3, "Cinderhope's a fine place to not be found, you follow.\n"
+                                  "Quiet. Out of the way. No questions."),
+                              (6, "There was a deal, out east, that went poorly.\n"
+                                  "Let's leave it there. Good of you to trust me anyway.")),
                 loves=(items.GRAPE_WINE, items.WINE),
                 likes=(items.JAM, items.PICKLES), dislikes=(items.FIBER,),
-                bio="A travelling trader lodging in Cinderhope."),
+                gifts=(items.DIAMOND, items.GOLD_BAR, items.GRAPE_WINE),
+                bio="A travelling trader lodging in Cinderhope; charming, evasive."),
+            NPC("Bea", "e", (224, 170, 190), shop=None, role="child",
+                blurbs=("I found a SPARKLY rock in the spoil-heap! ...I hid it.\n"
+                        "I'm not telling where.",
+                        "Da says the mines go down forever. Is that TRUE?\n"
+                        "I'm gonna go all the way down one day."),
+                heart_blurbs=((3, "It's dusty here and everyone's tired all the time.\n"
+                                  "But Mabel makes the good soup, so it's alright."),
+                              (6, "Here — you can have my second-best sparkly rock.\n"
+                                  "Not the best one. But nearly!")),
+                loves=(items.CURRANT, items.JAM),
+                likes=(items.TULIP, items.AMETHYST), dislikes=(items.STONE,),
+                gifts=(items.TULIP, items.CURRANT, items.AMETHYST),
+                bio="A Cinderhope child; a magpie for shiny stones."),
         ],
         "Saltmere": [
-            NPC("Coralie", "C", (150, 200, 210), shop=None, role="innkeeper",
-                blurbs=("Salt air and a warm fire — best cure there is.",
+            NPC("Coralie", "C", (150, 200, 210), shop="tavern", role="innkeeper",
+                blurbs=("Salt air and a warm fire — best cure there is.\n"
                         "The boats come in at dusk; that's when it gets lively.",
-                        "Storm's coming? The fishers can smell it before I can."),
+                        "Storm's coming? The fishers smell it before I can.\n"
+                        "Watch them all head for my door."),
+                heart_blurbs=((3, "My father kept the lighthouse down the point.\n"
+                                  "I grew up counting ships home. Still do, some nights."),
+                              (6, "Every soul who walks through that door, I want them\n"
+                                  "leaving a little warmer than they came. You do.")),
                 loves=(items.JELLIED_EEL, items.WINE, items.GRAPE_WINE),
                 likes=(items.JAM, items.PICKLES), dislikes=(items.STONE,),
-                bio="Keeps the dockside inn at Saltmere; warm to every soul."),
+                gifts=(items.MEAD, items.JELLIED_EEL, items.WINE),
+                bio="Keeps the dockside inn at Saltmere; a lighthouse-keeper's daughter."),
             NPC("Bryn", "b", (140, 180, 208), shop=None, role="fisher",
-                blurbs=("Out before dawn, in before dark — that's the fisher's day.",
-                        "Rough seas today. The little boats stay moored."),
+                blurbs=("Out before dawn, in before dark — the fisher's day.\n"
+                        "Rough seas today. The little boats stay moored.",
+                        "Read the tide, read the sky, and don't argue with either.\n"
+                        "That's the whole of it."),
+                heart_blurbs=((3, "My grandmother taught me the old sea-signs.\n"
+                                  "Folk laugh — till the day the signs save their nets."),
+                              (6, "I'll teach you to read the water, if you like.\n"
+                                  "Not many I'd bother with. You listen — that's why.")),
                 loves=(items.GRAPE_WINE, items.WINE),
                 likes=(items.PICKLES, items.JELLIED_EEL), dislikes=(items.STONE,),
-                bio="A Saltmere fisher; works the piers when the sea allows."),
+                gifts=(items.SALMON, items.TROUT, items.GRAPE_WINE),
+                bio="A Saltmere fisher; stoic and tide-wise."),
             NPC("Marli", "m", (168, 196, 210), shop=None, role="fisher",
-                blurbs=("Mended forty nets this week and my fingers know it.",
-                        "The catch is good when the currant blossoms fall."),
+                blurbs=("Mended forty nets this week and my fingers know it.\n"
+                        "Still — a good net's a good net.",
+                        "The catch is best when the currant-blossom falls.\n"
+                        "Old shore wisdom. Never fails me."),
+                heart_blurbs=((3, "I mend more than nets, truth be told.\n"
+                                  "A quarrel here, a sulk there — somebody's got to."),
+                              (6, "You've a knack for turning up when a body needs a hand.\n"
+                                  "Takes one to know one, I'd say.")),
                 loves=(items.JAM, items.STRAWBERRY),
                 likes=(items.BLUEBERRY, items.CURRANT), dislikes=(items.COAL,),
-                bio="A Saltmere fisher and net-mender by the shore."),
+                gifts=(items.TROUT, items.JAM, items.STRAWBERRY),
+                bio="A Saltmere fisher and net-mender; cheerful peacemaker of the shore."),
             NPC("Doran", "D", (128, 168, 200), shop=None, role="fisher",
-                blurbs=("Forty years on the water and she still surprises me.",
-                        "Learn the tides, lad, and the tides will feed you."),
+                blurbs=("Forty years on the water and she still surprises me.\n"
+                        "Learn the tides, and the tides will feed you.",
+                        "Harbour-master, they call me. Mostly I shout at gulls\n"
+                        "and tie other folks' knots properly."),
+                heart_blurbs=((3, "Wrecked once, off the point, in a squall none foresaw.\n"
+                                  "Clung to a spar all night. The sea gave me back."),
+                              (6, "Respect the sea — never love her, never trust her.\n"
+                                  "Do the same and you'll grow as old and ugly as me.")),
                 loves=(items.WINE, items.GRAPE_WINE),
                 likes=(items.CHERRY, items.APPLE), dislikes=(items.WOOD,),
-                bio="Saltmere's oldest fisher; harbour-master of a sort."),
+                gifts=(items.SALMON, items.WINE),
+                bio="Saltmere's oldest fisher and harbour-master; a grizzled sage."),
             NPC("Nan", "n", (196, 190, 208), shop=None, role="villager",
-                blurbs=("Every rope on that shore has passed through my hands.",
-                        "Salt gets into everything, cloth most of all."),
+                blurbs=("Every rope on that shore has passed through my hands.\n"
+                        "Good rope's the difference between home and drowned.",
+                        "Salt gets into everything, cloth most of all.\n"
+                        "My knuckles have been white as gull-down for years."),
+                heart_blurbs=((3, "My mother made rope, and hers. We tie the same knots\n"
+                                  "the first Saltmere folk tied. That's worth something."),
+                              (6, "Come by when your gear frays — no charge, for you.\n"
+                                  "Can't have a friend put to sea on bad rope.")),
                 loves=(items.FIBER, items.WINE),
                 likes=(items.WOOD, items.CURRANT), dislikes=(items.STONE,),
-                bio="Saltmere's rope- and net-maker; keeps a shore cottage."),
+                gifts=(items.FIBER, items.WOOD),
+                bio="Saltmere's rope- and net-maker; sharp-tongued and kind."),
+            NPC("Finn", "f", (150, 210, 214), shop=None, role="child",
+                blurbs=("I can hold my breath for AGES. Wanna count?\n"
+                        "...You have to actually count, though.",
+                        "Doran says I'll be a proper sailor someday.\n"
+                        "I already know four knots! Well. Three and a bit."),
+                heart_blurbs=((3, "I'm not scared of the big waves. Much.\n"
+                                  "Da was, at the end. So I decided not to be."),
+                              (6, "I saved you the best shell off the whole beach.\n"
+                                  "Listen — you can hear the sea in it!")),
+                loves=(items.STRAWBERRY, items.JAM),
+                likes=(items.TULIP, items.BLUEBERRY), dislikes=(items.STONE,),
+                gifts=(items.MINNOW, items.TULIP, items.STRAWBERRY),
+                bio="A Saltmere child; a would-be sailor, brave as he can manage."),
         ],
     }
 
@@ -534,9 +707,15 @@ def solo_npcs() -> list[NPC]:
                     "I've walked these green shadows my whole life long!",
                     "Hop-o'-my-thumb through the fern and the bramble —\n"
                     "the fox knows old Yew, and the deer when they ramble!"),
+            heart_blurbs=((3, "The wood was old when the first roads were new;\n"
+                              "it knows your step now — and it lets you through!"),
+                          (6, "Deep in my heart there's a hum and a humming —\n"
+                              "the bees know a friend, and they know when he's coming!")),
             loves=(items.WOOD, items.TIMBER_PLANK, items.CHANTERELLE),
             likes=(items.BOLETE, items.FIBER, items.RASPBERRY),
             dislikes=(items.STONE, items.COAL),
+            gifts=(items.BEE_QUEEN, items.CHERRY_SAPLING, items.APPLE_SAPLING,
+                   items.PEACH_SAPLING, items.WOOD),
             bio="The forester of the Wildwood, who talks in rhyme; keeps a hut deep among the trees."),
     ]
 
@@ -553,6 +732,46 @@ GENERAL_STOCK: list[tuple[Item, int]] = [
 # Blacksmith also sells fuel/metal: (item, buy price)
 BLACKSMITH_STOCK: list[tuple[Item, int]] = [
     (items.COAL, 25), (items.COPPER_BAR, 120),
+]
+
+# --- Festivals ---------------------------------------------------------------
+# Real seasonal festivals on fitting days (never the arbitrary 1st). The whole
+# village gathers in the square. Each: (day_of_season, name, flavour, treat).
+# Each festival scripts its own weather: fine days for most, fog for Hallows'
+# Eve, snow for the winter feasts. (day, name, flavour, treat, weather)
+FESTIVALS: dict[str, list] = {
+    "Spring": [(11, "the Spring Equinox",
+                "blossom and wildflowers deck the square; fiddles play", items.TULIP_SEEDS, "Clear")],
+    "Summer": [(5, "the Summer Solstice",
+                "the longest day — bonfires, garlands and dancing", items.SUNFLOWER_SEEDS, "Clear"),
+               (24, "the Harvest Fair",
+                "the first great harvest in; long tables fill the square", items.ROASTED_VEG, "Clear")],
+    "Fall":   [(26, "Hallows' Eve",
+                "carved lanterns loom in the mist; a pleasant shiver in the dark", items.CANDIED_FRUIT, "Fog")],
+    "Winter": [(4, "the Winter Solstice",
+                "snow falls soft; every lamp is lit against the long dark", items.MEAD, "Snow"),
+               (25, "Yuletide",
+                "the great midwinter feast — snow, gifts, song and warmth", items.GRAPE_WINE, "Snow")],
+}
+
+
+def festival_on(season: str, day_of_season: int):
+    """The festival on this day, or None: (day, name, flavour, treat, weather)."""
+    for fest in FESTIVALS.get(season, ()):
+        if fest[0] == day_of_season:
+            return fest
+    return None
+
+
+# Tavern fare: (dish, price, stamina restored, hp restored) — eaten on the spot,
+# a warm meal away from your own kitchen.
+TAVERN_MENU: list[tuple[str, int, int, int]] = [
+    ("Honeyed Tea",     20,  30, 3),
+    ("Cup of Wine",     25,  25, 0),
+    ("Bowl of Stew",    45,  60, 5),
+    ("Mug of Mead",     35,  45, 0),
+    ("Roast & Veg",     80,  95, 8),
+    ("Hearty Platter", 120, 140, 12),
 ]
 
 

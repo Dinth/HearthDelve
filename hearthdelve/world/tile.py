@@ -94,6 +94,7 @@ HOUSE_FLOOR = _add(TileType("house_floor",".", (150, 130, 110),(40, 32, 26)))
 DOOR        = _add(TileType("door",       "+", (210, 170, 110),(54, 40, 26), kind="door"))
 BED         = _add(TileType("bed",        "≡", (210, 150, 160),(58, 36, 44), kind="bed"))
 SHIP_BIN    = _add(TileType("shipping_bin","☐", (200, 170, 110),(48, 40, 26), walkable=False, kind="bin"))
+POST_BOX    = _add(TileType("post_box",    "⊠", (200, 120, 96), (44, 34, 28), walkable=False, kind="postbox"))
 FENCE       = _add(TileType("fence",      "│", (160, 130, 92), (28, 48, 30), walkable=False, kind="fence"))
 TILLED      = _add(TileType("tilled",     "≡", (120, 86, 60),  (52, 36, 24), kind="soil"))
 

@@ -126,9 +126,9 @@ def generate(seed: int = 1337) -> GameMap:
     # Shrubs: plain shrubs scatter through wooded land; fruit-bearing shrubs
     # are much rarer (a sparse subset), split between the three berry kinds.
     shrubland = (t2 | t3) & (flora > 0.45)
-    shrub_spots = shrubland & (detail > 0.50) & (detail < 0.55)
+    shrub_spots = shrubland & (detail > 0.50) & (detail < 0.56)
     tiles[shrub_spots] = tile.SHRUB
-    fruit_spots = shrub_spots & (rare > 0.84)
+    fruit_spots = shrub_spots & (rare > 0.76)              # a touch more berry shrubs
     tiles[fruit_spots & (variety < 0.34)] = tile.SHRUB_RASPBERRY
     tiles[fruit_spots & (variety >= 0.34) & (variety < 0.67)] = tile.SHRUB_GOOSEBERRY
     tiles[fruit_spots & (variety >= 0.67)] = tile.SHRUB_CURRANT
@@ -212,6 +212,7 @@ def generate(seed: int = 1337) -> GameMap:
     gm.village_centers = dict(centers)
     _place_dungeons(gm, wild, flora)
     forest_track = _carve_forest(gm, seed)
+    _scatter_wild_fruit(gm, wild, seed)
     _draw_roads(gm, centers)
     if forest_track is not None:                    # a track links the hut to the network
         _draw_road(gm, forest_track, gm.spawn)
@@ -219,6 +220,29 @@ def generate(seed: int = 1337) -> GameMap:
     _place_waypoints(gm)
     _populate_wildlife(gm, random.Random(seed + 131))
     return gm
+
+
+def _scatter_wild_fruit(gm: GameMap, wild: np.ndarray, seed: int) -> None:
+    """Scatter wild fruit trees (cherry/peach/apple/orange) through the wilds —
+    free fruit to pick in season, like a natural orchard."""
+    from ..world.crops import Tree
+    rng = random.Random((seed + 321) & 0x7FFFFFFF)
+    start_season = C.SEASONS[0]                       # a new game opens in spring
+    placed, tries = 0, 0
+    while placed < 55 and tries < 6000:
+        tries += 1
+        x, y = rng.randint(4, gm.width - 5), rng.randint(4, gm.height - 5)
+        if wild[x, y] < C.TIER1_MAX:                  # only out in the edge/wilds
+            continue
+        if gm.tiles[x, y] not in (tile.GRASS, tile.MEADOW, tile.TALL_GRASS):
+            continue
+        if (x, y) in gm.trees or (x, y) in gm.crops:
+            continue
+        t = rng.choice(content.TREES)
+        gm.tiles[x, y] = tile.GRASS
+        gm.trees[(x, y)] = Tree(t.name, t.fruit, t.fruit_color, t.season, t.days_to_mature,
+                                age=t.days_to_mature, has_fruit=(t.season == start_season))
+        placed += 1
 
 
 def _carve_sea(gm: GameMap, seed: int) -> np.ndarray:
@@ -1162,11 +1186,15 @@ def _carve_homestead(gm: GameMap, seed: int) -> None:
     t[bed] = tile.BED
     gm.bed = bed
 
-    # 3. shipping bin just outside the door
+    # 3. shipping bin just outside the door, and a post box on the other side
     bin_pos = (door[0] + 1, door[1] + 1)
     if gm.in_bounds(*bin_pos):
         t[bin_pos] = tile.SHIP_BIN
         gm.bin = bin_pos
+    box_pos = (door[0] - 1, door[1] + 1)
+    if gm.in_bounds(*box_pos) and t[box_pos] not in (tile.RIVER, tile.SAND):
+        t[box_pos] = tile.POST_BOX
+        gm.post_box = box_pos
 
     # 4. fenced tilled plot below the house (also east of the river)
     px, py, pw, ph = cx + 2, cy + 1, 6, 5

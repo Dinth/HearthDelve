@@ -34,7 +34,9 @@ def cast(state: GameState) -> None:
         state.log.add("Your line comes up empty.", C.DIM)
         return
     fish = _weighted(table)
-    p.inventory.add(fish, 1)
+    q = skills.roll_quality(state, "Fishing")
+    p.inventory.add(fish, 1, quality=q)
     state.bump("fish_caught")
     skills.gain(state, "Fishing", 12)
-    state.log.add(f"A tug on the line — you reel in a {fish.name}!", (150, 200, 224))
+    star = (" " + skills.stars(q)) if q else ""
+    state.log.add(f"A tug on the line — you reel in a {fish.name}{star}!", (150, 200, 224))

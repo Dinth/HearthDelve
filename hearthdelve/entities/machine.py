@@ -16,6 +16,7 @@ class Machine:
     loaded_output: Item | None = None   # what it will yield once ready
     ready_at: int = 0                    # absolute in-game minute it completes
     has_queen: bool = False              # beehive: a colony is established
+    out_quality: int = 0                 # quality (0-5 stars) of the pending output
 
     def status(self, now: int) -> str:
         if self.loaded_output is None:

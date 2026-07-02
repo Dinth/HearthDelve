@@ -103,9 +103,9 @@ def pick_tree(state: GameState, x: int, y: int) -> bool:
     if not tree.has_fruit:
         state.log.add(f"The {tree.name.lower()} tree has no ripe fruit right now.", C.DIM)
         return False
-    state.player.inventory.add(tree.fruit, 1)
-    tree.has_fruit = False
     from . import skills
+    state.player.inventory.add(tree.fruit, 1, quality=skills.roll_quality(state, "Farming"))
+    tree.has_fruit = False
     skills.gain(state, "Foraging", 10)
     state.log.add(f"You pick a {tree.fruit.name.lower()}.", (180, 230, 160))
     state.player.energy = max(0, state.player.energy - C.HARVEST_COST[0])
@@ -138,12 +138,13 @@ def harvest(state: GameState, x: int, y: int) -> bool:
         return False
 
     crop = plot.crop
-    state.player.inventory.add(crop.produce, 1)
-    state.bump("crops_harvested")
     from . import skills
+    q = skills.roll_quality(state, "Farming")
+    state.player.inventory.add(crop.produce, 1, quality=q)
+    state.bump("crops_harvested")
     skills.gain(state, "Farming", 15)
     if random.random() < skills.extra_yield_chance(state, "Farming"):
-        state.player.inventory.add(crop.produce, 1)
+        state.player.inventory.add(crop.produce, 1, quality=q)
         state.log.add("  Your farming skill yields an extra one!", C.DIM)
     if crop.regrows:
         plot.days_grown = max(0, crop.days_to_mature - crop.regrow_days)
@@ -180,6 +181,9 @@ def new_day(state: GameState, rested: bool = True) -> None:
     _tick_flora(state, season)
 
     state.weather = roll_weather(season, random.Random(state.seed * 100003 + state.day))
+    fest = content.festival_on(season, state.day_of_season)
+    if fest is not None and len(fest) > 4:          # festivals script their own weather
+        state.weather = fest[4]
     raining = is_wet_weather(state.weather)
 
     # Watering: rain soaks every plot; sprinklers water their neighbours.
@@ -205,6 +209,8 @@ def new_day(state: GameState, rested: bool = True) -> None:
     for npc in state.world.npcs:
         npc.gifted_today = False
         npc.talked_today = False
+
+    _deliver_mail(state)
 
     p = state.player
     p.energy = p.max_energy if rested else p.max_energy // 2
@@ -297,6 +303,44 @@ def prime_seasonal_flora(state: GameState) -> None:
             surf.tiles[x, y] = species
 
 
+def _deliver_mail(state: GameState) -> None:
+    """The morning post: festival invitations (a day ahead) and the occasional
+    gift from a friend, dropped in the post box by the farmhouse door."""
+    from . import skills
+    surf = state.surface
+    npcs = surf.npcs if surf else []
+    arrived = 0
+
+    # Festival invitation, delivered the day before.
+    fest = content.festival_on(state.season, state.day_of_season + 1)
+    if fest is not None and npcs:
+        host = next((n for n in npcs if n.role == "innkeeper"), npcs[0])
+        state.mail.append({
+            "sender": host.name,
+            "body": (f"You're invited! Tomorrow the village keeps {fest[1]}\n"
+                     f"in the square — {fest[2]}.\n"
+                     "Come and join us. There'll be more than enough to go round!"),
+            "items": [],
+        })
+        arrived += 1
+
+    # A friend occasionally sends a little something (from their own gift pool).
+    friends = [n for n in npcs if n.hearts >= 4 and n.gifts]
+    if friends and random.random() < 0.18:
+        n = random.choice(friends)
+        gift = random.choice(n.gifts)
+        state.mail.append({
+            "sender": n.name,
+            "body": ("Was thinking of you, and thought you might like this.\n"
+                     "No occasion — just from a friend."),
+            "items": [(gift, 1, skills.roll_quality(state, "Foraging") if skills.has_quality(gift) else 0)],
+        })
+        arrived += 1
+
+    if arrived and surf and surf.post_box:
+        state.log.add(f"The post has come — {arrived} letter(s) in your box.", (230, 200, 130))
+
+
 def _tend_village_fields(state: GameState, season: str) -> None:
     surf = state.surface
     fields = getattr(surf, "village_fields", None)
@@ -334,9 +378,9 @@ def collapse(state: GameState, reason: str) -> None:
     p.gold -= gold_lost
     dropped = 0
     if state.depth > 0:                     # drop the loose loot carried in the dark
-        for it, q in list(p.inventory.slots):
+        for it, q, ql in list(p.inventory.slots):
             if it.kind in ("crop", "material", "artisan", "food", "fish"):
-                p.inventory.remove(it, q)
+                p.inventory.remove(it, q, quality=ql)
                 dropped += q
         from . import delve
         delve.leave_to_surface(state)       # dragged up to the farm
@@ -353,3 +397,7 @@ def collapse(state: GameState, reason: str) -> None:
 
 def _announce_morning(state: GameState) -> None:
     state.log.add(f"{state.date_str()} — {state.weather}.", (236, 226, 180))
+    fest = content.festival_on(state.season, state.day_of_season)
+    if fest is not None:
+        state.log.add(f"Today is {fest[1]}! The village gathers in the square.",
+                      (244, 210, 130))

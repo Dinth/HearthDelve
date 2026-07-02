@@ -41,19 +41,28 @@ def craft(state: GameState, recipe: Recipe) -> bool:
         state.log.add(f"You need: {inputs_str(recipe)}.", C.DIM)
         return False
 
+    from . import skills
     if recipe.kind == "build":
         if not _place_machine(state, recipe.machine):
             return False
+        for it, qty in recipe.inputs:
+            state.player.inventory.remove(it, qty)
     elif recipe.kind == "cook":
-        p = state.player
-        p.energy = min(p.max_energy, p.energy + recipe.energy)
-        state.log.add(f"You cook and eat {recipe.name}. (+{recipe.energy} stamina)", (180, 230, 160))
+        # Cooking makes a carryable DISH whose quality inherits the average
+        # ingredient quality, adjusted by the cook's skill. Eat it later.
+        inv = state.player.inventory
+        qs = [inv.pop_quality(it, qty) for it, qty in recipe.inputs]
+        dish_q = skills.process_quality(sum(qs) / len(qs) if qs else 0, state, "Cooking")
+        inv.add(recipe.output, recipe.out_qty, quality=dish_q)
+        skills.gain(state, "Cooking", 14)
+        state.bump("dishes_cooked")
+        star = (" " + skills.stars(dish_q)) if dish_q else ""
+        state.log.add(f"You cook {recipe.name}{star}.", (180, 230, 160))
     elif recipe.kind == "item":
         state.player.inventory.add(recipe.output, recipe.out_qty)
         state.log.add(f"You craft {recipe.out_qty}x {recipe.output.name}.")
-
-    for it, qty in recipe.inputs:
-        state.player.inventory.remove(it, qty)
+        for it, qty in recipe.inputs:
+            state.player.inventory.remove(it, qty)
     return True
 
 
@@ -91,12 +100,17 @@ def interact_machine(state: GameState, x: int, y: int) -> bool:
         return True
 
     if status == "done":
-        state.player.inventory.add(m.loaded_output, 1)
+        from . import skills
+        q = m.out_quality if skills.has_quality(m.loaded_output) else 0
+        state.player.inventory.add(m.loaded_output, 1, quality=q)
+        star = (" " + skills.stars(q)) if q else ""
         if m.loaded_output.kind == "artisan":
             state.bump("artisan_made")
-        state.log.add(f"You collect {m.loaded_output.name} from the {mdef.name.lower()}.", (180, 230, 160))
+            skills.gain(state, "Cooking", 8)         # processing hones the craft
+        state.log.add(f"You collect {m.loaded_output.name}{star} from the {mdef.name.lower()}.", (180, 230, 160))
         m.loaded_output = None
         m.ready_at = 0
+        m.out_quality = 0
         return True
 
     if status == "working":
@@ -108,8 +122,10 @@ def interact_machine(state: GameState, x: int, y: int) -> bool:
 
 
 def _load_machine(state: GameState, m: Machine, mdef) -> bool:
+    from . import skills
     inv = state.player.inventory
     output = mdef.output
+    in_quality = 0.0
 
     if mdef.accepts == "ore":
         # smelt the most valuable bar the player can currently make
@@ -138,36 +154,36 @@ def _load_machine(state: GameState, m: Machine, mdef) -> bool:
         if inv.count(items.SUNFLOWER) < 2:
             state.log.add(f"The {mdef.name.lower()} needs at least 2 sunflowers.", C.DIM)
             return True
-        inv.remove(items.SUNFLOWER, 2)
+        in_quality = inv.pop_quality(items.SUNFLOWER, 2)
         output = items.SUNFLOWER_OIL
 
     elif mdef.accepts == "fruit":
         # Keg: honey -> mead; mead -> aged mead; otherwise fruit -> wine.
         if inv.count(items.HONEY) > 0:
-            inv.remove(items.HONEY, 1)
+            in_quality = inv.pop_quality(items.HONEY, 1)
             output = items.MEAD
         elif inv.count(items.MEAD) > 0:
-            inv.remove(items.MEAD, 1)
+            in_quality = inv.pop_quality(items.MEAD, 1)
             output = items.AGED_MEAD
         else:
             crop_item = items.GRAPE if inv.count(items.GRAPE) > 0 else _best_crop(state, fruit_only=True)
             if crop_item is None:
                 state.log.add(f"The {mdef.name.lower()} ferments fruit into wine, or honey into mead.", C.DIM)
                 return True
-            inv.remove(crop_item, 1)
+            in_quality = inv.pop_quality(crop_item, 1)
             output = items.GRAPE_WINE if crop_item is items.GRAPE else items.WINE
 
     elif mdef.accepts == "crop":
         # Preserves Jar: fruit -> jam, vegetables -> pickles, eel -> jellied eel.
         # (Flowers aren't preserved.)
-        candidates = [it for it, _ in inv.slots
+        candidates = [it for it, _q, _ql in inv.slots
                       if (it.kind == "crop" and content.PRODUCE_CATEGORY.get(it) != "flower")
                       or it is items.EEL]
         if not candidates:
             state.log.add(f"The {mdef.name.lower()} needs a crop or an eel.", C.DIM)
             return True
         chosen = max(candidates, key=lambda it: it.value)
-        inv.remove(chosen, 1)
+        in_quality = inv.pop_quality(chosen, 1)
         if chosen is items.EEL:
             output = items.JELLIED_EEL
         elif content.is_fruit(chosen):
@@ -177,6 +193,7 @@ def _load_machine(state: GameState, m: Machine, mdef) -> bool:
 
     m.loaded_output = output
     m.ready_at = state.abs_minutes + mdef.minutes
+    m.out_quality = skills.process_quality(in_quality, state, "Cooking") if skills.has_quality(output) else 0
     state.log.add(f"You load the {mdef.name.lower()} ({output.name}). Ready in {_fmt_remaining(mdef.minutes)}.")
     return True
 
@@ -214,15 +231,19 @@ def _tend_beehive(state: GameState, m, mdef, x: int, y: int) -> bool:
     if now < m.ready_at:
         state.log.add(f"The hive is filling — {_fmt_remaining(m.ready_at - now)} left.", C.DIM)
         return True
+    from . import skills
     flowers = _flowers_near(state, x, y, 10)
     honey = 1 + flowers // 6                    # a little even with none; lots with a flower bed
     wax = flowers // 12
-    inv.add(items.HONEY, honey)
+    # honey quality: foraging skill, lifted a touch by a rich flower bed
+    q = min(5, skills.roll_quality(state, "Foraging") + (1 if flowers >= 24 else 0))
+    inv.add(items.HONEY, honey, quality=q)
     if wax:
         inv.add(items.BEESWAX, wax)
     state.bump("artisan_made")
     tail = f" and {wax} beeswax" if wax else ""
-    state.log.add(f"You harvest {honey} honey{tail} ({flowers} flowers nearby).", (232, 200, 120))
+    star = (" " + skills.stars(q)) if q else ""
+    state.log.add(f"You harvest {honey} honey{star}{tail} ({flowers} flowers nearby).", (232, 200, 120))
     m.ready_at = now + mdef.minutes            # the colony keeps working
     return True
 
@@ -246,23 +267,31 @@ def run_sprinklers(state: GameState) -> None:
 
 
 def sellable_items(state: GameState):
-    """Inventory entries that can be shipped (have a sell value)."""
-    return [(it, q) for it, q in state.player.inventory.slots if it.value > 0]
+    """Inventory stacks that can be shipped (value>0), one per (item, quality)."""
+    return [(it, q, ql) for it, q, ql in state.player.inventory.slots if it.value > 0]
 
 
-def ship_item(state: GameState, item) -> None:
-    """Move a whole stack of item from inventory into the shipping bin."""
-    qty = state.player.inventory.count(item)
+def slot_value(item, quality: int) -> int:
+    """Sell price of one unit, scaled by its quality stars."""
+    from . import skills
+    return round(item.value * skills.value_mult(quality))
+
+
+def ship_item(state: GameState, item, quality: int = 0) -> None:
+    """Move a specific quality-stack of item from inventory into the bin."""
+    qty = state.player.inventory.count(item, quality)
     if qty <= 0:
         return
-    state.player.inventory.remove(item, qty)
-    state.ship_bin.add(item, qty)
-    state.log.add(f"You drop {qty} {item.name} in the bin.", C.DIM)
+    state.player.inventory.remove(item, qty, quality=quality)
+    state.ship_bin.add(item, qty, quality=quality)
+    from . import skills
+    star = (" " + skills.stars(quality)) if quality else ""
+    state.log.add(f"You drop {qty} {item.name}{star} in the bin.", C.DIM)
 
 
 def sell_shipment(state: GameState) -> None:
-    """Convert everything in the shipping bin to gold overnight."""
-    total = sum(it.value * qty for it, qty in state.ship_bin.slots)
+    """Convert everything in the shipping bin to gold overnight (quality-scaled)."""
+    total = sum(slot_value(it, ql) * qty for it, qty, ql in state.ship_bin.slots)
     if total > 0:
         state.player.gold += total
         state.bump("gold_earned", total)

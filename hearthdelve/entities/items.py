@@ -17,6 +17,7 @@ class Item:
     desc: str = ""
     stackable: bool = True
     value: int = 0       # base sell price (0 = not sellable)
+    energy: int = 0      # stamina restored when eaten (food dishes)
 
 
 # --- Tools (hotbar) ----------------------------------------------------------
@@ -132,6 +133,20 @@ GRAPE_WINE  = Item("Grape Wine",  "ø", "artisan",  "Vintage grape wine; the fin
 PICKLES     = Item("Pickles",     "■", "artisan",  "Pickled vegetables; tangy and tidy.", value=95)
 JELLIED_EEL = Item("Jellied Eel", "■", "artisan",  "Eel set in savoury jelly; a delicacy.", value=150)
 MEAD        = Item("Mead",        "u", "artisan",  "Fermented honey mead (miód pitny).", value=180)
+
+# --- Cooked dishes (kind 'food'; eat to restore stamina, scaled by quality) --
+PARSNIP_SOUP     = Item("Parsnip Soup",     "≈", "food", "A warming bowl of soup.",        value=60, energy=45)
+ROASTED_VEG      = Item("Roasted Veg",      "≈", "food", "Hearty roasted vegetables.",     value=95, energy=70)
+FISH_STEW        = Item("Fish Stew",        "≈", "food", "A rich fisherman's stew.",       value=85, energy=60)
+GRILLED_FISH     = Item("Grilled Fish",     "≈", "food", "Simply grilled and restorative.", value=65, energy=45)
+MUSHROOM_STEW    = Item("Mushroom Stew",    "≈", "food", "Earthy cave-mushroom stew.",     value=90, energy=65)
+GLOWCAP_BROTH    = Item("Glowcap Broth",    "≈", "food", "A radiant, deeply restorative broth.", value=150, energy=95)
+SAUTEED_MUSH     = Item("Sauteed Mushrooms","≈", "food", "Wild field mushrooms in butter.", value=60, energy=45)
+CHANTERELLE_SAUTE= Item("Chanterelle Saute","≈", "food", "Golden chanterelles, gently fried.", value=90, energy=60)
+BOLETE_BROTH     = Item("Bolete Broth",     "≈", "food", "A rich woodland mushroom broth.", value=100, energy=70)
+GLAZED_VEG       = Item("Glazed Vegetables","≈", "food", "Vegetables glazed in honey.",    value=110, energy=75)
+FRIED_FISH       = Item("Fried Fish",       "≈", "food", "Fish fried in sunflower oil.",   value=95, energy=65)
+CANDIED_FRUIT    = Item("Candied Fruit",    "≈", "food", "Fruit candied in honey; a sweet treat.", value=140, energy=85)
 AGED_MEAD   = Item("Aged Mead",   "u", "artisan",  "Mead matured in the cask; deep and mellow.", value=360)
 SUNFLOWER_OIL = Item("Sunflower Oil", "ó", "artisan", "Golden oil pressed from sunflowers.", value=130)
 
@@ -173,29 +188,51 @@ def by_name(name: str) -> Item | None:
 
 @dataclass
 class Inventory:
-    """Stacking storage for non-equipment goods."""
-    slots: list[list] = field(default_factory=list)   # list of [Item, qty]
+    """Stacking storage for non-equipment goods. Each slot is [item, qty,
+    quality]; the same item at different qualities (0-5 stars) stacks apart."""
+    slots: list[list] = field(default_factory=list)   # list of [Item, qty, quality]
 
-    def add(self, item: Item, qty: int = 1) -> None:
+    def add(self, item: Item, qty: int = 1, quality: int = 0) -> None:
         if item.stackable:
-            for entry in self.slots:
-                if entry[0] is item:
-                    entry[1] += qty
+            for e in self.slots:
+                if e[0] is item and e[2] == quality:
+                    e[1] += qty
                     return
-        self.slots.append([item, qty])
+        self.slots.append([item, qty, quality])
 
-    def count(self, item: Item) -> int:
-        return sum(e[1] for e in self.slots if e[0] is item)
+    def count(self, item: Item, quality: int | None = None) -> int:
+        return sum(e[1] for e in self.slots
+                   if e[0] is item and (quality is None or e[2] == quality))
 
-    def remove(self, item: Item, qty: int = 1) -> bool:
-        """Remove up to qty of item; drop the stack if it empties. False if absent."""
-        for entry in self.slots:
-            if entry[0] is item:
-                entry[1] -= qty
-                if entry[1] <= 0:
-                    self.slots.remove(entry)
-                return True
-        return False
+    def remove(self, item: Item, qty: int = 1, quality: int | None = None) -> bool:
+        """Remove up to qty (lowest quality first unless a quality is given)."""
+        stacks = sorted((e for e in self.slots if e[0] is item
+                         and (quality is None or e[2] == quality)),
+                        key=lambda e: e[2])
+        if not stacks:
+            return False
+        need = qty
+        for e in stacks:
+            take = min(e[1], need)
+            e[1] -= take
+            need -= take
+            if need <= 0:
+                break
+        self.slots = [e for e in self.slots if e[1] > 0]
+        return True
+
+    def pop_quality(self, item: Item, qty: int = 1) -> float:
+        """Remove qty (lowest quality first) and return the average quality of
+        the units removed — used to carry quality into processed goods."""
+        removed = []
+        for e in sorted((e for e in self.slots if e[0] is item), key=lambda e: e[2]):
+            take = min(e[1], qty - len(removed))
+            removed.extend([e[2]] * take)
+            e[1] -= take
+            if len(removed) >= qty:
+                break
+        self.slots = [e for e in self.slots if e[1] > 0]
+        return sum(removed) / len(removed) if removed else 0.0
 
     def is_empty(self) -> bool:
         return not self.slots

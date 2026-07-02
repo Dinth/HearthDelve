@@ -21,9 +21,15 @@ class NPC:
     color: tuple[int, int, int]
     shop: str | None                 # "general" | "blacksmith" | None
     blurbs: tuple[str, ...]
+    # friendship-gated lines: (min_hearts, text) — revealed as you grow closer,
+    # so backstory unfolds the more you befriend them.
+    heart_blurbs: tuple = ()
     loves: tuple[Item, ...] = ()
     likes: tuple[Item, ...] = ()
     dislikes: tuple[Item, ...] = ()
+    # a CLOSED, in-character pool this NPC may gift as a friendship reward
+    # (a blacksmith gives metal, a child gives flowers — never the reverse)
+    gifts: tuple[Item, ...] = ()
     bio: str = ""                    # short "who & where" line for the relationships menu
     role: str = "villager"           # shopkeeper|blacksmith|innkeeper|priest|farmer|fisher|forager|carpenter|trader|villager
     village: str = ""                # set by worldgen
@@ -46,10 +52,16 @@ class NPC:
     def hearts(self) -> int:
         return min(MAX_HEARTS, self.friendship // HEART_POINTS)
 
-    def next_blurb(self) -> str:
-        line = self.blurbs[self._blurb_i % len(self.blurbs)]
+    def speak(self) -> str:
+        """Next line from the pool that's unlocked at the current friendship —
+        deeper, more personal lines surface as hearts rise."""
+        pool = list(self.blurbs) + [t for (th, t) in self.heart_blurbs if self.hearts >= th]
+        line = pool[self._blurb_i % len(pool)]
         self._blurb_i += 1
         return line
+
+    def next_blurb(self) -> str:      # kept for compatibility
+        return self.speak()
 
     def gift_reaction(self, item: Item) -> tuple[int, str]:
         """Return (friendship_points, reaction line) for being given item."""

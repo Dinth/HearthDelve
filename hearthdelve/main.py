@@ -289,7 +289,7 @@ def _gather_drop(state: GameState, item, target) -> None:
         fruit = content.SHRUB_FRUIT.get(target.name)
         if fruit:
             n = random.randint(1, 2)
-            inv.add(fruit, n)
+            inv.add(fruit, n, quality=skills.roll_quality(state, "Foraging"))
             parts.append(f"+{n} {fruit.name}")
         if random.random() < 0.5:
             inv.add(items.FIBER, 1)
@@ -320,10 +320,12 @@ def do_grab(state: GameState) -> None:
                 item = _MUSHROOM_ITEM.get(state.world.tiles[gx, gy], items.BUTTON_MUSHROOM)
                 floor, col = tile.GRASS, (206, 176, 130)
             state.world.tiles[gx, gy] = floor
-            p.inventory.add(item, 1)
             from .game import skills
+            q = skills.roll_quality(state, "Foraging")
+            p.inventory.add(item, 1, quality=q)
             skills.gain(state, "Foraging", 12 if tk == "glowcap" else 8)
-            state.log.add(f"You gather a {item.name.lower()}.", col)
+            star = (" " + skills.stars(q)) if q else ""
+            state.log.add(f"You gather a {item.name.lower()}{star}.", col)
             turns.advance_time(state, C.HARVEST_COST[1])
             return
         if (gx, gy) in state.world.crops:
@@ -340,13 +342,14 @@ def do_grab(state: GameState) -> None:
 
 def _rob_hive(state: GameState, x: int, y: int) -> None:
     """Rob a wild bee hive: honey and wax, a mild sting, and rarely a queen."""
+    from .game import skills
     p = state.player
     honey = random.randint(1, 3)
     wax = random.randint(1, 2)
-    p.inventory.add(items.HONEY, honey)
+    p.inventory.add(items.HONEY, honey, quality=skills.roll_quality(state, "Foraging"))
     p.inventory.add(items.BEESWAX, wax)
     got = f"{honey} honey and {wax} beeswax"
-    if random.random() < 0.10:                       # a rare prize
+    if random.random() < 0.03:                       # a very rare prize
         p.inventory.add(items.BEE_QUEEN, 1)
         got += ", and a BEE QUEEN"
     state.world.tiles[x, y] = tile.GRASS
@@ -359,6 +362,51 @@ def _rob_hive(state: GameState, x: int, y: int) -> None:
     from .game import skills
     skills.gain(state, "Foraging", 14)
     turns.advance_time(state, C.HARVEST_COST[1])
+
+
+def _at_postbox(state: GameState) -> bool:
+    p = state.player
+    for gx, gy in ((p.x + p.facing[0], p.y + p.facing[1]), (p.x, p.y)):
+        if state.world.in_bounds(gx, gy) and state.world.tile_at(gx, gy).kind == "postbox":
+            return True
+    return False
+
+
+def collect_letter(state: GameState, letter) -> None:
+    """Take a letter's contents into the pack and read it out."""
+    from .game import skills
+    p = state.player
+    got = []
+    for name, qty, ql in letter.get("items", ()):
+        it = items.by_name(name) if isinstance(name, str) else name
+        if it:
+            p.inventory.add(it, qty, ql)
+            got.append(it.name + ((" " + skills.stars(ql)) if ql else ""))
+    state.log.add(f"Letter from {letter['sender']}:", (230, 200, 130))
+    for line in letter["body"].split("\n"):
+        state.log.add("  " + line, C.WHITE)
+    if got:
+        state.log.add("  Enclosed: " + ", ".join(got) + ".", (180, 230, 160))
+
+
+def edible_items(state: GameState):
+    """Cooked dishes in the pack, one entry per (item, quality)."""
+    return [(it, q, ql) for it, q, ql in state.player.inventory.slots if it.kind == "food"]
+
+
+def _eat(state: GameState, item, quality: int) -> None:
+    from .game import skills
+    p = state.player
+    if p.inventory.count(item, quality) <= 0:
+        return
+    p.inventory.remove(item, 1, quality=quality)
+    gain = round(item.energy * (1 + 0.12 * quality))     # tastier food goes further
+    p.energy = min(p.max_energy, p.energy + gain)
+    p.hp = min(p.max_hp, p.hp + max(1, gain // 6))
+    state.bump("meals_eaten")
+    star = (" " + skills.stars(quality)) if quality else ""
+    state.log.add(f"You eat the {item.name.lower()}{star}. (+{gain} stamina)", (180, 230, 160))
+    turns.advance_time(state, C.USE_SECONDS)
 
 
 def _open_chest(state: GameState, x: int, y: int) -> None:
@@ -505,7 +553,7 @@ def select_slot(state: GameState, n: int) -> None:
 
 def cycle_seed(state: GameState) -> None:
     p = state.player
-    plantables = [it for it, _ in p.inventory.slots if it.kind in ("seed", "sapling")]
+    plantables = [it for it, *_ in p.inventory.slots if it.kind in ("seed", "sapling")]
     if not plantables:
         state.log.add("You have no seeds or saplings to plant.", C.DIM)
         return
@@ -560,6 +608,8 @@ def main() -> None:
     save_on_exit = True      # cleared by "quit without saving"
     cheat_sel = 0            # cursor in the Konami cheat menu
     konami: list = []        # rolling buffer of recent keys
+    eat_sel = 0              # cursor in the eat menu
+    mail_sel = 0             # cursor in the post box
 
     with tcod.context.new(
         columns=C.SCREEN_W,
@@ -624,7 +674,7 @@ def main() -> None:
             elif mode == "dialogue":
                 rendering.render_dialogue(console, state, npc, dialogue_line)
             elif mode == "shop":
-                rendering.render_shop(console, state, npc, shop_sel)
+                rendering.render_shop(console, state, npc, shop_sel, dialogue_line)
             elif mode == "gift":
                 rendering.render_gift(console, state, npc, gift_sel)
             elif mode == "journal":
@@ -637,6 +687,10 @@ def main() -> None:
                 rendering.render_quit(console, state)
             elif mode == "cheats":
                 rendering.render_cheats(console, state, cheat_sel, _cheat_locations(state))
+            elif mode == "eat":
+                rendering.render_eat(console, state, eat_sel)
+            elif mode == "mail":
+                rendering.render_mail(console, state, mail_sel)
             context.present(console)
 
             # A short timeout drives the ambient animation: when no key is
@@ -694,8 +748,14 @@ def main() -> None:
                         use_tool(state)
                         check_faint(state)
                     elif cmd == "grab":
-                        do_grab(state)
-                        check_faint(state)
+                        if _at_postbox(state):
+                            if state.mail:
+                                mode, mail_sel = "mail", 0
+                            else:
+                                state.log.add("Your post box is empty.", C.DIM)
+                        else:
+                            do_grab(state)
+                            check_faint(state)
                     elif cmd == "ability":
                         combat.throw_bomb(state)
                         check_faint(state)
@@ -722,6 +782,11 @@ def main() -> None:
                     elif cmd == "craft":
                         mode = "craft"
                         craft_sel = 0
+                    elif cmd == "eat":
+                        if edible_items(state):
+                            mode, eat_sel = "eat", 0
+                        else:
+                            state.log.add("You have no cooked food. Craft (c) a dish first.", C.DIM)
                     elif cmd == "ship":
                         if near_bin(state):
                             mode = "ship"
@@ -738,6 +803,9 @@ def main() -> None:
                         npc = village.npc_near(state)
                         if npc is None:
                             state.log.add("There's no one here to talk to.", C.DIM)
+                        elif npc.shop == "tavern":
+                            dialogue_line = village.talk(state, npc)   # greeting + friendship
+                            mode, shop_sel = "shop", 0
                         elif npc.shop:
                             npc.met = True
                             mode, shop_sel = "shop", 0
@@ -797,6 +865,32 @@ def main() -> None:
                     elif cmd == "confirm":
                         crafting.craft(state, crafting.content.RECIPES[craft_sel])
 
+                elif mode == "mail":
+                    if cmd in ("cancel", "grab", "quit") or not state.mail:
+                        mode = "play"
+                    elif cmd == "move" and action[2] and state.mail:
+                        mail_sel = (mail_sel + action[2]) % len(state.mail)
+                    elif cmd == "confirm" and state.mail:
+                        mail_sel = min(mail_sel, len(state.mail) - 1)
+                        collect_letter(state, state.mail.pop(mail_sel))
+                        mail_sel = 0
+                        if not state.mail:
+                            mode = "play"
+
+                elif mode == "eat":
+                    foods = edible_items(state)
+                    if cmd in ("cancel", "eat", "quit"):
+                        mode = "play"
+                    elif cmd == "move" and action[2] and foods:
+                        eat_sel = (eat_sel + action[2]) % len(foods)
+                    elif cmd == "confirm" and foods:
+                        eat_sel = min(eat_sel, len(foods) - 1)
+                        it, _q, ql = foods[eat_sel]
+                        _eat(state, it, ql)
+                        check_faint(state)
+                        if not edible_items(state):
+                            mode = "play"
+
                 elif mode == "ship":
                     sellable = crafting.sellable_items(state)
                     if cmd in ("cancel", "ship", "quit"):
@@ -805,7 +899,8 @@ def main() -> None:
                         ship_sel = (ship_sel + action[2]) % len(sellable)
                     elif cmd == "confirm" and sellable:
                         ship_sel = min(ship_sel, len(sellable) - 1)
-                        crafting.ship_item(state, sellable[ship_sel][0])
+                        entry = sellable[ship_sel]
+                        crafting.ship_item(state, entry[0], entry[2])
 
                 elif mode == "dialogue":
                     if cmd == "gift":

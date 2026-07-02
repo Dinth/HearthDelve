@@ -22,6 +22,7 @@ class GameMap:
     spawn: tuple[int, int] = (0, 0)
     bed: tuple[int, int] | None = None
     bin: tuple[int, int] | None = None
+    post_box: tuple[int, int] | None = None
     dungeons: list[tuple[int, int]] = field(default_factory=list)
     dungeon_kind: dict = field(default_factory=dict)   # entrance (x,y) -> kind
     # dungeon-only

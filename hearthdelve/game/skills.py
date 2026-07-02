@@ -5,9 +5,11 @@ small, cozy bonuses. The character sheet shows level and progress.
 """
 from __future__ import annotations
 
+import random
+
 from .state import GameState
 
-SKILLS = ("Farming", "Foraging", "Mining", "Fishing", "Combat")
+SKILLS = ("Farming", "Foraging", "Mining", "Fishing", "Combat", "Cooking")
 XP_PER_LEVEL = 120
 MAX_LEVEL = 10
 
@@ -61,3 +63,39 @@ def fishing_catch_bonus(state: GameState) -> float:
 
 def extra_yield_chance(state: GameState, skill: str) -> float:
     return skill_level(state, skill) * 0.05             # up to +50% double drops
+
+
+# --- quality (0-5 stars) -----------------------------------------------------
+STAR = "★"
+_QUALITY_KINDS = ("crop", "fish", "artisan", "food")
+_QUALITY_NAMES = ("Honey",)               # tiered items that aren't one of the kinds
+
+
+def has_quality(item) -> bool:
+    """Whether an item carries a 0-5 star quality rating."""
+    return item.kind in _QUALITY_KINDS or item.name in _QUALITY_NAMES
+
+
+def stars(q: int) -> str:
+    return STAR * q if q else ""
+
+
+def roll_quality(state: GameState, skill: str) -> int:
+    """Quality of freshly produced goods: mostly the relevant skill, a little
+    the overall character level, plus luck. Returns 0-5 stars."""
+    lvl = skill_level(state, skill)                       # 0..10
+    clvl = state.player.level                             # character level (1..)
+    score = lvl * 0.42 + clvl * 0.12 + random.uniform(-1.3, 1.3)
+    return max(0, min(5, round(score - 0.8)))
+
+
+def process_quality(avg_in: float, state: GameState, skill: str) -> int:
+    """Quality of a processed/cooked good: inherits the average ingredient
+    quality, nudged up or down by the crafter's skill (plus a little luck)."""
+    adjust = (skill_level(state, skill) - 5) * 0.14 + random.uniform(-0.6, 0.6)
+    return max(0, min(5, round(avg_in + adjust)))
+
+
+def value_mult(quality: int) -> float:
+    """Sell-value multiplier for quality: 0★ = 1.0 … 5★ = 2.0."""
+    return 1.0 + 0.2 * quality

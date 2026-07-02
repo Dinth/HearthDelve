@@ -18,12 +18,21 @@ def scheduled_spot(npc, hour: int, weather: str, season: str, day_of_season: int
     bad = weather in ("Rain", "Storm", "Snow")
     storm = weather == "Storm"
 
+    # Festival day: the whole village gathers in the square through the day
+    # (unless a storm spoils it). Children roam it, adults mill about.
+    if content.festival_on(season, day_of_season) and 9 <= hour < 19 and not storm:
+        return "square"
+
+    # Children: out playing around the square by day, home by dusk (and in when
+    # the weather's foul). "square" triggers the roaming AI in update_npcs.
+    if role == "child":
+        if hour < 8 or hour >= 19 or hour == 13 or storm:
+            return "home"
+        return "square"
+
     # night & early morning: asleep / at home
     if hour < 8 or hour >= 22:
         return "home"
-    # first of the season is a holy morning — folk gather at the shrine
-    if day_of_season == 1 and 9 <= hour < 11 and role != "innkeeper":
-        return "temple"
     # midday meal at home
     if hour == 13:
         return "home"
@@ -52,12 +61,52 @@ def scheduled_spot(npc, hour: int, weather: str, season: str, day_of_season: int
 
 
 def update_npcs(state: GameState) -> None:
-    """Teleport each resident to their scheduled anchor for the hour."""
+    """Move each resident toward their scheduled anchor for the hour. Adults
+    teleport to their spot; children roam and play around the square by day."""
     hour = (state.time_minutes // 60) % 24
     for npc in state.world.npcs:
         key = scheduled_spot(npc, hour, state.weather, state.season, state.day_of_season)
-        spot = npc.spots.get(key) or npc.spots.get("home") or npc.work
-        npc.x, npc.y = spot
+        if key == "square":
+            _child_roam(state, npc)          # mill about (kids also chase to play)
+        else:
+            npc.x, npc.y = npc.spots.get(key) or npc.spots.get("home") or npc.work
+
+
+_CHILD_RANGE = 9      # how far kids stray from the square while playing
+
+
+def _child_roam(state: GameState, npc) -> None:
+    """A lively amble: kids wander near the square and chase each other to play."""
+    import random
+    w = state.world
+    anchor = npc.spots.get("square") or npc.spots.get("home") or (npc.x, npc.y)
+    px, py = state.player.x, state.player.y
+    # find a playmate to run toward, if one's a little way off
+    mates = [n for n in w.npcs if n.role == "child" and n is not npc]
+    mate = min(mates, key=lambda k: (k.x - npc.x) ** 2 + (k.y - npc.y) ** 2, default=None)
+
+    tx = ty = None
+    if mate is not None:
+        d = max(abs(mate.x - npc.x), abs(mate.y - npc.y))
+        if 2 < d < 16 and random.random() < 0.6:
+            tx, ty = mate.x, mate.y                     # chase a friend
+    if tx is None and max(abs(npc.x - anchor[0]), abs(npc.y - anchor[1])) > _CHILD_RANGE:
+        tx, ty = anchor                                 # strayed too far — head back
+    if random.random() < 0.35 and tx is None:
+        return                                          # pause a beat
+
+    if tx is not None:
+        sx = (tx > npc.x) - (tx < npc.x)
+        sy = (ty > npc.y) - (ty < npc.y)
+        options = [(sx, sy), (sx, 0), (0, sy)]
+    else:
+        options = [(dx, dy) for dx in (-1, 0, 1) for dy in (-1, 0, 1) if dx or dy]
+        random.shuffle(options)
+    for dx, dy in options:
+        nx, ny = npc.x + dx, npc.y + dy
+        if (dx or dy) and w.walkable(nx, ny) and (nx, ny) != (px, py):
+            npc.x, npc.y = nx, ny
+            return
 
 
 def npc_near(state: GameState):
@@ -76,11 +125,67 @@ def npc_near(state: GameState):
 
 # --- talk & gift ------------------------------------------------------------
 def talk(state: GameState, npc: NPC) -> str:
+    first = not npc.talked_today
     npc.met = True
-    if not npc.talked_today:
+    if first:
         npc.talked_today = True
         npc.friendship = min(MAX_HEARTS * 100, npc.friendship + 10)
-    return npc.next_blurb()
+        treat = _festival_treat(state, npc)  # a nibble at the fair
+        if treat:
+            return treat
+        reward = _heart_reward(state, npc)   # gifts from a good friend
+        if reward:
+            return reward
+    return npc.speak()
+
+
+def _festival_treat(state: GameState, npc: NPC):
+    """At a festival, the first villager you greet presses a themed treat on
+    you — once per festival."""
+    fest = content.festival_on(state.season, state.day_of_season)
+    if not fest:
+        return None
+    key = f"festival_{state.year}_{state.season}_{fest[0]}"
+    if state.stats.get(key):
+        return None
+    state.stats[key] = 1
+    treat = fest[3]
+    state.player.inventory.add(treat, 1)
+    name = fest[1][0].upper() + fest[1][1:]
+    return (f"\"{name}! So glad you came,\" says {npc.name}.\n"
+            f"\"Here — a {treat.name.lower()} for the day. Enjoy!\"")
+
+
+def _heart_reward(state: GameState, npc: NPC):
+    """A good friend may give the player something from their OWN, in-character
+    gift pool. The forester's rare bee queen recurs at high friendship; other
+    folk give a one-time token at 5 hearts and again at 8."""
+    import random
+    from ..entities import items
+    p = state.player
+    if not npc.gifts:
+        return None
+
+    # The forester passes on a bee queen (or a sapling) now and then, once close.
+    if npc.role == "forester" and npc.hearts >= 6 and random.random() < 0.30:
+        gift = random.choice(npc.gifts)
+        p.inventory.add(gift, 1)
+        if gift is items.BEE_QUEEN:
+            return ("Yew cups his hands and hums low; something within them stirs:\n"
+                    "\"A queen for a friend — go raise her a hall of gold!\"")
+        return (f"Yew tucks a {gift.name.lower()} into your pack with a wink:\n"
+                "\"The wood shares with them as shares with the wood!\"")
+
+    # One-time tokens of friendship at heart milestones, from their own pool.
+    for th in (8, 5):
+        key = f"heartgift_{npc.name}_{th}"
+        if npc.hearts >= th and not state.stats.get(key):
+            state.stats[key] = 1
+            gift = random.choice(npc.gifts)
+            p.inventory.add(gift, 1)
+            return (f"{npc.name} presses a {gift.name.lower()} into your hands.\n"
+                    "\"For a good friend. I mean it — take it.\"")
+    return None
 
 
 def gift(state: GameState, npc: NPC, item) -> None:
@@ -97,7 +202,7 @@ def gift(state: GameState, npc: NPC, item) -> None:
 
 def giftable_items(state: GameState):
     """Inventory items that can be given (anything but tools/weapon)."""
-    return [(it, q) for it, q in state.player.inventory.slots
+    return [(it, q, ql) for it, q, ql in state.player.inventory.slots
             if it.kind in ("crop", "artisan", "material", "food", "fish")]
 
 
@@ -110,6 +215,9 @@ def shop_entries(shop: str):
         ups = [("upgrade", t) for t in items.TIERED_TOOLS]
         buys = [("buy", it, price) for it, price in content.BLACKSMITH_STOCK]
         return ups + buys
+    if shop == "tavern":
+        return [("meal", label, price, stam, hp)
+                for (label, price, stam, hp) in content.TAVERN_MENU]
     return []
 
 
@@ -122,6 +230,20 @@ def purchase(state: GameState, entry) -> None:
         state.player.gold -= price
         state.player.inventory.add(item, 1)
         state.log.add(f"Bought {item.name} for {price}g.")
+    elif entry[0] == "meal":
+        _, label, price, stam, hp = entry
+        p = state.player
+        if p.gold < price:
+            state.log.add("You can't afford that.", C.DIM)
+            return
+        p.gold -= price
+        p.energy = min(p.max_energy, p.energy + stam)
+        p.hp = min(p.max_hp, p.hp + hp)
+        state.bump("meals_eaten")
+        from . import turns
+        from ..engine import constants as _C
+        turns.advance_time(state, _C.USE_SECONDS)
+        state.log.add(f"You tuck into {label.lower()}. (+{stam} stamina)", (180, 230, 160))
     elif entry[0] == "upgrade":
         upgrade_tool(state, entry[1])
 

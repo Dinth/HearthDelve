@@ -483,6 +483,7 @@ _TILE_DESC = {
     "door": "your front door.",
     "bed": "your bed. Sleep here to end the day (coming soon).",
     "shipping_bin": "the shipping bin. Drop goods to sell (coming soon).",
+    "post_box": "your post box — letters, invitations and gifts arrive here (g).",
     "fence": "a wooden fence around the plot.",
     "tilled": "tilled soil, ready for seeds.",
     "dungeon_down": "a stairway leading down. Press > to descend.",
@@ -668,6 +669,47 @@ def _modal(con, w, h, title):
     return x, y
 
 
+def render_mail(con: tcod.console.Console, state: GameState, sel: int) -> None:
+    mail = state.mail
+    body = mail[min(sel, len(mail) - 1)]["body"].split("\n") if mail else []
+    w = 60
+    h = len(mail) + len(body) + 8
+    x, y = _modal(con, w, h, "Post Box")
+    if not mail:
+        con.print(x + 2, y + 2, "The post box is empty.", fg=C.DIM)
+    for i, letter in enumerate(mail):
+        bg = (54, 50, 36) if i == sel else (20, 22, 32)
+        if i == sel:
+            con.draw_rect(x + 1, y + 2 + i, w - 2, 1, ch=ord(" "), bg=bg)
+        tag = " ✉+gift" if letter.get("items") else " ✉"
+        con.print(x + 2, y + 2 + i, ("▸ " if i == sel else "  ") + f"From {letter['sender']}{tag}",
+                  fg=C.WHITE, bg=bg)
+    # the open letter's text
+    ly = y + 3 + len(mail)
+    for j, bl in enumerate(body):
+        con.print(x + 3, ly + j, bl[:w - 6], fg=(210, 205, 190))
+    con.print(x + 2, y + h - 2, "↑↓ select   Enter take letter   Esc close", fg=C.DIM)
+
+
+def render_eat(con: tcod.console.Console, state: GameState, sel: int) -> None:
+    from ..game import skills
+    from ..main import edible_items
+    foods = edible_items(state)
+    w, h = 50, max(8, len(foods) + 6)
+    x, y = _modal(con, w, h, "Eat  (restores stamina)")
+    if not foods:
+        con.print(x + 2, y + 2, "No cooked food — craft a dish first (c).", fg=C.DIM)
+    for i, (it, q, ql) in enumerate(foods):
+        bg = (54, 50, 36) if i == sel else (20, 22, 32)
+        if i == sel:
+            con.draw_rect(x + 1, y + 2 + i, w - 2, 1, ch=ord(" "), bg=bg)
+        star = (" " + skills.stars(ql)) if ql else ""
+        gain = round(it.energy * (1 + 0.12 * ql))
+        con.print(x + 2, y + 2 + i, ("▸ " if i == sel else "  ") + f"{q:>2} {it.name}{star}", fg=C.WHITE, bg=bg)
+        con.print(x + w - 13, y + 2 + i, f"+{gain} stamina", fg=(150, 210, 150), bg=bg)
+    con.print(x + 2, y + h - 2, "↑↓ select   Enter eat   Esc close", fg=C.DIM)
+
+
 def render_cheats(con: tcod.console.Console, state: GameState, sel: int, locations) -> None:
     c = state.cheats
     rows = [f"Freeze Health:  {'ON ' if c.get('freeze_hp') else 'off'}",
@@ -725,7 +767,8 @@ def build_codex_pages(state: GameState):
         ("  1-9              select hotbar tool / seed", C.WHITE),
         ("  g                gather / harvest / use a machine", C.WHITE),
         ("  a                throw a bomb (harms monsters, breaks rock)", C.WHITE),
-        ("  c                craft, build machines, cook", C.WHITE),
+        ("  c                craft, build machines, cook dishes", C.WHITE),
+        ("  x                eat a cooked dish (restores stamina)", C.WHITE),
         ("  b                shipping bin (sell) — stand beside it", C.WHITE),
         ("  t                talk to a villager / open a shop", C.WHITE),
         ("  f                give a villager a gift", C.WHITE),
@@ -910,10 +953,12 @@ def render_codex(con: tcod.console.Console, state: GameState, page: int, scroll:
 
 
 def render_inventory(con: tcod.console.Console, state: GameState) -> None:
+    from ..game import skills
     inv = state.player.inventory
-    rows = [f"{qty:>3}  {item.glyph} {item.name}" for item, qty in inv.slots] \
+    rows = [f"{qty:>3}  {item.glyph} {item.name}{('  ' + skills.stars(ql)) if ql else ''}"
+            for item, qty, ql in inv.slots] \
         or ["  (empty — grow and forage to fill it)"]
-    w, h = 44, max(8, len(rows) + 5)
+    w, h = 46, max(8, len(rows) + 5)
     x, y = _modal(con, w, h, "Inventory  (i / Esc to close)")
     for i, row in enumerate(rows):
         con.print(x + 2, y + 2 + i, row[:w - 4], fg=C.WHITE)
@@ -969,20 +1014,22 @@ def render_craft(con: tcod.console.Console, state: GameState, sel: int) -> None:
 def render_ship(con: tcod.console.Console, state: GameState, sel: int) -> None:
     from ..game import crafting
 
+    from ..game import skills
     items_ = crafting.sellable_items(state)
-    pending = sum(it.value * q for it, q in state.ship_bin.slots)
-    w, h = 50, max(8, len(items_) + 7)
+    pending = sum(crafting.slot_value(it, ql) * q for it, q, ql in state.ship_bin.slots)
+    w, h = 52, max(8, len(items_) + 7)
     x, y = _modal(con, w, h, "Shipping Bin  (sells overnight)")
 
     if not items_:
         con.print(x + 2, y + 2, "Nothing to sell — grow and gather first.", fg=C.DIM)
-    for i, (it, q) in enumerate(items_):
+    for i, (it, q, ql) in enumerate(items_):
         marker = "▸" if i == sel else " "
         if i == sel:
             con.draw_rect(x + 1, y + 2 + i, w - 2, 1, ch=ord(" "), bg=(54, 50, 36))
         bg = (54, 50, 36) if i == sel else (20, 22, 32)
-        con.print(x + 2, y + 2 + i, f"{marker} {q:>3}  {it.name}", fg=C.WHITE, bg=bg)
-        con.print(x + w - 14, y + 2 + i, f"{it.value}g each", fg=C.GOLD_COLOR, bg=bg)
+        star = (" " + skills.stars(ql)) if ql else ""
+        con.print(x + 2, y + 2 + i, f"{marker} {q:>3}  {it.name}{star}", fg=C.WHITE, bg=bg)
+        con.print(x + w - 12, y + 2 + i, f"{crafting.slot_value(it, ql)}g ea", fg=C.GOLD_COLOR, bg=bg)
 
     con.print(x + 2, y + h - 3, f"In bin (sells tonight): {pending}g", fg=C.GOLD_COLOR)
     con.print(x + 2, y + h - 2, "↑↓ select   Enter ship stack   Esc close", fg=C.DIM)
@@ -1062,23 +1109,35 @@ def render_dialogue(con: tcod.console.Console, state: GameState, npc, line: str)
     con.print(x + 2, y + h - 2, "f to gift · any key to close", fg=C.DIM)
 
 
-def render_shop(con: tcod.console.Console, state: GameState, npc, sel: int) -> None:
+def render_shop(con: tcod.console.Console, state: GameState, npc, sel: int, line: str = "") -> None:
     from ..game import village
     from ..data import content
     from ..entities import items as I
 
     entries = village.shop_entries(npc.shop)
-    title = "General Store" if npc.shop == "general" else "Blacksmith"
-    w, h = 56, len(entries) + 6
+    title = {"general": "General Store", "blacksmith": "Blacksmith",
+             "tavern": "Tavern"}.get(npc.shop, "Shop")
+    header = line.split("\n") if (npc.shop == "tavern" and line) else []
+    w, h = 56, len(entries) + 6 + len(header)
     x, y = _modal(con, w, h, f"{npc.name}'s {title}")
     p = state.player
+    top = y + 2
+    for hl in header:                                     # innkeeper's greeting
+        con.print(x + 2, top, hl[:w - 4], fg=(210, 205, 190))
+        top += 1
 
     for i, e in enumerate(entries):
-        yy = y + 2 + i
+        yy = top + i
         rowbg = (54, 50, 36) if i == sel else (20, 22, 32)
         if i == sel:
             con.draw_rect(x + 1, yy, w - 2, 1, ch=ord(" "), bg=rowbg)
-        if e[0] == "buy":
+        if e[0] == "meal":
+            _, label, price, stam, _hp = e
+            afford = p.gold >= price
+            con.print(x + 2, yy, ("▸ " if i == sel else "  ") + label, fg=C.WHITE if afford else C.DIM, bg=rowbg)
+            con.print(x + w - 18, yy, f"+{stam} stam", fg=(150, 210, 150), bg=rowbg)
+            con.print(x + w - 8, yy, f"{price}g", fg=C.GOLD_COLOR if afford else C.DIM, bg=rowbg)
+        elif e[0] == "buy":
             _, item, price = e
             afford = p.gold >= price
             con.print(x + 2, yy, ("▸ " if i == sel else "  ") + item.name, fg=C.WHITE if afford else C.DIM, bg=rowbg)
@@ -1108,11 +1167,13 @@ def render_gift(con: tcod.console.Console, state: GameState, npc, sel: int) -> N
     x, y = _modal(con, w, h, f"Give a gift to {npc.name}")
     if not gifts:
         con.print(x + 2, y + 2, "You have nothing to give.", fg=C.DIM)
-    for i, (it, q) in enumerate(gifts):
+    from ..game import skills
+    for i, (it, q, ql) in enumerate(gifts):
         yy = y + 2 + i
         rowbg = (54, 50, 36) if i == sel else (20, 22, 32)
         if i == sel:
             con.draw_rect(x + 1, yy, w - 2, 1, ch=ord(" "), bg=rowbg)
         tag = " (loves!)" if it in npc.loves else " (likes)" if it in npc.likes else " (dislikes)" if it in npc.dislikes else ""
-        con.print(x + 2, yy, ("▸ " if i == sel else "  ") + f"{q:>3} {it.name}{tag}", fg=C.WHITE, bg=rowbg)
+        star = (" " + skills.stars(ql)) if ql else ""
+        con.print(x + 2, yy, ("▸ " if i == sel else "  ") + f"{q:>3} {it.name}{star}{tag}", fg=C.WHITE, bg=rowbg)
     con.print(x + 2, y + h - 2, "↑↓ select   Enter give   Esc close", fg=C.DIM)

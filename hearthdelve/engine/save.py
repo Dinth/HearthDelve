@@ -23,7 +23,7 @@ from ..world import worldgen
 from ..world.crops import CropPlot, Tree
 from ..game.state import GameState, MessageLog
 
-SAVE_VERSION = 2
+SAVE_VERSION = 4
 SAVE_PATH = os.path.join(os.path.expanduser("~"), ".hearthdelve_save.json")
 
 
@@ -58,14 +58,18 @@ def save(state: GameState, path: str = SAVE_PATH) -> None:
             "active_slot": p.active_slot,
             "hotbar": [it.name for it in p.hotbar],
             "weapon": p.weapon.name if p.weapon else None,
-            "inventory": [[it.name, q] for it, q in p.inventory.slots],
+            "inventory": [[it.name, q, ql] for it, q, ql in p.inventory.slots],
             "tool_tier": {it.name: t for it, t in p.tool_tier.items()},
             "active_seed": p.active_seed.name if p.active_seed else None,
             "skills": dict(p.skills),
         },
-        "ship_bin": [[it.name, q] for it, q in state.ship_bin.slots],
+        "ship_bin": [[it.name, q, ql] for it, q, ql in state.ship_bin.slots],
         "stats": dict(state.stats),
         "quests_done": list(state.quests_done),
+        "mail": [{"sender": m["sender"], "body": m["body"],
+                  "items": [[(it.name if hasattr(it, "name") else it), q, ql]
+                            for it, q, ql in m.get("items", [])]}
+                 for m in state.mail],
         "tiles_shape": [surf.width, surf.height],
         "tiles": base64.b64encode(np.ascontiguousarray(surf.tiles).tobytes()).decode("ascii"),
         "crops": {f"{x},{y}": [pl.crop.name, pl.days_grown, pl.watered, pl.dead]
@@ -73,7 +77,7 @@ def save(state: GameState, path: str = SAVE_PATH) -> None:
         "trees": {f"{x},{y}": [t.name, t.age, t.has_fruit]
                   for (x, y), t in surf.trees.items()},
         "machines": {f"{x},{y}": [m.kind, m.loaded_output.name if m.loaded_output else None,
-                                   m.ready_at, m.has_queen]
+                                   m.ready_at, m.has_queen, m.out_quality]
                      for (x, y), m in surf.machines.items()},
         "npcs": {n.name: [n.friendship, n.gifted_today, n.talked_today, n._blurb_i, n.met]
                  for n in surf.npcs},
@@ -120,6 +124,8 @@ def load(path: str = SAVE_PATH) -> GameState:
         m.ready_at = ready
         if len(rec) > 3:
             m.has_queen = rec[3]
+        if len(rec) > 4:
+            m.out_quality = rec[4]
         world.machines[(x, y)] = m
 
     for n in world.npcs:
@@ -143,7 +149,8 @@ def load(path: str = SAVE_PATH) -> GameState:
     player.active_slot = pd["active_slot"]
     player.hotbar = [items.by_name(n) for n in pd["hotbar"] if items.by_name(n)]
     player.weapon = items.by_name(pd["weapon"]) if pd["weapon"] else None
-    player.inventory = Inventory(slots=[[items.by_name(n), q] for n, q in pd["inventory"] if items.by_name(n)])
+    player.inventory = Inventory(slots=[[items.by_name(rec[0]), rec[1], rec[2] if len(rec) > 2 else 0]
+                                        for rec in pd["inventory"] if items.by_name(rec[0])])
     player.tool_tier = {items.by_name(n): t for n, t in pd["tool_tier"].items() if items.by_name(n)}
     player.active_seed = items.by_name(pd.get("active_seed") or "") or items.PARSNIP_SEEDS
     player.skills = dict(pd.get("skills", {}))
@@ -153,7 +160,9 @@ def load(path: str = SAVE_PATH) -> GameState:
     state.day = data["day"]
     state.clock = data["clock"]
     state.weather = data["weather"]
-    state.ship_bin = Inventory(slots=[[items.by_name(n), q] for n, q in data["ship_bin"] if items.by_name(n)])
+    state.ship_bin = Inventory(slots=[[items.by_name(rec[0]), rec[1], rec[2] if len(rec) > 2 else 0]
+                                      for rec in data["ship_bin"] if items.by_name(rec[0])])
     state.stats = dict(data.get("stats", {}))
     state.quests_done = set(data.get("quests_done", []))
+    state.mail = data.get("mail", [])
     return state
