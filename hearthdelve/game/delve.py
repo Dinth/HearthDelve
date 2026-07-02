@@ -1,0 +1,98 @@
+"""Entering, leaving, and seeing inside dungeons."""
+from __future__ import annotations
+
+import tcod.map
+
+from ..world import dungeon, tile
+from .state import GameState
+
+
+def _feeling(gm) -> str:
+    """A NetHack-style level feeling from the floor's riches and dangers."""
+    ore = int((gm.tiles == tile.ORE_VEIN).sum())
+    gem = int((gm.tiles == tile.GEM_VEIN).sum())
+    score = ore + gem * 3
+    if score == 0:
+        base = "This place feels barren."
+    elif score <= 3:
+        base = "There's little of worth here."
+    elif score <= 8:
+        base = "You sense a few veins worth mining."
+    elif score <= 15:
+        base = "This floor feels rich with ore."
+    else:
+        base = "Your heart quickens — treasure fills these walls."
+    extra = []
+    if gem:
+        extra.append("A gemstone glints somewhere in the dark.")
+    if (gm.tiles == tile.WATER).any():
+        extra.append("You hear water splashing nearby.")
+    if (gm.tiles == tile.GOLD_PILE).any():
+        extra.append("You feel strangely excited.")
+    if (gm.tiles == tile.CHEST).any():
+        extra.append("Something valuable lies hidden here.")
+    if (gm.tiles == tile.MUSHROOM).any():
+        extra.append("A loamy, mushroomy smell hangs in the air.")
+    if (gm.tiles == tile.WISPWOOD).any():
+        extra.append("A strange living glow drifts on the air — something grows down here.")
+    if (gm.tiles == tile.TRAP_HIDDEN).any():
+        extra.append("Something about the floor makes you uneasy.")
+    if any(getattr(m, "boss", False) for m in gm.monsters):
+        extra.append("You sense an imminent danger.")
+    return base + (" " + " ".join(extra) if extra else "")
+
+
+def update_fov(state: GameState) -> None:
+    w = state.world
+    if not w.is_dungeon:
+        return
+    w.visible = tcod.map.compute_fov(
+        w.transparency(), (state.player.x, state.player.y), radius=dungeon.FOV_RADIUS
+    )
+    w.explored |= w.visible
+
+
+def _floor_seed(state: GameState, depth: int) -> int:
+    return (hash((state.seed, state.dungeon_kind, depth, state.day)) & 0x7FFFFFFF)
+
+
+def _go_to_floor(state: GameState, depth: int, descending: bool) -> None:
+    gm = dungeon.generate(_floor_seed(state, depth), state.dungeon_kind, depth)
+    state.world = gm
+    state.stats["deepest_depth"] = max(state.stats.get("deepest_depth", 0), depth)
+    # arrive at the up-stairs when descending into a floor, down-stairs when rising
+    state.player.x, state.player.y = gm.stairs_up if descending else gm.stairs_down
+    update_fov(state)
+    state.log.add(_feeling(gm), (176, 180, 216))
+
+
+def enter(state: GameState, kind: str) -> None:
+    """Step from a surface entrance into floor 1 of a dungeon site."""
+    state.return_pos = (state.player.x, state.player.y)
+    state.dungeon_kind = kind
+    state.depth = 1
+    _go_to_floor(state, 1, descending=True)
+    state.log.add(f"You descend into the {kind}. (floor 1)", (200, 200, 220))
+
+
+def descend(state: GameState) -> None:
+    state.depth += 1
+    _go_to_floor(state, state.depth, descending=True)
+    state.log.add(f"You climb deeper. (floor {state.depth})", (200, 200, 220))
+
+
+def ascend(state: GameState) -> None:
+    state.depth -= 1
+    if state.depth <= 0:
+        leave_to_surface(state)
+        state.log.add("You climb back out into the daylight.", (220, 215, 180))
+    else:
+        _go_to_floor(state, state.depth, descending=False)
+        state.log.add(f"You climb up. (floor {state.depth})", (200, 200, 220))
+
+
+def leave_to_surface(state: GameState) -> None:
+    """Return to the farm (used by ascend and by fainting in the dark)."""
+    state.depth = 0
+    state.world = state.surface
+    state.player.x, state.player.y = state.return_pos

@@ -1,0 +1,86 @@
+name: Build
+
+# Rolling release: every push to main rebuilds the standalone binaries for
+# macOS, Linux and Windows and republishes them under the "rolling" release.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            asset: hearthdelve-linux
+            bin: dist/hearthdelve
+          - os: macos-latest
+            asset: hearthdelve-macos
+            bin: dist/hearthdelve
+          - os: windows-latest
+            asset: hearthdelve-windows.exe
+            bin: dist/hearthdelve.exe
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt pyinstaller
+
+      - name: Build standalone binary
+        run: pyinstaller --noconfirm --onefile --name hearthdelve --collect-all tcod play.py
+
+      - name: Stage artifact
+        shell: bash
+        run: |
+          mkdir -p out
+          cp "${{ matrix.bin }}" "out/${{ matrix.asset }}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: out/${{ matrix.asset }}
+
+  release:
+    name: Publish rolling release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          # Replace the previous rolling release so it always points at the
+          # latest commit and carries only the freshest binaries.
+          gh release delete rolling --cleanup-tag --yes || true
+          gh release create rolling \
+            --target "${{ github.sha }}" \
+            --title "Rolling build" \
+            --notes "Automated build from the latest push to \`main\` (commit ${{ github.sha }}).
+
+          Download the binary for your OS below — no Python needed.
+
+          * **Linux** — \`hearthdelve-linux\` (\`chmod +x\` then run in a terminal)
+          * **macOS** — \`hearthdelve-macos\` (\`chmod +x\`; first run: right-click → Open, or \`xattr -dr com.apple.quarantine hearthdelve-macos\` to clear Gatekeeper)
+          * **Windows** — \`hearthdelve-windows.exe\`
+
+          Runs in a terminal window. Save lives at \`~/.hearthdelve_save.json\`." \
+            --prerelease \
+            $(find artifacts -type f)

@@ -1,0 +1,6 @@
+attrs==26.1.0
+cffi==2.0.0
+numpy==2.5.0
+pycparser==3.0
+tcod==21.2.1
+typing_extensions==4.15.0

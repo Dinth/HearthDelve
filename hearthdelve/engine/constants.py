@@ -1,0 +1,90 @@
+"""Global constants and tunables for Hearthdelve.
+
+Everything balance-related lives here or in ``data/`` so a tuning pass is a
+one-file edit, per DESIGN.md §8/§14.
+"""
+from __future__ import annotations
+
+# --- Window / layout (cells) -------------------------------------------------
+SCREEN_W = 80
+SCREEN_H = 50
+
+PANEL_W = 22                       # right-hand status panel
+LOG_H = 6                          # bottom message log (incl. its border row)
+
+VIEW_W = SCREEN_W - PANEL_W        # world viewport width  -> 58
+VIEW_H = SCREEN_H - LOG_H          # world viewport height -> 44
+
+# --- World -------------------------------------------------------------------
+WORLD_W = 512
+WORLD_H = 512
+WORLD_CENTER = (WORLD_W // 2, WORLD_H // 2)
+
+# Wildness tier thresholds (0..1 field): below T1 = homestead, etc.
+TIER1_MAX = 0.34                   # homestead / safe
+TIER2_MAX = 0.66                   # edge
+
+# --- Clock / calendar (DESIGN §7) --------------------------------------------
+DAY_START_MIN = 6 * 60             # 06:00
+DAY_END_MIN = 26 * 60              # 02:00 next day (sleep cutoff)
+SEASON_LEN = 28                    # days per season
+SEASONS = ("Spring", "Summer", "Fall", "Winter")
+YEAR_LEN = SEASON_LEN * len(SEASONS)
+
+# --- Player start ------------------------------------------------------------
+START_HP = 50
+START_ENERGY = 270        # daily exertion pool (shown in the HUD as "Stamina")
+START_STAMINA = 20        # legacy field, unused (kept for save compatibility)
+START_GOLD = 0
+
+# --- Action costs: exertion (stamina) and time (seconds) are independent -----
+# The day runs 06:00 -> 02:00 (~1200 in-game minutes). For long tasks the clock,
+# not exertion, is the real limit. Roads cost no exertion.
+MOVE_SECONDS = 30
+ROAD_MOVE_SECONDS = 15
+WALK_STAMINA = 1          # per off-road step (0 on roads/bridges)
+
+# (stamina, seconds) per action
+TILL_COST    = (3, 45)
+WATER_COST   = (2, 30)
+PLANT_COST   = (2, 40)
+HARVEST_COST = (1, 30)
+CHOP_COST    = (4, 600)    # felling a tree takes a good while
+MINE_COST    = (6, 1200)   # heavy, tiring work underground
+MACHETE_COST = (3, 45)
+FISH_COST    = (1, 2100)   # avg; actual time is random (see FISH_SECONDS_*)
+FISH_SECONDS_MIN = 600     # 10 min
+FISH_SECONDS_MAX = 3600    # 60 min
+ATTACK_COST  = (3, 20)
+BOMB_COST    = (8, 60)
+USE_SECONDS  = 45         # fallback time for misc uses
+
+# Combat (DESIGN §7) — light bump combat.
+BASE_ATK = 1            # unarmed
+SWORD_ATK = 3
+
+# Tool material tiers (blacksmith upgrades, M3b+). Wooden is the starting tier;
+# each step up is bigger area / less energy.
+TOOL_TIERS = ("Wooden", "Bronze", "Iron", "Steel", "Adamantium", "Mithril")
+
+# --- Colors (RGB) ------------------------------------------------------------
+WHITE = (255, 255, 255)
+BLACK = (0, 0, 0)
+DIM = (110, 110, 120)
+HUD_BG = (18, 20, 28)
+PANEL_BG = (24, 26, 36)
+SEP = (60, 64, 82)
+
+PLAYER_FG = (255, 255, 255)
+
+HP_COLOR = (214, 92, 92)
+ENERGY_COLOR = (236, 196, 92)
+STAMINA_COLOR = (110, 188, 220)
+GOLD_COLOR = (240, 214, 120)
+
+# Weather glyph tints
+SUN_COLOR = (245, 214, 110)
+
+# Target-tile highlight (the tile the active tool would act on).
+TARGET_HL = (92, 84, 52)        # neutral reticle: just shows facing
+TARGET_OK = (54, 96, 58)        # green: the active tool can act here
