@@ -37,6 +37,38 @@ def new_game(seed: int = 1337) -> GameState:
     return state
 
 
+_KONAMI = [tcod.event.KeySym.UP, tcod.event.KeySym.UP,
+           tcod.event.KeySym.DOWN, tcod.event.KeySym.DOWN,
+           tcod.event.KeySym.LEFT, tcod.event.KeySym.RIGHT,
+           tcod.event.KeySym.LEFT, tcod.event.KeySym.RIGHT,
+           tcod.event.KeySym.b, tcod.event.KeySym.a]
+
+
+def _cheat_locations(state: GameState):
+    """(label, (x, y)) surface teleport targets for the cheat menu."""
+    surf = state.surface
+    locs = [("Home (the farm)", surf.spawn)]
+    for name, c in getattr(surf, "village_centers", {}).items():
+        locs.append((name, c))
+    for b in surf.buildings:
+        if b.get("kind") == "hut":
+            locs.append(("The Wildwood hut", b["front"]))
+    for (dx, dy) in surf.dungeons:
+        locs.append((f"Enter dungeon — {surf.dungeon_kind.get((dx, dy), 'delve')}", (dx, dy)))
+    return locs
+
+
+def _cheat_go(state: GameState, target) -> None:
+    """Teleport to a surface spot — or, if it's a dungeon entrance, drop right
+    into the dungeon."""
+    if state.world.is_dungeon:
+        delve.leave_to_surface(state)          # back to the surface first
+    surf = state.surface
+    state.player.x, state.player.y = target
+    if target in surf.dungeons:                # a dungeon mouth — descend into it
+        delve.enter(state, surf.dungeon_kind.get(target, "mine"))
+
+
 # which wild-mushroom item each surface mushroom tile yields when foraged
 _MUSHROOM_ITEM = {
     tile.BUTTON_MUSHROOM: items.BUTTON_MUSHROOM,
@@ -276,6 +308,9 @@ def do_grab(state: GameState) -> None:
         if tk == "chest":
             _open_chest(state, gx, gy)
             return
+        if tk == "hive":
+            _rob_hive(state, gx, gy)
+            return
         if tk in ("mushroom", "glowcap"):
             if tk == "glowcap":
                 item, floor, col = items.GLOWCAP, tile.GLOW_MOSS, (150, 236, 222)
@@ -301,6 +336,29 @@ def do_grab(state: GameState) -> None:
             if crafting.interact_machine(state, gx, gy):
                 return
     state.log.add("Nothing here to gather.", C.DIM)
+
+
+def _rob_hive(state: GameState, x: int, y: int) -> None:
+    """Rob a wild bee hive: honey and wax, a mild sting, and rarely a queen."""
+    p = state.player
+    honey = random.randint(1, 3)
+    wax = random.randint(1, 2)
+    p.inventory.add(items.HONEY, honey)
+    p.inventory.add(items.BEESWAX, wax)
+    got = f"{honey} honey and {wax} beeswax"
+    if random.random() < 0.10:                       # a rare prize
+        p.inventory.add(items.BEE_QUEEN, 1)
+        got += ", and a BEE QUEEN"
+    state.world.tiles[x, y] = tile.GRASS
+    state.bump("hives_robbed")
+    state.log.add(f"You raid the wild hive — {got}!", (232, 200, 120))
+    if random.random() < 0.5:                        # the bees object
+        sting = random.randint(1, 3)
+        p.hp = max(1, p.hp - sting)
+        state.log.add(f"  The bees sting you (−{sting} HP)!", (224, 140, 120))
+    from .game import skills
+    skills.gain(state, "Foraging", 14)
+    turns.advance_time(state, C.HARVEST_COST[1])
 
 
 def _open_chest(state: GameState, x: int, y: int) -> None:
@@ -500,6 +558,8 @@ def main() -> None:
     run_ctx = None           # active run
     rest_left = 0            # seconds left in an active rest
     save_on_exit = True      # cleared by "quit without saving"
+    cheat_sel = 0            # cursor in the Konami cheat menu
+    konami: list = []        # rolling buffer of recent keys
 
     with tcod.context.new(
         columns=C.SCREEN_W,
@@ -520,6 +580,12 @@ def main() -> None:
         start = time.perf_counter()
         while running:
             anim_time = time.perf_counter() - start
+
+            # Cheats: hold health / stamina pinned to full while frozen.
+            if state.cheats.get("freeze_hp"):
+                state.player.hp = state.player.max_hp
+            if state.cheats.get("freeze_stamina"):
+                state.player.energy = state.player.max_energy
 
             # Auto-actions: a run or a rest advances one tick per frame (animated)
             # until it's interrupted or a stop condition is met.
@@ -569,6 +635,8 @@ def main() -> None:
                 rendering.render_character(console, state)
             elif mode == "quitmenu":
                 rendering.render_quit(console, state)
+            elif mode == "cheats":
+                rendering.render_cheats(console, state, cheat_sel, _cheat_locations(state))
             context.present(console)
 
             # A short timeout drives the ambient animation: when no key is
@@ -577,6 +645,16 @@ def main() -> None:
                 if isinstance(event, tcod.event.WindowEvent) and event.type == "WINDOWCLOSE":
                     running = False
                     break
+
+                # Konami code (↑↑↓↓←→←→ B A) opens the hidden cheat menu.
+                if isinstance(event, tcod.event.KeyDown):
+                    konami.append(event.sym)
+                    del konami[:-len(_KONAMI)]
+                    if konami == _KONAMI:
+                        konami.clear()
+                        mode, cheat_sel = "cheats", 0
+                        state.log.add("A hidden door creaks open...", (250, 230, 140))
+                        continue
 
                 # Any key interrupts an in-progress run or rest.
                 if isinstance(event, tcod.event.KeyDown) and (run_ctx is not None or rest_left > 0):
@@ -774,6 +852,23 @@ def main() -> None:
                     elif cmd == "quitgame":              # Q — quit WITHOUT saving
                         save_on_exit = False
                         running = False
+
+                elif mode == "cheats":
+                    locs = _cheat_locations(state)
+                    n = 2 + len(locs)
+                    if cmd in ("cancel", "quitgame"):
+                        mode = "play"
+                    elif cmd == "move" and action[2]:
+                        cheat_sel = (cheat_sel + action[2]) % n
+                    elif cmd == "confirm":
+                        if cheat_sel == 0:
+                            state.cheats["freeze_hp"] = not state.cheats.get("freeze_hp")
+                        elif cheat_sel == 1:
+                            state.cheats["freeze_stamina"] = not state.cheats.get("freeze_stamina")
+                        else:
+                            _cheat_go(state, locs[cheat_sel - 2][1])
+                            state.log.add("You blink across the Vale.", (200, 180, 240))
+                            mode = "play"
 
         # Save on exit (unless the player chose to quit without saving).
         if save_on_exit:

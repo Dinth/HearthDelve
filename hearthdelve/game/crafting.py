@@ -83,6 +83,9 @@ def interact_machine(state: GameState, x: int, y: int) -> bool:
     now = state.abs_minutes
     status = m.status(now)
 
+    if m.kind == "beehive":
+        return _tend_beehive(state, m, mdef, x, y)
+
     if m.kind == "sprinkler":
         state.log.add("The sprinkler waters the soil around it each morning.", C.DIM)
         return True
@@ -122,21 +125,44 @@ def _load_machine(state: GameState, m: Machine, mdef) -> bool:
         for it, q in inputs.items():
             inv.remove(it, q)
 
-    elif mdef.accepts == "fruit":
-        # Keg: only fruit becomes wine. Prefer grapes — their wine is the prize.
-        if inv.count(items.GRAPE) > 0:
-            crop_item = items.GRAPE
-        else:
-            crop_item = _best_crop(state, fruit_only=True)
-        if crop_item is None:
-            state.log.add(f"The {mdef.name.lower()} only ferments fruit (jam/pickle veg in a jar).", C.DIM)
+    elif mdef.accepts == "wood":
+        # Sawmill: saw a couple of logs into a plank.
+        if inv.count(items.WOOD) < 2:
+            state.log.add(f"The {mdef.name.lower()} needs at least 2 wood.", C.DIM)
             return True
-        inv.remove(crop_item, 1)
-        output = items.GRAPE_WINE if crop_item is items.GRAPE else items.WINE
+        inv.remove(items.WOOD, 2)
+        output = mdef.output                       # Timber Plank
+
+    elif mdef.accepts == "oil":
+        # Oil press: squeeze a couple of sunflowers into oil.
+        if inv.count(items.SUNFLOWER) < 2:
+            state.log.add(f"The {mdef.name.lower()} needs at least 2 sunflowers.", C.DIM)
+            return True
+        inv.remove(items.SUNFLOWER, 2)
+        output = items.SUNFLOWER_OIL
+
+    elif mdef.accepts == "fruit":
+        # Keg: honey -> mead; mead -> aged mead; otherwise fruit -> wine.
+        if inv.count(items.HONEY) > 0:
+            inv.remove(items.HONEY, 1)
+            output = items.MEAD
+        elif inv.count(items.MEAD) > 0:
+            inv.remove(items.MEAD, 1)
+            output = items.AGED_MEAD
+        else:
+            crop_item = items.GRAPE if inv.count(items.GRAPE) > 0 else _best_crop(state, fruit_only=True)
+            if crop_item is None:
+                state.log.add(f"The {mdef.name.lower()} ferments fruit into wine, or honey into mead.", C.DIM)
+                return True
+            inv.remove(crop_item, 1)
+            output = items.GRAPE_WINE if crop_item is items.GRAPE else items.WINE
 
     elif mdef.accepts == "crop":
         # Preserves Jar: fruit -> jam, vegetables -> pickles, eel -> jellied eel.
-        candidates = [it for it, _ in inv.slots if it.kind == "crop" or it is items.EEL]
+        # (Flowers aren't preserved.)
+        candidates = [it for it, _ in inv.slots
+                      if (it.kind == "crop" and content.PRODUCE_CATEGORY.get(it) != "flower")
+                      or it is items.EEL]
         if not candidates:
             state.log.add(f"The {mdef.name.lower()} needs a crop or an eel.", C.DIM)
             return True
@@ -152,6 +178,52 @@ def _load_machine(state: GameState, m: Machine, mdef) -> bool:
     m.loaded_output = output
     m.ready_at = state.abs_minutes + mdef.minutes
     state.log.add(f"You load the {mdef.name.lower()} ({output.name}). Ready in {_fmt_remaining(mdef.minutes)}.")
+    return True
+
+
+def _flowers_near(state: GameState, x: int, y: int, r: int = 10) -> int:
+    """Count blooming flowers within r tiles — wild flower tiles plus mature
+    planted flower crops. Drives a beehive's yield."""
+    surf = state.surface
+    n = 0
+    for xx in range(x - r, x + r + 1):
+        for yy in range(y - r, y + r + 1):
+            if surf.in_bounds(xx, yy) and surf.tile_at(xx, yy).kind == "flower":
+                n += 1
+    for (cx, cy), plot in surf.crops.items():
+        if (not plot.dead and abs(cx - x) <= r and abs(cy - y) <= r
+                and getattr(plot.crop, "category", "") == "flower"):
+            n += 1
+    return n
+
+
+def _tend_beehive(state: GameState, m, mdef, x: int, y: int) -> bool:
+    """Install a queen, or harvest honey & wax (more the more flowers are near)."""
+    inv = state.player.inventory
+    now = state.abs_minutes
+    if not m.has_queen:
+        if inv.count(items.BEE_QUEEN) > 0:
+            inv.remove(items.BEE_QUEEN, 1)
+            m.has_queen = True
+            m.loaded_output = items.HONEY
+            m.ready_at = now + mdef.minutes
+            state.log.add("You settle a bee queen into the hive — the colony begins!", (232, 200, 120))
+        else:
+            state.log.add("The beehive stands empty; it needs a bee queen.", C.DIM)
+        return True
+    if now < m.ready_at:
+        state.log.add(f"The hive is filling — {_fmt_remaining(m.ready_at - now)} left.", C.DIM)
+        return True
+    flowers = _flowers_near(state, x, y, 10)
+    honey = 1 + flowers // 6                    # a little even with none; lots with a flower bed
+    wax = flowers // 12
+    inv.add(items.HONEY, honey)
+    if wax:
+        inv.add(items.BEESWAX, wax)
+    state.bump("artisan_made")
+    tail = f" and {wax} beeswax" if wax else ""
+    state.log.add(f"You harvest {honey} honey{tail} ({flowers} flowers nearby).", (232, 200, 120))
+    m.ready_at = now + mdef.minutes            # the colony keeps working
     return True
 
 

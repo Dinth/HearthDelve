@@ -517,6 +517,7 @@ _TILE_DESC = {
     "altar": "a shrine's altar, laid with offerings.",
     "grave": "a weathered headstone. Rest easy.",
     "boat": "a little fishing boat, moored at the pier.",
+    "wild_hive": "a wild bee hive in the tree — rob it (g) for honey and wax.",
 }
 
 
@@ -552,8 +553,11 @@ def _building_label(state: GameState, b: dict) -> str:
         npc = _npc_by_name(state, owner)
         if npc and npc.met:
             flavour = {"fisher": "fishing cottage", "farmer": "farmhouse",
-                       "forager": "cottage", "trader": "lodging"}.get(npc.role, "house")
+                       "forager": "cottage", "trader": "lodging",
+                       "forester": "hut"}.get(npc.role, "house")
             return f"{owner}'s {flavour}"
+    if kind == "hut":
+        return "a forester's hut"
     return "a farmhouse" if kind == "farmhouse" else "a house"
 
 
@@ -614,6 +618,12 @@ def describe(state: GameState, x: int, y: int) -> str:
         mdef = MACHINES[m.kind]
         if m.kind == "sprinkler":
             return "a sprinkler — waters nearby soil each morning."
+        if m.kind == "beehive":
+            if not m.has_queen:
+                return "a beehive — add a bee queen (g) to start a colony."
+            if state.abs_minutes < m.ready_at:
+                return "a beehive, humming — the colony is filling the combs."
+            return "a beehive — honey ready to harvest! (g)"
         st = m.status(state.abs_minutes)
         if st == "done":
             return f"{mdef.name} — {m.loaded_output.name} is ready! (g to collect)"
@@ -656,6 +666,21 @@ def _modal(con, w, h, title):
     con.draw_rect(x, y, w, h, ch=ord(" "), fg=C.WHITE, bg=(20, 22, 32))
     con.draw_frame(x, y, w, h, title=title, fg=(236, 226, 180), bg=(20, 22, 32))
     return x, y
+
+
+def render_cheats(con: tcod.console.Console, state: GameState, sel: int, locations) -> None:
+    c = state.cheats
+    rows = [f"Freeze Health:  {'ON ' if c.get('freeze_hp') else 'off'}",
+            f"Freeze Stamina: {'ON ' if c.get('freeze_stamina') else 'off'}"]
+    rows += [f"Teleport → {name}" for name, _ in locations]
+    h = len(rows) + 6
+    x, y = _modal(con, 52, h, "★ Cheats (up up down down ...) ★")
+    con.print(x + 2, y + 1, "The Konami whisper opens a little door.", fg=C.DIM)
+    for i, text in enumerate(rows):
+        hot = (i == sel)
+        con.print(x + 2, y + 3 + i, ("→ " if hot else "  ") + text,
+                  fg=(250, 230, 140) if hot else (210, 210, 220))
+    con.print(x + 2, y + h - 2, "↑↓ move · Enter select · Esc close", fg=C.DIM)
 
 
 def render_quit(con: tcod.console.Console, state: GameState) -> None:
@@ -1026,11 +1051,14 @@ def render_character(con: tcod.console.Console, state: GameState) -> None:
 
 
 def render_dialogue(con: tcod.console.Console, state: GameState, npc, line: str) -> None:
-    w, h = 54, 8
+    parts = line.split("\n")                          # blurbs may be multi-line verse
+    w = min(72, max(54, max((len(p) for p in parts), default=0) + 6))
+    h = len(parts) + 7
     x, y = _modal(con, w, h, f"{npc.name}")
     hearts = "♥" * npc.hearts + "·" * (10 - npc.hearts)
     con.print(x + 2, y + 2, hearts, fg=(220, 130, 150))
-    con.print(x + 2, y + 4, line[:w - 4], fg=C.WHITE)
+    for i, part in enumerate(parts):
+        con.print(x + 2, y + 4 + i, part[:w - 4], fg=C.WHITE)
     con.print(x + 2, y + h - 2, "f to gift · any key to close", fg=C.DIM)
 
 

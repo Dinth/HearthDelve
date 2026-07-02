@@ -72,7 +72,8 @@ def save(state: GameState, path: str = SAVE_PATH) -> None:
                   for (x, y), pl in surf.crops.items()},
         "trees": {f"{x},{y}": [t.name, t.age, t.has_fruit]
                   for (x, y), t in surf.trees.items()},
-        "machines": {f"{x},{y}": [m.kind, m.loaded_output.name if m.loaded_output else None, m.ready_at]
+        "machines": {f"{x},{y}": [m.kind, m.loaded_output.name if m.loaded_output else None,
+                                   m.ready_at, m.has_queen]
                      for (x, y), m in surf.machines.items()},
         "npcs": {n.name: [n.friendship, n.gifted_today, n.talked_today, n._blurb_i, n.met]
                  for n in surf.npcs},
@@ -111,11 +112,14 @@ def load(path: str = SAVE_PATH) -> GameState:
                                        tdef.days_to_mature, age=age, has_fruit=has_fruit)
 
     world.machines = {}
-    for key, (kind, out, ready) in data["machines"].items():
+    for key, rec in data["machines"].items():
         x, y = map(int, key.split(","))
+        kind, out, ready = rec[0], rec[1], rec[2]
         m = Machine(kind=kind)
         m.loaded_output = items.by_name(out) if out else None
         m.ready_at = ready
+        if len(rec) > 3:
+            m.has_queen = rec[3]
         world.machines[(x, y)] = m
 
     for n in world.npcs:

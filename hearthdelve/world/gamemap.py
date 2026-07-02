@@ -52,6 +52,8 @@ class GameMap:
     # wildflower spots (x, y, colour_tile_id, base_tile_id): bloom in spring/
     # summer and drift day to day.
     flower_spots: list = field(default_factory=list)
+    # village name -> plaza centre (x, y), for the cheat teleport menu
+    village_centers: dict = field(default_factory=dict)
 
     def in_bounds(self, x: int, y: int) -> bool:
         return 0 <= x < self.width and 0 <= y < self.height

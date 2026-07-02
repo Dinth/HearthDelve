@@ -209,8 +209,13 @@ def generate(seed: int = 1337) -> GameMap:
     coast = _carve_sea(gm, seed)
     _carve_homestead(gm, seed)
     centers = _carve_villages(gm, seed, coast)
+    gm.village_centers = dict(centers)
     _place_dungeons(gm, wild, flora)
+    forest_track = _carve_forest(gm, seed)
     _draw_roads(gm, centers)
+    if forest_track is not None:                    # a track links the hut to the network
+        _draw_road(gm, forest_track, gm.spawn)
+        _fill_road_gaps(gm)
     _place_waypoints(gm)
     _populate_wildlife(gm, random.Random(seed + 131))
     return gm
@@ -266,6 +271,21 @@ def _populate_wildlife(gm: GameMap, rng: random.Random) -> None:
                                c.defense, c.speed, c.behavior, x, y,
                                kind="wildlife", diet=c.diet, seasons=c.seasons))
         placed += 1
+
+    # A few rare bears, roaming far from the farmstead.
+    bears, tries = 0, 0
+    while bears < rng.randint(2, 4) and tries < 2000:
+        tries += 1
+        x, y = rng.randint(4, gm.width - 5), rng.randint(4, gm.height - 5)
+        if not gm.walkable(x, y) or gm.tile_at(x, y).kind in ("road", "bridge", "stairs"):
+            continue
+        if max(abs(x - cx), abs(y - cy)) < 40:        # keep them out in the wilds
+            continue
+        b = content.BEAR
+        gm.monsters.append(Mob(b.name, b.glyph, b.color, b.hp, b.hp, b.atk,
+                               b.defense, b.speed, b.behavior, x, y,
+                               kind="wildlife", diet=b.diet, seasons=b.seasons))
+        bears += 1
 
 
 def _place_waypoints(gm: GameMap) -> None:
@@ -1027,6 +1047,89 @@ def _build_forge(gm: GameMap, house_b: dict, placed: list, village: str, rng):
         _draw_road(gm, b["front"], house_b["front"])
         return (b, {"home": b["inner"], "work": b["front"], "seats": _interior_floor(gm, b)})
     return None
+
+
+_FOREST_OK = {"grass", "meadow", "tall_grass", "fog_grass", "moor", "bush",
+              "shrub", "shrub_raspberry", "shrub_gooseberry", "shrub_currant",
+              "oak", "maple", "birch", "poplar", "willow", "pine", "spruce", "foliage",
+              "red flowers", "yellow flowers", "violet flowers", "white flowers",
+              "button_mushroom", "parasol_mushroom", "bolete", "chanterelle"}
+
+
+def _carve_forest(gm: GameMap, seed: int):
+    """A large, dense wildwood in the NW, with a forester's hut in a clearing at
+    its heart. Returns the hut's doorstep (to link by a forest track), or None."""
+    import math
+    from ..data import content
+    rng = random.Random((seed + 4242) & 0x7FFFFFFF)
+    cx, cy = C.WORLD_CENTER
+    fx, fy = cx - 150, cy - 140                      # NW quarter, clear of the villages
+    R = 42
+    ph = [rng.uniform(0, 6.28) for _ in range(3)]
+    trees = (tile.TREE_OAK, tile.TREE_MAPLE, tile.TREE_BIRCH, tile.TREE_POPLAR,
+             tile.TREE_WILLOW, tile.TREE_PINE, tile.TREE_SPRUCE)
+    clearings, tree_cells = [], []
+    for x in range(fx - R - 2, fx + R + 3):
+        for y in range(fy - R - 2, fy + R + 3):
+            if not gm.in_bounds(x, y) or tile.TILES[gm.tiles[x, y]].name not in _FOREST_OK:
+                continue
+            dx, dy = x - fx, y - fy
+            ang = math.atan2(dy, dx)
+            rr = R * (0.72 + 0.14 * math.sin(ang * 2 + ph[0])
+                      + 0.10 * math.sin(ang * 3 + ph[1])
+                      + 0.06 * math.sin(ang * 5 + ph[2]))
+            if dx * dx + dy * dy > rr * rr:
+                continue
+            r = rng.random()
+            if r < 0.58:
+                gm.tiles[x, y] = rng.choice(trees)   # dense canopy (walkable)
+                tree_cells.append((x, y))
+            elif r < 0.70:
+                gm.tiles[x, y] = tile.FOLIAGE        # impassable thickets
+            elif r < 0.77:
+                gm.tiles[x, y] = tile.SHRUB
+            else:
+                gm.tiles[x, y] = tile.GRASS          # a clearing
+                clearings.append((x, y))
+    # rare wild bee hives up in the trees (well away from the hut)
+    rng.shuffle(tree_cells)
+    for x, y in tree_cells:
+        if (x - fx) ** 2 + (y - fy) ** 2 < 10 ** 2:  # keep the hut clearing clear
+            continue
+        gm.tiles[x, y] = tile.WILD_HIVE
+        if sum(1 for c in tree_cells if gm.tiles[c] == tile.WILD_HIVE) >= rng.randint(4, 6):
+            break
+    # seasonal forest mushrooms scattered through the clearings
+    for x, y in clearings:
+        if rng.random() < 0.08:
+            species = tile.CHANTERELLE if rng.random() < 0.5 else tile.BOLETE
+            gm.mushroom_spots.append((x, y, int(species), int(tile.GRASS)))
+
+    # open a clearing and raise the forester's hut at the heart of the wood
+    for x in range(fx - 4, fx + 5):
+        for y in range(fy - 4, fy + 5):
+            if gm.in_bounds(x, y) and tile.TILES[gm.tiles[x, y]].name in _FOREST_OK:
+                gm.tiles[x, y] = tile.GRASS
+    hut = _rect_building(gm, fx - 2, fy - 2, 5, 5, "S")
+    anchors = _furnish(gm, hut, "house", rng)
+    hut["kind"] = "hut"
+    hut["village"] = "Wildwood"
+    hut["owner"] = None
+    gm.buildings.append(hut)
+    # a woodpile by the door for flavour
+    px, py = hut["front"][0] + 1, hut["front"][1]
+    if gm.in_bounds(px, py) and gm.tiles[px, py] == tile.GRASS:
+        gm.tiles[px, py] = tile.BARREL
+
+    for npc in content.solo_npcs():
+        npc.home = anchors["home"]
+        npc.work = hut["front"] if gm.walkable(*hut["front"]) else anchors["home"]
+        npc.village = "Wildwood"
+        npc.spots = {"home": npc.home, "work": npc.work}
+        npc.x, npc.y = npc.work
+        hut["owner"] = npc.name
+        gm.npcs.append(npc)
+    return hut["front"]
 
 
 def _carve_homestead(gm: GameMap, seed: int) -> None:

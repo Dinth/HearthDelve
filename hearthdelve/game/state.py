@@ -46,6 +46,7 @@ class GameState:
     # goals / journal
     stats: dict = field(default_factory=dict)          # lifetime counters
     quests_done: set = field(default_factory=set)      # completed goal ids
+    cheats: dict = field(default_factory=dict)         # Konami menu toggles (transient)
 
     def bump(self, key: str, amount: int = 1) -> None:
         self.stats[key] = self.stats.get(key, 0) + amount

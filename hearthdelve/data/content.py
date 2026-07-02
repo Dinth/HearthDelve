@@ -114,15 +114,37 @@ GRAPE = Crop(
     desc="Fall vine fruit; re-fruits.",
 )
 
+# Flowers — grown for gifts and, crucially, to feed nearby beehives. They
+# re-bloom like berries so a bed of them keeps a colony fed.
+TULIP = Crop(
+    name="Tulip", glyph="*", color=(224, 96, 104), season="Spring",
+    days_to_mature=5, regrows=True, sell_price=40, regrow_days=3,
+    category="flower", seed=items.TULIP_SEEDS, produce=items.TULIP,
+    desc="A spring flower that re-blooms; bees adore it.",
+)
+SUNFLOWER = Crop(
+    name="Sunflower", glyph="*", color=(236, 214, 96), season="Summer",
+    days_to_mature=6, regrows=True, sell_price=45, regrow_days=3,
+    category="flower", seed=items.SUNFLOWER_SEEDS, produce=items.SUNFLOWER,
+    desc="A tall summer bloom that re-flowers; bees adore it.",
+)
+ASTER = Crop(
+    name="Aster", glyph="*", color=(190, 130, 220), season="Fall",
+    days_to_mature=5, regrows=True, sell_price=45, regrow_days=3,
+    category="flower", seed=items.ASTER_SEEDS, produce=items.ASTER,
+    desc="An autumn flower that re-blooms; bees adore it.",
+)
+
 CROPS: list[Crop] = [PARSNIP, POTATO, CAULIFLOWER, PUMPKIN,
-                     TOMATO, STRAWBERRY, BLUEBERRY, GRAPE]
+                     TOMATO, STRAWBERRY, BLUEBERRY, GRAPE,
+                     TULIP, SUNFLOWER, ASTER]
 SEED_TO_CROP: dict[Item, Crop] = {c.seed: c for c in CROPS}
 CROP_BY_NAME: dict[str, Crop] = {c.name: c for c in CROPS}
 
 
 def crops_in_season(season: str) -> list[Crop]:
-    """Field crops that grow in the given season (for stocking village fields)."""
-    return [c for c in CROPS if c.season == season]
+    """Food crops that grow in the given season (for stocking village fields)."""
+    return [c for c in CROPS if c.season == season and c.category != "flower"]
 # produce item -> "fruit" | "vegetable"
 PRODUCE_CATEGORY: dict[Item, str] = {c.produce: c.category for c in CROPS}
 # fruits not grown as field crops (shrubs & orchard trees) still count as fruit
@@ -183,6 +205,12 @@ MACHINES: dict[str, MachineDef] = {
                           None, "Fruit->jam, veg->pickles, eel->jellied eel."),
     "keg":     MachineDef("keg", "Keg", "K", (172, 110, 72), 480, "fruit",
                           items.WINE, "Ferments fruit into wine."),
+    "sawmill": MachineDef("sawmill", "Sawmill", "≠", (176, 134, 90), 90, "wood",
+                          items.TIMBER_PLANK, "Saws logs into timber planks (2 wood each)."),
+    "beehive": MachineDef("beehive", "Beehive", "⌂", (222, 178, 84), 480, "bees",
+                          items.HONEY, "Add a bee queen; makes honey & wax, more with flowers near."),
+    "press":   MachineDef("press", "Oil Press", "P", (172, 172, 184), 120, "oil",
+                          items.SUNFLOWER_OIL, "Presses sunflowers into oil (2 sunflowers each)."),
     "sprinkler": MachineDef("sprinkler", "Sprinkler", "¤", (120, 188, 222), 0, "",
                             None, "Waters the 4 neighbouring tiles each morning."),
 }
@@ -204,10 +232,16 @@ class Recipe:
 RECIPES: list[Recipe] = [
     Recipe("Furnace", "build", ((items.STONE, 5),), machine="furnace",
            desc="Smelts ore into bars."),
-    Recipe("Preserves Jar", "build", ((items.WOOD, 10),), machine="jar",
-           desc="Crops -> jam."),
-    Recipe("Keg", "build", ((items.WOOD, 10), (items.COPPER_BAR, 1)), machine="keg",
-           desc="Crops -> wine."),
+    Recipe("Sawmill", "build", ((items.WOOD, 12), (items.STONE, 4)), machine="sawmill",
+           desc="Saws logs into timber planks over time."),
+    Recipe("Preserves Jar", "build", ((items.TIMBER_PLANK, 5),), machine="jar",
+           desc="Crops -> jam. (needs timber planks)"),
+    Recipe("Keg", "build", ((items.TIMBER_PLANK, 5), (items.COPPER_BAR, 1)), machine="keg",
+           desc="Crops -> wine. (needs timber planks)"),
+    Recipe("Beehive", "build", ((items.TIMBER_PLANK, 8), (items.BEESWAX, 3)), machine="beehive",
+           desc="Add a bee queen; honey & wax, boosted by nearby flowers."),
+    Recipe("Oil Press", "build", ((items.TIMBER_PLANK, 6), (items.STONE, 4), (items.COPPER_BAR, 1)),
+           machine="press", desc="Presses sunflowers into oil."),
     Recipe("Sprinkler", "build", ((items.COPPER_BAR, 1),), machine="sprinkler",
            desc="Auto-waters nearby soil."),
     Recipe("Parsnip Soup", "cook", ((items.PARSNIP, 2),), energy=45,
@@ -341,6 +375,12 @@ WILDLIFE: list[Critter] = [
             "Roots up crops and minds its own business — until provoked."),
 ]
 
+# Bears are rare, strong, and raid beehives for honey. Spawned separately (not
+# in the common pool) so you meet them only now and then, deep in the wilds.
+BEAR = Critter("Bear", "B", (120, 88, 62), 42, 9, 2, 2, "defensive", "honey",
+               "A great shaggy bear — slow to anger, fearsome when roused, and mad for honey.",
+               seasons=_NO_WINTER)
+
 
 # --- Villages, NPCs, shops (M3b) ---------------------------------------------
 def village_npcs() -> dict[str, list[NPC]]:
@@ -384,7 +424,7 @@ def village_npcs() -> dict[str, list[NPC]]:
             NPC("Tomas", "T", (196, 158, 110), shop=None, role="carpenter",
                 blurbs=("Good timber, that. I could build you something one day.",
                         "Stone and wood — that's how a homestead grows."),
-                loves=(items.WOOD,), likes=(items.STONE,), dislikes=(items.JAM,),
+                loves=(items.WOOD, items.TIMBER_PLANK), likes=(items.STONE,), dislikes=(items.JAM,),
                 bio="Mossford's carpenter; found among the timber and tools."),
             NPC("Wrenna", "W", (170, 200, 150), shop=None, role="forager",
                 blurbs=("The wild berries make the loveliest preserves.",
@@ -480,6 +520,27 @@ def village_npcs() -> dict[str, list[NPC]]:
     }
 
 
+def solo_npcs() -> list[NPC]:
+    """Standalone folk who live out in the wilds, not in any village."""
+    return [
+        NPC("Yew", "Y", (150, 186, 120), shop=None, role="forester",
+            blurbs=("Hey dol! merry dol! Yew am I, the warden —\n"
+                    "boughs for my rafters, and the whole wood my garden!",
+                    "Tread soft, little digger, where the leaf-litter's deep;\n"
+                    "fell one and plant twain — that's the pledge the woods keep!",
+                    "Rain in the night-time, and mushrooms by morning!\n"
+                    "Gather a capful, but heed the wood's warning.",
+                    "Old are the oak-folk, and older still their song;\n"
+                    "I've walked these green shadows my whole life long!",
+                    "Hop-o'-my-thumb through the fern and the bramble —\n"
+                    "the fox knows old Yew, and the deer when they ramble!"),
+            loves=(items.WOOD, items.TIMBER_PLANK, items.CHANTERELLE),
+            likes=(items.BOLETE, items.FIBER, items.RASPBERRY),
+            dislikes=(items.STONE, items.COAL),
+            bio="The forester of the Wildwood, who talks in rhyme; keeps a hut deep among the trees."),
+    ]
+
+
 # General store stock: (seed, buy price)
 GENERAL_STOCK: list[tuple[Item, int]] = [
     (items.PARSNIP_SEEDS, 20), (items.POTATO_SEEDS, 50), (items.CAULIFLOWER_SEEDS, 80),
@@ -487,6 +548,7 @@ GENERAL_STOCK: list[tuple[Item, int]] = [
     (items.BLUEBERRY_SEEDS, 80), (items.GRAPE_SEEDS, 60),
     (items.CHERRY_SAPLING, 600), (items.PEACH_SAPLING, 600),
     (items.APPLE_SAPLING, 700), (items.ORANGE_SAPLING, 700),
+    (items.TULIP_SEEDS, 40), (items.SUNFLOWER_SEEDS, 50), (items.ASTER_SEEDS, 50),
 ]
 # Blacksmith also sells fuel/metal: (item, buy price)
 BLACKSMITH_STOCK: list[tuple[Item, int]] = [

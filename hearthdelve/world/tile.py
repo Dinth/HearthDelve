@@ -119,6 +119,10 @@ GRAVE   = _add(TileType("grave",    "†", (176, 178, 184), (34, 44, 34), walkab
 # --- Coast -------------------------------------------------------------------
 BOAT    = _add(TileType("boat",     "∪", (196, 150, 96),  (26, 58, 96), walkable=False, kind="boat"))
 
+# --- Beekeeping --------------------------------------------------------------
+# A wild bee hive, found rarely in the deep woods (forage with g for honey/wax).
+WILD_HIVE = _add(TileType("wild_hive", "⌂", (222, 178, 84), (26, 40, 24), walkable=False, kind="hive"))
+
 # --- Wild mushrooms (surface forage) -----------------------------------------
 # One glyph for all mushrooms; the species differ only by colour.
 BUTTON_MUSHROOM  = _add(TileType("button_mushroom",  "τ", (224, 216, 200), (28, 48, 30), kind="mushroom"))

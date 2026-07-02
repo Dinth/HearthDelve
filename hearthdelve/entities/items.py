@@ -44,12 +44,20 @@ PUMPKIN_SEEDS     = Item("Pumpkin Seeds",     "_", "seed", "The great fall harve
 STRAWBERRY_SEEDS  = Item("Strawberry Seeds",  "_", "seed", "Spring fruit; re-fruits.")
 BLUEBERRY_SEEDS   = Item("Blueberry Seeds",   "_", "seed", "Summer fruit; re-fruits.")
 GRAPE_SEEDS       = Item("Grape Seeds",       "_", "seed", "Fall fruit; re-fruits.")
+TULIP_SEEDS       = Item("Tulip Seeds",       "_", "seed", "Spring flowers; bloom again and again. Bees love them.")
+SUNFLOWER_SEEDS   = Item("Sunflower Seeds",   "_", "seed", "Tall summer blooms. Bees love them.")
+ASTER_SEEDS       = Item("Aster Seeds",       "_", "seed", "Autumn flowers. Bees love them.")
 
 # --- Produce: vegetables ----------------------------------------------------
 PARSNIP     = Item("Parsnip",     "♠", "crop", "A pale, hardy root.",   value=35)
 POTATO      = Item("Potato",      "o", "crop", "An earthy staple.",     value=80)
 CAULIFLOWER = Item("Cauliflower", "%", "crop", "A big, prized head.",   value=175)
 PUMPKIN     = Item("Pumpkin",     "O", "crop", "A heavy autumn gourd.", value=320)
+
+# --- Flowers (grown for beauty, gifts, and to feed the bees) ----------------
+TULIP       = Item("Tulip",       "*", "crop", "A cheerful spring bloom.",  value=40)
+SUNFLOWER   = Item("Sunflower",   "*", "crop", "A tall, sunny summer flower.", value=45)
+ASTER       = Item("Aster",       "*", "crop", "A starry autumn flower.",   value=45)
 
 # --- Produce: fruits (the only inputs for jam & wine) -----------------------
 TOMATO      = Item("Tomato",      "♥", "crop", "Plump and red.",        value=60)
@@ -77,6 +85,7 @@ SEED_POUCH  = Item("Seed Pouch", "_", "pouch", "Your seeds & saplings. Press its
 
 # --- Raw materials (gathered with axe / pickaxe / machete) ------------------
 WOOD        = Item("Wood",        "=", "material", "Logged from trees.",        value=5)
+TIMBER_PLANK = Item("Timber Plank", "≡", "material", "Sawn from logs at a sawmill; a sturdier building material.", value=15)
 FIBER       = Item("Fiber",       ";", "material", "Plant fibre from foliage.", value=3)
 STONE       = Item("Stone",       "o", "material", "Broken from rock.",         value=4)
 COAL        = Item("Coal",        "♦", "material", "Fuel for the furnace.",     value=12)
@@ -122,6 +131,14 @@ WINE        = Item("Wine",        "ø", "artisan",  "Aged fruit wine.",         
 GRAPE_WINE  = Item("Grape Wine",  "ø", "artisan",  "Vintage grape wine; the finest.", value=450)
 PICKLES     = Item("Pickles",     "■", "artisan",  "Pickled vegetables; tangy and tidy.", value=95)
 JELLIED_EEL = Item("Jellied Eel", "■", "artisan",  "Eel set in savoury jelly; a delicacy.", value=150)
+MEAD        = Item("Mead",        "u", "artisan",  "Fermented honey mead (miód pitny).", value=180)
+AGED_MEAD   = Item("Aged Mead",   "u", "artisan",  "Mead matured in the cask; deep and mellow.", value=360)
+SUNFLOWER_OIL = Item("Sunflower Oil", "ó", "artisan", "Golden oil pressed from sunflowers.", value=130)
+
+# --- Beekeeping -------------------------------------------------------------
+HONEY       = Item("Honey",       "*", "material", "Sweet golden honey from a hive.",       value=45)
+BEESWAX     = Item("Beeswax",     "%", "material", "Wax from a honeycomb; used in building.", value=25)
+BEE_QUEEN   = Item("Bee Queen",   "Q", "material", "A live queen — install her in a beehive to start a colony.", value=220)
 
 # --- Fish (caught with the rod at water; most are seasonal) -----------------
 MINNOW      = Item("Minnow",      "»", "fish", "A tiny river fish.",           value=15)

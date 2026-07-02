@@ -36,7 +36,7 @@ def scheduled_spot(npc, hour: int, weather: str, season: str, day_of_season: int
         return "inn"
     if role == "priest":
         return "temple"
-    if role in ("farmer", "fisher", "forager"):
+    if role in ("farmer", "fisher", "forager", "forester"):
         # outdoor trades can't work through a storm, a downpour, or (for the
         # fields) a frozen winter — they wait it out at the inn or at home.
         if storm or (role == "farmer" and season == "Winter"):

@@ -124,7 +124,24 @@ def _nearest_food(state: GameState, m):
                     d = max(abs(dx), abs(dy))
                     if d < best_d:
                         best, best_d = (x, y), d
+    elif m.diet == "honey":                       # bears make for beehives
+        for (hx, hy), mac in state.world.machines.items():
+            if mac.kind != "beehive":
+                continue
+            d = max(abs(hx - m.x), abs(hy - m.y))
+            if d < best_d:
+                best, best_d = (hx, hy), d
     return best
+
+
+def _raid_hive(state: GameState, m, hx: int, hy: int) -> bool:
+    mac = state.world.machines.get((hx, hy))
+    if mac is None or mac.kind != "beehive":
+        return False
+    # a bear tears into the hive, setting the colony's honey-making right back
+    mac.ready_at = state.abs_minutes + 480
+    _notice(state, m, f"A {m.name.lower()} raids your beehive for honey!", (228, 150, 110))
+    return True
 
 
 def _behave(state: GameState, m) -> None:
@@ -156,7 +173,8 @@ def _behave(state: GameState, m) -> None:
             fx, fy = food
             if max(abs(fx - m.x), abs(fy - m.y)) <= 1:
                 if (m.diet == "crops" and _eat_crops(state, m)) or \
-                   (m.diet == "berries" and _eat_berries(state, m)):
+                   (m.diet == "berries" and _eat_berries(state, m)) or \
+                   (m.diet == "honey" and _raid_hive(state, m, fx, fy)):
                     return
             elif not skittish or dist > PANIC_RANGE:
                 if _toward(state, m, fx, fy):
