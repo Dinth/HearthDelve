@@ -169,14 +169,20 @@ def _behave(state: GameState, m) -> None:
     _wander(state, m)
 
 
+def present(m, season: str) -> bool:
+    """Whether a critter is out and about this season (empty seasons = always)."""
+    return not getattr(m, "seasons", ()) or season in m.seasons
+
+
 def act(state: GameState) -> None:
     """Advance every nearby critter by its speed. No-op in dungeons."""
     w = state.world
     if w.is_dungeon or not w.monsters:
         return
     p = state.player
+    season = state.season
     for m in list(w.monsters):
-        if not m.alive:
+        if not m.alive or not present(m, season):
             continue
         if max(abs(m.x - p.x), abs(m.y - p.y)) > ACTIVE_RADIUS:
             m.energy = 0                        # dormant until you come near

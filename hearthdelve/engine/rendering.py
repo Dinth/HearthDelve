@@ -29,6 +29,52 @@ _ORE_IDS = np.array([tile.ORE_VEIN])
 _GEM_PALETTE = np.array([[226, 84, 84], [92, 132, 232], [236, 150, 68],
                          [92, 202, 112], [236, 236, 236]], dtype=np.float32)
 
+# --- Seasonal colour ---------------------------------------------------------
+# Broadleaf foliage & open ground recolour with the season; conifers stay green.
+_SEASON_VEG_IDS = np.array([
+    tile.GRASS, tile.MEADOW, tile.TALL_GRASS, tile.FOG_GRASS, tile.BUSH, tile.MOOR,
+    tile.FLOWER_RED, tile.FLOWER_YELLOW, tile.FLOWER_VIOLET, tile.FLOWER_WHITE,
+    tile.SHRUB, tile.SHRUB_RASPBERRY, tile.SHRUB_GOOSEBERRY, tile.SHRUB_CURRANT,
+    tile.TREE_OAK, tile.TREE_MAPLE, tile.TREE_BIRCH, tile.TREE_POPLAR, tile.TREE_WILLOW,
+    tile.FOLIAGE,
+])
+# Open ground that gets a coat of snow in winter.
+_SEASON_GROUND_IDS = np.array([
+    tile.GRASS, tile.MEADOW, tile.TALL_GRASS, tile.FOG_GRASS, tile.DIRT_PATH,
+    tile.MOOR, tile.SAND, tile.RUINS_FLOOR, tile.BUSH,
+    tile.FLOWER_RED, tile.FLOWER_YELLOW, tile.FLOWER_VIOLET, tile.FLOWER_WHITE,
+])
+# Per-season channel multiplier laid over the vegetation.
+_SEASON_TINT = {
+    "Spring": (1.00, 1.05, 0.98),   # fresh, faintly bright green
+    "Summer": (0.92, 1.02, 0.78),   # deep, warm green
+    "Fall":   (1.20, 0.90, 0.55),   # golds & russets
+    "Winter": (0.82, 0.88, 1.00),   # cold and desaturated
+}
+_SNOW_FG = np.array([206, 216, 232], dtype=np.float32)
+_SNOW_BG = np.array([182, 194, 214], dtype=np.float32)
+
+
+def _apply_season(view, fg, bg, season: str) -> None:
+    """Recolour natural terrain for the season (in place). Winter also lays snow
+    over open ground and frosts the trees."""
+    tint = _SEASON_TINT.get(season)
+    if tint is None:
+        return
+    veg = np.isin(view, _SEASON_VEG_IDS)
+    if veg.any():
+        mul = np.array(tint, dtype=np.float32)
+        fg[veg] *= mul
+        bg[veg] *= mul
+    if season == "Winter":
+        ground = np.isin(view, _SEASON_GROUND_IDS)
+        if ground.any():
+            fg[ground] = fg[ground] * 0.35 + _SNOW_FG * 0.65
+            bg[ground] = bg[ground] * 0.30 + _SNOW_BG * 0.70
+        frost = np.isin(view, _TREE_IDS)           # snow dusts the canopies
+        if frost.any():
+            fg[frost] = fg[frost] * 0.6 + _SNOW_FG * 0.4
+
 
 def _hash01(a, b):
     """Stable pseudo-random value in [0, 1) per (a, b) — the classic
@@ -88,6 +134,11 @@ def render_world(con: tcod.console.Console, state: GameState, anim_time: float =
     ch = _CH[view]
     fg = _FG[view].astype(np.float32)
     bg = _BG[view].astype(np.float32)
+
+    # Seasonal recolour of natural terrain (surface only): autumn golds, a lush
+    # summer, a snow-covered winter.
+    if not w.is_dungeon:
+        _apply_season(view, fg, bg, state.season)
 
     # World-space coordinate grids for the visible window (so waves flow
     # smoothly across the world, not just the screen).
@@ -249,9 +300,10 @@ def render_world(con: tcod.console.Console, state: GameState, anim_time: float =
                 con.rgb["fg"][sx, sy] = m.color
                 con.rgb["bg"][sx, sy] = (36, 24, 24)
     elif not w.is_dungeon:
+        season = state.season
         for m in w.monsters:
-            if not m.alive:
-                continue
+            if not m.alive or (m.seasons and season not in m.seasons):
+                continue                             # out of season — not about
             sx, sy = m.x - ox, m.y - oy
             if 0 <= sx < C.VIEW_W and 0 <= sy < C.VIEW_H:
                 con.rgb["ch"][sx, sy] = ord(m.glyph)
@@ -780,7 +832,7 @@ def build_codex_pages(state: GameState):
     mon.append(("Foraging (surface)", _HDR))
     mon.append((" τ  field mushrooms — button & parasol, in open grass", _KEY))
     mon.append((" τ  forest mushrooms — bolete & chanterelle, under the woods", _KEY))
-    mon.append(("      gather (g); cook Sauteed Mushrooms, Bolete Broth, ...", C.DIM))
+    mon.append(("      sprout in summer & autumn only; gather (g) to cook", C.DIM))
     mon.append(("", C.WHITE))
     mon.append(("Wildlife (surface)", _HDR))
     for c in content.WILDLIFE:

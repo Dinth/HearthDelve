@@ -321,17 +321,22 @@ class Critter:
     behavior: str          # "skittish" | "defensive"
     diet: str              # "" | "crops" | "berries"
     desc: str = ""
+    seasons: tuple = ()    # active seasons ("" = all year round)
 
+
+_NO_WINTER = ("Spring", "Summer", "Fall")
 
 WILDLIFE: list[Critter] = [
     Critter("Rabbit",    "r", (216, 190, 158),  3, 0, 0, 3, "skittish", "crops",
             "Timid — bolts the moment you draw near. Loves a tender crop."),
     Critter("Deer",      "d", (198, 164, 116), 10, 0, 0, 2, "skittish", "crops",
-            "Graceful and shy; will graze an unfenced field down to nothing."),
+            "Graceful and shy; will graze an unfenced field down to nothing. Gone by winter.",
+            seasons=_NO_WINTER),
     Critter("Fox",       "f", (222, 132, 66),   6, 0, 0, 3, "skittish", "",
             "A flash of russet through the grass — gone before you blink."),
     Critter("Squirrel",  "q", (188, 120, 88),   3, 0, 0, 3, "skittish", "berries",
-            "Chatters and darts off; raids berry shrubs for a meal."),
+            "Chatters and darts off; raids berry shrubs. Holes up for the winter.",
+            seasons=_NO_WINTER),
     Critter("Wild Boar", "b", (150, 122, 100), 14, 4, 1, 2, "defensive", "crops",
             "Roots up crops and minds its own business — until provoked."),
 ]

@@ -26,6 +26,8 @@ def new_game(seed: int = 1337) -> GameState:
     state = GameState(world=world, player=player, log=MessageLog(), seed=seed)
     state.surface = world
     farming.init_weather(state)
+    farming.prime_seasonal_flora(state)     # bloom the opening season's flora
+
     state.log.add("A letter from your grandfather: the old farm is yours now.", (236, 226, 180))
     state.log.add(f"You wake in Hollowmere Vale. {state.date_str()}, {state.weather.lower()}.", C.WHITE)
     state.log.add("Hoe (1) the soil, plant seeds (6), water them (2), then sleep (s).", C.DIM)
@@ -334,6 +336,8 @@ def _notable_nearby(state: GameState) -> bool:
         if max(abs(npc.x - p.x), abs(npc.y - p.y)) <= 6:
             return True
     for m in state.world.monsters:
+        if m.seasons and state.season not in m.seasons:
+            continue                                   # hibernating — not around
         if m.alive and max(abs(m.x - p.x), abs(m.y - p.y)) <= 6:
             return True
     for dx in (-1, 0, 1):

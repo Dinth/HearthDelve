@@ -171,9 +171,13 @@ def new_day(state: GameState, rested: bool = True) -> None:
     from . import crafting
     crafting.sell_shipment(state)
 
+    old_season = state.season
     state.day += 1
     state.clock = 0
     season = state.season
+    if season != old_season:
+        _seasonal_flora(state, old_season, season)
+    _tick_flora(state, season)
 
     state.weather = roll_weather(season, random.Random(state.seed * 100003 + state.day))
     raining = is_wet_weather(state.weather)
@@ -213,6 +217,84 @@ def new_day(state: GameState, rested: bool = True) -> None:
         save.save(state)
     except Exception:  # noqa: BLE001 - never let a save error break the day
         pass
+
+
+# Seasonal, drifting flora (mushrooms & wildflowers). Each is a pool of spots
+# on natural ground; while in season a rough fraction is "standing" and the set
+# drifts day to day (some wither, a random scattering sprouts elsewhere).
+_NATURAL_GROUND = {tile.GRASS, tile.MEADOW, tile.TALL_GRASS, tile.FOG_GRASS, tile.MOOR}
+#            spots attr        seasons                 active  wither  rng salt
+_FLORA = {
+    "mushroom_spots": (("Summer", "Fall"),           0.5,    0.16,   7919),
+    "flower_spots":   (("Spring", "Summer"),         0.55,   0.12,   6271),
+}
+
+
+def _drift_flora(state: GameState, attr: str, frac: float, wither: float, salt: int) -> None:
+    """Drift one flora pool one day: wither some standing tiles, then sprout a
+    fresh random scattering of empty spots toward the target population."""
+    surf = state.surface
+    spots = getattr(surf, attr, None)
+    if not spots:
+        return
+    rng = random.Random(state.seed * salt + state.day)
+    standing, empty = [], []
+    for s in spots:
+        x, y, species, base = s
+        if surf.tiles[x, y] == species:
+            standing.append(s)
+        elif surf.tiles[x, y] in _NATURAL_GROUND:
+            empty.append(s)
+    survivors = 0
+    for x, y, species, base in standing:
+        if rng.random() < wither:
+            surf.tiles[x, y] = base
+        else:
+            survivors += 1
+    target = int((len(standing) + len(empty)) * frac)
+    need = target - survivors
+    if need > 0 and empty:
+        rng.shuffle(empty)
+        for x, y, species, base in empty[:need]:
+            surf.tiles[x, y] = species
+
+
+def _clear_flora(state: GameState, attr: str) -> None:
+    surf = state.surface
+    for x, y, species, base in getattr(surf, attr, ()) or ():
+        if surf.tiles[x, y] == species:
+            surf.tiles[x, y] = base
+
+
+def _seasonal_flora(state: GameState, old: str, new: str) -> None:
+    """On a season change, clear any pool whose season has just ended (winter
+    snow, autumn foliage). Growth *within* season is handled daily."""
+    for attr, (seasons, _f, _w, _s) in _FLORA.items():
+        if old in seasons and new not in seasons:
+            _clear_flora(state, attr)
+
+
+def _tick_flora(state: GameState, season: str) -> None:
+    """Daily drift for whichever pools are in season."""
+    for attr, (seasons, frac, wither, salt) in _FLORA.items():
+        if season in seasons:
+            _drift_flora(state, attr, frac, wither, salt)
+
+
+def prime_seasonal_flora(state: GameState) -> None:
+    """Populate in-season pools to their target at once (used at game start so a
+    spring meadow already has flowers rather than filling in over days)."""
+    surf = state.surface
+    for attr, (seasons, frac, wither, salt) in _FLORA.items():
+        spots = getattr(surf, attr, None)
+        if not spots or state.season not in seasons:
+            continue
+        _clear_flora(state, attr)
+        viable = [s for s in spots if surf.tiles[s[0], s[1]] in _NATURAL_GROUND]
+        rng = random.Random(state.seed * salt + state.day + 1)
+        rng.shuffle(viable)
+        for x, y, species, base in viable[:int(len(viable) * frac)]:
+            surf.tiles[x, y] = species
 
 
 def _tend_village_fields(state: GameState, season: str) -> None:

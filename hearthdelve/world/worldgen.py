@@ -135,24 +135,29 @@ def generate(seed: int = 1337) -> GameMap:
 
     # Wild mushrooms. Forest species (bolete, chanterelle) grow on the shaded
     # grass under the woods; field species (button, parasol) dot open grass and
-    # meadow. `variety` noise decides which of each pair a patch is.
+    # meadow. We only RECORD the spots here — the day cycle sprouts them in
+    # summer/autumn and clears them otherwise (farming._seasonal_flora).
     forest_m = ((tiles == tile.GRASS) | (tiles == tile.MOOR) | (tiles == tile.FOG_GRASS)) \
         & (t2 | t3) & (flora > 0.5) & (detail > 0.40) & (detail < 0.47)
-    tiles[forest_m & (variety < 0.5)] = tile.BOLETE
-    tiles[forest_m & (variety >= 0.5)] = tile.CHANTERELLE
-
     field_m = ((tiles == tile.GRASS) | (tiles == tile.MEADOW)) \
         & (t1 | t2) & (flora < 0.40) & (detail > 0.44) & (detail < 0.47)
-    tiles[field_m & (variety < 0.5)] = tile.BUTTON_MUSHROOM
-    tiles[field_m & (variety >= 0.5)] = tile.PARASOL_MUSHROOM
+    mushroom_spots = []
+    for mask, lo, hi in ((forest_m, tile.BOLETE, tile.CHANTERELLE),
+                         (field_m, tile.BUTTON_MUSHROOM, tile.PARASOL_MUSHROOM)):
+        mx, my = np.where(mask)
+        for x, y in zip(mx.tolist(), my.tolist()):
+            species = hi if variety[x, y] >= 0.5 else lo
+            mushroom_spots.append((x, y, int(species), int(tiles[x, y])))
 
-    # Flowers dappled across the meadows (decorative, soft patches by colour).
-    meadow = tiles == tile.MEADOW
-    bloom = meadow & (detail > 0.26) & (detail < 0.40)
-    tiles[bloom & (variety < 0.25)] = tile.FLOWER_RED
-    tiles[bloom & (variety >= 0.25) & (variety < 0.50)] = tile.FLOWER_YELLOW
-    tiles[bloom & (variety >= 0.50) & (variety < 0.75)] = tile.FLOWER_VIOLET
-    tiles[bloom & (variety >= 0.75)] = tile.FLOWER_WHITE
+    # Wildflowers dappled across the meadows. Like mushrooms, we only RECORD the
+    # spots and let the day cycle bloom them in spring/summer, drifting daily.
+    bloom = (tiles == tile.MEADOW) & (detail > 0.26) & (detail < 0.40)
+    _flower_cols = (tile.FLOWER_RED, tile.FLOWER_YELLOW, tile.FLOWER_VIOLET, tile.FLOWER_WHITE)
+    flower_spots = []
+    bx, by = np.where(bloom)
+    for x, y in zip(bx.tolist(), by.tolist()):
+        col = _flower_cols[min(3, int(variety[x, y] * 4))]
+        flower_spots.append((x, y, int(col), int(tiles[x, y])))
 
     # Sparse ore: a handful of short veins in rock outcrops, plus a few lone gems.
     _grow_veins(tiles, w, h, tile.ROCK, ore_veins=12, max_len=6, gems=6,
@@ -199,6 +204,8 @@ def generate(seed: int = 1337) -> GameMap:
                     tiles[x, y] = tile.SAND
 
     gm = GameMap(width=w, height=h, tiles=tiles)
+    gm.mushroom_spots = mushroom_spots
+    gm.flower_spots = flower_spots
     coast = _carve_sea(gm, seed)
     _carve_homestead(gm, seed)
     centers = _carve_villages(gm, seed, coast)
@@ -257,7 +264,7 @@ def _populate_wildlife(gm: GameMap, rng: random.Random) -> None:
         c = rng.choice(content.WILDLIFE)
         gm.monsters.append(Mob(c.name, c.glyph, c.color, c.hp, c.hp, c.atk,
                                c.defense, c.speed, c.behavior, x, y,
-                               kind="wildlife", diet=c.diet))
+                               kind="wildlife", diet=c.diet, seasons=c.seasons))
         placed += 1
 
 
@@ -823,11 +830,14 @@ def _lay_square(gm: GameMap, vx: int, vy: int, R: int, rng) -> list:
         x, y = vx + dx, vy + dy
         if gm.in_bounds(x, y) and gm.tiles[x, y] in (tile.COBBLE, tile.GRASS):
             gm.tiles[x, y] = tile.LAMP
+    # Flower beds about the square — recorded as spots so they bloom with the
+    # seasons alongside the wild meadows (bare in autumn/winter).
     for _ in range(rng.randint(12, 20)):
         fx, fy = vx + rng.randint(-R, R), vy + rng.randint(-R, R)
         if gm.in_bounds(fx, fy) and gm.tiles[fx, fy] == tile.GRASS:
-            gm.tiles[fx, fy] = rng.choice((tile.FLOWER_RED, tile.FLOWER_YELLOW,
-                                           tile.FLOWER_VIOLET, tile.FLOWER_WHITE))
+            col = rng.choice((tile.FLOWER_RED, tile.FLOWER_YELLOW,
+                              tile.FLOWER_VIOLET, tile.FLOWER_WHITE))
+            gm.flower_spots.append((fx, fy, int(col), int(tile.GRASS)))
     return [s for s in seats if gm.tiles[s] == tile.COBBLE]
 
 

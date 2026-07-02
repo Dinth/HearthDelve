@@ -17,6 +17,9 @@ def _sign(n: int) -> int:
 def mob_at(state: GameState, x: int, y: int):
     for m in state.world.monsters:
         if m.alive and m.x == x and m.y == y:
+            # a critter that's out of season isn't really here
+            if m.seasons and state.season not in m.seasons:
+                continue
             return m
     return None
 

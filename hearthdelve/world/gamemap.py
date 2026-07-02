@@ -46,6 +46,12 @@ class GameMap:
     village_fields: list = field(default_factory=list)
     # village buildings for look/identification: dicts {x,y,w,h,kind,village,owner}
     buildings: list = field(default_factory=list)
+    # wild-mushroom spots (x, y, variety_tile_id, base_tile_id): only sprout in
+    # summer/autumn, toggled by the day cycle.
+    mushroom_spots: list = field(default_factory=list)
+    # wildflower spots (x, y, colour_tile_id, base_tile_id): bloom in spring/
+    # summer and drift day to day.
+    flower_spots: list = field(default_factory=list)
 
     def in_bounds(self, x: int, y: int) -> bool:
         return 0 <= x < self.width and 0 <= y < self.height

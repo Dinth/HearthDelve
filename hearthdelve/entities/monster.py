@@ -28,6 +28,7 @@ class Mob:
     kind: str = "monster"   # "monster" (dungeon) | "wildlife" (surface critter)
     diet: str = ""          # wildlife only: "" | "crops" | "berries"
     hostile: bool = False   # a defensive critter roused into fighting back
+    seasons: tuple = ()     # wildlife only: seasons it's active in ("" = all year)
 
     @property
     def alive(self) -> bool:
