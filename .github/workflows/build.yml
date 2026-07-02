@@ -101,11 +101,13 @@ jobs:
       - name: Build
         run: |
           # manylinux's /opt/python builds are static (no libpython.so), which
-          # PyInstaller can't use — install a shared Python from AlmaLinux 8.
-          dnf install -y python3.11 python3.11-pip python3.11-devel
-          python3.11 -m pip install --upgrade pip
-          python3.11 -m pip install -r requirements.txt pyinstaller
-          python3.11 -m PyInstaller --noconfirm --onefile --name hearthdelve --collect-all tcod play.py
+          # PyInstaller can't use — install a shared Python 3.12 from AlmaLinux 8
+          # (3.12 is required by our pinned numpy).
+          dnf install -y python3.12 python3.12-pip python3.12-devel
+          python3.12 -m ensurepip --upgrade 2>/dev/null || true
+          python3.12 -m pip install --upgrade pip
+          python3.12 -m pip install -r requirements.txt pyinstaller
+          python3.12 -m PyInstaller --noconfirm --onefile --name hearthdelve --collect-all tcod play.py
           mkdir -p out && cp dist/hearthdelve out/hearthdelve-linux
       - uses: actions/upload-artifact@v4
         with:
