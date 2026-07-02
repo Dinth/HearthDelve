@@ -1,18 +1,57 @@
 name: Build
 
-# Rolling release: every push to main rebuilds the standalone binaries for
-# macOS, Linux and Windows and republishes them under the "rolling" release.
+# Rolling release: the standalone binaries for macOS, Linux and Windows are
+# rebuilt and republished under the "rolling" release AT MOST ONCE PER DAY.
+# A push only triggers a rebuild if the last rolling build is ≥23h old; a daily
+# schedule catches any changes that were throttled; a manual run always builds.
 on:
   push:
     branches: [main]
+  schedule:
+    - cron: "0 6 * * *" # daily at 06:00 UTC
   workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
+  gate:
+    name: Rate-limit to once per day
+    runs-on: ubuntu-latest
+    outputs:
+      build: ${{ steps.check.outputs.build }}
+    steps:
+      - id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          # A manual run always rebuilds.
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "build=true" >> "$GITHUB_OUTPUT"
+            echo "Manual run — building."
+            exit 0
+          fi
+          # Otherwise, only rebuild if the rolling release is missing or ≥23h old.
+          ts=$(gh release view rolling --json publishedAt -q .publishedAt 2>/dev/null || echo "")
+          if [ -z "$ts" ]; then
+            echo "build=true" >> "$GITHUB_OUTPUT"
+            echo "No rolling release yet — building."
+            exit 0
+          fi
+          age_h=$(( ( $(date -u +%s) - $(date -u -d "$ts" +%s) ) / 3600 ))
+          if [ "$age_h" -ge 23 ]; then
+            echo "build=true" >> "$GITHUB_OUTPUT"
+            echo "Last rolling build was ${age_h}h ago — building."
+          else
+            echo "build=false" >> "$GITHUB_OUTPUT"
+            echo "Last rolling build was ${age_h}h ago (<23h) — skipping to stay at once/day."
+          fi
+
   build:
     name: Build (${{ matrix.os }})
+    needs: gate
+    if: needs.gate.outputs.build == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -73,7 +112,7 @@ jobs:
           gh release create rolling \
             --target "${{ github.sha }}" \
             --title "Rolling build" \
-            --notes "Automated build from the latest push to \`main\` (commit ${{ github.sha }}).
+            --notes "Automated build from the latest push to \`main\` (commit ${{ github.sha }}). Refreshed at most once per day.
 
           Download the binary for your OS below — no Python needed.
 
