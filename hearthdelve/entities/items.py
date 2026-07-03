@@ -38,8 +38,16 @@ FISHING_ROD  = Item("Fishing Rod",  "{", "tool", "Cast at water to catch fish.",
 # Tools whose name takes a material-tier prefix (Wooden Hoe, Bronze Axe, ...).
 TIERED_TOOLS = (HOE, WATERING_CAN, AXE, PICKAXE, MACHETE)
 
-# --- Weapon ------------------------------------------------------------------
-SWORD        = Item("Rusty Sword",  "|", "weapon", "A basic blade for the wilds.", stackable=False)
+# --- Weapons (held like a tool; see content.WEAPON_STATS for combat profiles) -
+SWORD        = Item("Rusty Sword",  "|", "weapon", "A basic blade for the wilds.", stackable=False, value=40)
+DAGGER       = Item("Dagger",       "†", "weapon", "A quick, light blade — deft and accurate.", stackable=False, value=70)
+BATTLE_AXE   = Item("Battle Axe",   "¶", "weapon", "A heavy axe; fells foes and trees alike.", stackable=False, value=180)
+WAR_MACE     = Item("War Mace",     "‡", "weapon", "A crushing head that shrugs off armour.", stackable=False, value=150)
+
+# --- Armor (worn; grants Protection, sometimes at a Dodge cost) --------------
+LEATHER_ARMOR = Item("Leather Armor", "]", "armor", "Boar-hide armour; light and unencumbering.", stackable=False, value=90)
+CHAIN_MAIL    = Item("Chain Mail",    "]", "armor", "Linked steel rings; solid cover, a touch bulky.", stackable=False, value=280)
+PLATE_ARMOR   = Item("Plate Armor",   "]", "armor", "Heavy plate; the best protection, but it slows your dodge.", stackable=False, value=650)
 
 # --- Seeds -------------------------------------------------------------------
 PARSNIP_SEEDS     = Item("Parsnip Seeds",     "_", "seed", "Plant in spring; matures in ~4 days.")

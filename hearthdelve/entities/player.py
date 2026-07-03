@@ -9,9 +9,20 @@ from .items import Inventory, Item
 
 
 def _starter_hotbar() -> list[Item]:
-    # tools on 1-6; slot 7 is the seed pouch (cycles through seeds & saplings)
+    # tools on 1-6, seed pouch on 7, the held weapon on 8 — you swap to whatever
+    # you want in hand; that item is used for both work and fighting.
     return [items.HOE, items.WATERING_CAN, items.AXE, items.PICKAXE,
-            items.MACHETE, items.FISHING_ROD, items.SEED_POUCH]
+            items.MACHETE, items.FISHING_ROD, items.SEED_POUCH, items.SWORD]
+
+
+# ADOM-style worn/ranged slots (melee weapon is whatever you hold, above).
+EQUIP_SLOTS = ("head", "body", "hands", "waist", "legs", "feet", "ranged", "ammo")
+
+
+def _starter_equipment() -> dict:
+    eq = {s: None for s in EQUIP_SLOTS}
+    eq["ammo"] = items.BOMB       # bombs ride in the ammo slot, thrown by hand
+    return eq
 
 
 def _starter_inventory() -> Inventory:
@@ -44,7 +55,9 @@ class Player:
     # quick-access tools (keys 1-9), the equipped weapon, and stacking goods
     hotbar: list[Item] = field(default_factory=_starter_hotbar)
     active_slot: int = 0
-    weapon: Item | None = field(default_factory=lambda: items.SWORD)
+    weapon: Item | None = field(default_factory=lambda: items.SWORD)   # the held melee weapon in the hotbar
+    equipment: dict = field(default_factory=_starter_equipment)        # worn armour + ranged/ammo slots
+    mastery: dict = field(default_factory=dict)                        # weapon category -> mastery xp
     inventory: Inventory = field(default_factory=_starter_inventory)
     tool_tier: dict = field(default_factory=_starter_tiers)
     active_seed: Item = field(default_factory=lambda: items.PARSNIP_SEEDS)

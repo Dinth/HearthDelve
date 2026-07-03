@@ -79,6 +79,8 @@ def save(state: GameState, path: str = SAVE_PATH) -> None:
             "active_slot": p.active_slot,
             "hotbar": [it.name for it in p.hotbar],
             "weapon": p.weapon.name if p.weapon else None,
+            "equipment": {slot: (it.name if it else None) for slot, it in p.equipment.items()},
+            "mastery": dict(p.mastery),
             "inventory": [[it.name, q, ql] for it, q, ql in p.inventory.slots],
             "tool_tier": {it.name: t for it, t in p.tool_tier.items()},
             "active_seed": p.active_seed.name if p.active_seed else None,
@@ -108,8 +110,8 @@ def save(state: GameState, path: str = SAVE_PATH) -> None:
                     for a in surf.animals],
         # Surface wildlife is persistent (a boar you put down stays down, and
         # its karma cost sticks) rather than re-scattered from the seed on load.
-        "wildlife": [[m.name, m.glyph, list(m.color), m.hp, m.max_hp, m.atk,
-                      m.defense, m.speed, m.behavior, m.x, m.y, m.awake,
+        "wildlife": [[m.name, m.glyph, list(m.color), m.hp, m.max_hp, m.speed, m.behavior,
+                      m.x, m.y, m.dv, m.pv, m.to_hit, list(m.dmg), m.awake,
                       m.kind, m.diet, m.hostile, list(m.seasons)]
                      for m in surf.monsters],
         # Player-raised outbuildings (worldgen doesn't recreate these).
@@ -195,11 +197,11 @@ def load(path: str = SAVE_PATH) -> GameState:
         from ..entities.monster import Mob
         world.monsters = []
         for rec in data["wildlife"]:
-            (nm, glyph, color, hp, mhp, atk, dfn, spd, behavior,
-             mx, my, awake, mkind, diet, hostile, seasons) = rec
-            world.monsters.append(Mob(nm, glyph, tuple(color), hp, mhp, atk, dfn, spd,
-                                      behavior, mx, my, awake=awake, kind=mkind,
-                                      diet=diet, hostile=hostile, seasons=tuple(seasons)))
+            (nm, glyph, color, hp, mhp, spd, behavior, mx, my,
+             dv, pv, th, dmg, awake, mkind, diet, hostile, seasons) = rec
+            world.monsters.append(Mob(nm, glyph, tuple(color), hp, mhp, spd, behavior, mx, my,
+                                      dv=dv, pv=pv, to_hit=th, dmg=tuple(dmg), awake=awake,
+                                      kind=mkind, diet=diet, hostile=hostile, seasons=tuple(seasons)))
 
     # Re-register player-raised outbuildings (their tiles + housing machine are
     # restored above; this puts back the record the look tool names them by).
@@ -230,6 +232,10 @@ def load(path: str = SAVE_PATH) -> GameState:
     player.active_slot = pd["active_slot"]
     player.hotbar = [items.by_name(n) for n in pd["hotbar"] if items.by_name(n)]
     player.weapon = items.by_name(pd["weapon"]) if pd["weapon"] else None
+    for slot, nm in pd.get("equipment", {}).items():
+        if slot in player.equipment:
+            player.equipment[slot] = items.by_name(nm) if nm else None
+    player.mastery = dict(pd.get("mastery", {}))
     player.inventory = Inventory(slots=[[items.by_name(rec[0]), rec[1], rec[2] if len(rec) > 2 else 0]
                                         for rec in pd["inventory"] if items.by_name(rec[0])])
     player.tool_tier = {items.by_name(n): t for n, t in pd["tool_tier"].items() if items.by_name(n)}

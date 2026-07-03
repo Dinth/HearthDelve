@@ -243,7 +243,7 @@ def respawn(state: GameState, rng: random.Random) -> None:
             if max(abs(x - cx), abs(y - cy)) < 20:  # not right on the farmyard
                 continue
             c = rng.choice(content.WILDLIFE)
-            surf.monsters.append(Mob(c.name, c.glyph, c.color, c.hp, c.hp, c.atk, c.defense,
-                                     c.speed, c.behavior, x, y, kind="wildlife",
-                                     diet=c.diet, seasons=c.seasons))
+            surf.monsters.append(Mob(c.name, c.glyph, c.color, c.hp, c.hp, c.speed, c.behavior, x, y,
+                                     dv=c.dv, pv=c.pv, to_hit=c.to_hit, dmg=c.dmg,
+                                     kind="wildlife", diet=c.diet, seasons=c.seasons))
             break

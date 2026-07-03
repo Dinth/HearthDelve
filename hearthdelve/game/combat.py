@@ -51,26 +51,104 @@ def _on_kill(state: GameState, m, award_combat: bool = True) -> None:
             state.log.add(f"  It drops {drop.name.lower()}.", C.DIM)
 
 
+# --- combat stats (ADOM-style: to-hit vs DV, then damage - PV) ---------------
+BASE_DV = 8              # a bare, unskilled defender's Defensive Value
+
+
+def held_profile(state: GameState):
+    """The combat profile of whatever the player is holding (a tool fights, but
+    badly; a real weapon fights well; bare hands / seed pouch = unarmed)."""
+    return content.profile_of(state.player.active_tool)
+
+
+def _worn(state: GameState):
+    dv = pv = 0
+    for it in state.player.equipment.values():
+        stats = content.ARMOR_STATS.get(it)
+        if stats:
+            dv += stats[0]
+            pv += stats[1]
+    return dv, pv
+
+
+def player_dv(state: GameState) -> int:
+    from . import skills
+    prof = held_profile(state)
+    wdv, _ = _worn(state)
+    lvl = skills.mastery_level(state, prof.category)
+    return (BASE_DV + skills.skill_level(state, "Combat")   # Dodge
+            + prof.dv + wdv + skills.mastery_parry(lvl))
+
+
+def player_pv(state: GameState) -> int:
+    return _worn(state)[1]
+
+
+def player_to_hit(state: GameState) -> int:
+    from . import skills
+    prof = held_profile(state)
+    lvl = skills.mastery_level(state, prof.category)
+    bonus = prof.to_hit + skills.skill_level(state, "Combat") // 2 + skills.mastery_to_hit(lvl)
+    if skills.active_buff(state) == "hearty":
+        bonus += 2
+    return bonus
+
+
+def player_crit(state: GameState) -> float:
+    from . import skills
+    lvl = skills.mastery_level(state, held_profile(state).category)
+    return 0.03 + skills.skill_level(state, "Combat") * 0.01 + skills.mastery_crit(lvl)
+
+
+def _resolve(to_hit: int, dmg_range, dmg_bonus: int, crit_chance: float,
+             target_dv: int, target_pv: int):
+    """One attack. Returns (damage, crit) if it lands, or None on a miss. A crit
+    doubles the damage and ignores Protection."""
+    if random.randint(1, 20) + to_hit < target_dv:
+        return None
+    dmg = random.randint(dmg_range[0], dmg_range[1]) + dmg_bonus
+    if random.random() < crit_chance:
+        return dmg * 2, True
+    return max(0, dmg - target_pv), False
+
+
 # --- player attacks ----------------------------------------------------------
 def player_attack(state: GameState, m) -> None:
     from . import skills
     p = state.player
-    watk = content.WEAPON_STATS[p.weapon].atk if p.weapon in content.WEAPON_STATS else 0
-    dmg = max(1, C.BASE_ATK + watk + skills.combat_atk_bonus(state) - m.defense + random.randint(-1, 1))
-    m.hp -= dmg
+    prof = held_profile(state)
     p.energy = max(0, p.energy - C.ATTACK_COST[0])
+    dmg_bonus = skills.mastery_dmg(skills.mastery_level(state, prof.category))
+    res = _resolve(player_to_hit(state), prof.dmg, dmg_bonus, player_crit(state), m.dv, m.pv)
     wild = getattr(m, "kind", "monster") == "wildlife"
+
+    if res is None:
+        state.log.add(f"You swing at the {m.name.lower()} and miss.", C.DIM)
+        if wild and m.behavior == "defensive":
+            m.hostile = True
+        m.awake = True
+        return
+
+    dmg, crit = res
+    skills.gain_mastery(state, prof.category, 3)     # learn by doing
+    m.awake = True
+    if wild and m.behavior == "defensive":
+        m.hostile = True
+    if dmg <= 0:
+        state.log.add(f"Your blow glances off the {m.name.lower()}'s hide.", C.DIM)
+        return
+    m.hp -= dmg
     if m.hp <= 0:
         _on_kill(state, m)
-    elif wild:
-        if m.behavior == "defensive":
-            m.hostile = True
-            state.log.add(f"The {m.name.lower()} rounds on you!", (224, 160, 110))
-        else:
-            state.log.add(f"You hit the {m.name.lower()} — it bolts!", C.DIM)
+        return
+    if wild and not m.hostile:
+        state.log.add(f"You hit the {m.name.lower()} for {dmg} — it bolts!", C.DIM)
     else:
-        skills.gain(state, "Combat", 4)
-        state.log.add(f"You hit the {m.name.lower()} for {dmg}.")
+        lead = "A critical hit! " if crit else ""
+        state.log.add(f"{lead}You hit the {m.name.lower()} for {dmg}.",
+                      (240, 220, 140) if crit else C.WHITE)
+        if not wild:
+            skills.gain(state, "Combat", 4)
 
 
 # --- monster turns -----------------------------------------------------------
@@ -103,9 +181,25 @@ def _can_move(state: GameState, m, dx: int, dy: int) -> bool:
     return mob_at(state, nx, ny) is None
 
 
+def _dist(m, p) -> int:
+    return max(abs(m.x - p.x), abs(m.y - p.y))
+
+
+def _move_toward(state: GameState, m, away: bool = False) -> bool:
+    p = state.player
+    sx = _sign(p.x - m.x) * (-1 if away else 1)
+    sy = _sign(p.y - m.y) * (-1 if away else 1)
+    for ax, ay in ((sx, sy), (sx, 0), (0, sy)):
+        if (ax or ay) and _can_move(state, m, ax, ay):
+            m.x += ax
+            m.y += ay
+            return True
+    return False
+
+
 def _step(state: GameState, m) -> None:
     p = state.player
-    if max(abs(m.x - p.x), abs(m.y - p.y)) == 1:
+    if _dist(m, p) == 1:
         _attack_player(state, m)
         return
     # bats flit erratically; wounded ones flee
@@ -119,17 +213,26 @@ def _step(state: GameState, m) -> None:
                 return
         return
     fleeing = m.behavior == "erratic" and m.hp <= m.max_hp * 0.35
-    sx = _sign(p.x - m.x) * (-1 if fleeing else 1)
-    sy = _sign(p.y - m.y) * (-1 if fleeing else 1)
-    for ax, ay in ((sx, sy), (sx, 0), (0, sy)):
-        if (ax or ay) and _can_move(state, m, ax, ay):
-            m.x += ax
-            m.y += ay
+    # a "charge" monster lunges — an extra stride when closing from nearby, so
+    # it covers ground and reaches you fast once roused.
+    strides = 2 if (m.behavior == "charge" and not fleeing and 2 <= _dist(m, p) <= 4) else 1
+    for _ in range(strides):
+        if _dist(m, p) == 1:
+            _attack_player(state, m)
+            return
+        if not _move_toward(state, m, away=fleeing):
             return
 
 
 def _attack_player(state: GameState, m) -> None:
-    dmg = max(1, m.atk)
+    res = _resolve(m.to_hit, m.dmg, 0, 0.0, player_dv(state), player_pv(state))
+    if res is None:
+        state.log.add(f"The {m.name.lower()} lunges — you dodge.", C.DIM)
+        return
+    dmg, _crit = res
+    if dmg <= 0:
+        state.log.add(f"The {m.name.lower()} strikes, but your armour holds.", C.DIM)
+        return
     state.player.hp -= dmg
     state.log.add(f"The {m.name.lower()} hits you for {dmg}!", (224, 140, 120))
 

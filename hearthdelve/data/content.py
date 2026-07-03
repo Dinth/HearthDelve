@@ -36,14 +36,70 @@ TOOL_STATS: dict[Item, ToolStat] = {
 
 
 @dataclass(frozen=True)
-class WeaponStat:
-    atk: int
-    note: str = ""
+class CombatProfile:
+    """How a held item fights (ADOM-style). Tools double as weak weapons; a
+    dedicated weapon hits harder and truer. `category` drives weapon mastery."""
+    category: str          # mastery bucket: blade | axe | pick | blunt | unarmed
+    to_hit: int            # flat bonus to the to-hit roll
+    dmg: tuple             # (min, max) damage rolled before bonuses
+    dv: int = 0            # Defensive-Value change while wielding (heavy < 0)
 
 
-WEAPON_STATS: dict[Item, WeaponStat] = {
-    items.SWORD: WeaponStat(atk=C.SWORD_ATK, note="bump-attack in the wilds"),
+# Bare hands / a non-weapon like the seed pouch.
+UNARMED = CombatProfile("unarmed", -2, (1, 2))
+
+# Every held item — tools included — can fight; tools just do it badly.
+WEAPON_STATS: dict[Item, CombatProfile] = {
+    # tools (usable as feeble weapons)
+    items.HOE:          CombatProfile("polearm", -1, (1, 4)),   # long-hafted, a bit of reach
+    items.WATERING_CAN: CombatProfile("blunt", -3, (1, 2)),
+    items.AXE:          CombatProfile("axe",    0, (2, 6)),
+    items.PICKAXE:      CombatProfile("pick",  -1, (2, 5)),
+    items.MACHETE:      CombatProfile("blade",  0, (2, 5)),
+    items.FISHING_ROD:  CombatProfile("blunt", -4, (1, 1)),
+    # dedicated weapons
+    items.SWORD:        CombatProfile("blade",  2, (3, 7)),
+    items.DAGGER:       CombatProfile("blade",  3, (2, 5)),
+    items.BATTLE_AXE:   CombatProfile("axe",    1, (4, 9), dv=-1),
+    items.WAR_MACE:     CombatProfile("blunt",  1, (3, 8), dv=-1),
 }
+
+# Worn armour: (Dodge change, Protection). Protection is flat damage soak.
+ARMOR_STATS: dict[Item, tuple[int, int]] = {
+    items.LEATHER_ARMOR: (0, 2),
+    items.CHAIN_MAIL:    (-1, 5),
+    items.PLATE_ARMOR:   (-2, 6),
+}
+
+
+def profile_of(item) -> CombatProfile:
+    """The combat profile of a held item (bare hands / seed pouch = unarmed)."""
+    return WEAPON_STATS.get(item, UNARMED) if item is not None else UNARMED
+
+
+# Which paperdoll slot each armour piece fills. Body is hand-defined above; the
+# rest (helmets, gauntlets, girdles, leggings, boots) are generated per slot.
+ARMOR_SLOT: dict[Item, str] = {
+    items.LEATHER_ARMOR: "body", items.CHAIN_MAIL: "body", items.PLATE_ARMOR: "body",
+}
+
+#   slot  -> [(name, dv, pv, value), ...] from lightest to heaviest
+_ARMOR_LINES = {
+    "head":  [("Leather Cap", 0, 1, 45), ("Iron Helm", 0, 1, 130), ("Steel Helm", -1, 2, 320)],
+    "hands": [("Leather Gloves", 0, 0, 40), ("Iron Gauntlets", 0, 1, 120), ("Steel Gauntlets", -1, 1, 300)],
+    "waist": [("Leather Girdle", 0, 0, 35), ("Iron Girdle", 0, 1, 110)],
+    "legs":  [("Leather Leggings", 0, 1, 50), ("Chain Leggings", -1, 1, 160), ("Plate Greaves", -1, 2, 340)],
+    "feet":  [("Leather Boots", 0, 0, 40), ("Iron Boots", 0, 1, 120)],
+}
+for _slot, _lines in _ARMOR_LINES.items():
+    for _nm, _dv, _pv, _val in _lines:
+        _it = items.register(items.Item(_nm, "]", "armor", f"Armour worn on the {_slot}.",
+                                        stackable=False, value=_val))
+        ARMOR_STATS[_it] = (_dv, _pv)
+        ARMOR_SLOT[_it] = _slot
+
+# Everything wearable, cheapest first — used to stock the smith and the codex.
+ALL_ARMOR = sorted(ARMOR_SLOT, key=lambda it: it.value)
 
 
 # --- Crops -------------------------------------------------------------------
@@ -311,6 +367,8 @@ RECIPES: list[Recipe] = [
            desc="Churns milk into cheese."),
     Recipe("Bomb", "item", ((items.COAL, 1), (items.FIBER, 2)), output=items.BOMB, out_qty=1,
            desc="Aim & throw with 't' to harm monsters and shatter rock."),
+    Recipe("Leather Armor", "item", ((items.BOAR_HIDE, 3), (items.FIBER, 4)),
+           output=items.LEATHER_ARMOR, out_qty=1, desc="Tanned boar-hide body armour (+2 Protection)."),
     # --- Cooking: makes a carryable dish; eat it (x) for stamina -------------
     Recipe("Parsnip Soup", "cook", ((items.PARSNIP, 2),), output=items.PARSNIP_SOUP,
            desc="A warming bowl."),
@@ -396,28 +454,40 @@ class Monster:
     glyph: str
     color: tuple[int, int, int]
     hp: int
-    atk: int
-    defense: int
     speed: int
     behavior: str          # "chase" | "erratic" | "charge"
     min_depth: int         # only appears at/after this dungeon floor
+    dv: int                # Defensive Value — how hard it is to hit
+    pv: int                # Protection Value — flat damage it soaks
+    to_hit: int            # its bonus to hit you
+    dmg: tuple             # (min, max) damage it deals on a hit
     desc: str = ""
     boss: bool = False
 
 
 MONSTERS: list[Monster] = [
-    Monster("Cave Slime", "s", (120, 200, 130), 8, 2, 0, 1, "chase", 1,
-            "Slow but persistent — easy to outrun."),
-    Monster("Bat", "w", (172, 150, 214), 5, 2, 0, 3, "erratic", 1,
-            "Flits about erratically; flees when hurt."),
-    Monster("Boar", "b", (200, 150, 112), 16, 4, 1, 2, "charge", 2,
-            "Tougher; charges once it's roused."),
+    Monster("Cave Slime", "s", (120, 200, 130), 8, 1, "chase", 1,
+            dv=6, pv=0, to_hit=1, dmg=(1, 3), desc="Slow but persistent — easy to outrun."),
+    Monster("Bat", "w", (172, 150, 214), 5, 3, "erratic", 1,
+            dv=15, pv=0, to_hit=2, dmg=(1, 2), desc="Flits about erratically; hard to swat, but frail."),
+    Monster("Boar", "b", (200, 150, 112), 16, 2, "charge", 2,
+            dv=8, pv=2, to_hit=3, dmg=(3, 6), desc="Tougher, lightly hided; charges once it's roused."),
+    Monster("Cave Spider", "x", (170, 176, 200), 12, 3, "erratic", 3,
+            dv=16, pv=1, to_hit=4, dmg=(2, 5), desc="Quick and skittering — devilishly hard to pin down."),
+    Monster("Deep Lurker", "L", (150, 140, 172), 30, 1, "chase", 5,
+            dv=7, pv=8, to_hit=5, dmg=(6, 12), desc="A slab of armoured muscle; only a real blade bites it."),
+    Monster("Wraith", "W", (186, 204, 224), 22, 2, "erratic", 6,
+            dv=18, pv=2, to_hit=6, dmg=(4, 11), desc="A cold, half-there shade you can barely lay a hand on."),
 ]
 
 # Bosses appear on deep floors and are spawned by special logic (not the pool).
 BOSSES: list[Monster] = [
-    Monster("Cave Troll", "T", (214, 120, 92), 44, 8, 3, 1, "charge", 4,
-            "A hulking cave troll — slow, but it hits like a landslide.", boss=True),
+    Monster("Cave Troll", "T", (214, 120, 92), 44, 1, "charge", 4,
+            dv=6, pv=6, to_hit=5, dmg=(6, 12), boss=True,
+            desc="A hulking cave troll — slow, but it hits like a landslide."),
+    Monster("Gloom Warden", "G", (156, 116, 176), 70, 2, "charge", 6,
+            dv=10, pv=8, to_hit=8, dmg=(11, 20), boss=True,
+            desc="Warden of the deep vaults — vast, armoured, and terribly strong."),
 ]
 
 
@@ -432,11 +502,13 @@ class Critter:
     glyph: str
     color: tuple[int, int, int]
     hp: int
-    atk: int
-    defense: int
     speed: int
     behavior: str          # "skittish" | "defensive"
-    diet: str              # "" | "crops" | "berries"
+    diet: str              # "" | "crops" | "berries" | "honey"
+    dv: int                # nimble critters are hard to hit
+    pv: int
+    to_hit: int            # only matters if it turns hostile (defensive ones)
+    dmg: tuple
     desc: str = ""
     seasons: tuple = ()    # active seasons ("" = all year round)
 
@@ -444,25 +516,28 @@ class Critter:
 _NO_WINTER = ("Spring", "Summer", "Fall")
 
 WILDLIFE: list[Critter] = [
-    Critter("Rabbit",    "r", (216, 190, 158),  3, 0, 0, 3, "skittish", "crops",
-            "Timid — bolts the moment you draw near. Loves a tender crop."),
-    Critter("Deer",      "d", (198, 164, 116), 10, 0, 0, 2, "skittish", "crops",
-            "Graceful and shy; will graze an unfenced field down to nothing. Gone by winter.",
-            seasons=_NO_WINTER),
-    Critter("Fox",       "f", (222, 132, 66),   6, 0, 0, 3, "skittish", "",
-            "A flash of russet through the grass — gone before you blink."),
-    Critter("Squirrel",  "q", (188, 120, 88),   3, 0, 0, 3, "skittish", "berries",
-            "Chatters and darts off; raids berry shrubs. Holes up for the winter.",
-            seasons=_NO_WINTER),
-    Critter("Wild Boar", "b", (150, 122, 100), 14, 4, 1, 2, "defensive", "crops",
-            "Roots up crops and minds its own business — until provoked."),
+    Critter("Rabbit",    "r", (216, 190, 158),  3, 3, "skittish", "crops",
+            dv=13, pv=0, to_hit=0, dmg=(1, 1),
+            desc="Timid — bolts the moment you draw near. Loves a tender crop."),
+    Critter("Deer",      "d", (198, 164, 116), 10, 2, "skittish", "crops",
+            dv=11, pv=0, to_hit=0, dmg=(1, 1), seasons=_NO_WINTER,
+            desc="Graceful and shy; will graze an unfenced field to nothing. Gone by winter."),
+    Critter("Fox",       "f", (222, 132, 66),   6, 3, "skittish", "",
+            dv=14, pv=0, to_hit=0, dmg=(1, 1),
+            desc="A flash of russet through the grass — gone before you blink."),
+    Critter("Squirrel",  "q", (188, 120, 88),   3, 3, "skittish", "berries",
+            dv=14, pv=0, to_hit=0, dmg=(1, 1), seasons=_NO_WINTER,
+            desc="Chatters and darts off; raids berry shrubs. Holes up for the winter."),
+    Critter("Wild Boar", "b", (150, 122, 100), 14, 2, "defensive", "crops",
+            dv=8, pv=1, to_hit=3, dmg=(3, 6),
+            desc="Roots up crops and minds its own business — until provoked."),
 ]
 
 # Bears are rare, strong, and raid beehives for honey. Spawned separately (not
 # in the common pool) so you meet them only now and then, deep in the wilds.
-BEAR = Critter("Bear", "B", (120, 88, 62), 42, 9, 2, 2, "defensive", "honey",
-               "A great shaggy bear — slow to anger, fearsome when roused, and mad for honey.",
-               seasons=_NO_WINTER)
+BEAR = Critter("Bear", "B", (120, 88, 62), 42, 2, "defensive", "honey",
+               dv=8, pv=3, to_hit=5, dmg=(5, 10), seasons=_NO_WINTER,
+               desc="A great shaggy bear — slow to anger, fearsome when roused, mad for honey.")
 
 
 # --- Villages, NPCs, shops (M3b) ---------------------------------------------
@@ -807,10 +882,11 @@ GENERAL_STOCK: list[tuple[Item, int]] = [
     (items.SNOW_TURNIP_SEEDS, 40), (items.WINTERBERRY_SEEDS, 90),
     (items.CHICK, 120), (items.CALF, 400),
 ]
-# Blacksmith also sells fuel/metal: (item, buy price)
+# Blacksmith sells fuel/metal, weapons, and armour: (item, buy price)
 BLACKSMITH_STOCK: list[tuple[Item, int]] = [
     (items.COAL, 25), (items.COPPER_BAR, 120),
-]
+    (items.DAGGER, 90), (items.WAR_MACE, 220), (items.BATTLE_AXE, 260),
+] + [(it, it.value) for it in ALL_ARMOR]
 
 # --- Festivals ---------------------------------------------------------------
 # Real seasonal festivals on fitting days (never the arbitrary 1st). The whole
@@ -1002,5 +1078,5 @@ QUESTS: list[Quest] = [
 
 # --- Convenience views for the encyclopedia ----------------------------------
 ALL_TOOLS = [items.HOE, items.WATERING_CAN, items.AXE, items.PICKAXE, items.MACHETE, items.FISHING_ROD]
-ALL_WEAPONS = [items.SWORD]
+ALL_WEAPONS = [items.SWORD, items.DAGGER, items.WAR_MACE, items.BATTLE_AXE]
 ALL_SEEDS = [c.seed for c in CROPS] + [t.sapling for t in TREES]

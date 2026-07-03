@@ -303,9 +303,15 @@ def use_tool(state: GameState) -> None:
         state.log.add("You're too exhausted. Rest first.", C.DIM)
         return None
 
-    stat = content.TOOL_STATS.get(item)
-    stamina = max(1, stat.stamina - p.tool_tier.get(item, 0)) if stat else 1
-    seconds = stat.seconds if stat else C.USE_SECONDS
+    if item.kind == "weapon":
+        # a weapon doing a tool's job: slower and more tiring than the real tool
+        cat = content.profile_of(item).category
+        base = C.CHOP_COST if cat == "axe" else C.MACHETE_COST
+        stamina, seconds = base[0] + 2, int(base[1] * 1.5)
+    else:
+        stat = content.TOOL_STATS.get(item)
+        stamina = max(1, stat.stamina - p.tool_tier.get(item, 0)) if stat else 1
+        seconds = stat.seconds if stat else C.USE_SECONDS
     if new_tile is not None and state.world.is_dungeon and new_tile == tile.GRASS:
         new_tile = tile.DUNGEON_FLOOR         # mined rock/ore leaves dungeon floor
 
@@ -333,7 +339,22 @@ def use_tool(state: GameState) -> None:
 def _gather_drop(state: GameState, item, target) -> None:
     """Chopping and mining yield raw materials, XP, and progress."""
     from .game import skills
+    from .data import content
     inv = state.player.inventory
+    if item.kind == "weapon":                          # a weapon used as a tool — poor yield
+        cat = content.profile_of(item).category
+        if cat == "axe" and target.kind == "tree":
+            inv.add(items.WOOD, 1)
+            state.bump("trees_chopped")
+            skills.gain(state, "Foraging", 4)
+            state.log.add("  (+1 Wood — a weapon makes clumsy work of it)", C.DIM)
+        elif cat == "blade" and target.name == "tall_grass":
+            inv.add(items.CUT_GRASS, 1)
+            state.log.add("  (+1 Cut Grass)", C.DIM)
+        elif cat == "blade" and target.kind in ("foliage", "shrub") and random.random() < 0.4:
+            inv.add(items.FIBER, 1)
+            state.log.add("  (+1 Fiber)", C.DIM)
+        return
     if item is items.AXE and target.kind == "tree":
         inv.add(items.WOOD, 2)
         state.bump("trees_chopped")
@@ -393,6 +414,37 @@ def _gather_drop(state: GameState, item, target) -> None:
             parts.append("+1 Fiber")
         if parts:
             state.log.add("  (" + ", ".join(parts) + ")", C.DIM)
+
+
+def _equip(state: GameState, item) -> None:
+    """Equip a carried weapon (into the held hotbar weapon slot) or armour piece
+    (into its paperdoll slot); whatever was there returns to the pack."""
+    from .data import content
+    p = state.player
+    if item.kind == "weapon":
+        idx = next((i for i, h in enumerate(p.hotbar) if h.kind == "weapon"), None)
+        old = p.hotbar[idx] if idx is not None else None
+        if not p.inventory.remove(item, 1):
+            return
+        if idx is None:
+            p.hotbar.append(item)
+        else:
+            p.hotbar[idx] = item
+        if old:
+            p.inventory.add(old)
+        p.weapon = item
+        state.log.add(f"You ready the {item.name.lower()}.", (200, 220, 160))
+    elif item.kind == "armor":
+        slot = content.ARMOR_SLOT.get(item)
+        if slot is None:
+            return
+        if not p.inventory.remove(item, 1):
+            return
+        old = p.equipment.get(slot)
+        p.equipment[slot] = item
+        if old:
+            p.inventory.add(old)
+        state.log.add(f"You don the {item.name.lower()}.", (200, 220, 160))
 
 
 def do_grab(state: GameState) -> None:
@@ -969,8 +1021,11 @@ def main() -> None:
                         if ord(ch) - ord("a") < n:
                             inv_sel = ord(ch) - ord("a")
                         continue
-                    if mode == "equipment" and ch and ch in "abcdef":
-                        select_slot(state, "abcdef".index(ch))
+                    if mode == "equipment" and ch and ch not in ("i", "e"):
+                        gear = rendering.equippables(state)
+                        idx = ord(ch) - ord("a")
+                        if idx < len(gear):
+                            _equip(state, gear[idx][0])
                         continue
 
                 action = game_input.event_to_action(event)

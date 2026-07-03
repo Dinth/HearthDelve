@@ -671,7 +671,8 @@ def describe(state: GameState, x: int, y: int) -> str:
                          if m.behavior == "defensive"
                          else "skittish; it bolts if you get too close")
                 return f"a {m.name.lower()} — {trait}."
-            return f"a {m.name.lower()} — HP {m.hp}/{m.max_hp}. Bump it to attack."
+            return (f"a {m.name.lower()} — HP {m.hp}/{m.max_hp}, DV {m.dv}, PV {m.pv}. "
+                    "Bump it to attack.")
     for npc in state.world.npcs:
         if (npc.x, npc.y) == (x, y):
             role = {"general": "shopkeeper", "blacksmith": "blacksmith"}.get(npc.shop, "villager")
@@ -1023,12 +1024,19 @@ def build_codex_pages(state: GameState):
         tools.append((f"      {s.verb} {s.target} · {s.stamina} stamina · {tstr} · {s.yields}", C.WHITE))
         tools.append((f"      {it.desc}", C.DIM))
     tools.append(("", C.WHITE))
-    tools.append(("Weapons  (bump-attack)", _HDR))
+    tools.append(("Weapons  (hold one; bump to attack)", _HDR))
     tools.append(("", C.WHITE))
     for it in content.ALL_WEAPONS:
         w = content.WEAPON_STATS[it]
-        tools.append((f" {it.glyph}  {it.name}   ATK {w.atk}", _KEY))
-        tools.append((f"      {it.desc}  ({w.note})", C.DIM))
+        lo, hi = w.dmg
+        tools.append((f" {it.glyph}  {it.name}   {w.category}  hit {w.to_hit:+d}  dmg {lo}-{hi}"
+                      + (f"  DV {w.dv:+d}" if w.dv else ""), _KEY))
+        tools.append((f"      {it.desc}", C.DIM))
+    tools.append(("", C.WHITE))
+    tools.append(("Any tool can fight too (badly); a weapon can do a tool's job", C.DIM))
+    tools.append(("with penalties — a battle axe fells trees, a blade clears brush.", C.DIM))
+    tools.append(("Combat: 1d20 + to-hit vs the foe's DV; damage - its PV. Armour", C.DIM))
+    tools.append(("gives PV; Dodge & mastery give DV. Land hits to master a weapon.", C.DIM))
     pages.append(("Tools & Equipment", tools))
 
     # --- Page: Seeds & Crops -------------------------------------------------
@@ -1133,7 +1141,8 @@ def build_codex_pages(state: GameState):
     # --- Page: Monsters ------------------------------------------------------
     mon = [("Monsters", _HDR), ("", C.WHITE)]
     for m in content.MONSTERS:
-        mon.append((f" {m.glyph}  {m.name}   HP {m.hp}  ATK {m.atk}  SPD {m.speed}", _KEY))
+        mon.append((f" {m.glyph}  {m.name}   HP {m.hp}  DV {m.dv} PV {m.pv}  "
+                    f"dmg {m.dmg[0]}-{m.dmg[1]}  from floor {m.min_depth}", _KEY))
         mon.append((f"      {m.behavior}, from floor {m.min_depth}. {m.desc}", C.DIM))
     mon.append(("", C.WHITE))
     mon.append(("Bump to attack. Aim & throw a Bomb (t) to hit several at once.", C.DIM))
@@ -1300,48 +1309,66 @@ def render_inventory(con: tcod.console.Console, state: GameState, sel: int = 0) 
     con.print(x + 2, y + h - 2, "[a-z] pick  [⇧D] drop  [e] equipment  [Esc] close", fg=_FOOT_FG)
 
 
-_EQUIP_TOOLS = (items.HOE, items.WATERING_CAN, items.AXE, items.PICKAXE, items.MACHETE, items.FISHING_ROD)
+_SLOT_LABEL = {"head": "Head", "body": "Body", "hands": "Gauntlets", "waist": "Girdle",
+               "legs": "Legs", "feet": "Feet", "ranged": "Ranged", "ammo": "Ammo"}
+
+
+def equippables(state: GameState) -> list:
+    """Carried weapons and armour — the equipment screen equips these by letter."""
+    return [(it, q, ql) for it, q, ql in state.player.inventory.slots
+            if it.kind in ("weapon", "armor")]
 
 
 def render_equipment(con: tcod.console.Console, state: GameState) -> None:
     from ..data import content
-    from ..game import skills
+    from ..game import combat, skills
     p = state.player
-    tool = p.active_tool
-    w, h = 58, len(_EQUIP_TOOLS) + 9
+    gear = equippables(state)
+    w, h = 60, min(C.SCREEN_H - 2, 15 + len(gear))
     x, y = _modal(con, w, h, "PERSONAL EQUIPMENT")
-    con.print(x + 2, y + 1, f"Character level {p.level}", fg=_CAP_FG)
-    gold = f"Gold: {p.gold}g"
-    con.print(x + w - 2 - len(gold), y + 1, gold, fg=C.GOLD_COLOR)
 
-    # fixed slots (ADOM lists Right Hand / Rings / Boots …; ours is simpler)
-    watk = content.WEAPON_STATS[p.weapon].atk if p.weapon in content.WEAPON_STATS else 0
-    atk = C.BASE_ATK + watk + skills.combat_atk_bonus(state)
-    fixed = (("Wielded", f"{p.weapon.name}  (ATK {atk})" if p.weapon else "-"),
-             ("Accessory", "-"))
+    dv, pv, th = combat.player_dv(state), combat.player_pv(state), combat.player_to_hit(state)
+    con.print(x + 2, y + 1, f"DV {dv}   PV {pv}   To-hit {th:+d}", fg=_CAP_FG)
+    g = f"Gold: {p.gold}g"
+    con.print(x + w - 2 - len(g), y + 1, g, fg=C.GOLD_COLOR)
+
+    # what's in hand doubles as your weapon
+    prof = combat.held_profile(state)
+    lo, hi = prof.dmg
+    ml = skills.mastery_level(state, prof.category)
     row = y + 3
-    for name, val in fixed:
-        con.print(x + 4, row, name, fg=_SECTION_FG)
-        con.print(x + 18, row, ": " + val, fg=C.WHITE if val != "-" else C.DIM)
+    con.print(x + 2, row, "In hand", fg=_SECTION_FG)
+    con.print(x + 12, row, f": {p.display_name(p.active_tool) if p.active_tool else '-'}"
+              f"  ({prof.category} {lo}-{hi}, mastery {ml})"[:w - 14], fg=C.WHITE)
+    row += 1
+    # worn paperdoll + ranged/ammo
+    for slot in ("head", "body", "hands", "waist", "legs", "feet", "ranged", "ammo"):
+        it = p.equipment.get(slot)
+        if slot == "ammo":
+            n = p.inventory.count(it) if it else 0
+            val = f"{it.name} x{n}" if it else "-"
+        elif slot == "ranged":
+            val = it.name if it else "- (none yet)"
+        else:
+            st = content.ARMOR_STATS.get(it)
+            val = f"{it.name}  [DV {st[0]:+d}, PV +{st[1]}]" if (it and st) else "-"
+        con.print(x + 2, row, _SLOT_LABEL[slot], fg=_SECTION_FG)
+        con.print(x + 12, row, ": " + val, fg=C.WHITE if it else C.DIM)
         row += 1
 
     row += 1
-    con.print(x + 2, row, "In hand — press a letter to hold:", fg=_HDR)
+    con.print(x + 2, row, "Carried gear — press a letter to equip:", fg=_HDR)
     row += 1
-    for j, t in enumerate(_EQUIP_TOOLS):
-        held = t is tool
-        tier = C.TOOL_TIERS[p.tool_tier[t]] if t in p.tool_tier else "—"
-        bg = (54, 50, 36) if held else (20, 22, 32)
-        if held:
-            con.draw_rect(x + 1, row, w - 2, 1, ch=ord(" "), bg=bg)
-        con.print(x + 3, row, f"{inv_letter(j)} -", fg=_LETTER_FG, bg=bg)
-        con.print(x + 8, row, f"{t.glyph} {t.name}", fg=C.WHITE if held else (200, 200, 210), bg=bg)
-        con.print(x + 30, row, tier, fg=_BRACKET_FG, bg=bg)
-        if held:
-            con.print(x + w - 11, row, "in hand", fg=_CAP_FG, bg=bg)
+    for i, (it, _q, _ql) in enumerate(gear):
+        if row >= y + h - 2:
+            break
+        st = content.ARMOR_STATS.get(it)
+        tag = (f"[DV {st[0]:+d}, PV +{st[1]}]" if st
+               else f"{content.profile_of(it).category}, dmg {content.profile_of(it).dmg[0]}-{content.profile_of(it).dmg[1]}")
+        con.print(x + 3, row, f"{inv_letter(i)} - {it.glyph} {it.name}", fg=C.WHITE)
+        con.print(x + 34, row, tag, fg=_BRACKET_FG)
         row += 1
-
-    con.print(x + 2, y + h - 2, "[a-f] hold tool  [i] pack  [Esc] close", fg=_FOOT_FG)
+    con.print(x + 2, y + h - 2, "[a-z] equip  [i] pack  [Esc] close", fg=_FOOT_FG)
 
 
 def render_craft(con: tcod.console.Console, state: GameState, sel: int) -> None:

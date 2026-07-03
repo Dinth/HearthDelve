@@ -7,6 +7,7 @@ Both the actual action (main.use_tool) and the target-tile highlight
 """
 from __future__ import annotations
 
+from ..data import content
 from ..entities import items
 from ..entities.items import Item
 from ..world import tile
@@ -55,5 +56,17 @@ def resolve_tool(tool: Item, t: TileType) -> tuple[bool, int | None, str]:
         if t.kind == "water":
             return True, None, "You cast your line."
         return False, None, "You can only fish in water."
+
+    # A weapon can do the matching tool's job — clumsily (see main.use_tool for
+    # the time penalty and reduced yield). An axe-type fells trees; a blade hacks
+    # brush and tall grass.
+    if tool.kind == "weapon":
+        cat = content.profile_of(tool).category
+        if cat == "axe" and t.kind == "tree":
+            return True, tile.GRASS, "You hack the tree down with your weapon — hard going."
+        if cat == "blade" and t.name == "tall_grass":
+            return True, tile.GRASS, "You scythe the grass with your blade."
+        if cat == "blade" and t.kind in ("foliage", "shrub", "shrub_berry"):
+            return True, tile.GRASS, "You slash it away with your blade."
 
     return False, None, f"You can't use the {tool.name} on that."

@@ -87,6 +87,41 @@ def apply_buff(state: GameState, key: str, minutes: int = BUFF_MINUTES) -> None:
     p.buff_until = state.abs_minutes + minutes
 
 
+# --- weapon mastery (learn by doing, per weapon category) --------------------
+MASTERY_MAX = 10            # 0 = unskilled … 10 = grand mastery
+MASTERY_PER = 60           # mastery xp per level
+
+
+def mastery_level(state: GameState, category: str) -> int:
+    return min(MASTERY_MAX, state.player.mastery.get(category, 0) // MASTERY_PER)
+
+
+def gain_mastery(state: GameState, category: str, xp: int) -> None:
+    p = state.player
+    cap = MASTERY_MAX * MASTERY_PER
+    cur = p.mastery.get(category, 0)
+    if cur >= cap:
+        return
+    before = min(MASTERY_MAX, cur // MASTERY_PER)
+    p.mastery[category] = min(cap, cur + xp)
+    now = min(MASTERY_MAX, p.mastery[category] // MASTERY_PER)
+    if now > before:
+        state.log.add(f"Your {category} mastery deepens — level {now}.", (170, 210, 240))
+
+
+def mastery_to_hit(level: int) -> int:
+    return level // 2          # +0..+5
+
+def mastery_dmg(level: int) -> int:
+    return level // 3          # +0..+3
+
+def mastery_crit(level: int) -> float:
+    return level * 0.015       # +0..+15% crit
+
+def mastery_parry(level: int) -> int:
+    return level // 4          # +0..+2 DV
+
+
 # --- gentle bonuses ----------------------------------------------------------
 def combat_atk_bonus(state: GameState) -> int:
     bonus = skill_level(state, "Combat") // 3           # +0..+3 attack

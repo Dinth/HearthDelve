@@ -296,8 +296,8 @@ def _populate_wildlife(gm: GameMap, rng: random.Random) -> None:
         if max(abs(x - cx), abs(y - cy)) < 10:      # give the farmyard some space
             continue
         c = rng.choice(content.WILDLIFE)
-        gm.monsters.append(Mob(c.name, c.glyph, c.color, c.hp, c.hp, c.atk,
-                               c.defense, c.speed, c.behavior, x, y,
+        gm.monsters.append(Mob(c.name, c.glyph, c.color, c.hp, c.hp, c.speed, c.behavior, x, y,
+                               dv=c.dv, pv=c.pv, to_hit=c.to_hit, dmg=c.dmg,
                                kind="wildlife", diet=c.diet, seasons=c.seasons))
         placed += 1
 
@@ -311,8 +311,8 @@ def _populate_wildlife(gm: GameMap, rng: random.Random) -> None:
         if max(abs(x - cx), abs(y - cy)) < 40:        # keep them out in the wilds
             continue
         b = content.BEAR
-        gm.monsters.append(Mob(b.name, b.glyph, b.color, b.hp, b.hp, b.atk,
-                               b.defense, b.speed, b.behavior, x, y,
+        gm.monsters.append(Mob(b.name, b.glyph, b.color, b.hp, b.hp, b.speed, b.behavior, x, y,
+                               dv=b.dv, pv=b.pv, to_hit=b.to_hit, dmg=b.dmg,
                                kind="wildlife", diet=b.diet, seasons=b.seasons))
         bears += 1
 
