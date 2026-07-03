@@ -88,3 +88,18 @@ SUN_COLOR = (245, 214, 110)
 # Target-tile highlight (the tile the active tool would act on).
 TARGET_HL = (92, 84, 52)        # neutral reticle: just shows facing
 TARGET_OK = (54, 96, 58)        # green: the active tool can act here
+
+# Aiming reticle (targeting mode — throwing, siting a building).
+AIM_OK = (72, 120, 80)          # a valid target/placement
+AIM_BAD = (120, 60, 56)         # out of range / blocked
+
+# Warning colours (HUD clock + alerts).
+WARN_COLOR = (240, 200, 90)     # amber: getting late / running low
+DANGER_COLOR = (228, 92, 82)    # red: past midnight / critical
+
+# Time-of-day warning thresholds (minute-of-day; day runs 06:00–02:00).
+LATE_WARN_MIN = 22 * 60         # 22:00 — evening drawing on (amber)
+MIDNIGHT_MIN = 24 * 60          # 00:00 — past midnight (red)
+# Low-resource warning fractions.
+LOW_HP_FRAC = 0.25
+LOW_ENERGY_FRAC = 0.15

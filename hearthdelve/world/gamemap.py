@@ -55,6 +55,9 @@ class GameMap:
     # wildflower spots (x, y, colour_tile_id, base_tile_id): bloom in spring/
     # summer and drift day to day.
     flower_spots: list = field(default_factory=list)
+    # picked berry shrubs regrowing: (x, y) -> [berry_tile_id, day_ready]. A
+    # shrub is stripped to a plain bush when foraged and re-berries a few days on.
+    berry_regrow: dict = field(default_factory=dict)
     # village name -> plaza centre (x, y), for the cheat teleport menu
     village_centers: dict = field(default_factory=dict)
 

@@ -49,18 +49,36 @@ floors, combat kill-parity, jar/keg margins, skill cap, build timing).
 - [x] **INP-4** Cobble now counts as road for walking too (fast & effortless), matching running (`main.py`).
 - [x] **QLT-1** `edible_items` moved to `crafting.py`; rendering no longer imports from `..main` (render→app cycle broken) (`crafting.py`, `main.py`, `rendering.py`).
 
-## Deferred (needs design or is a larger feature)
+## Second pass (2026-07-03) — deferred items now addressed
 
-- [~] **DEF-1** Konami code entry has gameplay side effects (arrows move you, `a` throws a real bomb) — needs an input-consuming design or a different activation (`main.py:712-719`).
-- [~] **DEF-2** Furnace auto-smelts "best bar" so IRON_BAR (needed ×3 for the tool ladder) requires coal-dumping — real fix is a choose-input submenu for machines (also the nicer long-term fix behind CRF-1).
-- [~] **DEF-3** Modal panels (mail, inventory, craft) don't scroll; long content silently hides rows + footer hints.
-- [~] **DEF-4** Look-mode cursor clamped to viewport; camera doesn't follow.
-- [~] **DEF-5** Monster "charge" behavior declared in data + flavor text but not implemented — fold into the dungeon-depth pass.
-- [~] **DEF-6** Monsters get exactly one action per `advance_time` call regardless of duration — mining next to a monster is free time.
-- [~] **DEF-7** Weather particles overdraw entity glyphs; NPCs are tinted by night but monsters/animals aren't.
-- [~] **DEF-8** No collapse warning as 02:00 approaches; no message-log scrollback; inventory screen read-only — QoL batch.
-- [~] **DEF-9** `quests.check` runs every frame at ~30fps.
-- [~] **DEF-10** MessageLog grows unbounded; only 5 lines shown.
+- [x] **INP-3** SDL Quit (Cmd+Q / window close) now leaves immediately without saving, from any screen (`input.py` `sysquit`, `main.py`).
+- [~] **DEF-1** Konami code still moves the player / ships on `b` (left per your call), but the `a`→bomb side effect is gone: throwing moved to the targeting key, so `a` is now unbound.
+- [x] **DEF-2** Loading a machine opens a **choose-what-to-make menu** (reuses the inventory-list style) instead of a silent auto-pick — fixes the pumpkin→pickles trap and the "honey blocks grape wine" / iron-vs-steel problem (`crafting.machine_load_options`/`load_machine_choice`, `render_load_machine`).
+- [x] **DEF-3** Inventory, gift, eat, mail, and the machine menu now scroll (windowed to the selection, with ▲/▼); the codex already scrolled.
+- [x] **DEF-4** Look cursor roams the whole map and the camera follows it (`cam_focus`, `camera_origin`, `clamp_look`).
+- [~] **DEF-5** Monster "charge" — still deferred, folding into your planned combat/equipment revamp.
+- [x] **DEF-6** `advance_time` now steps actors proportionally to elapsed time (capped); chop/mine **animate over frames** so critters visibly move, and a nearing hostile **interrupts** them (peaceful critters/villagers don't). Fishing refuses to start with a threat near (`turns.py`, `main.py` busy loop, `_threat_near`).
+- [x] **DEF-7** Weather no longer overdraws entity glyphs (occupied cells skipped) and villagers/wildlife/animals now dim at night like the ground (`render_world` unified entity pass).
+- [x] **DEF-8** Inventory has a cursor + `d` to drop/trash; plus the collapse/low-HP/low-stamina warnings below and log scrollback.
+- [x] **DEF-9** `quests.check` runs after state-changing actions (and on run/rest completion), not every frame.
+- [x] **DEF-10** Message log is bounded (400) with a full scrollback view on `m`.
+
+### Also added this pass
+- **Targeting mode** (ADOM-style, reusable): aim a cursor and confirm. Bound to **`t`** (throw bombs; will extend to bows/ranged later) and reused by **`p`** to site carpenter buildings with a live footprint preview. **Talk moved to `Shift+C`.**
+- **Warnings**: amber clock + log nudge from 22:00, red from midnight (collapse at 02:00); one-shot low-HP and low-stamina alerts (re-arm on recovery / each morning).
+- **Organic-lite regrowth** (per your spec — not full mushroom-style drift): orchard/wild trees fruit every ~4 days (jittered), never wither/move; berry shrubs are picked with `g` (renewable), persist, and re-berry in ~3 days; a rare adjacent tree/shrub takes root over the seasons; wildlife slowly trickles back after a cull (cap 140). New state (`Tree.refruit_in`, `GameMap.berry_regrow`) is saved.
+
+## Third pass (2026-07-03) — reported issues
+
+- [x] **Windows crash** `AttributeError: KeySym has no attribute 'b'` — tcod version drift (newer tcod on Windows names letter keys `KeySym.B`, this Mac uses `.b`). Key handling now matches letters/digits by character value and the Konami code by SDL keycode, so it works across tcod builds (`input.py`, `main.py`).
+- [x] **Invisible furniture** (shipping bin, post box, beds, market stalls — and, silently, the card-suit crops/trees, cheese, milk, boat, beehive, scaffold). Root cause: no font was bundled, so it fell back to a system font (macOS SFNSMono) that lacks those glyphs. Fixed by bundling **DejaVu Sans Mono** at `hearthdelve/assets/font.ttf` (full coverage of all 82 game glyphs, verified); `build.sh`, `hearthdelve.spec`, and all three CI build steps now embed it so every platform's binary renders them.
+- [x] **Signposts on household spurs** — signposts placed at any 3-road junction, so a short spur to one house got one. Now only placed where 3+ branches are genuine through-routes (a spur that dead-ends at a dwelling no longer counts) (`worldgen._place_waypoints`/`_branch_through`).
+- [x] **Look readout truncated** — the single-row banner was overwritten by the hint. Look mode now draws a word-wrapped multi-line box, and **signposts read out the notable places and their compass bearings** (`render_look`, `describe`/`_signpost_text`).
+
+## Still deferred (your call)
+
+- [~] **VIL-2** Village-field crops remain free to harvest — cozy free-foraging vs. theft/karma is a design decision for you.
+- [~] **Balance pass** — prices/earnings tuning (grape-wine/animal/mead faucets, cooking value, combat depth curve) left for your planned balance + combat/equipment revamp. The organic-lite tree/shrub cadence already trims the biggest wild-fruit faucet.
 
 ## Balance (from the review — not code bugs, tuning decisions for you)
 

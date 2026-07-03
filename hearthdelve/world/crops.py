@@ -80,6 +80,7 @@ class Tree:
     days_to_mature: int
     age: int = 0
     has_fruit: bool = False
+    refruit_in: int = 0      # in-season mornings until it bears again after a pick
 
     @property
     def mature(self) -> bool:
@@ -95,6 +96,17 @@ class Tree:
 
 
 def advance_tree(tree: Tree, season: str) -> None:
-    """A day passes: the tree ages, and bears fruit each morning in its season."""
+    """A day passes: the tree ages. A mature tree in its season bears fruit, but
+    only every few days (see ``refruit_in``) rather than every single morning —
+    so a pick-route drifts instead of refilling like clockwork. A tree never
+    withers, moves, or dies; out of season it simply carries no fruit."""
     tree.age += 1
-    tree.has_fruit = tree.mature and tree.season == season
+    if not tree.mature or tree.season != season:
+        tree.has_fruit = False
+        return
+    if tree.has_fruit:
+        return                                # ripe already, waiting to be picked
+    if tree.refruit_in > 0:
+        tree.refruit_in -= 1
+    if tree.refruit_in <= 0:
+        tree.has_fruit = True

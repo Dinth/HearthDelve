@@ -238,38 +238,47 @@ def _footprint(door, kind):
     return left, top, w, h
 
 
-def place_commission(state: GameState) -> None:
-    """The player, having ordered an outbuilding, marks where it should stand:
-    the faced tile becomes the doorway; the building rises north behind it."""
+def placement_cells(kind: str, door) -> list:
+    """Every tile an outbuilding of `kind` would occupy with its door at `door`."""
+    left, top, w, h = _footprint(door, kind)
+    return [(cx, cy) for cx in range(left, left + w) for cy in range(top, top + h)]
+
+
+def can_place_building(state: GameState, door, kind: str):
+    """Whether an outbuilding may be sited with its door at `door`.
+    Returns (ok, cells, reason) — reason is a ready-to-log line when not ok."""
+    surf = state.world
+    cells = placement_cells(kind, door)
+    sx, sy = surf.spawn
+    if max(abs(door[0] - sx), abs(door[1] - sy)) > FARM_RADIUS:
+        return False, cells, "That's too far from the homestead for Tomas to work."
+    for cx, cy in cells:
+        if not surf.in_bounds(cx, cy):
+            return False, cells, "There isn't room there — try more open ground."
+        if surf.tiles[cx, cy] not in _GROUND:
+            return False, cells, "The ground there isn't clear — need open grass."
+        if ((cx, cy) in surf.crops or (cx, cy) in surf.machines or (cx, cy) in surf.trees
+                or animal_at(state, cx, cy) or (cx, cy) == (state.player.x, state.player.y)):
+            return False, cells, "Something's in the way there."
+    return True, cells, ""
+
+
+def place_commission_at(state: GameState, dx: int, dy: int) -> bool:
+    """Site an ordered outbuilding: (dx, dy) becomes the doorway; the building
+    rises north behind it. Returns True if the site was staked out."""
     kind = state.pending_build
     if not kind:
         state.log.add("You've nothing on order from the carpenter.", C_DIM)
-        return
+        return False
     surf = state.world
     if surf.is_dungeon:
         state.log.add("You can only raise a building on the surface.", C_DIM)
-        return
-    door = (state.player.x + state.player.facing[0], state.player.y + state.player.facing[1])
-    left, top, w, h = _footprint(door, kind)
-
-    sx, sy = surf.spawn
-    if max(abs(door[0] - sx), abs(door[1] - sy)) > FARM_RADIUS:
-        state.log.add("That's too far from the homestead for Tomas to work.", C_DIM)
-        return
-
-    cells = [(cx, cy) for cx in range(left, left + w) for cy in range(top, top + h)]
-    for cx, cy in cells:
-        if not surf.in_bounds(cx, cy):
-            state.log.add("There isn't room there — try more open ground.", C_DIM)
-            return
-        if surf.tiles[cx, cy] not in _GROUND:
-            state.log.add("The ground there isn't clear — need open grass.", C_DIM)
-            return
-        if ((cx, cy) in surf.crops or (cx, cy) in surf.machines or (cx, cy) in surf.trees
-                or animal_at(state, cx, cy) or (cx, cy) == (state.player.x, state.player.y)):
-            state.log.add("Something's in the way there.", C_DIM)
-            return
-
+        return False
+    door = (dx, dy)
+    ok, cells, reason = can_place_building(state, door, kind)
+    if not ok:
+        state.log.add(reason, C_DIM)
+        return False
     for cx, cy in cells:                      # frame it off while it goes up
         surf.tiles[cx, cy] = tile.SCAFFOLD
     # Finish on the morning BUILD_DAYS mornings from now — anchored to dawn so
@@ -280,6 +289,13 @@ def place_commission(state: GameState) -> None:
     name = MACHINES[kind].name.lower()
     state.log.add(f"Tomas sets to work. Your {name} will be ready in {BUILD_DAYS} mornings.",
                   (200, 220, 160))
+    return True
+
+
+def place_commission(state: GameState) -> bool:
+    """Site the ordered building at the faced tile (convenience wrapper)."""
+    return place_commission_at(state, state.player.x + state.player.facing[0],
+                               state.player.y + state.player.facing[1])
 
 
 def _raise_building(state: GameState, x: int, y: int, kind: str) -> None:

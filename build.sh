@@ -12,7 +12,14 @@ echo "Ensuring build deps…"
 "$PY" -m pip install -q -r requirements.txt pyinstaller
 
 echo "Building…"
-"$PY" -m PyInstaller --noconfirm --onefile --name hearthdelve --collect-all tcod play.py
+# Bundle the game font if present, so the binary renders every glyph regardless
+# of the host's installed system fonts.
+FONT_ARG=()
+if [ -f hearthdelve/assets/font.ttf ]; then
+    FONT_ARG=(--add-data "hearthdelve/assets/font.ttf:hearthdelve/assets")
+    echo "  (bundling hearthdelve/assets/font.ttf)"
+fi
+"$PY" -m PyInstaller --noconfirm --onefile --name hearthdelve --collect-all tcod "${FONT_ARG[@]}" play.py
 
 echo
 echo "Done. Standalone executable: dist/hearthdelve"

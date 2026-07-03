@@ -95,8 +95,10 @@ def save(state: GameState, path: str = SAVE_PATH) -> None:
         "tiles": base64.b64encode(np.ascontiguousarray(surf.tiles).tobytes()).decode("ascii"),
         "crops": {f"{x},{y}": [pl.crop.name, pl.days_grown, pl.watered, pl.dead]
                   for (x, y), pl in surf.crops.items()},
-        "trees": {f"{x},{y}": [t.name, t.age, t.has_fruit]
+        "trees": {f"{x},{y}": [t.name, t.age, t.has_fruit, t.refruit_in]
                   for (x, y), t in surf.trees.items()},
+        "berry_regrow": {f"{x},{y}": [bt, ready]
+                         for (x, y), (bt, ready) in surf.berry_regrow.items()},
         "machines": {f"{x},{y}": [m.kind, m.loaded_output.name if m.loaded_output else None,
                                    m.ready_at, m.has_queen, m.out_quality, m.build_kind]
                      for (x, y), m in surf.machines.items()},
@@ -141,12 +143,20 @@ def load(path: str = SAVE_PATH) -> GameState:
             world.crops[(x, y)] = CropPlot(crop=crop, days_grown=days, watered=watered, dead=dead)
 
     world.trees = {}
-    for key, (name, age, has_fruit) in data.get("trees", {}).items():
+    for key, rec in data.get("trees", {}).items():
+        name, age, has_fruit = rec[:3]
+        refruit = rec[3] if len(rec) > 3 else 0
         x, y = map(int, key.split(","))
         tdef = content.TREE_BY_NAME.get(name)
         if tdef:
             world.trees[(x, y)] = Tree(tdef.name, tdef.fruit, tdef.fruit_color, tdef.season,
-                                       tdef.days_to_mature, age=age, has_fruit=has_fruit)
+                                       tdef.days_to_mature, age=age, has_fruit=has_fruit,
+                                       refruit_in=refruit)
+
+    world.berry_regrow = {}
+    for key, (bt, ready) in data.get("berry_regrow", {}).items():
+        x, y = map(int, key.split(","))
+        world.berry_regrow[(x, y)] = [bt, ready]
 
     world.machines = {}
     for key, rec in data["machines"].items():

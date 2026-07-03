@@ -126,94 +126,89 @@ def interact_machine(state: GameState, x: int, y: int) -> bool:
         state.log.add(f"The {mdef.name.lower()} is working — {_fmt_remaining(m.ready_at - now)} left.", C.DIM)
         return True
 
-    # empty -> load
-    return _load_machine(state, m, mdef)
+    # empty -> offer the player a choice of what to load (see load_machine_choice)
+    opts = machine_load_options(state, mdef)
+    if not opts:
+        state.log.add(_needs_hint(mdef), C.DIM)
+        return True
+    return {"load": (x, y), "options": opts, "name": mdef.name}
 
 
-def _load_machine(state: GameState, m: Machine, mdef) -> bool:
-    from . import skills
+def _needs_hint(mdef) -> str:
+    return {
+        "ore":   "The furnace needs ore and coal.",
+        "wood":  "The sawmill needs at least 2 wood.",
+        "oil":   "The press needs at least 2 sunflowers.",
+        "dairy": "The churn needs milk.",
+        "fruit": "The keg ferments fruit into wine, or honey into mead.",
+        "crop":  "The jar needs a crop or an eel to preserve.",
+    }.get(mdef.accepts, f"The {mdef.name.lower()} has nothing to work with.")
+
+
+def _preserve_of(it):
+    """What a Preserves Jar turns a given input into."""
+    if it is items.EEL:
+        return items.JELLIED_EEL
+    return items.JAM if content.is_fruit(it) else items.PICKLES
+
+
+def machine_load_options(state: GameState, mdef) -> list:
+    """Everything the player could load into an empty machine right now — one
+    entry per distinct input. Each is {inputs, output, quality_from}."""
     inv = state.player.inventory
-    output = mdef.output
-    in_quality = 0.0
-
-    if mdef.accepts == "ore":
-        # smelt the most valuable bar the player can currently make
-        best = None
+    a = mdef.accepts
+    opts = []
+    if a == "ore":
         for bar, inputs in content.FURNACE_RECIPES:
             if all(inv.count(it) >= q for it, q in inputs.items()):
-                if best is None or bar.value > best[0].value:
-                    best = (bar, inputs)
-        if best is None:
-            state.log.add(f"The {mdef.name.lower()} needs ore and coal.", C.DIM)
-            return True
-        output, inputs = best
-        for it, q in inputs.items():
-            inv.remove(it, q)
-
-    elif mdef.accepts == "wood":
-        # Sawmill: saw a couple of logs into a plank.
-        if inv.count(items.WOOD) < 2:
-            state.log.add(f"The {mdef.name.lower()} needs at least 2 wood.", C.DIM)
-            return True
-        inv.remove(items.WOOD, 2)
-        output = mdef.output                       # Timber Plank
-
-    elif mdef.accepts == "oil":
-        # Oil press: squeeze a couple of sunflowers into oil.
-        if inv.count(items.SUNFLOWER) < 2:
-            state.log.add(f"The {mdef.name.lower()} needs at least 2 sunflowers.", C.DIM)
-            return True
-        in_quality = inv.pop_quality(items.SUNFLOWER, 2)
-        output = items.SUNFLOWER_OIL
-
-    elif mdef.accepts == "fruit":
-        # Keg: honey -> mead, mead -> aged mead, grapes -> grape wine, other
-        # fruit -> wine. Ferment whichever the player holds gains the most value,
-        # so a keg never picks a conversion that loses gold (or blocks the best).
-        cands = []
+                opts.append({"inputs": list(inputs.items()), "output": bar, "quality_from": None})
+    elif a == "wood":
+        if inv.count(items.WOOD) >= 2:
+            opts.append({"inputs": [(items.WOOD, 2)], "output": mdef.output, "quality_from": None})
+    elif a == "oil":
+        if inv.count(items.SUNFLOWER) >= 2:
+            opts.append({"inputs": [(items.SUNFLOWER, 2)], "output": items.SUNFLOWER_OIL,
+                         "quality_from": items.SUNFLOWER})
+    elif a == "dairy":
+        if inv.count(items.MILK) >= 1:
+            opts.append({"inputs": [(items.MILK, 1)], "output": items.CHEESE, "quality_from": items.MILK})
+    elif a == "fruit":
         if inv.count(items.HONEY) > 0:
-            cands.append((items.HONEY, items.MEAD))
+            opts.append({"inputs": [(items.HONEY, 1)], "output": items.MEAD, "quality_from": items.HONEY})
         if inv.count(items.MEAD) > 0:
-            cands.append((items.MEAD, items.AGED_MEAD))
+            opts.append({"inputs": [(items.MEAD, 1)], "output": items.AGED_MEAD, "quality_from": items.MEAD})
         for it in {e[0] for e in inv.slots if e[0].kind == "crop" and content.is_fruit(e[0])}:
-            cands.append((it, items.GRAPE_WINE if it is items.GRAPE else items.WINE))
-        if not cands:
-            state.log.add(f"The {mdef.name.lower()} ferments fruit into wine, or honey into mead.", C.DIM)
-            return True
-        crop_item, output = max(cands, key=lambda c: c[1].value - c[0].value)
-        in_quality = inv.pop_quality(crop_item, 1)
+            out = items.GRAPE_WINE if it is items.GRAPE else items.WINE
+            opts.append({"inputs": [(it, 1)], "output": out, "quality_from": it})
+    elif a == "crop":
+        seen = set()
+        for it, _q, _ql in inv.slots:
+            if it in seen:
+                continue
+            if (it.kind == "crop" and content.PRODUCE_CATEGORY.get(it) != "flower") or it is items.EEL:
+                seen.add(it)
+                opts.append({"inputs": [(it, 1)], "output": _preserve_of(it), "quality_from": it})
+    return opts
 
-    elif mdef.accepts == "dairy":
-        # Churn: a pail of milk -> a wheel of cheese.
-        if inv.count(items.MILK) < 1:
-            state.log.add(f"The {mdef.name.lower()} needs milk.", C.DIM)
-            return True
-        in_quality = inv.pop_quality(items.MILK, 1)
-        output = items.CHEESE
 
-    elif mdef.accepts == "crop":
-        # Preserves Jar: fruit -> jam, vegetables -> pickles, eel -> jellied eel.
-        # (Flowers aren't preserved.) Preserve whichever the player holds gains
-        # the most value, so a jar never turns a prize pumpkin into cheap pickles.
-        def _preserve_of(it):
-            if it is items.EEL:
-                return items.JELLIED_EEL
-            return items.JAM if content.is_fruit(it) else items.PICKLES
-        candidates = [it for it, _q, _ql in inv.slots
-                      if (it.kind == "crop" and content.PRODUCE_CATEGORY.get(it) != "flower")
-                      or it is items.EEL]
-        if not candidates:
-            state.log.add(f"The {mdef.name.lower()} needs a crop or an eel.", C.DIM)
-            return True
-        chosen = max(candidates, key=lambda it: _preserve_of(it).value - it.value)
-        output = _preserve_of(chosen)
-        in_quality = inv.pop_quality(chosen, 1)
-
+def load_machine_choice(state: GameState, m: Machine, mdef, opt) -> None:
+    """Load a machine with the option the player picked (see the load menu)."""
+    from . import skills
+    inv = state.player.inventory
+    in_quality = 0.0
+    qfrom = opt["quality_from"]
+    if qfrom is not None:
+        qty = dict(opt["inputs"]).get(qfrom, 1)
+        in_quality = inv.pop_quality(qfrom, qty)      # carry the input's quality through
+    for it, q in opt["inputs"]:
+        if it is qfrom:
+            continue                                  # already taken above
+        inv.remove(it, q)
+    output = opt["output"]
     m.loaded_output = output
     m.ready_at = state.abs_minutes + mdef.minutes
     m.out_quality = skills.process_quality(in_quality, state, "Cooking") if skills.has_quality(output) else 0
     state.log.add(f"You load the {mdef.name.lower()} ({output.name}). Ready in {_fmt_remaining(mdef.minutes)}.")
-    return True
 
 
 def _flowers_near(state: GameState, x: int, y: int, r: int = 10) -> int:

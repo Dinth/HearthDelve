@@ -31,10 +31,16 @@ _MOVE = {**_ARROWS, **_KEYPAD}
 
 _WAIT = {K.KP_5, K.PERIOD}
 
-# Top-row digits 1..9 -> hotbar slot index 0..8.
-_SLOTS = {
-    K.N1: 0, K.N2: 1, K.N3: 2, K.N4: 3, K.N5: 4,
-    K.N6: 5, K.N7: 6, K.N8: 7, K.N9: 8,
+# Letter commands, matched by CHARACTER (not KeySym attribute) so they work
+# whether this tcod build names letter keys KeySym.a (older) or KeySym.A
+# (newer/SDL3 on Windows). Top-row digits 1-9 select hotbar slots.
+_LETTER_CMD = {
+    "l": ("look",), "g": ("grab",), "p": ("place",), "s": ("sleep",),
+    "c": ("craft",), "b": ("ship",), "t": ("target",), "f": ("gift",),
+    "w": ("runprefix",), "i": ("inventory",), "m": ("messages",),
+    "d": ("drop",), "e": ("equipment",), "j": ("journal",),
+    "r": ("relations",), "v": ("character",), "q": ("quitgame",),
+    "x": ("eat",),
 }
 
 
@@ -61,55 +67,27 @@ def _sym_to_action(event: tcod.event.KeyDown):
         return ("confirm",)
     if sym == K.SPACE:
         return ("use",)
-    if sym in _SLOTS:
-        return ("slot", _SLOTS[sym])
-    if sym == K.l:
-        return ("look",)
-    if sym == K.g:
-        return ("grab",)
-    if sym == K.p:
-        return ("place",)
-    if sym == K.s:
-        return ("sleep",)
-    if sym == K.c:
-        return ("craft",)
-    if sym == K.b:
-        return ("ship",)
-    if sym == K.t:
-        return ("talk",)
-    if sym == K.f:
-        return ("gift",)
-    if sym == K.w:
-        return ("runprefix",)
-    if sym == K.a:
-        return ("ability",)
-    if sym == K.i:
-        return ("inventory",)
-    if sym == K.e:
-        return ("equipment",)
-    if sym == K.j:
-        return ("journal",)
-    if sym == K.r:
-        return ("relations",)
-    if sym == K.v:
-        return ("character",)
-    # '?' is its own keysym; also accept shift+'/' for robustness.
-    if sym == K.QUESTION or (sym == K.SLASH and event.mod & tcod.event.Modifier.SHIFT):
+    # '?' is its own keysym on some builds; also accept shift+'/' for robustness.
+    if sym == getattr(K, "QUESTION", object()) or (sym == K.SLASH and shift):
         return ("help",)
-    if sym == K.q:
-        return ("quitgame",)
     if sym == K.BACKSPACE:
         return ("discard",)
-    if sym == K.x:
-        return ("eat",)
     if sym == K.ESCAPE:
         return ("cancel",)
+    # Letters and digits by character value (version-proof across tcod builds).
+    ch = chr(int(sym)) if 0x20 <= int(sym) <= 0x7E else ""
+    if ch and ch in "123456789":
+        return ("slot", int(ch) - 1)
+    if ch == "c" and shift:
+        return ("talk",)             # Shift+C: chat with a villager / open a shop
+    if ch in _LETTER_CMD:
+        return _LETTER_CMD[ch]
     return None
 
 
 def event_to_action(event: tcod.event.Event):
     if isinstance(event, tcod.event.Quit):
-        return ("quit",)
+        return ("sysquit",)          # OS quit (Cmd+Q / window close): leave now
     if isinstance(event, tcod.event.KeyDown):
         action = _sym_to_action(event)
         if action is None:

@@ -5,6 +5,8 @@ matching the world map and ``console.print(x, y, ...)``.
 """
 from __future__ import annotations
 
+import math
+
 import numpy as np
 import tcod.console
 
@@ -116,13 +118,14 @@ _WEATHER_ICON = {
 
 
 def camera_origin(state: GameState) -> tuple[int, int]:
-    """Top-left world cell shown in the viewport, clamped to world bounds."""
-    p = state.player
+    """Top-left world cell shown in the viewport, clamped to world bounds.
+
+    Normally centred on the player; in look/aim modes it follows ``cam_focus``
+    so the cursor can roam past the edge of where the player stands."""
     w = state.world
-    cx = p.x - C.VIEW_W // 2
-    cy = p.y - C.VIEW_H // 2
-    cx = max(0, min(cx, w.width - C.VIEW_W))
-    cy = max(0, min(cy, w.height - C.VIEW_H))
+    fx, fy = state.cam_focus if state.cam_focus is not None else (state.player.x, state.player.y)
+    cx = max(0, min(fx - C.VIEW_W // 2, w.width - C.VIEW_W))
+    cy = max(0, min(fy - C.VIEW_H // 2, w.height - C.VIEW_H))
     return cx, cy
 
 
@@ -242,14 +245,6 @@ def render_world(con: tcod.console.Console, state: GameState, anim_time: float =
         gemfg = np.clip(base * (0.7 + 0.55 * spark)[..., None], 0, 255)
         fg = np.where(gem_mask[..., None], gemfg, fg)
 
-    # Village residents.
-    for npc in state.world.npcs:
-        sx, sy = npc.x - ox, npc.y - oy
-        if 0 <= sx < C.VIEW_W and 0 <= sy < C.VIEW_H:
-            ch[sx, sy] = ord(npc.glyph)
-            fg[sx, sy] = npc.color
-            bg[sx, sy] = (42, 38, 50)
-
     if w.is_dungeon and w.visible is not None:
         # Fog of war: lit where visible, dim where explored, black otherwise.
         vis = w.visible[ox:ox + C.VIEW_W, oy:oy + C.VIEW_H]
@@ -288,29 +283,44 @@ def render_world(con: tcod.console.Console, state: GameState, anim_time: float =
     con.rgb["fg"][:C.VIEW_W, :C.VIEW_H] = fg.astype(np.uint8)
     con.rgb["bg"][:C.VIEW_W, :C.VIEW_H] = bg.astype(np.uint8)
 
-    # monsters — dungeon mobs only where currently visible; surface wildlife
-    # roams in the open (no fog on the overworld).
+    # --- Dynamic entities, drawn last so nothing overwrites them and tinted to
+    # match the time of day (villagers, wildlife and animals dim at night just
+    # like the ground). Their cells are returned so weather stays off them. ---
+    occupied: set[tuple[int, int]] = set()
+    dr, dg, db = (1.0, 1.0, 1.0) if w.is_dungeon else daylight_mul(state.time_minutes)
+
+    def _draw(sx: int, sy: int, glyph: str, color, cell_bg=None) -> None:
+        con.rgb["ch"][sx, sy] = ord(glyph)
+        con.rgb["fg"][sx, sy] = (min(255, int(color[0] * dr)),
+                                 min(255, int(color[1] * dg)),
+                                 min(255, int(color[2] * db)))
+        if cell_bg is not None:
+            con.rgb["bg"][sx, sy] = (min(255, int(cell_bg[0] * dr)),
+                                     min(255, int(cell_bg[1] * dg)),
+                                     min(255, int(cell_bg[2] * db)))
+        occupied.add((sx, sy))
+
     if w.is_dungeon and w.visible is not None:
+        # dungeon mobs only where currently visible
         for m in w.monsters:
             if not m.alive:
                 continue
             sx, sy = m.x - ox, m.y - oy
             if 0 <= sx < C.VIEW_W and 0 <= sy < C.VIEW_H and w.visible[m.x, m.y]:
-                con.rgb["ch"][sx, sy] = ord(m.glyph)
-                con.rgb["fg"][sx, sy] = m.color
-                con.rgb["bg"][sx, sy] = (36, 24, 24)
+                _draw(sx, sy, m.glyph, m.color, (36, 24, 24))
     elif not w.is_dungeon:
         season = state.season
-        for m in w.monsters:
+        for npc in state.world.npcs:
+            sx, sy = npc.x - ox, npc.y - oy
+            if 0 <= sx < C.VIEW_W and 0 <= sy < C.VIEW_H:
+                _draw(sx, sy, npc.glyph, npc.color, (42, 38, 50))
+        for m in w.monsters:                         # surface wildlife (no fog outdoors)
             if not m.alive or (m.seasons and season not in m.seasons):
                 continue                             # out of season — not about
             sx, sy = m.x - ox, m.y - oy
             if 0 <= sx < C.VIEW_W and 0 <= sy < C.VIEW_H:
-                con.rgb["ch"][sx, sy] = ord(m.glyph)
-                con.rgb["fg"][sx, sy] = m.color
-
-        # farm animals amble the overworld too; young ones are drawn paler and
-        # a ready-to-collect animal glints.
+                _draw(sx, sy, m.glyph, m.color)
+        # farm animals; young ones are paler, a ready-to-collect one glints.
         from ..game.husbandry import SPECIES
         for a in w.animals:
             sx, sy = a.x - ox, a.y - oy
@@ -322,14 +332,16 @@ def render_world(con: tcod.console.Console, state: GameState, anim_time: float =
                 col = spec.young_color
             elif a.produce_ready:
                 col = (250, 240, 170)
-            con.rgb["ch"][sx, sy] = ord(a.glyph)
-            con.rgb["fg"][sx, sy] = col
+            _draw(sx, sy, a.glyph, col)
 
-    # player, centered-ish
+    # player, centered-ish — always full-bright so you never lose yourself
     px, py = state.player.x - ox, state.player.y - oy
     if 0 <= px < C.VIEW_W and 0 <= py < C.VIEW_H:
         con.rgb["ch"][px, py] = ord(state.player.glyph)
         con.rgb["fg"][px, py] = C.PLAYER_FG
+        occupied.add((px, py))
+
+    return occupied
 
 
 def _bar(con, x, y, label, cur, mx, color, width=12):
@@ -353,7 +365,11 @@ def render_panel(con: tcod.console.Console, state: GameState) -> None:
     else:
         icon, wcolor = _WEATHER_ICON.get(state.weather, ("·", C.WHITE))
         con.print(x, 2, f"{icon} {state.weather}", fg=wcolor)
-    con.print(x, 3, state.time_str(), fg=C.WHITE)
+    # Clock reddens as the small hours close in (collapse waits at 02:00).
+    tm = state.time_minutes
+    clock_fg = (C.DANGER_COLOR if tm >= C.MIDNIGHT_MIN
+                else C.WARN_COLOR if tm >= C.LATE_WARN_MIN else C.WHITE)
+    con.print(x, 3, state.time_str(), fg=clock_fg)
 
     p = state.player
     _bar(con, x, 5, "♥ HP", p.hp, p.max_hp, C.HP_COLOR)
@@ -412,8 +428,11 @@ def render_log(con: tcod.console.Console, state: GameState) -> None:
         con.print(1, y0 + 1 + i, text[:C.VIEW_W - 2], fg=color)
 
 
-def render_weather(con: tcod.console.Console, state: GameState, t: float) -> None:
-    """Animated precipitation drawn over the world viewport (surface only)."""
+def render_weather(con: tcod.console.Console, state: GameState, t: float, occupied=frozenset()) -> None:
+    """Animated precipitation drawn over the world viewport (surface only).
+
+    ``occupied`` is the set of screen cells holding the player/creatures, which
+    weather skips so their glyphs never flicker under the rain."""
     if state.world.is_dungeon:
         return
     w = state.weather
@@ -423,6 +442,8 @@ def render_weather(con: tcod.console.Console, state: GameState, t: float) -> Non
         for i in range(n):
             cx = int(i * 37 + t * speed * drift) % C.VIEW_W
             cy = int(i * 0.139 * C.VIEW_H + t * speed) % C.VIEW_H
+            if (cx, cy) in occupied:
+                continue
             con.rgb["ch"][cx, cy] = glyph
             con.rgb["fg"][cx, cy] = color
     elif w == "Snow":
@@ -430,6 +451,8 @@ def render_weather(con: tcod.console.Console, state: GameState, t: float) -> Non
         for i in range(48):
             cx = int(i * 53 + 2.2 * np.sin(t * 0.5 + i)) % C.VIEW_W
             cy = int(i * 0.17 * C.VIEW_H + t * 4.0) % C.VIEW_H
+            if (cx, cy) in occupied:
+                continue
             con.rgb["ch"][cx, cy] = glyph
             con.rgb["fg"][cx, cy] = color
     elif w == "Fog":
@@ -437,14 +460,16 @@ def render_weather(con: tcod.console.Console, state: GameState, t: float) -> Non
         for i in range(34):
             cx = int(i * 41 + t * 3.0) % C.VIEW_W
             cy = int(i * 0.23 * C.VIEW_H + 1.5 * np.sin(t * 0.3 + i)) % C.VIEW_H
+            if (cx, cy) in occupied:
+                continue
             con.rgb["ch"][cx, cy] = glyph
             con.rgb["fg"][cx, cy] = color
 
 
 def render_all(con: tcod.console.Console, state: GameState, anim_time: float = 0.0) -> None:
     con.clear(bg=C.BLACK)
-    render_world(con, state, anim_time)
-    render_weather(con, state, anim_time)
+    occupied = render_world(con, state, anim_time)
+    render_weather(con, state, anim_time, occupied)
     render_panel(con, state)
     render_log(con, state)
 
@@ -582,6 +607,48 @@ def _building_label(state: GameState, b: dict) -> str:
     return "a farmhouse" if kind == "farmhouse" else "a house"
 
 
+_COMPASS = ("E", "NE", "N", "NW", "W", "SW", "S", "SE")
+
+
+def _compass(dx: int, dy: int) -> str:
+    """8-wind bearing from a tile to a target (screen coords: +y is south)."""
+    if dx == 0 and dy == 0:
+        return "here"
+    ang = math.degrees(math.atan2(-dy, dx)) % 360     # 0=E, 90=N
+    return _COMPASS[int(((ang + 22.5) % 360) // 45)]
+
+
+def _signpost_text(state: GameState, x: int, y: int) -> str:
+    """A signpost names the notable places and which way each lies."""
+    w = state.world
+    dests = []
+    for name, (cx, cy) in getattr(w, "village_centers", {}).items():
+        dests.append((name, cx, cy))
+    for (dx, dy) in getattr(w, "dungeons", []):
+        dests.append((f"the {w.dungeon_kind.get((dx, dy), 'delve')}", dx, dy))
+    if w.spawn:
+        dests.append(("home", w.spawn[0], w.spawn[1]))
+    ranked = sorted(((abs(tx - x) + abs(ty - y), f"{name} {_compass(tx - x, ty - y)}")
+                     for name, tx, ty in dests), key=lambda e: e[0])
+    if not ranked:
+        return "a weathered signpost."
+    return "A signpost points the way — " + ", ".join(s for _d, s in ranked) + "."
+
+
+def _wrap(text: str, width: int) -> list[str]:
+    """Greedy word-wrap to `width` columns."""
+    lines, cur = [], ""
+    for word in text.split():
+        if cur and len(cur) + 1 + len(word) > width:
+            lines.append(cur)
+            cur = word
+        else:
+            cur = f"{cur} {word}" if cur else word
+    if cur:
+        lines.append(cur)
+    return lines
+
+
 def describe(state: GameState, x: int, y: int) -> str:
     if (x, y) == (state.player.x, state.player.y):
         return "yourself, the new farmer of Hollowmere Vale."
@@ -600,7 +667,7 @@ def describe(state: GameState, x: int, y: int) -> str:
     for npc in state.world.npcs:
         if (npc.x, npc.y) == (x, y):
             role = {"general": "shopkeeper", "blacksmith": "blacksmith"}.get(npc.shop, "villager")
-            return f"{npc.name}, the {role}. {'♥' * npc.hearts}{'·' * (10 - npc.hearts)} (t talk, f gift)"
+            return f"{npc.name}, the {role}. {'♥' * npc.hearts}{'·' * (10 - npc.hearts)} (Shift+C talk, f gift)"
     from ..game.husbandry import animal_at, SPECIES, _is_adult
     a = animal_at(state, x, y)
     if a is not None:
@@ -661,6 +728,8 @@ def describe(state: GameState, x: int, y: int) -> str:
             return f"{mdef.name}, working away... (g to check)"
         return f"{mdef.name}, empty. {mdef.desc} (g to load)"
     t = state.world.tile_at(x, y)
+    if t.kind == "signpost":
+        return _signpost_text(state, x, y)
     if t.kind == "tree":
         return f"a {t.name} tree — passable. Chop it with an axe for wood."
     if t.kind == "foliage":
@@ -671,7 +740,7 @@ def describe(state: GameState, x: int, y: int) -> str:
         from ..data.content import SHRUB_FRUIT
         fruit = SHRUB_FRUIT.get(t.name)
         fn = fruit.name.lower() if fruit else "berry"
-        return f"a {fn} shrub — machete it (Space) for {fn}s and fibre."
+        return f"a {fn} shrub, ripe — pick it (g) and it bears again; machete clears it."
     return _TILE_DESC.get(t.name, f"{t.name.replace('_', ' ')}.")
 
 
@@ -681,11 +750,54 @@ def render_look(con: tcod.console.Console, state: GameState, lx: int, ly: int) -
     if 0 <= sx < C.VIEW_W and 0 <= sy < C.VIEW_H:
         con.rgb["bg"][sx, sy] = (120, 110, 40)
         con.rgb["fg"][sx, sy] = (20, 20, 20)
-    # readout banner across the top of the viewport
-    text = f" Look: {describe(state, lx, ly)}"
+    # Word-wrapped readout box across the top of the viewport, so long
+    # descriptions (a signpost's directions, say) aren't clipped to one row.
+    lines = _wrap("Look: " + describe(state, lx, ly), C.VIEW_W - 2)[:5]
+    h = len(lines) + 1
+    con.draw_rect(0, 0, C.VIEW_W, h, ch=ord(" "), bg=(40, 38, 30))
+    for i, ln in enumerate(lines):
+        con.print(1, i, ln[:C.VIEW_W - 1], fg=(245, 235, 200), bg=(40, 38, 30))
+    con.print(1, len(lines), "(move cursor · Esc/l to close)", fg=C.DIM, bg=(40, 38, 30))
+
+
+def render_target(con: tcod.console.Console, state: GameState, ctx) -> None:
+    """Aiming overlay: a reticle plus a preview of the affected tiles — the blast
+    radius when throwing, the footprint when siting a building."""
+    if not ctx:
+        return
+    from ..game import combat, husbandry
+    ox, oy = camera_origin(state)
+
+    def _paint(x: int, y: int, ok: bool) -> None:
+        sx, sy = x - ox, y - oy
+        if 0 <= sx < C.VIEW_W and 0 <= sy < C.VIEW_H:
+            con.rgb["bg"][sx, sy] = C.AIM_OK if ok else C.AIM_BAD
+
+    cx, cy = ctx["cursor"]
+    if ctx["purpose"] == "throw":
+        ok = combat.in_bomb_range(state, cx, cy)
+        lx, ly = combat.bomb_landing(state, cx, cy)
+        for x in range(lx - 1, lx + 2):                # the 3x3 blast preview
+            for y in range(ly - 1, ly + 2):
+                _paint(x, y, ok)
+        sx, sy = cx - ox, cy - oy                      # the reticle itself
+        if 0 <= sx < C.VIEW_W and 0 <= sy < C.VIEW_H:
+            con.rgb["ch"][sx, sy] = ord("*")
+            con.rgb["fg"][sx, sy] = (20, 20, 20)
+        banner = (f" Aim — throw a bomb (range {combat.BOMB_RANGE})"
+                  if ok else " Aim — out of range")
+    else:  # build
+        from ..data.content import MACHINES
+        kind = ctx["build_kind"]
+        ok, cells, reason = husbandry.can_place_building(state, (cx, cy), kind)
+        for bx, by in cells:
+            _paint(bx, by, ok)
+        name = MACHINES[kind].name.lower()
+        banner = f" Site your {name} — the door faces you" if ok else f" Can't build here: {reason}"
+
     con.draw_rect(0, 0, C.VIEW_W, 1, ch=ord(" "), bg=(40, 38, 30))
-    con.print(0, 0, text[:C.VIEW_W], fg=(245, 235, 200), bg=(40, 38, 30))
-    hint = "(move cursor · Esc/l to stop)"
+    con.print(0, 0, banner[:C.VIEW_W], fg=(245, 235, 200), bg=(40, 38, 30))
+    hint = "(move to aim · Enter/Space confirm · Esc cancel)"
     con.print(max(0, C.VIEW_W - len(hint) - 1), 0, hint, fg=C.DIM, bg=(40, 38, 30))
 
 
@@ -698,23 +810,58 @@ def _modal(con, w, h, title):
     return x, y
 
 
+def _window(sel: int, total: int, height: int) -> tuple[int, int]:
+    """First/last row index to show so `sel` stays visible in a `height`-row list."""
+    if total <= height:
+        return 0, total
+    start = max(0, min(sel - height // 2, total - height))
+    return start, start + height
+
+
+def render_message_log(con: tcod.console.Console, state: GameState, scroll: int) -> None:
+    """Full scrollback of the message log (newest at the bottom)."""
+    msgs = state.log.messages
+    w, h = 72, C.SCREEN_H - 6
+    body = h - 4
+    x, y = _modal(con, w, h, "Message Log")
+    total = len(msgs)
+    max_scroll = max(0, total - body)
+    scroll = max(0, min(scroll, max_scroll))
+    start = max(0, total - body - scroll)
+    for i, (text, color) in enumerate(msgs[start:start + body]):
+        con.print(x + 2, y + 2 + i, text[:w - 4], fg=color)
+    if scroll < max_scroll:
+        con.print(x + w - 4, y + 2, "▲", fg=_HDR)
+    if scroll > 0:
+        con.print(x + w - 4, y + h - 3, "▼", fg=_HDR)
+    con.print(x + 2, y + h - 2, "↑↓ scroll · Esc close", fg=C.DIM)
+
+
 def render_mail(con: tcod.console.Console, state: GameState, sel: int) -> None:
     mail = state.mail
     body = mail[min(sel, len(mail) - 1)]["body"].split("\n") if mail else []
     w = 60
-    h = len(mail) + len(body) + 8
+    list_h = min(10, max(1, len(mail)))          # cap the letter list; it scrolls
+    h = list_h + len(body) + 8
     x, y = _modal(con, w, h, "Post Box")
     if not mail:
         con.print(x + 2, y + 2, "The post box is empty.", fg=C.DIM)
-    for i, letter in enumerate(mail):
+    sel = max(0, min(sel, len(mail) - 1)) if mail else 0
+    start, end = _window(sel, len(mail), list_h)
+    for row, letter in enumerate(mail[start:end]):
+        i = start + row
         bg = (54, 50, 36) if i == sel else (20, 22, 32)
         if i == sel:
-            con.draw_rect(x + 1, y + 2 + i, w - 2, 1, ch=ord(" "), bg=bg)
+            con.draw_rect(x + 1, y + 2 + row, w - 2, 1, ch=ord(" "), bg=bg)
         tag = " ✉+gift" if letter.get("items") else " ✉"
-        con.print(x + 2, y + 2 + i, ("▸ " if i == sel else "  ") + f"From {letter['sender']}{tag}",
+        con.print(x + 2, y + 2 + row, ("▸ " if i == sel else "  ") + f"From {letter['sender']}{tag}",
                   fg=C.WHITE, bg=bg)
-    # the open letter's text
-    ly = y + 3 + len(mail)
+    if start > 0:
+        con.print(x + w - 4, y + 2, "▲", fg=_HDR)
+    if end < len(mail):
+        con.print(x + w - 4, y + 1 + list_h, "▼", fg=_HDR)
+    # the open letter's text below the list
+    ly = y + 3 + list_h
     for j, bl in enumerate(body):
         con.print(x + 3, ly + j, bl[:w - 6], fg=(210, 205, 190))
     con.print(x + 2, y + h - 2, "↑↓ select   Enter take letter   Esc close", fg=C.DIM)
@@ -724,20 +871,55 @@ def render_eat(con: tcod.console.Console, state: GameState, sel: int) -> None:
     from ..game import skills
     from ..game.crafting import edible_items
     foods = edible_items(state)
-    w, h = 50, max(8, len(foods) + 6)
+    w, h = 50, min(C.SCREEN_H - 4, max(8, len(foods) + 6))
+    body = h - 4
     x, y = _modal(con, w, h, "Eat  (restores stamina & health)")
     if not foods:
         con.print(x + 2, y + 2, "Nothing to eat — cook a dish (c) or gather eggs/milk.", fg=C.DIM)
-    for i, (it, q, ql) in enumerate(foods):
+    sel = max(0, min(sel, len(foods) - 1)) if foods else 0
+    start, end = _window(sel, len(foods), body)
+    for row, (it, q, ql) in enumerate(foods[start:end]):
+        i = start + row
         bg = (54, 50, 36) if i == sel else (20, 22, 32)
         if i == sel:
-            con.draw_rect(x + 1, y + 2 + i, w - 2, 1, ch=ord(" "), bg=bg)
+            con.draw_rect(x + 1, y + 2 + row, w - 2, 1, ch=ord(" "), bg=bg)
         star = (" " + skills.stars(ql)) if ql else ""
         gain = round(it.energy * (1 + 0.12 * ql))
         hp = max(1, gain // 6)
-        con.print(x + 2, y + 2 + i, ("▸ " if i == sel else "  ") + f"{q:>2} {it.name}{star}", fg=C.WHITE, bg=bg)
-        con.print(x + w - 18, y + 2 + i, f"+{gain} st  +{hp} hp", fg=(150, 210, 150), bg=bg)
+        con.print(x + 2, y + 2 + row, ("▸ " if i == sel else "  ") + f"{q:>2} {it.name}{star}", fg=C.WHITE, bg=bg)
+        con.print(x + w - 18, y + 2 + row, f"+{gain} st  +{hp} hp", fg=(150, 210, 150), bg=bg)
+    if start > 0:
+        con.print(x + w - 4, y + 2, "▲", fg=_HDR)
+    if end < len(foods):
+        con.print(x + w - 4, y + h - 3, "▼", fg=_HDR)
     con.print(x + 2, y + h - 2, "↑↓ select   Enter eat   Esc close", fg=C.DIM)
+
+
+def render_load_machine(con: tcod.console.Console, state: GameState, ctx) -> None:
+    """Choose-what-to-make menu for an empty machine (jam vs pickles, which bar…)."""
+    if not ctx:
+        return
+    opts, sel, name = ctx["options"], ctx["sel"], ctx["name"]
+    w, h = 56, min(C.SCREEN_H - 4, max(8, len(opts) + 6))
+    body = h - 4
+    x, y = _modal(con, w, h, f"Load {name}  (choose what to make)")
+    sel = max(0, min(sel, len(opts) - 1)) if opts else 0
+    start, end = _window(sel, len(opts), body)
+    for row, opt in enumerate(opts[start:end]):
+        i = start + row
+        bg = (54, 50, 36) if i == sel else (20, 22, 32)
+        if i == sel:
+            con.draw_rect(x + 1, y + 2 + row, w - 2, 1, ch=ord(" "), bg=bg)
+        out = opt["output"]
+        ins = ", ".join(f"{q} {it.name}" for it, q in opt["inputs"])
+        con.print(x + 2, y + 2 + row, ("▸ " if i == sel else "  ") + out.name, fg=C.WHITE, bg=bg)
+        con.print(x + 20, y + 2 + row, f"from {ins}"[:w - 30], fg=(160, 180, 205), bg=bg)
+        con.print(x + w - 8, y + 2 + row, f"{out.value}g", fg=C.GOLD_COLOR, bg=bg)
+    if start > 0:
+        con.print(x + w - 4, y + 2, "▲", fg=_HDR)
+    if end < len(opts):
+        con.print(x + w - 4, y + h - 3, "▼", fg=_HDR)
+    con.print(x + 2, y + h - 2, "↑↓ select   Enter load   Esc cancel", fg=C.DIM)
 
 
 def render_cheats(con: tcod.console.Console, state: GameState, sel: int, locations) -> None:
@@ -798,17 +980,18 @@ def build_codex_pages(state: GameState):
         ("                   (it turns green when the tool can act there)", C.DIM),
         ("  1-9              select hotbar tool / seed", C.WHITE),
         ("  g                gather / harvest / use a machine", C.WHITE),
-        ("  a                throw a bomb (harms monsters, breaks rock)", C.WHITE),
+        ("  t                aim & throw a bomb (move to aim, Enter to throw)", C.WHITE),
         ("  c                craft, build machines, cook dishes", C.WHITE),
-        ("  p                place a building ordered from the carpenter", C.WHITE),
-        ("  x                eat a cooked dish (restores stamina)", C.WHITE),
+        ("  p                site a carpenter building (opens aiming)", C.WHITE),
+        ("  x                eat (restores stamina & health)", C.WHITE),
         ("  b                shipping bin (sell) — stand beside it", C.WHITE),
-        ("  t                talk to a villager / open a shop", C.WHITE),
+        ("  Shift+C          talk to a villager / open a shop", C.WHITE),
         ("  f                give a villager a gift", C.WHITE),
         ("  > / <            descend / climb a dungeon (on stairs)", C.WHITE),
         ("  s                sleep in bed -> next day", C.WHITE),
-        ("  i                inventory", C.WHITE),
+        ("  i                inventory  (d drops the selected stack)", C.WHITE),
         ("  e                equipment", C.WHITE),
+        ("  m                message log (scrollback)", C.WHITE),
         ("  v                character sheet (level & skills)", C.WHITE),
         ("  j                journal (goals)", C.WHITE),
         ("  r                relationships", C.WHITE),
@@ -912,7 +1095,7 @@ def build_codex_pages(state: GameState):
         "bin": "drop goods to sell", "stairs": "enter a dungeon",
         "door": "an open doorway", "fence": "impassable",
         "foliage": "machete to clear (fibre)", "shrub": "machete to clear (fibre)",
-        "shrub_berry": "machete for berries + fibre",
+        "shrub_berry": "pick berries (g); regrows in days",
     }
     terrain = [("Terrain & Features  ( · walkable / x blocked )", _HDR), ("", C.WHITE)]
     seen = set()
@@ -932,7 +1115,7 @@ def build_codex_pages(state: GameState):
         mon.append((f" {m.glyph}  {m.name}   HP {m.hp}  ATK {m.atk}  SPD {m.speed}", _KEY))
         mon.append((f"      {m.behavior}, from floor {m.min_depth}. {m.desc}", C.DIM))
     mon.append(("", C.WHITE))
-    mon.append(("Bump to attack. Throw a Bomb (a) to hit several at once.", C.DIM))
+    mon.append(("Bump to attack. Aim & throw a Bomb (t) to hit several at once.", C.DIM))
     mon.append(("Slain cave beasts may drop reagents (gel, wing, hide).", C.DIM))
     mon.append(("Faint in the dark → hauled home, minus loose loot & 10% gold.", C.DIM))
     mon.append(("", C.WHITE))
@@ -966,7 +1149,7 @@ def build_codex_pages(state: GameState):
         loves = ", ".join(i.name for i in npc.loves) or "—"
         vp.append((f"      {'♥' * npc.hearts}{'·' * (10 - npc.hearts)}   loves: {loves}", C.DIM))
     vp.append(("", C.WHITE))
-    vp.append(("t talk · f gift. Mossford is the hamlet; Cinderhope the outpost.", C.DIM))
+    vp.append(("Shift+C talk · f gift. Mossford is the hamlet; Cinderhope the outpost.", C.DIM))
     vp.append(("Gifts they love raise friendship most (one gift each per day).", C.DIM))
     pages.append(("Villagers", vp))
 
@@ -999,17 +1182,32 @@ def render_codex(con: tcod.console.Console, state: GameState, page: int, scroll:
     con.print(x + 2, y + h - 2, footer, fg=C.DIM)
 
 
-def render_inventory(con: tcod.console.Console, state: GameState) -> None:
+def render_inventory(con: tcod.console.Console, state: GameState, sel: int = 0) -> None:
     from ..game import skills
     inv = state.player.inventory
-    rows = [f"{qty:>3}  {item.glyph} {item.name}{('  ' + skills.stars(ql)) if ql else ''}"
-            for item, qty, ql in inv.slots] \
-        or ["  (empty — grow and forage to fill it)"]
-    w, h = 46, max(8, len(rows) + 5)
-    x, y = _modal(con, w, h, "Inventory  (i / Esc to close)")
-    for i, row in enumerate(rows):
-        con.print(x + 2, y + 2 + i, row[:w - 4], fg=C.WHITE)
-    con.print(x + 2, y + h - 2, f"Gold: {state.player.gold}g", fg=C.GOLD_COLOR)
+    slots = inv.slots
+    w, h = 48, min(C.SCREEN_H - 4, max(8, len(slots) + 5))
+    body = h - 5
+    x, y = _modal(con, w, h, "Inventory")
+    if not slots:
+        con.print(x + 2, y + 2, "(empty — grow and forage to fill it)", fg=C.DIM)
+    else:
+        sel = max(0, min(sel, len(slots) - 1))
+        start, end = _window(sel, len(slots), body)
+        for row, (item, qty, ql) in enumerate(slots[start:end]):
+            i = start + row
+            bg = (54, 50, 36) if i == sel else (20, 22, 32)
+            if i == sel:
+                con.draw_rect(x + 1, y + 2 + row, w - 2, 1, ch=ord(" "), bg=bg)
+            star = ("  " + skills.stars(ql)) if ql else ""
+            con.print(x + 2, y + 2 + row,
+                      ("▸ " if i == sel else "  ") + f"{qty:>3}  {item.glyph} {item.name}{star}",
+                      fg=C.WHITE, bg=bg)
+        if start > 0:
+            con.print(x + w - 4, y + 2, "▲", fg=_HDR)
+        if end < len(slots):
+            con.print(x + w - 4, y + h - 3, "▼", fg=_HDR)
+    con.print(x + 2, y + h - 2, f"Gold: {state.player.gold}g   ↑↓ · d drop · Esc", fg=C.GOLD_COLOR)
 
 
 def render_equipment(con: tcod.console.Console, state: GameState) -> None:
@@ -1221,19 +1419,26 @@ def render_shop(con: tcod.console.Console, state: GameState, npc, sel: int, line
 
 
 def render_gift(con: tcod.console.Console, state: GameState, npc, sel: int) -> None:
-    from ..game import village
+    from ..game import village, skills
     gifts = village.giftable_items(state)
-    w, h = 48, max(7, len(gifts) + 5)
+    w, h = 48, min(C.SCREEN_H - 4, max(7, len(gifts) + 5))
+    body = h - 4
     x, y = _modal(con, w, h, f"Give a gift to {npc.name}")
     if not gifts:
         con.print(x + 2, y + 2, "You have nothing to give.", fg=C.DIM)
-    from ..game import skills
-    for i, (it, q, ql) in enumerate(gifts):
-        yy = y + 2 + i
+    sel = max(0, min(sel, len(gifts) - 1)) if gifts else 0
+    start, end = _window(sel, len(gifts), body)
+    for row, (it, q, ql) in enumerate(gifts[start:end]):
+        i = start + row
+        yy = y + 2 + row
         rowbg = (54, 50, 36) if i == sel else (20, 22, 32)
         if i == sel:
             con.draw_rect(x + 1, yy, w - 2, 1, ch=ord(" "), bg=rowbg)
         tag = " (loves!)" if it in npc.loves else " (likes)" if it in npc.likes else " (dislikes)" if it in npc.dislikes else ""
         star = (" " + skills.stars(ql)) if ql else ""
         con.print(x + 2, yy, ("▸ " if i == sel else "  ") + f"{q:>3} {it.name}{star}{tag}", fg=C.WHITE, bg=rowbg)
+    if start > 0:
+        con.print(x + w - 4, y + 2, "▲", fg=_HDR)
+    if end < len(gifts):
+        con.print(x + w - 4, y + h - 3, "▼", fg=_HDR)
     con.print(x + 2, y + h - 2, "↑↓ select   Enter give   Esc close", fg=C.DIM)

@@ -240,8 +240,13 @@ def _scatter_wild_fruit(gm: GameMap, wild: np.ndarray, seed: int) -> None:
             continue
         t = rng.choice(content.TREES)
         gm.tiles[x, y] = tile.GRASS
+        # Stagger the opening crop so the wild orchard doesn't all ripen on the
+        # same morning: a few days of jitter on when each first bears.
+        ri = rng.randint(0, 6)
+        in_season = (t.season == start_season)
         gm.trees[(x, y)] = Tree(t.name, t.fruit, t.fruit_color, t.season, t.days_to_mature,
-                                age=t.days_to_mature, has_fruit=(t.season == start_season))
+                                age=t.days_to_mature,
+                                has_fruit=(in_season and ri == 0), refruit_in=ri)
         placed += 1
 
 
@@ -312,18 +317,43 @@ def _populate_wildlife(gm: GameMap, rng: random.Random) -> None:
         bears += 1
 
 
+_SIGN_ROADS = (tile.ROAD, tile.BRIDGE, tile.COBBLE)
+
+
+def _branch_through(gm: GameMap, jx: int, jy: int, dx: int, dy: int, cap: int = 14) -> bool:
+    """Follow the road branch leaving junction (jx,jy) in direction (dx,dy). It's
+    a "through route" if it keeps going for `cap` tiles; a short dead-end (a spur
+    to a single household) runs out of road first and returns False."""
+    x, y = jx + dx, jy + dy
+    if not gm.in_bounds(x, y) or gm.tiles[x, y] not in _SIGN_ROADS:
+        return False
+    px, py = jx, jy
+    for _ in range(cap):
+        nxts = [(x + ax, y + ay) for ax, ay in ((1, 0), (-1, 0), (0, 1), (0, -1))
+                if (x + ax, y + ay) != (px, py) and gm.in_bounds(x + ax, y + ay)
+                and gm.tiles[x + ax, y + ay] in _SIGN_ROADS]
+        if not nxts:
+            return False          # dead-ended — just a spur to one dwelling
+        px, py = x, y
+        x, y = nxts[0]            # follow the road on (a fork mid-branch still counts)
+    return True                   # still going — a genuine route worth signing
+
+
 def _place_waypoints(gm: GameMap) -> None:
-    """Stand a signpost beside notable road junctions (3+ road neighbours)."""
-    rs = (tile.ROAD, tile.BRIDGE)
+    """Stand a signpost beside road junctions where three or more real routes
+    meet — not where a short spur to a single household joins the road."""
     placed: list = []
     for x in range(1, gm.width - 1):
         for y in range(1, gm.height - 1):
-            if gm.tiles[x, y] not in rs:
+            if gm.tiles[x, y] not in _SIGN_ROADS:
                 continue
-            nb = sum(gm.tiles[x + dx, y + dy] in rs
-                     for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)))
-            if nb < 3:
-                continue
+            dirs = [(dx, dy) for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1))
+                    if gm.tiles[x + dx, y + dy] in _SIGN_ROADS]
+            if len(dirs) < 3:
+                continue          # not a junction at all
+            through = sum(_branch_through(gm, x, y, dx, dy) for dx, dy in dirs)
+            if through < 3:
+                continue          # a household spur off a road — no signpost needed
             if any(abs(x - px) + abs(y - py) < 8 for px, py in placed):
                 continue          # one signpost per junction cluster
             for dx, dy in ((0, -1), (0, 1), (1, 0), (-1, 0), (1, 1), (-1, -1), (1, -1), (-1, 1)):

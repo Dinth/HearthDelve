@@ -136,32 +136,52 @@ def _attack_player(state: GameState, m) -> None:
 
 # --- the Bomb ability --------------------------------------------------------
 BOMB_DAMAGE = 8
+BOMB_RANGE = 5                     # how far a bomb can be lobbed
 _BREAKABLE = {"rock", "ore_vein", "gem_vein", "ruins_wall"}
 
 
-def throw_bomb(state: GameState) -> None:
+def _line(x0: int, y0: int, x1: int, y1: int):
+    """Bresenham cells from (x0,y0) to (x1,y1), excluding the start."""
+    pts = []
+    dx, dy = abs(x1 - x0), abs(y1 - y0)
+    sx, sy = (1 if x0 < x1 else -1), (1 if y0 < y1 else -1)
+    err = dx - dy
+    x, y = x0, y0
+    while (x, y) != (x1, y1):
+        e2 = 2 * err
+        if e2 > -dy:
+            err -= dy
+            x += sx
+        if e2 < dx:
+            err += dx
+            y += sy
+        pts.append((x, y))
+    return pts
+
+
+def bomb_landing(state: GameState, tx: int, ty: int) -> tuple[int, int]:
+    """Where a bomb aimed at (tx, ty) actually detonates: it flies along the
+    line from the player, stopping at the first wall (thunking short), a mob it
+    strikes, the aimed tile, or its maximum range."""
     p = state.player
-    if p.inventory.count(items.BOMB) < 1:
-        state.log.add("You have no bombs. (craft one: 1 Coal + 2 Fiber)", C.DIM)
-        return
-    if p.energy < C.BOMB_COST[0]:
-        state.log.add("You're too winded to throw.", C.DIM)
-        return
-
-    fx, fy = p.facing
     bx, by = p.x, p.y
-    for _ in range(5):                          # flies up to 5 tiles / until blocked
-        nx, ny = bx + fx, by + fy
-        if not state.world.in_bounds(nx, ny) or not state.world.walkable(nx, ny):
-            break
+    for nx, ny in _line(p.x, p.y, tx, ty):
+        if (max(abs(nx - p.x), abs(ny - p.y)) > BOMB_RANGE
+                or not state.world.in_bounds(nx, ny)
+                or not state.world.walkable(nx, ny)):
+            break                               # can't fly past a wall / its range
         bx, by = nx, ny
-        if mob_at(state, bx, by):
+        if mob_at(state, nx, ny) or (nx, ny) == (tx, ty):
             break
+    return bx, by
 
-    p.inventory.remove(items.BOMB, 1)
-    p.energy = max(0, p.energy - C.BOMB_COST[0])
-    state.log.add("You hurl a bomb — BOOM!", (236, 180, 90))
 
+def in_bomb_range(state: GameState, tx: int, ty: int) -> bool:
+    return max(abs(tx - state.player.x), abs(ty - state.player.y)) <= BOMB_RANGE
+
+
+def _detonate(state: GameState, bx: int, by: int) -> None:
+    """Resolve the 3x3 blast at (bx, by): damage mobs, shatter rock/ore/gems."""
     hit = []
     for x in range(bx - 1, bx + 2):
         for y in range(by - 1, by + 2):
@@ -179,8 +199,33 @@ def throw_bomb(state: GameState) -> None:
         if not m.alive:
             _on_kill(state, m)
 
+
+def throw_bomb_at(state: GameState, tx: int, ty: int) -> bool:
+    """Lob a bomb at an aimed tile (see targeting mode). Returns True if thrown."""
+    p = state.player
+    if p.inventory.count(items.BOMB) < 1:
+        state.log.add("You have no bombs. (craft one: 1 Coal + 2 Fiber)", C.DIM)
+        return False
+    if p.energy < C.BOMB_COST[0]:
+        state.log.add("You're too winded to throw.", C.DIM)
+        return False
+    if (tx, ty) == (p.x, p.y):
+        state.log.add("Best not drop it at your own feet — aim away.", C.DIM)
+        return False
+    bx, by = bomb_landing(state, tx, ty)
+    p.inventory.remove(items.BOMB, 1)
+    p.energy = max(0, p.energy - C.BOMB_COST[0])
+    state.log.add("You hurl a bomb — BOOM!", (236, 180, 90))
+    _detonate(state, bx, by)
     from . import turns
     turns.advance_time(state, C.BOMB_COST[1])
+    return True
+
+
+def throw_bomb(state: GameState) -> bool:
+    """Lob straight ahead (kept for convenience / callers without a target)."""
+    fx, fy = state.player.facing
+    return throw_bomb_at(state, state.player.x + fx * BOMB_RANGE, state.player.y + fy * BOMB_RANGE)
 
 
 def _shatter(state: GameState, x: int, y: int, t) -> None:

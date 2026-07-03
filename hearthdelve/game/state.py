@@ -10,11 +10,15 @@ from ..world.gamemap import GameMap
 
 
 class MessageLog:
+    MAX = 400            # keep a bounded scrollback (see render_message_log)
+
     def __init__(self) -> None:
         self.messages: list[tuple[str, tuple[int, int, int]]] = []
 
     def add(self, text: str, color: tuple[int, int, int] = C.WHITE) -> None:
         self.messages.append((text, color))
+        if len(self.messages) > self.MAX:
+            del self.messages[:-self.MAX]
 
     def tail(self, n: int) -> list[tuple[str, tuple[int, int, int]]]:
         return self.messages[-n:]
@@ -49,6 +53,10 @@ class GameState:
     cheats: dict = field(default_factory=dict)         # Konami menu toggles (transient)
     mail: list = field(default_factory=list)           # letters in the post box: {sender, body, items}
     pending_build: str = ""        # outbuilding ordered from the carpenter, awaiting placement
+
+    # transient view/UI state (never serialized)
+    cam_focus: tuple | None = None                     # camera centres here if set (look/aim modes)
+    warned: dict = field(default_factory=dict)         # one-shot alert flags, reset each morning
 
     def bump(self, key: str, amount: int = 1) -> None:
         self.stats[key] = self.stats.get(key, 0) + amount

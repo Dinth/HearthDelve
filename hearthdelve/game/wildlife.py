@@ -19,9 +19,11 @@ from __future__ import annotations
 
 import random
 
+from ..engine import constants as C
 from ..world import tile
 from .state import GameState
 
+WILDLIFE_CAP = 140    # the Vale's rough carrying capacity (matches worldgen)
 FLEE_RANGE = 5        # skittish critters shy away inside this Chebyshev distance
 PANIC_RANGE = 2       # ...but a feeding critter only bolts at point-blank range
 FORAGE_RADIUS = 8     # how far a hungry critter will spot and stalk toward food
@@ -219,3 +221,29 @@ def act(state: GameState) -> None:
             m.energy -= 2
             _behave(state, m)
     w.monsters = [m for m in w.monsters if m.alive]
+
+
+def respawn(state: GameState, rng: random.Random) -> None:
+    """A slow morning trickle of new critters into the Vale, so it doesn't
+    permanently empty out as things are hunted or eaten. Called from new_day."""
+    surf = state.surface
+    if surf is None:
+        return
+    alive = sum(1 for m in surf.monsters if m.alive)
+    if alive >= WILDLIFE_CAP:
+        return
+    from ..data import content
+    from ..entities.monster import Mob
+    cx, cy = C.WORLD_CENTER
+    for _ in range(rng.randint(0, 2)):              # 0-2 arrivals a day
+        for _try in range(30):
+            x, y = rng.randint(4, surf.width - 5), rng.randint(4, surf.height - 5)
+            if not surf.walkable(x, y) or surf.tile_at(x, y).kind in ("road", "bridge", "stairs"):
+                continue
+            if max(abs(x - cx), abs(y - cy)) < 20:  # not right on the farmyard
+                continue
+            c = rng.choice(content.WILDLIFE)
+            surf.monsters.append(Mob(c.name, c.glyph, c.color, c.hp, c.hp, c.atk, c.defense,
+                                     c.speed, c.behavior, x, y, kind="wildlife",
+                                     diet=c.diet, seasons=c.seasons))
+            break

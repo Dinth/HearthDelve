@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import random
 
+import numpy as np
+
 from ..data import content
 from ..data.content import SEED_TO_CROP
 from ..engine import constants as C
@@ -106,6 +108,7 @@ def pick_tree(state: GameState, x: int, y: int) -> bool:
     from . import skills
     state.player.inventory.add(tree.fruit, 1, quality=skills.roll_quality(state, "Farming"))
     tree.has_fruit = False
+    tree.refruit_in = random.randint(4, 6)          # bears again in a few days (jittered)
     skills.gain(state, "Foraging", 10)
     state.log.add(f"You pick a {tree.fruit.name.lower()}.", (180, 230, 160))
     state.player.energy = max(0, state.player.energy - C.HARVEST_COST[0])
@@ -175,6 +178,7 @@ def new_day(state: GameState, rested: bool = True) -> None:
     old_season = state.season
     state.day += 1
     state.clock = 0
+    state.warned.clear()            # a fresh morning re-arms the day's warnings
     season = state.season
     if season != old_season:
         _seasonal_flora(state, old_season, season)
@@ -204,6 +208,14 @@ def new_day(state: GameState, rested: bool = True) -> None:
     # replanted with a fresh in-season crop, so they recover after a raid and
     # change over with the seasons (bare and fallow through winter).
     _tend_village_fields(state, season)
+
+    # Living-world drift: picked berry shrubs re-berry, the odd new tree/shrub
+    # takes root by an old one, and fresh wildlife wanders in.
+    _regrow_berries(state)
+    wilds = random.Random(state.seed * 5171 + state.day)
+    _propagate(state, wilds)
+    from . import wildlife
+    wildlife.respawn(state, wilds)
 
     # farm animals grow, settle their mood, and leave the morning's produce;
     # any carpenter outbuilding whose time is up is finished off
@@ -344,6 +356,60 @@ def _deliver_mail(state: GameState) -> None:
 
     if arrived and surf and surf.post_box:
         state.log.add(f"The post has come — {arrived} letter(s) in your box.", (230, 200, 130))
+
+
+# Living-world drift for trees & shrubs (gentler than the mushroom/flower pools:
+# they don't wither or move, they just occasionally seed a neighbour).
+TREE_SPREAD_CHANCE = 0.04       # per day, one mature tree may seed a sapling nearby
+SHRUB_SPREAD_CHANCE = 0.06      # per day, one berry shrub may spread to a neighbour
+_SPREAD_GROUND = {tile.GRASS, tile.MEADOW, tile.TALL_GRASS}
+_BERRY_IDS = (tile.SHRUB_RASPBERRY, tile.SHRUB_GOOSEBERRY, tile.SHRUB_CURRANT)
+
+
+def _regrow_berries(state: GameState) -> None:
+    """Re-berry any picked shrubs whose regrow day has come (unless the bush was
+    since cleared away)."""
+    surf = state.surface
+    for pos, (btile, ready) in list(surf.berry_regrow.items()):
+        if state.day >= ready:
+            if surf.tiles[pos] == tile.SHRUB:
+                surf.tiles[pos] = btile
+            del surf.berry_regrow[pos]
+
+
+def _empty_adjacent(surf, x: int, y: int, rng: random.Random):
+    """An open, unclaimed ground tile beside (x, y), or None."""
+    dirs = [(dx, dy) for dx in (-1, 0, 1) for dy in (-1, 0, 1) if dx or dy]
+    rng.shuffle(dirs)
+    for dx, dy in dirs:
+        nx, ny = x + dx, y + dy
+        if (surf.in_bounds(nx, ny) and surf.tiles[nx, ny] in _SPREAD_GROUND
+                and (nx, ny) not in surf.crops and (nx, ny) not in surf.trees
+                and (nx, ny) not in surf.machines):
+            return (nx, ny)
+    return None
+
+
+def _propagate(state: GameState, rng: random.Random) -> None:
+    """Now and then a mature tree drops a sapling, or a berry shrub spreads, onto
+    open ground beside it — a slow spread (a few a season), never a takeover."""
+    surf = state.surface
+    if rng.random() < TREE_SPREAD_CHANCE and surf.trees:
+        mature = [(pos, t) for pos, t in surf.trees.items() if t.mature]
+        if mature:
+            (tx, ty), parent = mature[rng.randrange(len(mature))]
+            spot = _empty_adjacent(surf, tx, ty, rng)
+            if spot is not None:                      # a fresh sapling — years to bear
+                surf.trees[spot] = Tree(parent.name, parent.fruit, parent.fruit_color,
+                                        parent.season, parent.days_to_mature, age=0)
+    if rng.random() < SHRUB_SPREAD_CHANCE:
+        coords = np.argwhere(np.isin(surf.tiles, _BERRY_IDS))
+        if len(coords):
+            i = rng.randrange(len(coords))
+            sx, sy = int(coords[i][0]), int(coords[i][1])
+            spot = _empty_adjacent(surf, sx, sy, rng)
+            if spot is not None:
+                surf.tiles[spot] = int(surf.tiles[sx, sy])
 
 
 def _tend_village_fields(state: GameState, season: str) -> None:

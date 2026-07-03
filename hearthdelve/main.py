@@ -33,15 +33,16 @@ def new_game(seed: int = 1337) -> GameState:
     state.log.add("Hoe (1) the soil, plant seeds (6), water them (2), then sleep (s).", C.DIM)
     state.log.add("Chop/mine for materials, c to craft & build, b at the bin to sell.", C.DIM)
     state.log.add("Space uses the active tool. ? for help, l to look, g to gather.", C.DIM)
-    state.log.add("Visit Mossford (east) & Cinderhope (west): t to talk/shop, f to gift.", C.DIM)
+    state.log.add("Visit Mossford (east) & Cinderhope (west): Shift+C to talk/shop, f to gift.", C.DIM)
     return state
 
 
-_KONAMI = [tcod.event.KeySym.UP, tcod.event.KeySym.UP,
-           tcod.event.KeySym.DOWN, tcod.event.KeySym.DOWN,
-           tcod.event.KeySym.LEFT, tcod.event.KeySym.RIGHT,
-           tcod.event.KeySym.LEFT, tcod.event.KeySym.RIGHT,
-           tcod.event.KeySym.b, tcod.event.KeySym.a]
+# Stored as plain ints (SDL keycodes) so this doesn't depend on whether the
+# installed tcod names letter keys KeySym.a (older) or KeySym.A (newer/Windows).
+_K = tcod.event.KeySym
+_KONAMI = [int(_K.UP), int(_K.UP), int(_K.DOWN), int(_K.DOWN),
+           int(_K.LEFT), int(_K.RIGHT), int(_K.LEFT), int(_K.RIGHT),
+           ord("b"), ord("a")]
 
 
 def _cheat_locations(state: GameState):
@@ -110,6 +111,37 @@ def _scoop_gold(state: GameState) -> None:
         state.log.add(f"You scoop up {amt}g!", (244, 216, 110))
 
 
+THREAT_RANGE = 6          # a menacing creature this close breaks your concentration
+
+
+def _threat_near(state: GameState):
+    """A dangerous creature within THREAT_RANGE (an awake dungeon monster, or
+    roused wildlife) — peaceful critters and villagers don't count. Returns the
+    mob, or None."""
+    p = state.player
+    for m in state.world.monsters:
+        if not m.alive:
+            continue
+        if getattr(m, "kind", "monster") == "wildlife":
+            if not m.hostile:
+                continue                          # a grazing rabbit won't stop you
+        elif not m.awake:
+            continue                              # a sleeping mob is no threat yet
+        if max(abs(m.x - p.x), abs(m.y - p.y)) <= THREAT_RANGE:
+            return m
+    return None
+
+
+def _finish_busy(state: GameState, b: dict) -> None:
+    """Complete a long, animated tool action (chop/mine) once its time is up."""
+    p = state.player
+    if b["new_tile"] is not None:
+        state.world.tiles[b["tx"], b["ty"]] = b["new_tile"]
+    p.energy = max(0, p.energy - b["stamina"])
+    state.log.add(b["msg"])
+    _gather_drop(state, b["item"], b["target"])
+
+
 def try_move(state: GameState, dx: int, dy: int) -> None:
     p = state.player
     p.facing = (dx, dy)
@@ -132,7 +164,7 @@ def try_move(state: GameState, dx: int, dy: int) -> None:
     # don't stand on top of a villager — nudge the player to talk/gift instead
     n = _npc_at(state, nx, ny)
     if n is not None:
-        state.log.add(f"You greet {n.name}. (t to talk, f to give a gift)", C.DIM)
+        state.log.add(f"You greet {n.name}. (Shift+C to talk, f to give a gift)", C.DIM)
         return
     if state.world.walkable(nx, ny):
         p.x, p.y = nx, ny
@@ -243,40 +275,58 @@ def use_tool(state: GameState) -> None:
 
     # Fishing rod cast at water.
     if item is items.FISHING_ROD and state.world.tile_at(tx, ty).kind == "water":
+        threat = _threat_near(state)
+        if threat is not None:
+            state.log.add(f"You can't fish with a {threat.name.lower()} lurking so near.", C.DIM)
+            return None
         fishing.cast(state)
-        return
+        return None
 
     # Watering can over a planted tile waters the crop directly.
     if item is items.WATERING_CAN and (tx, ty) in state.world.crops:
         if p.energy <= 0:
             state.log.add("You're too exhausted. Rest first.", C.DIM)
-            return
+            return None
         if farming.water_crop(state, tx, ty):
             tier = p.tool_tier.get(items.WATERING_CAN, 0)
             p.energy = max(0, p.energy - max(1, C.WATER_COST[0] - tier))
             turns.advance_time(state, C.WATER_COST[1])
-            return
+            return None
 
     target = state.world.tile_at(tx, ty)
     success, new_tile, msg = actions.resolve_tool(item, target)
     if not success:
         state.log.add(msg, C.DIM)
-        return
+        return None
     if p.energy <= 0:
         state.log.add("You're too exhausted. Rest first.", C.DIM)
-        return
+        return None
 
     stat = content.TOOL_STATS.get(item)
     stamina = max(1, stat.stamina - p.tool_tier.get(item, 0)) if stat else 1
     seconds = stat.seconds if stat else C.USE_SECONDS
+    if new_tile is not None and state.world.is_dungeon and new_tile == tile.GRASS:
+        new_tile = tile.DUNGEON_FLOOR         # mined rock/ore leaves dungeon floor
+
+    # Long tasks (felling a tree, breaking rock) play out over a few seconds so
+    # the world moves around you — and a menacing creature can break them off.
+    if seconds >= LONG_ACTION_SECONDS:
+        threat = _threat_near(state)
+        if threat is not None:
+            state.log.add(f"You can't focus with a {threat.name.lower()} so close.", C.DIM)
+            return None
+        state.log.add(f"You set to work with the {item.name.lower()}...", C.DIM)
+        return {"left": seconds, "item": item, "tx": tx, "ty": ty, "target": target,
+                "new_tile": new_tile, "stamina": stamina, "msg": msg}
+
+    # Short tasks resolve at once.
     if new_tile is not None:
-        if state.world.is_dungeon and new_tile == tile.GRASS:
-            new_tile = tile.DUNGEON_FLOOR     # mined rock/ore leaves dungeon floor
         state.world.tiles[tx, ty] = new_tile
     p.energy = max(0, p.energy - stamina)
     turns.advance_time(state, seconds)
     state.log.add(msg)
     _gather_drop(state, item, target)
+    return None
 
 
 def _gather_drop(state: GameState, item, target) -> None:
@@ -369,6 +419,9 @@ def do_grab(state: GameState) -> None:
             state.log.add(f"You gather a {item.name.lower()}{star}.", col)
             turns.advance_time(state, C.HARVEST_COST[1])
             return
+        if tk == "shrub_berry":                          # pick berries; the bush stays
+            _pick_berries(state, gx, gy)
+            return
         if (gx, gy) in state.world.crops:
             if farming.harvest(state, gx, gy):
                 return
@@ -376,9 +429,40 @@ def do_grab(state: GameState) -> None:
             if farming.pick_tree(state, gx, gy):
                 return
         if (gx, gy) in state.world.machines:
-            if crafting.interact_machine(state, gx, gy):
-                return
+            res = crafting.interact_machine(state, gx, gy)
+            if isinstance(res, dict):        # machine wants a "what to load?" choice
+                return res
+            if res:
+                return None
     state.log.add("Nothing here to gather.", C.DIM)
+    return None
+
+
+BERRY_REGROW_DAYS = 3            # a picked berry shrub bears again after ~this many days
+
+
+def _pick_berries(state: GameState, x: int, y: int) -> None:
+    """Forage a berry shrub without destroying it — it's stripped to a plain bush
+    and re-berries a few days later (see farming._regrow_berries)."""
+    from .data import content
+    from .game import skills
+    p = state.player
+    btile = int(state.world.tiles[x, y])
+    fruit = content.SHRUB_FRUIT.get(state.world.tile_at(x, y).name)
+    q = skills.roll_quality(state, "Foraging")
+    n = random.randint(1, 2)
+    if fruit:
+        p.inventory.add(fruit, n, quality=q)
+    if random.random() < 0.4:
+        p.inventory.add(items.FIBER, 1)
+    state.world.tiles[x, y] = tile.SHRUB                 # picked bare; it will regrow
+    state.world.berry_regrow[(x, y)] = [btile, state.day + BERRY_REGROW_DAYS + random.randint(0, 1)]
+    skills.gain(state, "Foraging", 8)
+    star = (" " + skills.stars(q)) if q else ""
+    fn = fruit.name.lower() if fruit else "berries"
+    state.log.add(f"You pick {n} {fn}{star}; the bush will bear again in a few days.",
+                  (200, 170, 120))
+    turns.advance_time(state, C.HARVEST_COST[1])
 
 
 def _rob_hive(state: GameState, x: int, y: int) -> None:
@@ -470,6 +554,7 @@ def near_bin(state: GameState) -> bool:
 
 RUN_MAX_TILES = 50
 REST_MAX_SECONDS = 3600          # rest up to an in-game hour
+LONG_ACTION_SECONDS = 120        # tasks at/above this animate over frames (chop, mine)
 
 
 def _notable_nearby(state: GameState) -> bool:
@@ -565,6 +650,32 @@ def run_step(state: GameState, ctx: dict) -> bool:
     return True
 
 
+def _check_warnings(state: GameState) -> None:
+    """Nudge the player before a bad end: the late hour, and low HP/stamina.
+    Each fires once until the condition clears (or the morning resets it)."""
+    p, w = state.player, state.warned
+    tm = state.time_minutes
+    if tm >= C.MIDNIGHT_MIN and not w.get("midnight"):
+        w["midnight"] = True
+        state.log.add("Past midnight! Get to bed, or you'll drop where you stand at 2am.",
+                      C.DANGER_COLOR)
+    elif C.LATE_WARN_MIN <= tm < C.MIDNIGHT_MIN and not w.get("late"):
+        w["late"] = True
+        state.log.add("The evening draws on — best head to bed before long.", C.WARN_COLOR)
+
+    if p.hp <= p.max_hp * C.LOW_HP_FRAC and not w.get("hp"):
+        w["hp"] = True
+        state.log.add("You're badly hurt — eat something or rest.", C.DANGER_COLOR)
+    elif p.hp > p.max_hp * C.LOW_HP_FRAC:
+        w["hp"] = False                              # re-arm once you recover
+
+    if p.energy <= p.max_energy * C.LOW_ENERGY_FRAC and not w.get("energy"):
+        w["energy"] = True
+        state.log.add("You're worn out — rest soon or you'll collapse.", C.WARN_COLOR)
+    elif p.energy > p.max_energy * C.LOW_ENERGY_FRAC:
+        w["energy"] = False
+
+
 def check_faint(state: GameState) -> None:
     """Collapse if slain, out of energy, or up past the small hours."""
     if state.player.hp <= 0:
@@ -574,6 +685,8 @@ def check_faint(state: GameState) -> None:
         farming.collapse(state, "You collapse from exhaustion...")
     elif state.time_minutes >= C.DAY_END_MIN:
         farming.collapse(state, "You can't keep your eyes open and pass out...")
+    else:
+        _check_warnings(state)                       # not fainting yet — just warn
 
 
 def select_slot(state: GameState, n: int) -> None:
@@ -606,10 +719,10 @@ def cycle_seed(state: GameState) -> None:
 
 
 def clamp_look(state: GameState, x: int, y: int) -> list[int]:
-    """Keep the look cursor within the (fixed) viewport and the world."""
-    ox, oy = rendering.camera_origin(state)
-    x = max(ox, min(x, ox + C.VIEW_W - 1, state.world.width - 1))
-    y = max(oy, min(y, oy + C.VIEW_H - 1, state.world.height - 1))
+    """Keep the look cursor anywhere within the world; the camera follows it (so
+    you can inspect tiles past the edge of where you stand)."""
+    x = max(0, min(x, state.world.width - 1))
+    y = max(0, min(y, state.world.height - 1))
     return [x, y]
 
 
@@ -651,11 +764,16 @@ def main() -> None:
     awaiting_run = False     # 'w' pressed, waiting for a direction or '.'
     run_ctx = None           # active run
     rest_left = 0            # seconds left in an active rest
+    busy_ctx = None          # active long tool action (chop/mine), animating
     save_on_exit = True      # cleared by "quit without saving"
     cheat_sel = 0            # cursor in the Konami cheat menu
     konami: list = []        # rolling buffer of recent keys
     eat_sel = 0              # cursor in the eat menu
     mail_sel = 0             # cursor in the post box
+    target_ctx = None        # active aiming context (throw / site a building)
+    load_ctx = None          # active machine "choose input" menu
+    msg_scroll = 0           # scrollback offset in the message-log view
+    inv_sel = 0              # cursor in the inventory screen
 
     with tcod.context.new(
         columns=C.SCREEN_W,
@@ -689,6 +807,7 @@ def main() -> None:
                 if not run_step(state, run_ctx):
                     run_ctx = None
                     check_faint(state)
+                    quests.check(state)
             elif mode == "play" and rest_left > 0:
                 turns.advance_time(state, C.MOVE_SECONDS)
                 if state.world.is_dungeon:
@@ -698,9 +817,23 @@ def main() -> None:
                     rest_left = 0
                     state.log.add("You wait a while.", C.DIM)
                     check_faint(state)
-
-            if mode == "play":
-                quests.check(state)
+                    quests.check(state)
+            elif mode == "play" and busy_ctx is not None:
+                threat = _threat_near(state)
+                if threat is not None:                   # a beast closes in — break off
+                    state.log.add(f"You break off — a {threat.name.lower()} is too close!",
+                                  C.WARN_COLOR)
+                    busy_ctx = None
+                else:
+                    turns.advance_time(state, C.MOVE_SECONDS)
+                    if state.world.is_dungeon:
+                        delve.update_fov(state)
+                    busy_ctx["left"] -= C.MOVE_SECONDS
+                    if busy_ctx["left"] <= 0:
+                        _finish_busy(state, busy_ctx)
+                        busy_ctx = None
+                        check_faint(state)
+                        quests.check(state)
 
             rendering.render_all(console, state, anim_time)
             if mode == "play":
@@ -710,7 +843,7 @@ def main() -> None:
             elif mode == "help":
                 rendering.render_codex(console, state, help_page, help_scroll)
             elif mode == "inventory":
-                rendering.render_inventory(console, state)
+                rendering.render_inventory(console, state, inv_sel)
             elif mode == "equipment":
                 rendering.render_equipment(console, state)
             elif mode == "craft":
@@ -737,6 +870,12 @@ def main() -> None:
                 rendering.render_eat(console, state, eat_sel)
             elif mode == "mail":
                 rendering.render_mail(console, state, mail_sel)
+            elif mode == "target":
+                rendering.render_target(console, state, target_ctx)
+            elif mode == "loadmachine":
+                rendering.render_load_machine(console, state, load_ctx)
+            elif mode == "log":
+                rendering.render_message_log(console, state, msg_scroll)
             context.present(console)
 
             # A short timeout drives the ambient animation: when no key is
@@ -748,7 +887,7 @@ def main() -> None:
 
                 # Konami code (↑↑↓↓←→←→ B A) opens the hidden cheat menu.
                 if isinstance(event, tcod.event.KeyDown):
-                    konami.append(event.sym)
+                    konami.append(int(event.sym))
                     del konami[:-len(_KONAMI)]
                     if konami == _KONAMI:
                         konami.clear()
@@ -760,14 +899,21 @@ def main() -> None:
                 # NOT OS key-repeat from still holding the direction that began
                 # the run, which would cancel it almost immediately.
                 if (isinstance(event, tcod.event.KeyDown) and not getattr(event, "repeat", False)
-                        and (run_ctx is not None or rest_left > 0)):
-                    run_ctx, rest_left = None, 0
+                        and (run_ctx is not None or rest_left > 0 or busy_ctx is not None)):
+                    run_ctx, rest_left, busy_ctx = None, 0, None
                     continue
 
                 action = game_input.event_to_action(event)
                 if action is None:
                     continue
                 cmd = action[0]
+
+                # OS quit (Cmd+Q / window close via SDL): leave immediately
+                # without saving, from any screen.
+                if cmd == "sysquit":
+                    save_on_exit = False
+                    running = False
+                    break
 
                 if mode == "play":
                     if awaiting_run:
@@ -795,9 +941,13 @@ def main() -> None:
                     elif cmd == "look":
                         mode = "look"
                         look = [state.player.x, state.player.y]
+                        state.cam_focus = tuple(look)
                     elif cmd == "use":
-                        use_tool(state)
-                        check_faint(state)
+                        busy = use_tool(state)
+                        if busy is not None:
+                            busy_ctx = busy          # a long task begins — it animates
+                        else:
+                            check_faint(state)
                     elif cmd == "grab":
                         if _at_postbox(state):
                             if state.mail:
@@ -805,14 +955,34 @@ def main() -> None:
                             else:
                                 state.log.add("Your post box is empty.", C.DIM)
                         else:
-                            do_grab(state)
-                            check_faint(state)
+                            req = do_grab(state)
+                            if isinstance(req, dict) and "load" in req:
+                                load_ctx = {"pos": req["load"], "options": req["options"],
+                                            "name": req["name"], "sel": 0}
+                                mode = "loadmachine"
+                            else:
+                                check_faint(state)
                     elif cmd == "place":
-                        from .game import husbandry
-                        husbandry.place_commission(state)
-                    elif cmd == "ability":
-                        combat.throw_bomb(state)
-                        check_faint(state)
+                        if not state.pending_build:
+                            state.log.add("You've nothing on order from the carpenter.", C.DIM)
+                        elif state.world.is_dungeon:
+                            state.log.add("You can only raise a building on the surface.", C.DIM)
+                        else:
+                            fx, fy = state.player.facing
+                            cur = clamp_look(state, state.player.x + fx, state.player.y + fy)
+                            target_ctx = {"purpose": "build", "cursor": cur,
+                                          "build_kind": state.pending_build}
+                            state.cam_focus = tuple(cur)
+                            mode = "target"
+                    elif cmd == "target":
+                        if state.player.inventory.count(items.BOMB) < 1:
+                            state.log.add("You've nothing to aim — craft a bomb first (c).", C.DIM)
+                        else:
+                            fx, fy = state.player.facing
+                            cur = clamp_look(state, state.player.x + fx, state.player.y + fy)
+                            target_ctx = {"purpose": "throw", "cursor": cur}
+                            state.cam_focus = tuple(cur)
+                            mode = "target"
                     elif cmd == "descend":
                         here = state.world.tile_at(state.player.x, state.player.y)
                         if not state.world.is_dungeon and here.kind == "stairs":
@@ -876,17 +1046,55 @@ def main() -> None:
                         help_page = 0
                         help_scroll = 0
                     elif cmd == "inventory":
-                        mode = "inventory"
+                        mode, inv_sel = "inventory", 0
                     elif cmd == "equipment":
                         mode = "equipment"
+                    elif cmd == "messages":
+                        mode, msg_scroll = "log", 0
                     if cmd in ("move", "wait"):
                         check_faint(state)
+                    quests.check(state)              # re-check goals on any action
 
                 elif mode == "look":
                     if cmd in ("look", "cancel", "quit"):
                         mode = "play"
+                        state.cam_focus = None
                     elif cmd == "move":
                         look = clamp_look(state, look[0] + action[1], look[1] + action[2])
+                        state.cam_focus = tuple(look)
+
+                elif mode == "target":
+                    if cmd in ("cancel", "target", "quit"):
+                        mode, target_ctx, state.cam_focus = "play", None, None
+                    elif cmd == "move":
+                        cur = clamp_look(state, target_ctx["cursor"][0] + action[1],
+                                         target_ctx["cursor"][1] + action[2])
+                        target_ctx["cursor"] = cur
+                        state.cam_focus = tuple(cur)
+                    elif cmd in ("confirm", "use"):
+                        tx, ty = target_ctx["cursor"]
+                        if target_ctx["purpose"] == "throw":
+                            combat.throw_bomb_at(state, tx, ty)
+                            check_faint(state)
+                        else:
+                            from .game import husbandry
+                            husbandry.place_commission_at(state, tx, ty)
+                        mode, target_ctx, state.cam_focus = "play", None, None
+                        quests.check(state)
+
+                elif mode == "loadmachine":
+                    opts = load_ctx["options"] if load_ctx else []
+                    if cmd in ("cancel", "grab", "quit") or not opts:
+                        mode, load_ctx = "play", None
+                    elif cmd == "move" and action[2]:
+                        load_ctx["sel"] = (load_ctx["sel"] + action[2]) % len(opts)
+                    elif cmd == "confirm":
+                        m = state.world.machines.get(load_ctx["pos"])
+                        if m is not None:
+                            crafting.load_machine_choice(state, m, crafting.MACHINES[m.kind],
+                                                         opts[min(load_ctx["sel"], len(opts) - 1)])
+                        mode, load_ctx = "play", None
+                        quests.check(state)
 
                 elif mode == "help":
                     if cmd in ("help", "cancel", "quit"):
@@ -899,10 +1107,26 @@ def main() -> None:
                             help_scroll = max(0, help_scroll + action[2])
 
                 elif mode == "inventory":
+                    slots = state.player.inventory.slots
                     if cmd == "equipment":
                         mode = "equipment"
                     elif cmd in ("cancel", "inventory", "quit"):
                         mode = "play"
+                    elif cmd == "move" and action[2] and slots:
+                        inv_sel = (inv_sel + action[2]) % len(slots)
+                    elif cmd == "drop" and slots:
+                        inv_sel = min(inv_sel, len(slots) - 1)
+                        it, _q, ql = slots[inv_sel]
+                        state.player.inventory.remove(it, 1, quality=ql)
+                        state.log.add(f"You toss out a {it.name.lower()}.", C.DIM)
+                        if inv_sel >= len(state.player.inventory.slots):
+                            inv_sel = max(0, len(state.player.inventory.slots) - 1)
+
+                elif mode == "log":
+                    if cmd in ("cancel", "messages", "quit"):
+                        mode = "play"
+                    elif cmd == "move" and action[2]:
+                        msg_scroll = max(0, msg_scroll - action[2])   # up = older
 
                 elif mode == "equipment":
                     if cmd == "inventory":

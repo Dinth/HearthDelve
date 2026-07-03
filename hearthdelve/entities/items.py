@@ -184,7 +184,7 @@ BLINDFISH   = Item("Blindfish",   "»", "fish", "Eyeless and ghostly.",         
 GLOWFISH    = Item("Glowfish",    "»", "fish", "Faintly luminescent; prized.",   value=180)
 
 # --- Consumables -------------------------------------------------------------
-BOMB        = Item("Bomb",        "*", "bomb",     "Thrown (a): harms monsters and shatters rock/ore.", value=0)
+BOMB        = Item("Bomb",        "*", "bomb",     "Aim & throw (t): harms monsters and shatters rock/ore.", value=0)
 
 
 # Registry of every defined item, for save/load by name.
