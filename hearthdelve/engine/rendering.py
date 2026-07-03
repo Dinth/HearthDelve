@@ -1191,11 +1191,41 @@ def render_codex(con: tcod.console.Console, state: GameState, page: int, scroll:
     con.print(x + 2, y + h - 2, footer, fg=C.DIM)
 
 
+# Inventory categories, in the order they're listed (ADOM-style grouping).
+_INV_ORDER = ("Cooked Food", "Animal Produce", "Artisan Goods", "Fruit", "Vegetables",
+              "Flowers", "Fish", "Materials", "Seeds & Saplings", "Livestock",
+              "Consumables", "Misc")
+
+
+def _inv_category(item) -> str:
+    from ..data import content
+    k = item.kind
+    simple = {"food": "Cooked Food", "animal": "Animal Produce", "artisan": "Artisan Goods",
+              "fish": "Fish", "material": "Materials", "livestock": "Livestock",
+              "bomb": "Consumables"}
+    if k in simple:
+        return simple[k]
+    if k in ("seed", "sapling", "pouch"):
+        return "Seeds & Saplings"
+    if k == "crop":
+        if content.is_fruit(item):
+            return "Fruit"
+        if content.PRODUCE_CATEGORY.get(item) == "flower":
+            return "Flowers"
+        return "Vegetables"
+    return "Misc"
+
+
+def inv_sort_key(item, quality: int):
+    cat = _inv_category(item)
+    rank = _INV_ORDER.index(cat) if cat in _INV_ORDER else len(_INV_ORDER)
+    return (rank, cat, item.name, quality)
+
+
 def render_inventory(con: tcod.console.Console, state: GameState, sel: int = 0) -> None:
     from ..game import skills
-    inv = state.player.inventory
-    slots = inv.slots
-    w, h = 48, min(C.SCREEN_H - 4, max(8, len(slots) + 5))
+    slots = state.player.inventory.slots
+    w, h = 52, min(C.SCREEN_H - 4, max(8, len(slots) + 5))
     body = h - 5
     x, y = _modal(con, w, h, "Inventory")
     if not slots:
@@ -1203,14 +1233,20 @@ def render_inventory(con: tcod.console.Console, state: GameState, sel: int = 0) 
     else:
         sel = max(0, min(sel, len(slots) - 1))
         start, end = _window(sel, len(slots), body)
+        prev_cat = _inv_category(slots[start - 1][0]) if start > 0 else None
         for row, (item, qty, ql) in enumerate(slots[start:end]):
             i = start + row
+            cat = _inv_category(item)
             bg = (54, 50, 36) if i == sel else (20, 22, 32)
             if i == sel:
                 con.draw_rect(x + 1, y + 2 + row, w - 2, 1, ch=ord(" "), bg=bg)
+            # section label only when the category changes (grouped feel)
+            label = f"{cat}:" if cat != prev_cat else ""
+            prev_cat = cat
+            con.print(x + 2, y + 2 + row, label[:16], fg=_HDR, bg=bg)
             star = ("  " + skills.stars(ql)) if ql else ""
-            con.print(x + 2, y + 2 + row,
-                      ("▸ " if i == sel else "  ") + f"{qty:>3}  {item.glyph} {item.name}{star}",
+            con.print(x + 18, y + 2 + row,
+                      ("▸ " if i == sel else "  ") + f"{qty:>3} {item.glyph} {item.name}{star}",
                       fg=C.WHITE, bg=bg)
         if start > 0:
             con.print(x + w - 4, y + 2, "▲", fg=_HDR)
@@ -1220,18 +1256,39 @@ def render_inventory(con: tcod.console.Console, state: GameState, sel: int = 0) 
 
 
 def render_equipment(con: tcod.console.Console, state: GameState) -> None:
+    from ..data import content
+    from ..game import skills
     p = state.player
     tool = p.active_tool
-    rows = [
-        ("Tool   ", p.display_name(tool) if tool else "-"),
-        ("Weapon ", p.weapon.name if p.weapon else "-"),
-        ("Accessory", "- (none yet)"),
-    ]
-    w, h = 44, 9
-    x, y = _modal(con, w, h, "Equipment  (e / Esc to close)")
-    for i, (slot, name) in enumerate(rows):
-        con.print(x + 2, y + 2 + i, f"{slot:<10} {name}", fg=C.WHITE)
-    con.print(x + 2, y + h - 2, "Switch tools with keys 1-9.", fg=C.DIM)
+    w, h = 46, 17
+    x, y = _modal(con, w, h, "Equipment")
+
+    # equipped slots (a small ADOM-style paperdoll)
+    watk = content.WEAPON_STATS[p.weapon].atk if p.weapon in content.WEAPON_STATS else 0
+    atk = C.BASE_ATK + watk + skills.combat_atk_bonus(state)
+    wielded = f"{p.weapon.name}  (ATK {atk})" if p.weapon else "- (bare hands)"
+    in_hand = p.display_name(tool) if tool else "- (nothing in hand)"
+    for i, (slot, val, col) in enumerate((
+            ("Wielded", wielded, C.WHITE),
+            ("In hand", in_hand, C.WHITE),
+            ("Accessory", "- (none yet)", C.DIM))):
+        con.print(x + 2, y + 2 + i, slot, fg=_HDR)
+        con.print(x + 13, y + 2 + i, val[:w - 15], fg=col)
+
+    # tools you carry and the tier each has been forged to
+    con.print(x + 2, y + 6, "Tools & upgrades", fg=_HDR)
+    row = 7
+    for t in items.TIERED_TOOLS:
+        tier = C.TOOL_TIERS[p.tool_tier.get(t, 0)]
+        mark = "▸ " if t is tool else "  "
+        con.print(x + 3, y + row, f"{mark}{t.name:<14} {tier}",
+                  fg=C.WHITE if t is tool else (200, 200, 210))
+        row += 1
+    mark = "▸ " if items.FISHING_ROD is tool else "  "
+    con.print(x + 3, y + row, f"{mark}{items.FISHING_ROD.name:<14} —",
+              fg=C.WHITE if items.FISHING_ROD is tool else (200, 200, 210))
+
+    con.print(x + 2, y + h - 2, "1-9 switch tool · i bags · e/Esc close", fg=C.DIM)
 
 
 def render_craft(con: tcod.console.Console, state: GameState, sel: int) -> None:

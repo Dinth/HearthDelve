@@ -1050,6 +1050,8 @@ def main() -> None:
                         help_page = 0
                         help_scroll = 0
                     elif cmd == "inventory":
+                        state.player.inventory.slots.sort(
+                            key=lambda e: rendering.inv_sort_key(e[0], e[2]))
                         mode, inv_sel = "inventory", 0
                     elif cmd == "equipment":
                         mode = "equipment"
@@ -1116,6 +1118,8 @@ def main() -> None:
                         mode = "equipment"
                     elif cmd in ("cancel", "inventory", "quit"):
                         mode = "play"
+                    elif cmd == "slot":
+                        select_slot(state, action[1])
                     elif cmd == "move" and action[2] and slots:
                         inv_sel = (inv_sel + action[2]) % len(slots)
                     elif cmd == "drop" and slots:
@@ -1134,9 +1138,13 @@ def main() -> None:
 
                 elif mode == "equipment":
                     if cmd == "inventory":
-                        mode = "inventory"
+                        state.player.inventory.slots.sort(
+                            key=lambda e: rendering.inv_sort_key(e[0], e[2]))
+                        mode, inv_sel = "inventory", 0
                     elif cmd in ("cancel", "equipment", "quit"):
                         mode = "play"
+                    elif cmd == "slot":
+                        select_slot(state, action[1])
 
                 elif mode == "craft":
                     if cmd in ("cancel", "craft", "quit"):
