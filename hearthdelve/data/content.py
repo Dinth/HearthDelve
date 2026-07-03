@@ -266,7 +266,7 @@ RECIPES: list[Recipe] = [
     Recipe("Churn", "build", ((items.TIMBER_PLANK, 5), (items.COPPER_BAR, 1)), machine="churn",
            desc="Churns milk into cheese."),
     Recipe("Bomb", "item", ((items.COAL, 1), (items.FIBER, 2)), output=items.BOMB, out_qty=1,
-           desc="Throw with 'a' to harm monsters and shatter rock."),
+           desc="Aim & throw with 't' to harm monsters and shatter rock."),
     # --- Cooking: makes a carryable dish; eat it (x) for stamina -------------
     Recipe("Parsnip Soup", "cook", ((items.PARSNIP, 2),), output=items.PARSNIP_SOUP,
            desc="A warming bowl."),
@@ -292,6 +292,17 @@ RECIPES: list[Recipe] = [
            desc="Fish fried in sunflower oil."),
     Recipe("Candied Fruit", "cook", ((items.HONEY, 1), (items.STRAWBERRY, 1)), output=items.CANDIED_FRUIT,
            desc="Fruit candied in honey."),
+    # --- Cooking with the farm's own eggs, milk & cheese (husbandry tie-in) ---
+    Recipe("Fried Egg", "cook", ((items.EGG, 1),), output=items.FRIED_EGG,
+           desc="A quick fried egg."),
+    Recipe("Omelette", "cook", ((items.EGG, 2),), output=items.OMELETTE,
+           desc="A fluffy two-egg omelette."),
+    Recipe("Cheese Omelette", "cook", ((items.EGG, 2), (items.CHEESE, 1)), output=items.CHEESE_OMELETTE,
+           desc="An omelette folded with farmhouse cheese."),
+    Recipe("Creamy Soup", "cook", ((items.MILK, 1), (items.POTATO, 1)), output=items.CREAMY_SOUP,
+           desc="Potato simmered in fresh milk."),
+    Recipe("Custard", "cook", ((items.MILK, 1), (items.EGG, 1), (items.HONEY, 1)), output=items.CUSTARD,
+           desc="Silky honey-and-egg custard."),
 ]
 
 

@@ -375,6 +375,12 @@ def render_panel(con: tcod.console.Console, state: GameState) -> None:
     _bar(con, x, 5, "♥ HP", p.hp, p.max_hp, C.HP_COLOR)
     _bar(con, x, 8, "✦ Stamina", p.energy, p.max_energy, C.ENERGY_COLOR)
     con.print(x, 11, f"⛁ Gold  {p.gold}g", fg=C.GOLD_COLOR)
+    from ..game import skills
+    b = skills.active_buff(state)
+    if b:
+        mins = max(0, state.player.buff_until - state.abs_minutes)
+        left = f"{mins // 60}h{mins % 60:02d}" if mins >= 60 else f"{mins}m"
+        con.print(x, 13, f"↯ {skills.BUFFS.get(b, b)} {left}"[:C.PANEL_W - 2], fg=(180, 210, 250))
 
     # --- hotbar (keys 1-9) ---
     tool = p.active_tool
@@ -1047,7 +1053,10 @@ def build_codex_pages(state: GameState):
         if r.kind == "build":
             tag = "build"
         elif r.kind == "cook":
-            tag = f"cook (+{r.energy} stamina)"
+            from ..game import skills
+            e = r.output.energy if r.output else 0
+            bf = f", {skills.BUFFS[r.output.buff]}" if (r.output and r.output.buff in skills.BUFFS) else ""
+            tag = f"cook (+{e} stamina{bf})"
         else:
             tag = "craft"
         craftp.append((f"      {tag}:  {ins}", C.WHITE))
@@ -1362,7 +1371,7 @@ def render_shop(con: tcod.console.Console, state: GameState, npc, sel: int, line
     from ..data import content
     from ..entities import items as I
 
-    entries = village.shop_entries(npc.shop)
+    entries = village.shop_entries(npc.shop, state)
     title = {"general": "General Store", "blacksmith": "Blacksmith",
              "tavern": "Tavern", "carpenter": "Carpentry"}.get(npc.shop, "Shop")
     header = line.split("\n") if (npc.shop in ("tavern", "carpenter") and line) else []
@@ -1392,6 +1401,13 @@ def render_shop(con: tcod.console.Console, state: GameState, npc, sel: int, line
             afford = p.gold >= price
             con.print(x + 2, yy, ("▸ " if i == sel else "  ") + item.name, fg=C.WHITE if afford else C.DIM, bg=rowbg)
             con.print(x + w - 10, yy, f"{price}g", fg=C.GOLD_COLOR if afford else C.DIM, bg=rowbg)
+        elif e[0] == "sellto":
+            _, item, price, q = e
+            from ..game import skills
+            star = (" " + skills.stars(q)) if q else ""
+            con.print(x + 2, yy, ("▸ " if i == sel else "  ") + f"Sell {item.name}{star}",
+                      fg=(200, 220, 160), bg=rowbg)
+            con.print(x + w - 10, yy, f"+{price}g", fg=C.GOLD_COLOR, bg=rowbg)
         elif e[0] == "commission":
             _, label, kind, price, mats = e
             matstr = ", ".join(f"{q} {it.name.split()[0].lower()}" for it, q in mats)

@@ -75,6 +75,7 @@ def save(state: GameState, path: str = SAVE_PATH) -> None:
             "hp": p.hp, "energy": p.energy, "stamina": p.stamina, "gold": p.gold,
             "max_hp": p.max_hp, "max_energy": p.max_energy,
             "level": p.level, "xp": p.xp, "karma": p.karma,
+            "buff": p.buff, "buff_until": p.buff_until,
             "active_slot": p.active_slot,
             "hotbar": [it.name for it in p.hotbar],
             "weapon": p.weapon.name if p.weapon else None,
@@ -222,6 +223,8 @@ def load(path: str = SAVE_PATH) -> GameState:
     player.level = pd.get("level", 1)
     player.xp = pd.get("xp", 0)
     player.karma = pd.get("karma", 0)
+    player.buff = pd.get("buff", "")
+    player.buff_until = pd.get("buff_until", 0)
     player.active_slot = pd["active_slot"]
     player.hotbar = [items.by_name(n) for n in pd["hotbar"] if items.by_name(n)]
     player.weapon = items.by_name(pd["weapon"]) if pd["weapon"] else None

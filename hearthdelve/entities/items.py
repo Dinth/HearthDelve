@@ -18,6 +18,7 @@ class Item:
     stackable: bool = True
     value: int = 0       # base sell price (0 = not sellable)
     energy: int = 0      # stamina restored when eaten (food dishes)
+    buff: str = ""       # a temporary boon granted on eating (see skills.BUFFS)
 
 
 # --- Tools (hotbar) ----------------------------------------------------------
@@ -135,18 +136,24 @@ JELLIED_EEL = Item("Jellied Eel", "■", "artisan",  "Eel set in savoury jelly; 
 MEAD        = Item("Mead",        "u", "artisan",  "Fermented honey mead (miód pitny).", value=180)
 
 # --- Cooked dishes (kind 'food'; eat to restore stamina, scaled by quality) --
-PARSNIP_SOUP     = Item("Parsnip Soup",     "≈", "food", "A warming bowl of soup.",        value=60, energy=45)
-ROASTED_VEG      = Item("Roasted Veg",      "≈", "food", "Hearty roasted vegetables.",     value=95, energy=70)
-FISH_STEW        = Item("Fish Stew",        "≈", "food", "A rich fisherman's stew.",       value=85, energy=60)
-GRILLED_FISH     = Item("Grilled Fish",     "≈", "food", "Simply grilled and restorative.", value=65, energy=45)
-MUSHROOM_STEW    = Item("Mushroom Stew",    "≈", "food", "Earthy cave-mushroom stew.",     value=90, energy=65)
-GLOWCAP_BROTH    = Item("Glowcap Broth",    "≈", "food", "A radiant, deeply restorative broth.", value=150, energy=95)
-SAUTEED_MUSH     = Item("Sauteed Mushrooms","≈", "food", "Wild field mushrooms in butter.", value=60, energy=45)
-CHANTERELLE_SAUTE= Item("Chanterelle Saute","≈", "food", "Golden chanterelles, gently fried.", value=90, energy=60)
-BOLETE_BROTH     = Item("Bolete Broth",     "≈", "food", "A rich woodland mushroom broth.", value=100, energy=70)
-GLAZED_VEG       = Item("Glazed Vegetables","≈", "food", "Vegetables glazed in honey.",    value=110, energy=75)
-FRIED_FISH       = Item("Fried Fish",       "≈", "food", "Fish fried in sunflower oil.",   value=95, energy=65)
-CANDIED_FRUIT    = Item("Candied Fruit",    "≈", "food", "Fruit candied in honey; a sweet treat.", value=140, energy=85)
+PARSNIP_SOUP     = Item("Parsnip Soup",     "≈", "food", "A warming bowl of soup.",        value=60, energy=45, buff="tiller")
+ROASTED_VEG      = Item("Roasted Veg",      "≈", "food", "Hearty roasted vegetables.",     value=95, energy=70, buff="tiller")
+FISH_STEW        = Item("Fish Stew",        "≈", "food", "A rich fisherman's stew.",       value=85, energy=60, buff="hearty")
+GRILLED_FISH     = Item("Grilled Fish",     "≈", "food", "Simply grilled and restorative.", value=65, energy=45, buff="hearty")
+MUSHROOM_STEW    = Item("Mushroom Stew",    "≈", "food", "Earthy cave-mushroom stew.",     value=90, energy=65, buff="forager")
+GLOWCAP_BROTH    = Item("Glowcap Broth",    "≈", "food", "A radiant, deeply restorative broth.", value=150, energy=95, buff="forager")
+SAUTEED_MUSH     = Item("Sauteed Mushrooms","≈", "food", "Wild field mushrooms in butter.", value=60, energy=45, buff="forager")
+CHANTERELLE_SAUTE= Item("Chanterelle Saute","≈", "food", "Golden chanterelles, gently fried.", value=90, energy=60, buff="forager")
+BOLETE_BROTH     = Item("Bolete Broth",     "≈", "food", "A rich woodland mushroom broth.", value=100, energy=70, buff="forager")
+GLAZED_VEG       = Item("Glazed Vegetables","≈", "food", "Vegetables glazed in honey.",    value=110, energy=75, buff="tiller")
+FRIED_FISH       = Item("Fried Fish",       "≈", "food", "Fish fried in sunflower oil.",   value=95, energy=65, buff="hearty")
+CANDIED_FRUIT    = Item("Candied Fruit",    "≈", "food", "Fruit candied in honey; a sweet treat.", value=140, energy=85, buff="brisk")
+# Dishes made from the farm's own eggs, milk and cheese — the husbandry->kitchen tie-in.
+FRIED_EGG        = Item("Fried Egg",        "≈", "food", "A quick fried egg.",             value=45, energy=30, buff="hearty")
+OMELETTE         = Item("Omelette",         "≈", "food", "A fluffy two-egg omelette.",     value=90, energy=60, buff="hearty")
+CHEESE_OMELETTE  = Item("Cheese Omelette",  "≈", "food", "An omelette folded with farmhouse cheese.", value=240, energy=95, buff="hearty")
+CREAMY_SOUP      = Item("Creamy Soup",      "≈", "food", "Potato simmered in fresh milk.", value=150, energy=80, buff="tiller")
+CUSTARD          = Item("Custard",          "≈", "food", "Silky honey-and-egg custard.",   value=160, energy=85, buff="brisk")
 AGED_MEAD   = Item("Aged Mead",   "u", "artisan",  "Mead matured in the cask; deep and mellow.", value=360)
 SUNFLOWER_OIL = Item("Sunflower Oil", "ó", "artisan", "Golden oil pressed from sunflowers.", value=130)
 

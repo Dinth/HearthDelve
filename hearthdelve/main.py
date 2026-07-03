@@ -14,7 +14,7 @@ from .engine import constants as C
 from .engine import font, input as game_input, rendering, save
 from .entities import items
 from .entities.player import Player
-from .game import combat, crafting, delve, farming, fishing, quests, turns, village
+from .game import combat, crafting, delve, farming, fishing, quests, skills, turns, village
 from .game.state import GameState, MessageLog
 from .world import tile, worldgen
 
@@ -171,8 +171,9 @@ def try_move(state: GameState, dx: int, dy: int) -> None:
         _scoop_gold(state)                                      # scoop up a gold pile
         on_road = _is_road(state, nx, ny)                       # roads/bridges/cobble: fast & effortless
         turns.advance_time(state, C.ROAD_MOVE_SECONDS if on_road else C.MOVE_SECONDS)
-        # roads are effortless, and you don't tire underground
-        if not on_road and not state.world.is_dungeon:
+        # roads are effortless, you don't tire underground, and a Brisk meal
+        # keeps you fresh afoot
+        if not on_road and not state.world.is_dungeon and skills.active_buff(state) != "brisk":
             p.energy = max(0, p.energy - C.WALK_STAMINA)
         if state.world.is_dungeon:
             delve.update_fov(state)
@@ -527,6 +528,9 @@ def _eat(state: GameState, item, quality: int) -> None:
     state.bump("meals_eaten")
     star = (" " + skills.stars(quality)) if quality else ""
     state.log.add(f"You eat the {item.name.lower()}{star}. (+{gain} stamina, +{heal} HP)", (180, 230, 160))
+    if item.buff:
+        skills.apply_buff(state, item.buff)
+        state.log.add(f"  You feel {skills.BUFFS.get(item.buff, item.buff)}!", (200, 220, 250))
     turns.advance_time(state, C.USE_SECONDS)
 
 
@@ -633,7 +637,7 @@ def run_step(state: GameState, ctx: dict) -> bool:
         return False                                   # a creature/person ahead — stop
     p.x, p.y = nx, ny
     turns.advance_time(state, C.MOVE_SECONDS)
-    if not state.world.is_dungeon:
+    if not state.world.is_dungeon and skills.active_buff(state) != "brisk":
         p.energy = max(0, p.energy - C.WALK_STAMINA)
     if state.world.is_dungeon:
         delve.update_fov(state)
@@ -1186,7 +1190,7 @@ def main() -> None:
                         mode = "play"
 
                 elif mode == "shop":
-                    entries = village.shop_entries(npc.shop)
+                    entries = village.shop_entries(npc.shop, state)
                     if cmd in ("cancel", "talk", "quit"):
                         mode = "play"
                     elif cmd == "move" and action[2] and entries:

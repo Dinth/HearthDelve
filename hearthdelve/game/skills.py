@@ -61,15 +61,48 @@ def gain_char_xp(state: GameState, amount: int) -> None:
         state.log.add(f"You reach level {p.level}! (+8 max HP, +12 max stamina)", (240, 220, 140))
 
 
+# --- food buffs (a cooked dish grants a temporary boon; see main._eat) -------
+BUFF_MINUTES = 300                    # a buff lasts ~5 in-game hours
+BUFFS = {
+    "hearty":  "Hearty",              # +2 attack in a scrap
+    "tiller":  "Green Thumb",         # richer farm harvests
+    "forager": "Keen Forager",        # richer foraging
+    "brisk":   "Brisk",               # tireless on foot
+}
+
+
+def active_buff(state: GameState) -> str:
+    """The player's current food buff key, or '' if none / expired."""
+    p = state.player
+    if p.buff and state.abs_minutes < p.buff_until:
+        return p.buff
+    return ""
+
+
+def apply_buff(state: GameState, key: str, minutes: int = BUFF_MINUTES) -> None:
+    if not key:
+        return
+    p = state.player
+    p.buff = key
+    p.buff_until = state.abs_minutes + minutes
+
+
 # --- gentle bonuses ----------------------------------------------------------
 def combat_atk_bonus(state: GameState) -> int:
-    return skill_level(state, "Combat") // 3            # +0..+3 attack
+    bonus = skill_level(state, "Combat") // 3           # +0..+3 attack
+    if active_buff(state) == "hearty":
+        bonus += 2                                      # a hearty meal steels you
+    return bonus
 
 def fishing_catch_bonus(state: GameState) -> float:
     return skill_level(state, "Fishing") * 0.02         # up to +20% catch
 
 def extra_yield_chance(state: GameState, skill: str) -> float:
-    return skill_level(state, skill) * 0.05             # up to +50% double drops
+    chance = skill_level(state, skill) * 0.05           # up to +50% double drops
+    b = active_buff(state)
+    if (b == "tiller" and skill == "Farming") or (b == "forager" and skill == "Foraging"):
+        chance += 0.30
+    return chance
 
 
 # --- quality (0-5 stars) -----------------------------------------------------

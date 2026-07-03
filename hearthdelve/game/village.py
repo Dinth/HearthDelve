@@ -215,9 +215,31 @@ def giftable_items(state: GameState):
             if it.kind in ("crop", "artisan", "material", "food", "fish", "animal")]
 
 
+# The innkeeper buys the farm's artisan drinks & cheese at a small premium — a
+# gold sink that closes the loop between your kegs/churn and the village.
+_INN_BUYS = (items.WINE, items.GRAPE_WINE, items.MEAD, items.AGED_MEAD, items.CHEESE)
+INN_PREMIUM = 1.2
+
+
+def _inn_purchases(state: GameState):
+    """Offers to buy each artisan good the player is carrying (lowest-quality
+    unit first, priced by quality with a specialty-buyer premium)."""
+    from . import skills
+    inv = state.player.inventory
+    out = []
+    for it in _INN_BUYS:
+        stacks = sorted((e for e in inv.slots if e[0] is it), key=lambda e: e[2])
+        if stacks:
+            q = stacks[0][2]
+            price = round(it.value * skills.value_mult(q) * INN_PREMIUM)
+            out.append(("sellto", it, price, q))
+    return out
+
+
 # --- shops ------------------------------------------------------------------
-def shop_entries(shop: str):
-    """List of entries for a shop: ('buy', item, price) | ('upgrade', tool)."""
+def shop_entries(shop: str, state: GameState | None = None):
+    """List of entries for a shop: ('buy', item, price) | ('upgrade', tool) |
+    ('meal', ...) | ('sellto', item, price, quality) | ('commission', ...)."""
     if shop == "general":
         return [("buy", it, price) for it, price in content.GENERAL_STOCK]
     if shop == "blacksmith":
@@ -225,8 +247,9 @@ def shop_entries(shop: str):
         buys = [("buy", it, price) for it, price in content.BLACKSMITH_STOCK]
         return ups + buys
     if shop == "tavern":
-        return [("meal", label, price, stam, hp)
-                for (label, price, stam, hp) in content.TAVERN_MENU]
+        meals = [("meal", label, price, stam, hp)
+                 for (label, price, stam, hp) in content.TAVERN_MENU]
+        return meals + (_inn_purchases(state) if state is not None else [])
     if shop == "carpenter":
         return [("commission", label, kind, gold, mats)
                 for (label, kind, gold, mats) in content.CARPENTER_JOBS]
@@ -257,6 +280,18 @@ def purchase(state: GameState, entry) -> None:
         turns.advance_time(state, _C.USE_SECONDS)
         gains = f"+{stam} stamina" + (f", +{hp} HP" if hp else "")
         state.log.add(f"You tuck into {label.lower()}. ({gains})", (180, 230, 160))
+    elif entry[0] == "sellto":
+        _, item, price, q = entry
+        p = state.player
+        if p.inventory.count(item, q) <= 0:
+            return
+        p.inventory.remove(item, 1, quality=q)
+        p.gold += price
+        state.bump("gold_earned", price)
+        from . import skills
+        star = (" " + skills.stars(q)) if q else ""
+        state.log.add(f"The innkeeper takes your {item.name.lower()}{star} for {price}g.",
+                      (240, 214, 120))
     elif entry[0] == "commission":
         _, label, kind, gold, mats = entry
         p = state.player

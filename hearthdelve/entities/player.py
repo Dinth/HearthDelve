@@ -52,6 +52,8 @@ class Player:
     level: int = 1                               # general character level
     xp: int = 0                                  # xp toward the next level
     karma: int = 0                               # -100 villainous .. +100 saintly
+    buff: str = ""                               # active food buff key (see skills.BUFFS)
+    buff_until: int = 0                          # abs in-game minute the buff wears off
 
     @property
     def active_tool(self) -> Item | None:
