@@ -19,6 +19,10 @@ class Item:
     value: int = 0       # base sell price (0 = not sellable)
     energy: int = 0      # stamina restored when eaten (food dishes)
     buff: str = ""       # a temporary boon granted on eating (see skills.BUFFS)
+    family: str = ""     # groups per-source artisan goods (all jams share "jam")
+                         # so NPC gift tastes & the like match any variant
+    source: object = None  # the fruit/veg this good was made from (artisan goods);
+                           # its price already reflects the source's value
 
 
 # --- Tools (hotbar) ----------------------------------------------------------
@@ -134,11 +138,14 @@ SAPPHIRE    = Item("Sapphire",    "◊", "material", "A blue gemstone.",   value
 DIAMOND     = Item("Diamond",     "◊", "material", "The most prized gem.", value=320)
 
 # --- Artisan goods (made in machines — the value ladder) --------------------
-JAM         = Item("Jam",         "■", "artisan",  "Preserved fruit; sells well.", value=160)
-WINE        = Item("Wine",        "ø", "artisan",  "Aged fruit wine.",            value=200)
-GRAPE_WINE  = Item("Grape Wine",  "ø", "artisan",  "Vintage grape wine; the finest.", value=260)
-PICKLES     = Item("Pickles",     "■", "artisan",  "Pickled vegetables; tangy and tidy.", value=130)
-JELLIED_EEL = Item("Jellied Eel", "■", "artisan",  "Eel set in savoury jelly; a delicacy.", value=150)
+# Generic artisan goods double as the "family" anchors for gifts & tastes; the
+# jar/keg actually make per-fruit variants (content.FRUIT_JAM etc.) whose price
+# is derived from the source fruit.
+JAM         = Item("Jam",         "■", "artisan",  "Preserved fruit; sells well.", value=160, family="jam")
+WINE        = Item("Wine",        "ø", "artisan",  "Aged fruit wine.",            value=200, family="wine")
+GRAPE_WINE  = Item("Grape Wine",  "ø", "artisan",  "Vintage grape wine; the finest.", value=260, family="wine", source=GRAPE)
+PICKLES     = Item("Pickles",     "■", "artisan",  "Pickled vegetables; tangy and tidy.", value=130, family="pickles")
+JELLIED_EEL = Item("Jellied Eel", "■", "artisan",  "Eel set in savoury jelly; a delicacy.", value=150, family="jellied")
 MEAD        = Item("Mead",        "u", "artisan",  "Fermented honey mead (miód pitny).", value=180)
 
 # --- Cooked dishes (kind 'food'; eat to restore stamina, scaled by quality) --
@@ -202,6 +209,13 @@ BOMB        = Item("Bomb",        "*", "bomb",     "Aim & throw (t): harms monst
 
 # Registry of every defined item, for save/load by name.
 BY_NAME: dict[str, Item] = {v.name: v for v in list(globals().values()) if isinstance(v, Item)}
+
+
+def register(item: Item) -> Item:
+    """Add a dynamically-built item (e.g. a per-fruit jam) to the save/load
+    registry. Returns the item for convenient assignment."""
+    BY_NAME[item.name] = item
+    return item
 
 
 def by_name(name: str) -> Item | None:

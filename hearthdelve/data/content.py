@@ -201,6 +201,34 @@ def is_fruit(produce: Item) -> bool:
     return PRODUCE_CATEGORY.get(produce) == "fruit" or produce in _EXTRA_FRUIT
 
 
+# --- Per-source artisan goods ------------------------------------------------
+# A jam/wine/pickle inherits the value of the fruit or vegetable it's made from,
+# plus a crafting premium (and, at sell time, a quality-star bonus). Rather than
+# hand-author "Strawberry Jam", "Raspberry Jam", ... we generate one variant per
+# source; each carries its `source` and a shared `family` so gift tastes match
+# "any jam". Grape wine keeps its hand-tuned premium item.
+JAM_MULT, WINE_MULT, PICKLE_MULT = 1.6, 2.2, 1.5
+
+_FRUIT_ITEMS = [c.produce for c in CROPS if c.category == "fruit"] + \
+    [items.RASPBERRY, items.GOOSEBERRY, items.CURRANT,
+     items.CHERRY, items.PEACH, items.APPLE, items.ORANGE]
+_VEG_ITEMS = [c.produce for c in CROPS if c.category == "vegetable"]
+
+
+def _variant(name: str, glyph: str, source: Item, mult: float, family: str) -> Item:
+    return items.register(items.Item(
+        name, glyph, "artisan", f"{family.capitalize()} made from {source.name.lower()}.",
+        value=round(source.value * mult), family=family, source=source))
+
+
+FRUIT_JAM = {f: _variant(f"{f.name} Jam", "■", f, JAM_MULT, "jam") for f in _FRUIT_ITEMS}
+FRUIT_WINE = {}
+for _f in _FRUIT_ITEMS:
+    FRUIT_WINE[_f] = items.GRAPE_WINE if _f is items.GRAPE \
+        else _variant(f"{_f.name} Wine", "ø", _f, WINE_MULT, "wine")
+VEG_PICKLE = {v: _variant(f"Pickled {v.name}", "■", v, PICKLE_MULT, "pickles") for v in _VEG_ITEMS}
+
+
 # --- Machines (placed; process inputs over time) -----------------------------
 @dataclass(frozen=True)
 class MachineDef:

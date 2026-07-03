@@ -215,9 +215,9 @@ def giftable_items(state: GameState):
             if it.kind in ("crop", "artisan", "material", "food", "fish", "animal")]
 
 
-# The innkeeper buys the farm's artisan drinks & cheese at a small premium — a
-# gold sink that closes the loop between your kegs/churn and the village.
-_INN_BUYS = (items.WINE, items.GRAPE_WINE, items.MEAD, items.AGED_MEAD, items.CHEESE)
+# The innkeeper buys the farm's artisan goods (wine, mead, jam, pickles, cheese…)
+# at a small premium — a gold sink that closes the loop between your kegs/jars/
+# churn and the village.
 INN_PREMIUM = 1.2
 
 
@@ -226,13 +226,15 @@ def _inn_purchases(state: GameState):
     unit first, priced by quality with a specialty-buyer premium)."""
     from . import skills
     inv = state.player.inventory
-    out = []
-    for it in _INN_BUYS:
+    out, seen = [], set()
+    for it, _q, _ql in inv.slots:
+        if it.kind != "artisan" or it in seen:
+            continue
+        seen.add(it)
         stacks = sorted((e for e in inv.slots if e[0] is it), key=lambda e: e[2])
-        if stacks:
-            q = stacks[0][2]
-            price = round(it.value * skills.value_mult(q) * INN_PREMIUM)
-            out.append(("sellto", it, price, q))
+        q = stacks[0][2]
+        price = round(it.value * skills.value_mult(q) * INN_PREMIUM)
+        out.append(("sellto", it, price, q))
     return out
 
 

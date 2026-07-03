@@ -63,12 +63,19 @@ class NPC:
     def next_blurb(self) -> str:      # kept for compatibility
         return self.speak()
 
+    def _matches(self, item: Item, pool: tuple) -> bool:
+        """A taste matches the exact item, or any good of the same family — so
+        'loves Jam' is satisfied by a raspberry jam, a strawberry jam, and so on."""
+        if item in pool:
+            return True
+        return bool(item.family) and any(p.family == item.family for p in pool)
+
     def gift_reaction(self, item: Item) -> tuple[int, str]:
         """Return (friendship_points, reaction line) for being given item."""
-        if item in self.loves:
+        if self._matches(item, self.loves):
             return 80, f"{self.name}: This is wonderful — I love it!"
-        if item in self.likes:
+        if self._matches(item, self.likes):
             return 45, f"{self.name}: Oh, thank you! How thoughtful."
-        if item in self.dislikes:
+        if self._matches(item, self.dislikes):
             return -20, f"{self.name}: ...thanks, I suppose."
         return 20, f"{self.name}: That's kind of you."

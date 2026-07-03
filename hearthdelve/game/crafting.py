@@ -146,10 +146,13 @@ def _needs_hint(mdef) -> str:
 
 
 def _preserve_of(it):
-    """What a Preserves Jar turns a given input into."""
+    """What a Preserves Jar turns a given input into — a per-source jam/pickle
+    (so a strawberry jam is worth more than a raspberry one)."""
     if it is items.EEL:
         return items.JELLIED_EEL
-    return items.JAM if content.is_fruit(it) else items.PICKLES
+    if content.is_fruit(it):
+        return content.FRUIT_JAM.get(it, items.JAM)
+    return content.VEG_PICKLE.get(it, items.PICKLES)
 
 
 def machine_load_options(state: GameState, mdef) -> list:
@@ -178,7 +181,7 @@ def machine_load_options(state: GameState, mdef) -> list:
         if inv.count(items.MEAD) > 0:
             opts.append({"inputs": [(items.MEAD, 1)], "output": items.AGED_MEAD, "quality_from": items.MEAD})
         for it in {e[0] for e in inv.slots if e[0].kind == "crop" and content.is_fruit(e[0])}:
-            out = items.GRAPE_WINE if it is items.GRAPE else items.WINE
+            out = content.FRUIT_WINE.get(it, items.WINE)      # wine inherits the fruit's value
             opts.append({"inputs": [(it, 1)], "output": out, "quality_from": it})
     elif a == "crop":
         seen = set()
