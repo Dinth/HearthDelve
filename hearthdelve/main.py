@@ -561,24 +561,46 @@ REST_MAX_SECONDS = 3600          # rest up to an in-game hour
 LONG_ACTION_SECONDS = 120        # tasks at/above this animate over frames (chop, mine)
 
 
-def _notable_nearby(state: GameState) -> bool:
-    """Something worth stopping for: a person close by, or an interesting tile."""
+_NOTABLE_TILE = {"stairs": "a stairway down", "stairs_up": "a stairway up",
+                 "bin": "the shipping bin", "shrub_berry": "a berry shrub"}
+
+
+def _notable_nearby(state: GameState) -> str:
+    """A reason a run/rest should stop — someone close by or an interesting tile
+    underfoot — or '' if nothing of note (so it stays usable as a boolean)."""
     p = state.player
     for npc in state.world.npcs:
         if max(abs(npc.x - p.x), abs(npc.y - p.y)) <= 6:
-            return True
+            return f"{npc.name} is nearby"
     for m in state.world.monsters:
         if m.seasons and state.season not in m.seasons:
             continue                                   # hibernating — not around
         if m.alive and max(abs(m.x - p.x), abs(m.y - p.y)) <= 6:
-            return True
+            return f"a {m.name.lower()} is nearby"
     for dx in (-1, 0, 1):
         for dy in (-1, 0, 1):
             x, y = p.x + dx, p.y + dy
             if state.world.in_bounds(x, y):
-                if state.world.tile_at(x, y).kind in ("stairs", "stairs_up", "bin", "shrub_berry"):
-                    return True
-    return False
+                kind = state.world.tile_at(x, y).kind
+                if kind in _NOTABLE_TILE:
+                    return f"you reach {_NOTABLE_TILE[kind]}"
+    return ""
+
+
+def _blocker_name(state: GameState, x: int, y: int) -> str:
+    """Name of whoever/whatever is standing on (x, y) — for run-stop messages."""
+    m = combat.mob_at(state, x, y)
+    if m is not None:
+        return f"a {m.name.lower()}"
+    if not state.world.is_dungeon:
+        from .game import husbandry
+        a = husbandry.animal_at(state, x, y)
+        if a is not None:
+            return a.name
+        n = _npc_at(state, x, y)
+        if n is not None:
+            return n.name
+    return "something"
 
 
 _ROAD_KINDS = ("road", "bridge", "cobble")
@@ -615,26 +637,37 @@ def run_step(state: GameState, ctx: dict) -> bool:
         elif len(opts) == 1:
             ndir = opts[0]                             # follow the bend
         else:
-            return False                               # fork or dead end — stop
-        if _entity_at(state, p.x + ndir[0], p.y + ndir[1]):
-            return False                               # someone's in the way — stop
-        p.x, p.y = p.x + ndir[0], p.y + ndir[1]
+            ctx["stop"] = "The road forks." if opts else "The road ends."
+            return False
+        nx, ny = p.x + ndir[0], p.y + ndir[1]
+        if _entity_at(state, nx, ny):
+            ctx["stop"] = f"You stop — {_blocker_name(state, nx, ny)} is in the way."
+            return False
+        p.x, p.y = nx, ny
         ctx["d"] = ndir
         turns.advance_time(state, C.ROAD_MOVE_SECONDS)
         ctx["steps"] += 1
-        if ctx["steps"] >= RUN_MAX_TILES or _notable_nearby(state):
+        note = _notable_nearby(state)
+        if ctx["steps"] >= RUN_MAX_TILES:
+            ctx["stop"] = "You pause to catch your breath."
+            return False
+        if note:
+            ctx["stop"] = f"You stop — {note}."
             return False
         exits = sum(_is_road(state, p.x + ax, p.y + ay) for ax, ay in ((1, 0), (-1, 0), (0, 1), (0, -1)))
         if exits > 2:
-            return False                               # a real junction — stop
+            ctx["stop"] = "You reach a junction."
+            return False
         return True
 
     # Off-road (wilderness / dungeon): straight-line run.
     nx, ny = p.x + dx, p.y + dy
     if not state.world.walkable(nx, ny):
-        return False                                   # wall ahead — stop here
+        ctx["stop"] = "The way ahead is blocked."
+        return False
     if _entity_at(state, nx, ny):
-        return False                                   # a creature/person ahead — stop
+        ctx["stop"] = f"You stop — {_blocker_name(state, nx, ny)} is in the way."
+        return False
     p.x, p.y = nx, ny
     turns.advance_time(state, C.MOVE_SECONDS)
     if not state.world.is_dungeon and skills.active_buff(state) != "brisk":
@@ -643,14 +676,20 @@ def run_step(state: GameState, ctx: dict) -> bool:
         delve.update_fov(state)
         _scoop_gold(state)                             # grab gold we ran over
         if _dungeon_tile_fx(state):
-            return False                               # a trap sprang — stop
+            return False                               # a trap sprang — it logs its own message
     ctx["steps"] += 1
 
-    if ctx["steps"] >= RUN_MAX_TILES or _notable_nearby(state):
+    note = _notable_nearby(state)
+    if ctx["steps"] >= RUN_MAX_TILES:
+        ctx["stop"] = "You pause to catch your breath."
+        return False
+    if note:
+        ctx["stop"] = f"You stop — {note}."
         return False
     if ctx["tunnel"]:
         if state.world.walkable(p.x - dy, p.y + dx) or state.world.walkable(p.x + dy, p.y - dx):
-            return False                               # corridor opened up
+            ctx["stop"] = "The passage opens up."
+            return False
     return True
 
 
@@ -809,7 +848,10 @@ def main() -> None:
             # until it's interrupted or a stop condition is met.
             if mode == "play" and run_ctx is not None:
                 if not run_step(state, run_ctx):
+                    reason = run_ctx.get("stop", "")
                     run_ctx = None
+                    if reason:
+                        state.log.add(reason, C.DIM)
                     check_faint(state)
                     quests.check(state)
             elif mode == "play" and rest_left > 0:
@@ -817,9 +859,10 @@ def main() -> None:
                 if state.world.is_dungeon:
                     delve.update_fov(state)
                 rest_left -= C.MOVE_SECONDS
-                if _notable_nearby(state) or rest_left <= 0:
+                note = _notable_nearby(state)
+                if note or rest_left <= 0:
                     rest_left = 0
-                    state.log.add("You wait a while.", C.DIM)
+                    state.log.add(f"You stop resting — {note}." if note else "You rest a while.", C.DIM)
                     check_faint(state)
                     quests.check(state)
             elif mode == "play" and busy_ctx is not None:
