@@ -31,15 +31,12 @@ TAX_PER_TILE = 2                 # gold per claimed tile, assessed weekly
 TAX_INTERVAL = 7                 # days between assessments
 KARMA_DRIP = 1                   # karma lost per week an unpaid balance is carried
 
-# A fenced region larger than this isn't treated as a deliberate claim (guards
-# against "enclosing" the whole map when the border happens to be walled/watered).
-MAX_ENCLOSURE = 400
+# A fenced plot whose bounding box is larger than this isn't auto-claimed (a
+# runaway guard — a fence run this big is almost certainly not one plot).
+MAX_ENCLOSURE = 900
 
 # Ground a player fence may be planted on.
 FENCEABLE = {"grass", "meadow", "tall_grass", "path", "sand", "moor", "fog_grass"}
-
-# Tiles that stop an enclosure flood-fill (you can pen land against these).
-_BARRIER_KINDS = {"fence", "wall", "water"}
 
 
 # --- ownership resolution ----------------------------------------------------
@@ -163,53 +160,44 @@ def note_claim(state, tiles, announce: bool = False) -> int:
     return n
 
 
-def _is_barrier(surf, x: int, y: int) -> bool:
-    if not surf.in_bounds(x, y):
-        return True                        # the map edge bounds nothing — open
-    return tile.TILES[surf.tiles[x, y]].kind in _BARRIER_KINDS
-
-
-def enclosed_region(surf, seed) -> set | None:
-    """Flood-fill open ground from ``seed`` (a tile just inside a fence). If the
-    fill is bounded — never escaping to the map edge and no larger than
-    ``MAX_ENCLOSURE`` — return the interior tiles; otherwise ``None`` (an open
-    gap means no enclosure)."""
-    sx, sy = seed
-    if _is_barrier(surf, sx, sy):
-        return None
-    seen = {(sx, sy)}
-    stack = [(sx, sy)]
+def _fence_run(surf, start) -> set:
+    """Every fence tile connected (orthogonally or diagonally) to ``start`` —
+    the single run of fencing the player is building."""
+    if tile.TILES[surf.tiles[start]].kind != "fence":
+        return set()
+    seen = {start}
+    stack = [start]
     while stack:
         x, y = stack.pop()
-        for nx, ny in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
-            if not surf.in_bounds(nx, ny):
-                return None                # leaked to the edge — not enclosed
-            if (nx, ny) in seen or _is_barrier(surf, nx, ny):
-                continue
-            seen.add((nx, ny))
-            if len(seen) > MAX_ENCLOSURE:
-                return None
-            stack.append((nx, ny))
+        for dx in (-1, 0, 1):
+            for dy in (-1, 0, 1):
+                if dx == 0 and dy == 0:
+                    continue
+                nx, ny = x + dx, y + dy
+                if (nx, ny) in seen or not surf.in_bounds(nx, ny):
+                    continue
+                if tile.TILES[surf.tiles[nx, ny]].kind == "fence":
+                    seen.add((nx, ny))
+                    stack.append((nx, ny))
     return seen
 
 
 def enclosed_tiles(state, fence_xy) -> set:
-    """The set of wilderness tiles a fence at ``fence_xy`` now encloses (empty if
-    it closes nothing). The caller claims them. Regions containing someone
-    else's land are skipped — you can't fence in a neighbour's plot."""
+    """The plot a fence run bounds. There are no gates, so a fence needn't form a
+    closed loop: the run's bounding box IS the plot — a U or an L of 5-long sides
+    bounds a 5×5, so you're charged for all 25 tiles. Tiles owned by others are
+    left out (you can't fence in a neighbour's land)."""
     surf = _surf(state)
-    fx, fy = fence_xy
-    out: set = set()
-    for nx, ny in ((fx + 1, fy), (fx - 1, fy), (fx, fy + 1), (fx, fy - 1)):
-        if (nx, ny) in out:
-            continue
-        region = enclosed_region(surf, (nx, ny))
-        if region is None:
-            continue
-        if any(owned_by_other(state, x, y) for (x, y) in region):
-            continue
-        out |= region
-    return out
+    run = _fence_run(surf, fence_xy)
+    if len(run) < 2:                       # a lone panel bounds no plot
+        return set()
+    xs = [x for x, _ in run]
+    ys = [y for _, y in run]
+    x0, x1, y0, y1 = min(xs), max(xs), min(ys), max(ys)
+    if (x1 - x0 + 1) * (y1 - y0 + 1) > MAX_ENCLOSURE:
+        return set()                       # too sprawling to be one plot
+    return {(x, y) for x in range(x0, x1 + 1) for y in range(y0, y1 + 1)
+            if not owned_by_other(state, x, y)}
 
 
 # --- theft / vandalism -------------------------------------------------------
