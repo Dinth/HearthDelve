@@ -49,6 +49,16 @@ def init_weather(state: GameState) -> None:
 
 
 # --- Planting / watering / harvest ------------------------------------------
+def in_greenhouse(world, x: int, y: int) -> bool:
+    """Whether (x, y) sits inside a raised greenhouse — crops there grow
+    year-round and ignore the season."""
+    for b in getattr(world, "buildings", ()):
+        if (b.get("kind") == "greenhouse"
+                and b["x"] <= x < b["x"] + b["w"] and b["y"] <= y < b["y"] + b["h"]):
+            return True
+    return False
+
+
 def plant(state: GameState, x: int, y: int, seed: Item) -> None:
     world = state.world
     if world.tile_at(x, y).name != "tilled":
@@ -61,8 +71,9 @@ def plant(state: GameState, x: int, y: int, seed: Item) -> None:
     if crop is None:
         state.log.add("You can't plant that.", C.DIM)
         return
-    if crop.season != state.season:
-        state.log.add(f"{crop.name} is a {crop.season} crop — it won't sprout now.", C.DIM)
+    if crop.season != state.season and not in_greenhouse(world, x, y):
+        state.log.add(f"{crop.name} is a {crop.season} crop — it won't sprout now "
+                      "(a greenhouse grows any crop year-round).", C.DIM)
         return
     if state.player.inventory.count(seed) <= 0:
         state.log.add(f"You're out of {seed.name}.", C.DIM)
@@ -190,17 +201,20 @@ def new_day(state: GameState, rested: bool = True) -> None:
         state.weather = fest[4]
     raining = is_wet_weather(state.weather)
 
-    # Watering: rain soaks every plot; sprinklers water their neighbours.
+    # Watering: rain soaks every plot; sprinklers water their neighbours. Rain
+    # doesn't reach crops under a greenhouse's glass — those you tend yourself.
     if raining:
-        for plot in state.world.crops.values():
-            if not plot.dead and not plot.mature:
+        for (cx, cy), plot in state.world.crops.items():
+            if not plot.dead and not plot.mature and not in_greenhouse(state.world, cx, cy):
                 plot.watered = True
     from . import crafting
     crafting.run_sprinklers(state)
 
-    # Growth tick.
-    for plot in state.world.crops.values():
-        advance_growth(plot, season)
+    # Growth tick. Greenhouse crops always count as in-season (never wither, keep
+    # growing) — they use their own season instead of the calendar's.
+    for (cx, cy), plot in state.world.crops.items():
+        grow_season = plot.crop.season if in_greenhouse(state.world, cx, cy) else season
+        advance_growth(plot, grow_season)
     for tree in state.world.trees.values():
         advance_tree(tree, season)
 

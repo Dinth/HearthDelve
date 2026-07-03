@@ -116,8 +116,7 @@ def interact_building(state: GameState, m: Machine, x: int, y: int) -> bool:
     from . import skills  # noqa: F401 (kept parallel with the rest of crafting)
     if m.kind == "site":
         now = state.abs_minutes
-        target = MACHINES.get(m.build_kind)
-        name = target.name.lower() if target else "building"
+        name = _build_name(m.build_kind)
         if now < m.ready_at:
             days = max(1, (m.ready_at - now + DAY - 1) // DAY)
             state.log.add(f"Tomas is still raising your {name} — about {days} day(s) to go.", (200, 190, 150))
@@ -227,11 +226,23 @@ def _finish_construction(state: GameState) -> None:
 _GROUND = {tile.GRASS, tile.MEADOW, tile.TALL_GRASS, tile.DIRT_PATH, tile.SAND,
            tile.FOG_GRASS, tile.MOOR, tile.BUSH}
 
+# The greenhouse isn't a machine (nothing to load) — it's a walled plot of soil
+# where crops grow year-round. Its size/name live here rather than in MACHINES.
+GREENHOUSE_FOOTPRINT = (7, 5)
+
+
+def _build_wh(kind: str):
+    return GREENHOUSE_FOOTPRINT if kind == "greenhouse" else MACHINES[kind].footprint
+
+
+def _build_name(kind: str) -> str:
+    return "greenhouse" if kind == "greenhouse" else MACHINES[kind].name.lower()
+
 
 def _footprint(door, kind):
     """Rectangle (left, top, w, h) for an outbuilding whose door sits at `door`
     on the south edge, the building extending north."""
-    w, h = MACHINES[kind].footprint
+    w, h = _build_wh(kind)
     dx, dy = door
     left = dx - w // 2
     top = dy - (h - 1)
@@ -286,8 +297,7 @@ def place_commission_at(state: GameState, dx: int, dy: int) -> bool:
     ready = (state.day + BUILD_DAYS) * DAY + C.DAY_START_MIN
     surf.machines[door] = Machine(kind="site", build_kind=kind, ready_at=ready)
     state.pending_build = ""
-    name = MACHINES[kind].name.lower()
-    state.log.add(f"Tomas sets to work. Your {name} will be ready in {BUILD_DAYS} mornings.",
+    state.log.add(f"Tomas sets to work. Your {_build_name(kind)} will be ready in {BUILD_DAYS} mornings.",
                   (200, 220, 160))
     return True
 
@@ -299,22 +309,26 @@ def place_commission(state: GameState) -> bool:
 
 
 def _raise_building(state: GameState, x: int, y: int, kind: str) -> None:
-    """Turn a finished site into a real coop/barn: walls, floor, a door, and the
-    housing anchor. Registered so the look tool names it."""
+    """Turn a finished site into a real building: walls, a door, and its
+    interior. A coop/barn gets a housing anchor (a Machine); a greenhouse gets
+    pre-tilled soil beds and no machine (crops there grow year-round — see
+    farming.in_greenhouse). Registered so the look tool names it."""
     surf = state.surface
     left, top, w, h = _footprint((x, y), kind)
+    interior = tile.TILLED if kind == "greenhouse" else tile.HOUSE_FLOOR
     for cx in range(left, left + w):
         for cy in range(top, top + h):
             if not surf.in_bounds(cx, cy):
                 continue
             edge = cx in (left, left + w - 1) or cy in (top, top + h - 1)
-            surf.tiles[cx, cy] = tile.HOUSE_WALL if edge else tile.HOUSE_FLOOR
+            surf.tiles[cx, cy] = tile.HOUSE_WALL if edge else interior
     surf.tiles[x, y] = tile.DOOR
     del surf.machines[(x, y)]
-    surf.machines[(x, y)] = Machine(kind=kind)
+    if kind != "greenhouse":                       # a greenhouse isn't a machine
+        surf.machines[(x, y)] = Machine(kind=kind)
     surf.buildings.append({"x": left, "y": top, "w": w, "h": h,
                            "kind": kind, "village": "", "owner": None})
-    state.log.add(f"Your {MACHINES[kind].name.lower()} is finished!", (200, 230, 170))
+    state.log.add(f"Your {_build_name(kind)} is finished!", (200, 230, 170))
 
 
 # --- roaming (called from turns.advance_time on the surface) ----------------

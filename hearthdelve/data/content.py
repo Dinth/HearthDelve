@@ -135,9 +135,25 @@ ASTER = Crop(
     desc="An autumn flower that re-blooms; bees adore it.",
 )
 
+# Winter crops — the only things that grow outdoors in the cold (and what the
+# village fields fall back to), so winter isn't a dead season on the farm.
+SNOW_TURNIP = Crop(
+    name="Snow Turnip", glyph="♠", color=(210, 220, 232), season="Winter",
+    days_to_mature=5, regrows=False, sell_price=90,
+    seed=items.SNOW_TURNIP_SEEDS, produce=items.SNOW_TURNIP,
+    desc="A hardy winter root, sweetened by the frost.",
+)
+WINTERBERRY = Crop(
+    name="Winterberry", glyph="♦", color=(120, 162, 214), season="Winter",
+    days_to_mature=8, regrows=True, sell_price=110, regrow_days=4,
+    category="fruit", seed=items.WINTERBERRY_SEEDS, produce=items.WINTERBERRY,
+    desc="A tart berry that keeps fruiting in the snow; makes a fine wine.",
+)
+
 CROPS: list[Crop] = [PARSNIP, POTATO, CAULIFLOWER, PUMPKIN,
                      TOMATO, STRAWBERRY, BLUEBERRY, GRAPE,
-                     TULIP, SUNFLOWER, ASTER]
+                     TULIP, SUNFLOWER, ASTER,
+                     SNOW_TURNIP, WINTERBERRY]
 SEED_TO_CROP: dict[Item, Crop] = {c.seed: c for c in CROPS}
 CROP_BY_NAME: dict[str, Crop] = {c.name: c for c in CROPS}
 
@@ -760,6 +776,7 @@ GENERAL_STOCK: list[tuple[Item, int]] = [
     (items.CHERRY_SAPLING, 600), (items.PEACH_SAPLING, 600),
     (items.APPLE_SAPLING, 700), (items.ORANGE_SAPLING, 700),
     (items.TULIP_SEEDS, 40), (items.SUNFLOWER_SEEDS, 50), (items.ASTER_SEEDS, 50),
+    (items.SNOW_TURNIP_SEEDS, 70), (items.WINTERBERRY_SEEDS, 90),
     (items.CHICK, 120), (items.CALF, 400),
 ]
 # Blacksmith also sells fuel/metal: (item, buy price)
@@ -816,6 +833,8 @@ CARPENTER_JOBS: list = [
      ((items.TIMBER_PLANK, 20), (items.STONE, 8))),
     ("Barn (for cattle)", "barn", 900,
      ((items.TIMBER_PLANK, 32), (items.STONE, 18), (items.COPPER_BAR, 2))),
+    ("Greenhouse (grow any crop, any season)", "greenhouse", 1200,
+     ((items.TIMBER_PLANK, 28), (items.STONE, 12), (items.COPPER_BAR, 3))),
 ]
 
 

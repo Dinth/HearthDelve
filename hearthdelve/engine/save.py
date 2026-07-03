@@ -31,7 +31,7 @@ SAVE_PATH = os.path.join(os.path.expanduser("~"), ".hearthdelve_save.json")
 
 # Housing the carpenter/player raises (not produced by worldgen), so it must be
 # persisted and re-registered on load — otherwise look-mode forgets the barn.
-_PLAYER_BUILT_KINDS = ("coop_small", "coop_big", "barn")
+_PLAYER_BUILT_KINDS = ("coop_small", "coop_big", "barn", "greenhouse")
 
 
 def exists(path: str = SAVE_PATH) -> bool:

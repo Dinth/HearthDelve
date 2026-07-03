@@ -49,12 +49,15 @@ GRAPE_SEEDS       = Item("Grape Seeds",       "_", "seed", "Fall fruit; re-fruit
 TULIP_SEEDS       = Item("Tulip Seeds",       "_", "seed", "Spring flowers; bloom again and again. Bees love them.")
 SUNFLOWER_SEEDS   = Item("Sunflower Seeds",   "_", "seed", "Tall summer blooms. Bees love them.")
 ASTER_SEEDS       = Item("Aster Seeds",       "_", "seed", "Autumn flowers. Bees love them.")
+SNOW_TURNIP_SEEDS = Item("Snow Turnip Seeds", "_", "seed", "Plant in winter; a hardy frost-sweet root.")
+WINTERBERRY_SEEDS = Item("Winterberry Seeds", "_", "seed", "Winter berry; re-fruits in the cold.")
 
 # --- Produce: vegetables ----------------------------------------------------
 PARSNIP     = Item("Parsnip",     "♠", "crop", "A pale, hardy root.",   value=35)
 POTATO      = Item("Potato",      "o", "crop", "An earthy staple.",     value=80)
 CAULIFLOWER = Item("Cauliflower", "%", "crop", "A big, prized head.",   value=175)
 PUMPKIN     = Item("Pumpkin",     "O", "crop", "A heavy autumn gourd.", value=320)
+SNOW_TURNIP = Item("Snow Turnip", "♠", "crop", "A frost-sweetened winter root.", value=90)
 
 # --- Flowers (grown for beauty, gifts, and to feed the bees) ----------------
 TULIP       = Item("Tulip",       "*", "crop", "A cheerful spring bloom.",  value=40)
@@ -66,6 +69,7 @@ TOMATO      = Item("Tomato",      "♥", "crop", "Plump and red.",        value=
 STRAWBERRY  = Item("Strawberry",  "♦", "crop", "Sweet spring berry.",   value=120)
 BLUEBERRY   = Item("Blueberry",   "♦", "crop", "Summer berry cluster.", value=80)
 GRAPE       = Item("Grape",       "♦", "crop", "Fall vine fruit; prized for wine.", value=80)
+WINTERBERRY = Item("Winterberry", "♦", "crop", "A tart berry that ripens in the snow.", value=110)
 RASPBERRY   = Item("Raspberry",   "♦", "crop", "Wild berry from shrubs.",  value=50)
 GOOSEBERRY  = Item("Gooseberry",  "♦", "crop", "Tart berry from shrubs.",  value=55)
 CURRANT     = Item("Currant",     "♦", "crop", "Jewel-like shrub berry.",  value=65)

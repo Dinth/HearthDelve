@@ -610,6 +610,8 @@ def _building_label(state: GameState, b: dict) -> str:
         return "your coop"
     if kind == "barn":
         return "your barn"
+    if kind == "greenhouse":
+        return "your greenhouse"
     return "a farmhouse" if kind == "farmhouse" else "a house"
 
 
@@ -1072,7 +1074,8 @@ def build_codex_pages(state: GameState):
     craftp.append(("", C.WHITE))
     craftp.append(("Animals  (buy chicks/calves at the general store)", _HDR))
     craftp.append(("  Build a little coop yourself, or have Tomas the carpenter", C.DIM))
-    craftp.append(("  raise a roomy coop or barn (order it, then press p to site it).", C.DIM))
+    craftp.append(("  raise a roomy coop, barn, or greenhouse (order it, press p to site it).", C.DIM))
+    craftp.append(("  A greenhouse grows any crop year-round — winter farming!", C.DIM))
     craftp.append(("  Settle young animals with g; bump them to pet or collect.", C.DIM))
     craftp.append(("  Pet daily to keep them happy — happier beasts give finer", C.DIM))
     craftp.append(("  eggs & milk. Churn milk into cheese.", C.DIM))
