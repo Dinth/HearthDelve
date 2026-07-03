@@ -149,10 +149,20 @@ def interact_building(state: GameState, m: Machine, x: int, y: int) -> bool:
                       (200, 220, 160))
         return True
 
-    # no young animal in hand — just report the flock
+    # straw in hand — fork it into the building's trough for the animals to eat
+    straw = p.inventory.count(items.STRAW)
+    if straw > 0:
+        p.inventory.remove(items.STRAW, straw)
+        m.feed += straw
+        state.log.add(f"You fork {straw} straw into the {mdef.name.lower()}'s trough "
+                      f"({m.feed} in store).", (200, 220, 160))
+        return True
+
+    # nothing in hand — report the flock and the trough
     grown = sum(1 for a in flock if _is_adult(a))
-    state.log.add(f"{mdef.name}: {len(flock)}/{mdef.capacity} "
-                  f"({grown} grown). Bring a {spec.young_name} to add one.", (200, 200, 210))
+    state.log.add(f"{mdef.name}: {len(flock)}/{mdef.capacity} ({grown} grown), "
+                  f"{m.feed} straw in the trough. Bring a {spec.young_name} to add one.",
+                  (200, 200, 210))
     return True
 
 
@@ -215,11 +225,12 @@ def _pasture_near(state: GameState, home) -> bool:
 def _feed_animal(state: GameState, a: Animal, season: str) -> bool:
     """Feed one animal for the day. It grazes for free when there's pasture in a
     growing season; otherwise (winter, or a paved-in yard) it eats a straw from
-    your stock. Returns False if it went unfed."""
+    its building's trough (fork straw in with 'g'). Returns False if unfed."""
     if season != "Winter" and _pasture_near(state, a.home):
         return True
-    if state.player.inventory.count(items.STRAW) > 0:
-        state.player.inventory.remove(items.STRAW, 1)
+    m = state.surface.machines.get(a.home)
+    if m is not None and m.feed > 0:
+        m.feed -= 1
         return True
     return False
 
@@ -248,7 +259,7 @@ def new_day(state: GameState) -> None:
                 state.log.add(f"{a.name} the {spec.young_name} has grown into a {spec.grown_name}.",
                               (200, 220, 160))
     if hungry:
-        state.log.add(f"{hungry} of your animals went hungry — cut & dry grass for straw!",
+        state.log.add(f"{hungry} of your animals went hungry — fork straw into the trough (g)!",
                       (228, 150, 110))
 
 
@@ -393,12 +404,27 @@ def _wander_home(state: GameState, a: Animal, spec: Species) -> None:
             return
 
 
+def _shelter(state: GameState, a: Animal) -> None:
+    """Head back to the coop/barn and huddle by it (used in a storm)."""
+    hx, hy = a.home
+    if max(abs(a.x - hx), abs(a.y - hy)) <= 1:
+        return                                  # sheltering at the door
+    sx, sy = _sign(hx - a.x), _sign(hy - a.y)
+    for ax, ay in ((sx, sy), (sx, 0), (0, sy)):
+        if (ax or ay) and _can_stand(state, a.x + ax, a.y + ay):
+            a.x += ax
+            a.y += ay
+            return
+
+
 def act(state: GameState) -> None:
-    """Amble every animal near the player. No-op underground."""
+    """Amble every animal near the player. No-op underground. In a storm they
+    make for home and shelter instead of wandering."""
     w = state.world
     if w.is_dungeon or not w.animals:
         return
     p = state.player
+    storm = state.weather == "Storm"
     for a in w.animals:
         if max(abs(a.x - p.x), abs(a.y - p.y)) > 28:   # dormant off-screen
             a.energy = 0
@@ -407,7 +433,10 @@ def act(state: GameState) -> None:
         a.energy += spec.speed
         while a.energy >= 2:
             a.energy -= 2
-            _wander_home(state, a, spec)
+            if storm:
+                _shelter(state, a)
+            else:
+                _wander_home(state, a, spec)
 
 
 C_DIM = (150, 150, 150)

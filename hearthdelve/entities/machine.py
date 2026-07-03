@@ -18,6 +18,7 @@ class Machine:
     has_queen: bool = False              # beehive: a colony is established
     out_quality: int = 0                 # quality (0-5 stars) of the pending output
     build_kind: str = ""                 # construction site: the machine kind it becomes
+    feed: int = 0                        # coop/barn: straw stocked in the trough
 
     def status(self, now: int) -> str:
         if self.loaded_output is None:

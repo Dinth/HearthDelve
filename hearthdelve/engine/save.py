@@ -101,7 +101,7 @@ def save(state: GameState, path: str = SAVE_PATH) -> None:
         "berry_regrow": {f"{x},{y}": [bt, ready]
                          for (x, y), (bt, ready) in surf.berry_regrow.items()},
         "machines": {f"{x},{y}": [m.kind, m.loaded_output.name if m.loaded_output else None,
-                                   m.ready_at, m.has_queen, m.out_quality, m.build_kind]
+                                   m.ready_at, m.has_queen, m.out_quality, m.build_kind, m.feed]
                      for (x, y), m in surf.machines.items()},
         "animals": [[a.kind, a.name, a.x, a.y, list(a.home),
                      a.happiness, a.age_days, a.produce_ready, a.petted_today]
@@ -172,6 +172,8 @@ def load(path: str = SAVE_PATH) -> GameState:
             m.out_quality = rec[4]
         if len(rec) > 5:
             m.build_kind = rec[5]
+        if len(rec) > 6:
+            m.feed = rec[6]
         world.machines[(x, y)] = m
 
     from ..entities.animal import Animal

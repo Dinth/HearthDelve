@@ -729,6 +729,11 @@ def describe(state: GameState, x: int, y: int) -> str:
             if state.abs_minutes < m.ready_at:
                 return "a beehive, humming — the colony is filling the combs."
             return "a beehive — honey ready to harvest! (g)"
+        if m.kind in ("coop_small", "coop_big", "barn"):
+            from ..game.husbandry import _flock
+            n = len(_flock(state, (x, y)))
+            return (f"your {mdef.name.lower()} — {n}/{mdef.capacity} animals, {m.feed} straw in "
+                    "the trough. (g: settle a young one, or fork in straw)")
         st = m.status(state.abs_minutes)
         if st == "done":
             return f"{mdef.name} — {m.loaded_output.name} is ready! (g to collect)"
@@ -1080,8 +1085,9 @@ def build_codex_pages(state: GameState):
     craftp.append(("  Pet daily to keep them happy — happier beasts give finer", C.DIM))
     craftp.append(("  eggs & milk. Churn milk into cheese.", C.DIM))
     craftp.append(("  They graze free on grass in the growing seasons; in winter", C.DIM))
-    craftp.append(("  (or a paved-in yard) they need straw — scythe the tall grass", C.DIM))
-    craftp.append(("  that grows near home (machete) and dry it on a fair day.", C.DIM))
+    craftp.append(("  (or a paved-in yard) they eat straw — scythe tall grass", C.DIM))
+    craftp.append(("  (machete), dry it on a fair day, then fork it into the coop/", C.DIM))
+    craftp.append(("  barn trough (g). They shelter by the coop in a storm.", C.DIM))
     craftp.append(("", C.WHITE))
     craftp.append(("Gather wood (axe), stone & ore+coal (pickaxe).", C.DIM))
     craftp.append(("Value ladder: raw crop < jam < wine.", C.DIM))
