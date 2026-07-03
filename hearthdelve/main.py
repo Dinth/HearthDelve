@@ -567,7 +567,9 @@ LONG_ACTION_SECONDS = 120        # tasks at/above this animate over frames (chop
 
 
 _NOTABLE_TILE = {"stairs": "a stairway down", "stairs_up": "a stairway up",
-                 "bin": "the shipping bin", "shrub_berry": "a berry shrub"}
+                 "bin": "the shipping bin"}
+# (berry shrubs used to stop a run here, but they're common and renewable now —
+#  halting at every bush beside the road was just noise; forage them with g.)
 
 
 def _notable_nearby(state: GameState) -> str:
