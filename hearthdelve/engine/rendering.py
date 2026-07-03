@@ -1222,37 +1222,73 @@ def inv_sort_key(item, quality: int):
     return (rank, cat, item.name, quality)
 
 
+# ADOM-flavoured palette for the list screens.
+_LETTER_FG = (224, 186, 108)      # item/slot selector letters
+_SECTION_FG = (208, 146, 86)      # category / slot names
+_BRACKET_FG = (140, 140, 152)     # right-hand [qty]/[tier] column
+_CAP_FG = (150, 200, 150)         # the capacity/summary line
+_FOOT_FG = (232, 192, 112)        # footer key hints
+_INV_LETTERS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+
+def inv_letter(i: int) -> str:
+    return _INV_LETTERS[i] if i < len(_INV_LETTERS) else " "
+
+
 def render_inventory(con: tcod.console.Console, state: GameState, sel: int = 0) -> None:
     from ..game import skills
     slots = state.player.inventory.slots
-    w, h = 52, min(C.SCREEN_H - 4, max(8, len(slots) + 5))
-    body = h - 5
-    x, y = _modal(con, w, h, "Inventory")
+
+    # Build the display list ADOM-style: a category header (with the group's
+    # glyph in quotes) before each run of items, then the items themselves.
+    rows: list = []                                  # ("head", cat, glyph) | ("item", slot_index)
+    prev = None
+    for i, (it, _q, _ql) in enumerate(slots):
+        cat = _inv_category(it)
+        if cat != prev:
+            rows.append(("head", cat, it.glyph))
+            prev = cat
+        rows.append(("item", i))
+
+    w, h = 62, min(C.SCREEN_H - 2, max(9, len(rows) + 5))
+    body = h - 4
+    x, y = _modal(con, w, h, "PACK")
+    total = sum(q for _it, q, _ql in slots)
+    con.print(x + 2, y + 1, f"Carrying {total} item(s)", fg=_CAP_FG)
+    gold = f"Gold: {state.player.gold}g"
+    con.print(x + w - 2 - len(gold), y + 1, gold, fg=C.GOLD_COLOR)
+
     if not slots:
-        con.print(x + 2, y + 2, "(empty — grow and forage to fill it)", fg=C.DIM)
+        con.print(x + 2, y + 3, "(empty — grow and forage to fill it)", fg=C.DIM)
     else:
         sel = max(0, min(sel, len(slots) - 1))
-        start, end = _window(sel, len(slots), body)
-        prev_cat = _inv_category(slots[start - 1][0]) if start > 0 else None
-        for row, (item, qty, ql) in enumerate(slots[start:end]):
-            i = start + row
-            cat = _inv_category(item)
-            bg = (54, 50, 36) if i == sel else (20, 22, 32)
-            if i == sel:
-                con.draw_rect(x + 1, y + 2 + row, w - 2, 1, ch=ord(" "), bg=bg)
-            # section label only when the category changes (grouped feel)
-            label = f"{cat}:" if cat != prev_cat else ""
-            prev_cat = cat
-            con.print(x + 2, y + 2 + row, label[:16], fg=_HDR, bg=bg)
+        sel_row = next((r for r, rw in enumerate(rows) if rw[0] == "item" and rw[1] == sel), 0)
+        start, end = _window(sel_row, len(rows), body)
+        for r in range(start, end):
+            yy = y + 3 + (r - start)
+            rw = rows[r]
+            if rw[0] == "head":
+                con.print(x + 2, yy, f"{rw[1]}  ('{rw[2]}')", fg=_SECTION_FG)
+                continue
+            i = rw[1]
+            it, qty, ql = slots[i]
+            picked = (i == sel)
+            bg = (54, 50, 36) if picked else (20, 22, 32)
+            if picked:
+                con.draw_rect(x + 1, yy, w - 2, 1, ch=ord(" "), bg=bg)
+            con.print(x + 3, yy, f"{inv_letter(i)} -", fg=_LETTER_FG, bg=bg)
             star = ("  " + skills.stars(ql)) if ql else ""
-            con.print(x + 18, y + 2 + row,
-                      ("▸ " if i == sel else "  ") + f"{qty:>3} {item.glyph} {item.name}{star}",
-                      fg=C.WHITE, bg=bg)
+            con.print(x + 8, yy, f"{it.glyph} {it.name}{star}", fg=C.WHITE, bg=bg)
+            qs = f"[x{qty}]"
+            con.print(x + w - 2 - len(qs), yy, qs, fg=_BRACKET_FG, bg=bg)
         if start > 0:
-            con.print(x + w - 4, y + 2, "▲", fg=_HDR)
-        if end < len(slots):
-            con.print(x + w - 4, y + h - 3, "▼", fg=_HDR)
-    con.print(x + 2, y + h - 2, f"Gold: {state.player.gold}g   ↑↓ · d drop · Esc", fg=C.GOLD_COLOR)
+            con.print(x + w - 3, y + 2, "↑", fg=_HDR)
+        if end < len(rows):
+            con.print(x + w - 3, y + h - 3, "↓", fg=_HDR)
+    con.print(x + 2, y + h - 2, "[a-z] pick  [⇧D] drop  [e] equipment  [Esc] close", fg=_FOOT_FG)
+
+
+_EQUIP_TOOLS = (items.HOE, items.WATERING_CAN, items.AXE, items.PICKAXE, items.MACHETE, items.FISHING_ROD)
 
 
 def render_equipment(con: tcod.console.Console, state: GameState) -> None:
@@ -1260,35 +1296,40 @@ def render_equipment(con: tcod.console.Console, state: GameState) -> None:
     from ..game import skills
     p = state.player
     tool = p.active_tool
-    w, h = 46, 17
-    x, y = _modal(con, w, h, "Equipment")
+    w, h = 58, len(_EQUIP_TOOLS) + 9
+    x, y = _modal(con, w, h, "PERSONAL EQUIPMENT")
+    con.print(x + 2, y + 1, f"Character level {p.level}", fg=_CAP_FG)
+    gold = f"Gold: {p.gold}g"
+    con.print(x + w - 2 - len(gold), y + 1, gold, fg=C.GOLD_COLOR)
 
-    # equipped slots (a small ADOM-style paperdoll)
+    # fixed slots (ADOM lists Right Hand / Rings / Boots …; ours is simpler)
     watk = content.WEAPON_STATS[p.weapon].atk if p.weapon in content.WEAPON_STATS else 0
     atk = C.BASE_ATK + watk + skills.combat_atk_bonus(state)
-    wielded = f"{p.weapon.name}  (ATK {atk})" if p.weapon else "- (bare hands)"
-    in_hand = p.display_name(tool) if tool else "- (nothing in hand)"
-    for i, (slot, val, col) in enumerate((
-            ("Wielded", wielded, C.WHITE),
-            ("In hand", in_hand, C.WHITE),
-            ("Accessory", "- (none yet)", C.DIM))):
-        con.print(x + 2, y + 2 + i, slot, fg=_HDR)
-        con.print(x + 13, y + 2 + i, val[:w - 15], fg=col)
-
-    # tools you carry and the tier each has been forged to
-    con.print(x + 2, y + 6, "Tools & upgrades", fg=_HDR)
-    row = 7
-    for t in items.TIERED_TOOLS:
-        tier = C.TOOL_TIERS[p.tool_tier.get(t, 0)]
-        mark = "▸ " if t is tool else "  "
-        con.print(x + 3, y + row, f"{mark}{t.name:<14} {tier}",
-                  fg=C.WHITE if t is tool else (200, 200, 210))
+    fixed = (("Wielded", f"{p.weapon.name}  (ATK {atk})" if p.weapon else "-"),
+             ("Accessory", "-"))
+    row = y + 3
+    for name, val in fixed:
+        con.print(x + 4, row, name, fg=_SECTION_FG)
+        con.print(x + 18, row, ": " + val, fg=C.WHITE if val != "-" else C.DIM)
         row += 1
-    mark = "▸ " if items.FISHING_ROD is tool else "  "
-    con.print(x + 3, y + row, f"{mark}{items.FISHING_ROD.name:<14} —",
-              fg=C.WHITE if items.FISHING_ROD is tool else (200, 200, 210))
 
-    con.print(x + 2, y + h - 2, "1-9 switch tool · i bags · e/Esc close", fg=C.DIM)
+    row += 1
+    con.print(x + 2, row, "In hand — press a letter to hold:", fg=_HDR)
+    row += 1
+    for j, t in enumerate(_EQUIP_TOOLS):
+        held = t is tool
+        tier = C.TOOL_TIERS[p.tool_tier[t]] if t in p.tool_tier else "—"
+        bg = (54, 50, 36) if held else (20, 22, 32)
+        if held:
+            con.draw_rect(x + 1, row, w - 2, 1, ch=ord(" "), bg=bg)
+        con.print(x + 3, row, f"{inv_letter(j)} -", fg=_LETTER_FG, bg=bg)
+        con.print(x + 8, row, f"{t.glyph} {t.name}", fg=C.WHITE if held else (200, 200, 210), bg=bg)
+        con.print(x + 30, row, tier, fg=_BRACKET_FG, bg=bg)
+        if held:
+            con.print(x + w - 11, row, "in hand", fg=_CAP_FG, bg=bg)
+        row += 1
+
+    con.print(x + 2, y + h - 2, "[a-f] hold tool  [i] pack  [Esc] close", fg=_FOOT_FG)
 
 
 def render_craft(con: tcod.console.Console, state: GameState, sel: int) -> None:

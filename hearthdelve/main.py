@@ -950,6 +950,22 @@ def main() -> None:
                     run_ctx, rest_left, busy_ctx = None, 0, None
                     continue
 
+                # ADOM-style list screens: a bare letter picks an item / tool
+                # directly. Handled here (before the normal command mapping) so
+                # even keys that would otherwise be commands act as selectors.
+                if isinstance(event, tcod.event.KeyDown) and mode in ("inventory", "equipment") \
+                        and not (event.mod & tcod.event.Modifier.SHIFT):
+                    s = int(event.sym)
+                    ch = chr(s) if ord("a") <= s <= ord("z") else ""
+                    if mode == "inventory" and ch and ch not in ("i", "e"):
+                        n = len(state.player.inventory.slots)
+                        if ord(ch) - ord("a") < n:
+                            inv_sel = ord(ch) - ord("a")
+                        continue
+                    if mode == "equipment" and ch in "abcdef":
+                        select_slot(state, "abcdef".index(ch))
+                        continue
+
                 action = game_input.event_to_action(event)
                 if action is None:
                     continue
