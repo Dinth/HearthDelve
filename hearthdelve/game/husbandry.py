@@ -28,7 +28,9 @@ DAY = 1440                      # in-game minutes in a day
 BUILD_DAYS = 2                  # mornings the carpenter takes to finish an outbuilding
 PET_BONUS = 12                  # happiness gained from a daily pet
 NEGLECT_DRIFT = 6               # happiness lost on a day with no attention (floor 20)
+HUNGER_DRIFT = 12               # happiness lost on a day with nothing to eat (floor 10)
 FARM_RADIUS = 50                # how far from the homestead an outbuilding may be raised
+PASTURE_RADIUS = 6              # a beast grazes if grass lies this close to its home
 
 
 @dataclass(frozen=True)
@@ -194,23 +196,60 @@ def _produce_quality(state: GameState, a: Animal) -> int:
     return max(0, min(5, base + bonus))
 
 
+# --- feeding ----------------------------------------------------------------
+_PASTURE = {tile.GRASS, tile.TALL_GRASS, tile.MEADOW, tile.FOG_GRASS, tile.MOOR}
+
+
+def _pasture_near(state: GameState, home) -> bool:
+    """Whether open grass lies close enough to `home` for a beast to graze."""
+    surf = state.surface
+    hx, hy = home
+    r = PASTURE_RADIUS
+    for xx in range(hx - r, hx + r + 1):
+        for yy in range(hy - r, hy + r + 1):
+            if surf.in_bounds(xx, yy) and surf.tiles[xx, yy] in _PASTURE:
+                return True
+    return False
+
+
+def _feed_animal(state: GameState, a: Animal, season: str) -> bool:
+    """Feed one animal for the day. It grazes for free when there's pasture in a
+    growing season; otherwise (winter, or a paved-in yard) it eats a straw from
+    your stock. Returns False if it went unfed."""
+    if season != "Winter" and _pasture_near(state, a.home):
+        return True
+    if state.player.inventory.count(items.STRAW) > 0:
+        state.player.inventory.remove(items.STRAW, 1)
+        return True
+    return False
+
+
 # --- daily cycle (called from farming.new_day) ------------------------------
 def new_day(state: GameState) -> None:
-    """Finish any construction, then age and tend every animal for the morning."""
+    """Finish any construction, then age, feed and tend every animal for the morning."""
     _finish_construction(state)
     surf = state.surface
+    season = state.season
+    hungry = 0
     for a in surf.animals:
         was_adult = _is_adult(a)
         a.age_days += 1
         if not a.petted_today:
             a.happiness = max(20, a.happiness - NEGLECT_DRIFT)
         a.petted_today = False
+        fed = _feed_animal(state, a, season)
+        if not fed:
+            a.happiness = max(10, a.happiness - HUNGER_DRIFT)
+            hungry += 1
         if _is_adult(a):
-            a.produce_ready = True
-            if not was_adult:
+            a.produce_ready = fed          # a hungry beast gives nothing that day
+            if fed and not was_adult:
                 spec = SPECIES[a.kind]
                 state.log.add(f"{a.name} the {spec.young_name} has grown into a {spec.grown_name}.",
                               (200, 220, 160))
+    if hungry:
+        state.log.add(f"{hungry} of your animals went hungry — cut & dry grass for straw!",
+                      (228, 150, 110))
 
 
 def _finish_construction(state: GameState) -> None:

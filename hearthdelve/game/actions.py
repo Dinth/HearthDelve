@@ -41,6 +41,8 @@ def resolve_tool(tool: Item, t: TileType) -> tuple[bool, int | None, str]:
         return False, None, "Your pickaxe needs rock or ore to swing at."
 
     if tool is items.MACHETE:
+        if t.name == "tall_grass":
+            return True, tile.GRASS, "You scythe the tall grass."
         if t.kind == "foliage":
             return True, tile.GRASS, "You hack through the foliage."
         if t.kind == "shrub":

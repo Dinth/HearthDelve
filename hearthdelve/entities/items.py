@@ -93,6 +93,8 @@ SEED_POUCH  = Item("Seed Pouch", "_", "pouch", "Your seeds & saplings. Press its
 WOOD        = Item("Wood",        "=", "material", "Logged from trees.",        value=5)
 TIMBER_PLANK = Item("Timber Plank", "≡", "material", "Sawn from logs at a sawmill; a sturdier building material.", value=15)
 FIBER       = Item("Fiber",       ";", "material", "Plant fibre from foliage.", value=3)
+CUT_GRASS   = Item("Cut Grass",   "\"","material", "Freshly scythed grass — dries into straw on a fair day.", value=2)
+STRAW       = Item("Straw",       "~", "material", "Dried grass; winter feed for your animals.", value=5)
 STONE       = Item("Stone",       "o", "material", "Broken from rock.",         value=4)
 COAL        = Item("Coal",        "♦", "material", "Fuel for the furnace.",     value=12)
 # Dungeon reagents: foraged fungus and creature drops (cook/sell/gift).

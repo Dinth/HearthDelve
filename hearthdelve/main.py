@@ -369,6 +369,11 @@ def _gather_drop(state: GameState, item, target) -> None:
         state.bump("ore_mined")
         skills.gain(state, "Mining", 6)
         state.log.add("  (+2 Stone)", C.DIM)
+    elif item is items.MACHETE and target.name == "tall_grass":
+        n = random.randint(1, 2)
+        inv.add(items.CUT_GRASS, n)
+        skills.gain(state, "Foraging", 4)
+        state.log.add(f"  (+{n} Cut Grass — dry it into straw)", C.DIM)
     elif item is items.MACHETE and target.kind in ("foliage", "shrub"):
         skills.gain(state, "Foraging", 6)
         if random.random() < 0.55:

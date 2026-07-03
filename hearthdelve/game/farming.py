@@ -12,6 +12,7 @@ import numpy as np
 from ..data import content
 from ..data.content import SEED_TO_CROP
 from ..engine import constants as C
+from ..entities import items
 from ..entities.items import Item
 from ..world import tile
 from ..world.crops import CropPlot, Tree, advance_growth, advance_tree
@@ -181,10 +182,52 @@ def can_sleep(state: GameState) -> bool:
     return abs(state.player.x - bed[0]) <= 1 and abs(state.player.y - bed[1]) <= 1
 
 
+# Hay meadow: plain grass around the homestead grows tall over the growing
+# seasons (you scythe it for cut grass, then dry it into straw).
+_HAY_RADIUS = 45
+_HAY_CAP = 240                  # don't let the whole meadow go to tall grass
+
+
+def _grow_tall_grass(state: GameState, season: str) -> None:
+    if season == "Winter":
+        return                  # grass lies dormant under the frost
+    surf = state.surface
+    cx, cy = surf.spawn
+    x0, x1 = max(1, cx - _HAY_RADIUS), min(surf.width - 1, cx + _HAY_RADIUS)
+    y0, y1 = max(1, cy - _HAY_RADIUS), min(surf.height - 1, cy + _HAY_RADIUS)
+    if int((surf.tiles[x0:x1, y0:y1] == tile.TALL_GRASS).sum()) >= _HAY_CAP:
+        return
+    rng = random.Random(state.seed * 3313 + state.day)
+    want = rng.randint(4, 8) * (2 if season == "Fall" else 1)   # autumn's flush
+    tries = 0
+    while want > 0 and tries < want * 6:
+        tries += 1
+        gx, gy = rng.randint(x0, x1 - 1), rng.randint(y0, y1 - 1)
+        if surf.tiles[gx, gy] == tile.GRASS:
+            surf.tiles[gx, gy] = tile.TALL_GRASS
+            want -= 1
+
+
+def _dry_cut_grass(state: GameState) -> None:
+    """A fair day turns cut grass into straw; rain and snow ruin the drying."""
+    if state.weather not in ("Clear", "Fog"):
+        return
+    inv = state.player.inventory
+    n = inv.count(items.CUT_GRASS)
+    if n:
+        inv.remove(items.CUT_GRASS, n)
+        inv.add(items.STRAW, n)
+        state.log.add(f"Your cut grass dried into {n} straw.", (220, 210, 150))
+
+
 def new_day(state: GameState, rested: bool = True) -> None:
     """Advance to the next morning: sell shipment, grow crops, roll weather."""
     from . import crafting
     crafting.sell_shipment(state)
+
+    # A fair day (that's now ending) dries any cut grass into straw; snow/rain
+    # ruins the drying, so hay is a fine-weather job — stock up before winter.
+    _dry_cut_grass(state)
 
     old_season = state.season
     state.day += 1
@@ -217,6 +260,10 @@ def new_day(state: GameState, rested: bool = True) -> None:
         advance_growth(plot, grow_season)
     for tree in state.world.trees.values():
         advance_tree(tree, season)
+
+    # The meadow around the homestead grows tall through the growing seasons
+    # (twice as fast in autumn) — scythe it for hay.
+    _grow_tall_grass(state, season)
 
     # Village farmhouse fields tend themselves: empty/out-of-season rows are
     # replanted with a fresh in-season crop, so they recover after a raid and
