@@ -39,7 +39,7 @@ TOOL_STATS: dict[Item, ToolStat] = {
 class CombatProfile:
     """How a held item fights (ADOM-style). Tools double as weak weapons; a
     dedicated weapon hits harder and truer. `category` drives weapon mastery."""
-    category: str          # mastery bucket: blade | axe | pick | blunt | unarmed
+    category: str          # mastery bucket: blade | axe | blunt | polearm | unarmed
     to_hit: int            # flat bonus to the to-hit roll
     dmg: tuple             # (min, max) damage rolled before bonuses
     dv: int = 0            # Defensive-Value change while wielding (heavy < 0)
