@@ -1,15 +1,18 @@
 """The shared turn scheduler.
 
-In M1 this only advances the clock; later milestones hook crop growth,
-machine completion, and monster turns through ``advance_time``.
+Advances the world clock and steps the actors that live on the passing of time
+(monsters underground; residents, wildlife, and farm animals on the surface).
+
+Note: the clock and every caller work in SECONDS. Machine timers elsewhere use
+in-game MINUTES via ``GameState.abs_minutes`` — don't confuse the two units.
 """
 from __future__ import annotations
 
 from .state import GameState
 
 
-def advance_time(state: GameState, minutes: int) -> None:
-    state.clock += minutes
+def advance_time(state: GameState, seconds: int) -> None:
+    state.clock += seconds
     if state.world.is_dungeon:
         # in the dark, time passing is a combat turn for the monsters
         from .combat import monsters_act

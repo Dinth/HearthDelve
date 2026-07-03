@@ -24,6 +24,33 @@ def mob_at(state: GameState, x: int, y: int):
     return None
 
 
+# --- kills --------------------------------------------------------------------
+def _on_kill(state: GameState, m, award_combat: bool = True) -> None:
+    """Resolve a slain mob: removal, karma/XP, kill-count, and drops.
+
+    Shared by the sword (``player_attack``) and the bomb (``throw_bomb``) so
+    both obey the same rules. Peaceful surface wildlife costs karma and yields
+    no XP or loot; a dungeon monster gains Combat XP, bumps the slain count and
+    rolls its reagent drops.
+    """
+    from . import skills
+    p = state.player
+    state.world.monsters = [x for x in state.world.monsters if x is not m]
+    if getattr(m, "kind", "monster") == "wildlife":
+        if not getattr(m, "hostile", False):
+            from . import karma
+            karma.adjust(state, -2)  # slaying a peaceful creature is unkind
+        state.log.add(f"You put down the {m.name.lower()}.", (200, 180, 150))
+    else:
+        state.bump("monsters_slain")
+        if award_combat:
+            skills.gain(state, "Combat", 20)
+        state.log.add(f"You strike down the {m.name.lower()}!", (200, 220, 160))
+        for drop in content.monster_drops(m.name, random):
+            p.inventory.add(drop, 1)
+            state.log.add(f"  It drops {drop.name.lower()}.", C.DIM)
+
+
 # --- player attacks ----------------------------------------------------------
 def player_attack(state: GameState, m) -> None:
     from . import skills
@@ -34,19 +61,7 @@ def player_attack(state: GameState, m) -> None:
     p.energy = max(0, p.energy - C.ATTACK_COST[0])
     wild = getattr(m, "kind", "monster") == "wildlife"
     if m.hp <= 0:
-        state.world.monsters = [x for x in state.world.monsters if x is not m]
-        if wild:
-            if not getattr(m, "hostile", False):
-                from . import karma
-                karma.adjust(state, -2)  # slaying a peaceful creature is unkind
-            state.log.add(f"You put down the {m.name.lower()}.", (200, 180, 150))
-        else:
-            state.bump("monsters_slain")
-            skills.gain(state, "Combat", 20)
-            state.log.add(f"You strike down the {m.name.lower()}!", (200, 220, 160))
-            for drop in content.monster_drops(m.name, random):
-                p.inventory.add(drop, 1)
-                state.log.add(f"  It drops {drop.name.lower()}.", C.DIM)
+        _on_kill(state, m)
     elif wild:
         if m.behavior == "defensive":
             m.hostile = True
@@ -147,22 +162,22 @@ def throw_bomb(state: GameState) -> None:
     p.energy = max(0, p.energy - C.BOMB_COST[0])
     state.log.add("You hurl a bomb — BOOM!", (236, 180, 90))
 
+    hit = []
     for x in range(bx - 1, bx + 2):
         for y in range(by - 1, by + 2):
             if not state.world.in_bounds(x, y):
                 continue
             m = mob_at(state, x, y)
             if m:
+                m.awake = True                  # the blast rouses survivors
                 m.hp -= BOMB_DAMAGE
+                hit.append(m)
             t = state.world.tile_at(x, y)
             if t.name in _BREAKABLE:
                 _shatter(state, x, y, t)
-    killed = sum(1 for m in state.world.monsters if not m.alive)
-    if killed:
-        from . import skills
-        state.bump("monsters_slain", killed)
-        skills.gain(state, "Combat", 12 * killed)
-    state.world.monsters = [m for m in state.world.monsters if m.alive]
+    for m in hit:                               # snapshot: _on_kill mutates the list
+        if not m.alive:
+            _on_kill(state, m)
 
     from . import turns
     turns.advance_time(state, C.BOMB_COST[1])

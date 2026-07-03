@@ -63,9 +63,16 @@ def generate(seed: int, kind: str, depth: int) -> GameMap:
             _tunnel(tiles, rooms[-1].center, room.center, rng)
         rooms.append(room)
 
-    # stairs: up in the first room, down in the last
-    up = rooms[0].center
-    down = rooms[-1].center
+    # stairs: up in the first room, down in the last. If collisions left us with
+    # a single room, up and down would coincide (down would clobber up), so put
+    # them on two distinct interior tiles (opposite corners of the inner area).
+    if len(rooms) == 1:
+        r = rooms[0]
+        up = (r.x + 1, r.y + 1)
+        down = (r.x + r.w - 2, r.y + r.h - 2)
+    else:
+        up = rooms[0].center
+        down = rooms[-1].center
     tiles[up] = tile.STAIRS_UP
     tiles[down] = tile.DUNGEON_DOWN
 
@@ -106,17 +113,42 @@ def generate(seed: int, kind: str, depth: int) -> GameMap:
             break
         tiles[rng.choice(cands)] = tile.GEM_VEIN
 
-    # Underground lakes: a small pool in a couple of rooms (never the entry).
-    for room in rng.sample(rooms[1:], min(2, max(0, len(rooms) - 1))):
+    # Underground lakes: a small pool in a couple of rooms. Never the entry
+    # (rooms[0]) nor the down-stairs room (rooms[-1]) — a pool there could drown
+    # the stairs tile itself. A lake can still stray onto a corridor and cut off
+    # later rooms, so we snapshot each lake's footprint, carve it, and revert if
+    # it disconnected anything (stairs or a room centre).
+    def _connected(reachable_from):
+        """Flood-fill over walkable tiles (per the tile registry) from a start,
+        returning the set of reached (x, y). tiles is indexed [x, y], (w, h)."""
+        seen = {reachable_from}
+        stack = [reachable_from]
+        while stack:
+            sx, sy = stack.pop()
+            for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                nx, ny = sx + dx, sy + dy
+                if not (0 <= nx < w and 0 <= ny < h) or (nx, ny) in seen:
+                    continue
+                if tile.TILES[tiles[nx, ny]].walkable:
+                    seen.add((nx, ny))
+                    stack.append((nx, ny))
+        return seen
+
+    lake_rooms = rooms[1:-1] if len(rooms) > 2 else []
+    for room in rng.sample(lake_rooms, min(2, len(lake_rooms))):
         lw, lh = rng.randint(2, max(2, room.w - 3)), rng.randint(2, max(2, room.h - 3))
         lx = rng.randint(room.x + 1, room.x + room.w - lw - 1)
         ly = rng.randint(room.y + 1, room.y + room.h - lh - 1)
-        for x in range(lx, lx + lw):
-            for y in range(ly, ly + lh):
-                if tiles[x, y] == tile.DUNGEON_FLOOR:
-                    tiles[x, y] = tile.WATER
-        if tiles[room.center] == tile.WATER:       # keep the corridor junction clear
-            tiles[room.center] = tile.DUNGEON_FLOOR
+        pool = [(x, y) for x in range(lx, lx + lw) for y in range(ly, ly + lh)
+                if tiles[x, y] == tile.DUNGEON_FLOOR]
+        snapshot = [(x, y, tiles[x, y]) for x, y in pool]      # revert-on-cut
+        for x, y in pool:
+            tiles[x, y] = tile.WATER
+        reachable = _connected(up)
+        need = {down} | {r.center for r in rooms}
+        if not need.issubset(reachable):
+            for x, y, old in snapshot:                          # lake cut us off — revert
+                tiles[x, y] = old
 
     # --- texture: rubble, cave fungus, hidden traps, treasure chests --------
     entry = rooms[0]
@@ -167,8 +199,10 @@ def generate(seed: int, kind: str, depth: int) -> GameMap:
     gm.rooms = rooms
 
     # A few gentle monsters, never in the entry room. More on deeper floors.
+    # Track occupied tiles (seeded with the stairs) so no two mobs share a spot.
     from ..data import content
     from ..entities.monster import Mob
+    occupied = {up, down}
     pool = [m for m in content.MONSTERS if m.min_depth <= depth]
     n_mon = rng.randint(2, 3 + depth)
     for _ in range(n_mon):
@@ -177,8 +211,9 @@ def generate(seed: int, kind: str, depth: int) -> GameMap:
         room = rng.choice(rooms[1:])
         mx = rng.randint(room.x + 1, room.x + room.w - 2)
         my = rng.randint(room.y + 1, room.y + room.h - 2)
-        if tiles[mx, my] != tile.DUNGEON_FLOOR:
+        if tiles[mx, my] != tile.DUNGEON_FLOOR or (mx, my) in occupied:
             continue
+        occupied.add((mx, my))
         t = rng.choice(pool)
         gm.monsters.append(Mob(t.name, t.glyph, t.color, t.hp, t.hp, t.atk,
                                t.defense, t.speed, t.behavior, mx, my))
@@ -190,7 +225,8 @@ def generate(seed: int, kind: str, depth: int) -> GameMap:
         room = rooms[-1]
         bx = rng.randint(room.x + 1, room.x + room.w - 2)
         by = rng.randint(room.y + 1, room.y + room.h - 2)
-        if tiles[bx, by] == tile.DUNGEON_FLOOR:
+        if tiles[bx, by] == tile.DUNGEON_FLOOR and (bx, by) not in occupied:
+            occupied.add((bx, by))
             gm.monsters.append(Mob(b.name, b.glyph, b.color, b.hp, b.hp, b.atk,
                                    b.defense, b.speed, b.behavior, bx, by, boss=True))
 
@@ -217,7 +253,8 @@ def generate(seed: int, kind: str, depth: int) -> GameMap:
                 tiles[gx, gy] = tile.GOLD_PILE
             guards = pool or content.MONSTERS
             for mx, my in cells[-rng.randint(4, 6):]:          # and its guardians
-                if tiles[mx, my] == tile.DUNGEON_FLOOR:
+                if tiles[mx, my] == tile.DUNGEON_FLOOR and (mx, my) not in occupied:
+                    occupied.add((mx, my))
                     t = rng.choice(guards)
                     gm.monsters.append(Mob(t.name, t.glyph, t.color, t.hp, t.hp, t.atk,
                                            t.defense, t.speed, t.behavior, mx, my))
@@ -266,4 +303,42 @@ def generate(seed: int, kind: str, depth: int) -> GameMap:
                 spot = next((c for c in cells if tiles[c] == tile.GLOW_MOSS), None)
                 if spot:
                     tiles[spot] = tile.CHEST
+
+    # --- connectivity repair -------------------------------------------------
+    # The room/tunnel carve can leave a room stranded when ore/gem veins grow
+    # across a one-wide corridor's flanks and pinch it shut. Flood from the
+    # up-stairs over walkable tiles; for any target (down-stairs or a room
+    # centre) still unreachable, dig a fresh L-corridor from it to the nearest
+    # reachable floor. Repeat until everything is joined.
+    def _reachable():
+        seen = {up}
+        stack = [up]
+        while stack:
+            sx, sy = stack.pop()
+            for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                nx, ny = sx + dx, sy + dy
+                if not (0 <= nx < w and 0 <= ny < h) or (nx, ny) in seen:
+                    continue
+                if tile.TILES[tiles[nx, ny]].walkable:
+                    seen.add((nx, ny))
+                    stack.append((nx, ny))
+        return seen
+
+    targets = [down] + [r.center for r in rooms]
+    for _ in range(len(targets) + 2):                 # each pass joins >=1 target
+        reach = _reachable()
+        stranded = [p for p in targets if p not in reach]
+        if not stranded:
+            break
+        tx, ty = min(stranded, key=lambda p: min(
+            (abs(p[0] - rx) + abs(p[1] - ry) for rx, ry in reach)))
+        gx, gy = min(reach, key=lambda c: abs(c[0] - tx) + abs(c[1] - ty))
+        for x in range(min(tx, gx), max(tx, gx) + 1):  # horizontal leg
+            if tiles[x, ty] == tile.DUNGEON_WALL or not tile.TILES[tiles[x, ty]].walkable:
+                if (x, ty) not in (up, down):
+                    tiles[x, ty] = tile.DUNGEON_FLOOR
+        for y in range(min(ty, gy), max(ty, gy) + 1):  # vertical leg
+            if tiles[gx, y] == tile.DUNGEON_WALL or not tile.TILES[tiles[gx, y]].walkable:
+                if (gx, y) not in (up, down):
+                    tiles[gx, y] = tile.DUNGEON_FLOOR
     return gm

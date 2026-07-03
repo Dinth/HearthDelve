@@ -78,6 +78,38 @@ _MUSHROOM_ITEM = {
 }
 
 
+def _npc_at(state: GameState, x: int, y: int):
+    """A villager standing on (x, y), if any (surface only)."""
+    if state.world.is_dungeon:
+        return None
+    for n in state.world.npcs:
+        if (n.x, n.y) == (x, y):
+            return n
+    return None
+
+
+def _entity_at(state: GameState, x: int, y: int) -> bool:
+    """Whether a creature, farm animal, or villager occupies (x, y) — a run
+    should never barrel onto one."""
+    if combat.mob_at(state, x, y) is not None:
+        return True
+    if not state.world.is_dungeon:
+        from .game import husbandry
+        if husbandry.animal_at(state, x, y) is not None or _npc_at(state, x, y) is not None:
+            return True
+    return False
+
+
+def _scoop_gold(state: GameState) -> None:
+    """Pick up a gold pile the player is standing on (dungeon vaults)."""
+    p = state.player
+    if state.world.tile_at(p.x, p.y).kind == "gold":
+        amt = random.randint(20, 60) + state.world.depth * 10
+        p.gold += amt
+        state.world.tiles[p.x, p.y] = tile.DUNGEON_FLOOR
+        state.log.add(f"You scoop up {amt}g!", (244, 216, 110))
+
+
 def try_move(state: GameState, dx: int, dy: int) -> None:
     p = state.player
     p.facing = (dx, dy)
@@ -97,14 +129,15 @@ def try_move(state: GameState, dx: int, dy: int) -> None:
         combat.player_attack(state, m)
         turns.advance_time(state, C.ATTACK_COST[1])   # a combat turn
         return
+    # don't stand on top of a villager — nudge the player to talk/gift instead
+    n = _npc_at(state, nx, ny)
+    if n is not None:
+        state.log.add(f"You greet {n.name}. (t to talk, f to give a gift)", C.DIM)
+        return
     if state.world.walkable(nx, ny):
         p.x, p.y = nx, ny
-        if state.world.tile_at(nx, ny).kind == "gold":          # scoop up a gold pile
-            amt = random.randint(20, 60) + state.world.depth * 10
-            p.gold += amt
-            state.world.tiles[nx, ny] = tile.DUNGEON_FLOOR
-            state.log.add(f"You scoop up {amt}g!", (244, 216, 110))
-        on_road = state.world.tile_at(nx, ny).kind in ("road", "bridge")
+        _scoop_gold(state)                                      # scoop up a gold pile
+        on_road = _is_road(state, nx, ny)                       # roads/bridges/cobble: fast & effortless
         turns.advance_time(state, C.ROAD_MOVE_SECONDS if on_road else C.MOVE_SECONDS)
         # roads are effortless, and you don't tire underground
         if not on_road and not state.world.is_dungeon:
@@ -397,11 +430,6 @@ def collect_letter(state: GameState, letter) -> None:
         state.log.add("  Enclosed: " + ", ".join(got) + ".", (180, 230, 160))
 
 
-def edible_items(state: GameState):
-    """Cooked dishes in the pack, one entry per (item, quality)."""
-    return [(it, q, ql) for it, q, ql in state.player.inventory.slots if it.kind == "food"]
-
-
 def _eat(state: GameState, item, quality: int) -> None:
     from .game import skills
     p = state.player
@@ -409,11 +437,12 @@ def _eat(state: GameState, item, quality: int) -> None:
         return
     p.inventory.remove(item, 1, quality=quality)
     gain = round(item.energy * (1 + 0.12 * quality))     # tastier food goes further
+    heal = max(1, gain // 6)
     p.energy = min(p.max_energy, p.energy + gain)
-    p.hp = min(p.max_hp, p.hp + max(1, gain // 6))
+    p.hp = min(p.max_hp, p.hp + heal)
     state.bump("meals_eaten")
     star = (" " + skills.stars(quality)) if quality else ""
-    state.log.add(f"You eat the {item.name.lower()}{star}. (+{gain} stamina)", (180, 230, 160))
+    state.log.add(f"You eat the {item.name.lower()}{star}. (+{gain} stamina, +{heal} HP)", (180, 230, 160))
     turns.advance_time(state, C.USE_SECONDS)
 
 
@@ -498,6 +527,8 @@ def run_step(state: GameState, ctx: dict) -> bool:
             ndir = opts[0]                             # follow the bend
         else:
             return False                               # fork or dead end — stop
+        if _entity_at(state, p.x + ndir[0], p.y + ndir[1]):
+            return False                               # someone's in the way — stop
         p.x, p.y = p.x + ndir[0], p.y + ndir[1]
         ctx["d"] = ndir
         turns.advance_time(state, C.ROAD_MOVE_SECONDS)
@@ -513,12 +544,15 @@ def run_step(state: GameState, ctx: dict) -> bool:
     nx, ny = p.x + dx, p.y + dy
     if not state.world.walkable(nx, ny):
         return False                                   # wall ahead — stop here
+    if _entity_at(state, nx, ny):
+        return False                                   # a creature/person ahead — stop
     p.x, p.y = nx, ny
     turns.advance_time(state, C.MOVE_SECONDS)
     if not state.world.is_dungeon:
         p.energy = max(0, p.energy - C.WALK_STAMINA)
     if state.world.is_dungeon:
         delve.update_fov(state)
+        _scoop_gold(state)                             # grab gold we ran over
         if _dungeon_tile_fx(state):
             return False                               # a trap sprang — stop
     ctx["steps"] += 1
@@ -591,7 +625,11 @@ def load_or_new() -> GameState:
             state.log.add(f"{state.date_str()}, {state.weather.lower()}. (auto-saves each morning)", C.DIM)
             return state
         except Exception as e:  # noqa: BLE001 - corrupt/old save -> fresh start
-            print(f"Could not load save ({e}); starting a new game.")
+            # Never let the morning autosave silently clobber a save we couldn't
+            # read (e.g. a version mismatch): set the old one aside first.
+            bak = save.backup()
+            where = f" (kept a copy at {bak})" if bak else ""
+            print(f"Could not load save ({e}); starting a new game{where}.")
     return new_game()
 
 
@@ -718,8 +756,11 @@ def main() -> None:
                         state.log.add("A hidden door creaks open...", (250, 230, 140))
                         continue
 
-                # Any key interrupts an in-progress run or rest.
-                if isinstance(event, tcod.event.KeyDown) and (run_ctx is not None or rest_left > 0):
+                # A fresh key press interrupts an in-progress run or rest — but
+                # NOT OS key-repeat from still holding the direction that began
+                # the run, which would cancel it almost immediately.
+                if (isinstance(event, tcod.event.KeyDown) and not getattr(event, "repeat", False)
+                        and (run_ctx is not None or rest_left > 0)):
                     run_ctx, rest_left = None, 0
                     continue
 
@@ -733,6 +774,8 @@ def main() -> None:
                         awaiting_run = False
                         if cmd == "move":
                             run_ctx = start_run(state, action[1], action[2])
+                            if run_ctx is None:
+                                state.log.add("You can't run that way.", C.DIM)
                         elif cmd == "wait":
                             rest_left = REST_MAX_SECONDS
                         continue
@@ -794,10 +837,10 @@ def main() -> None:
                         mode = "craft"
                         craft_sel = 0
                     elif cmd == "eat":
-                        if edible_items(state):
+                        if crafting.edible_items(state):
                             mode, eat_sel = "eat", 0
                         else:
-                            state.log.add("You have no cooked food. Craft (c) a dish first.", C.DIM)
+                            state.log.add("You have nothing to eat. Cook (c) a dish or gather eggs/milk.", C.DIM)
                     elif cmd == "ship":
                         if near_bin(state):
                             mode = "ship"
@@ -814,11 +857,10 @@ def main() -> None:
                         npc = village.npc_near(state)
                         if npc is None:
                             state.log.add("There's no one here to talk to.", C.DIM)
-                        elif npc.shop in ("tavern", "carpenter"):
-                            dialogue_line = village.talk(state, npc)   # greeting + friendship
-                            mode, shop_sel = "shop", 0
                         elif npc.shop:
-                            npc.met = True
+                            # every shopkeeper still gets the daily greeting
+                            # (friendship, festival treats, heart gifts), then trades
+                            dialogue_line = village.talk(state, npc)
                             mode, shop_sel = "shop", 0
                         else:
                             dialogue_line = village.talk(state, npc)
@@ -889,7 +931,7 @@ def main() -> None:
                             mode = "play"
 
                 elif mode == "eat":
-                    foods = edible_items(state)
+                    foods = crafting.edible_items(state)
                     if cmd in ("cancel", "eat", "quit"):
                         mode = "play"
                     elif cmd == "move" and action[2] and foods:
@@ -899,7 +941,7 @@ def main() -> None:
                         it, _q, ql = foods[eat_sel]
                         _eat(state, it, ql)
                         check_faint(state)
-                        if not edible_items(state):
+                        if not crafting.edible_items(state):
                             mode = "play"
 
                 elif mode == "ship":
@@ -935,7 +977,8 @@ def main() -> None:
                     elif cmd == "move" and action[2] and gifts:
                         gift_sel = (gift_sel + action[2]) % len(gifts)
                     elif cmd == "confirm" and gifts:
-                        village.gift(state, npc, gifts[min(gift_sel, len(gifts) - 1)][0])
+                        git, _gq, gql = gifts[min(gift_sel, len(gifts) - 1)]
+                        village.gift(state, npc, git, gql)
                         mode = "play"
 
                 elif mode == "journal":
@@ -953,9 +996,9 @@ def main() -> None:
                 elif mode == "quitmenu":
                     if cmd == "cancel":
                         mode = "play"                    # Esc — keep playing
-                    elif cmd in ("sleep", "confirm"):    # S / Enter — save & quit
-                        running = False
-                    elif cmd == "quitgame":              # Q — quit WITHOUT saving
+                    elif cmd in ("sleep", "confirm", "quitgame"):  # S / Enter / Q — save & quit
+                        running = False                  # (Q is safe so a reflexive qq can't lose the day)
+                    elif cmd == "discard":               # Backspace — quit WITHOUT saving
                         save_on_exit = False
                         running = False
 

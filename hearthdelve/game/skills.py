@@ -29,11 +29,18 @@ def char_level(state: GameState) -> int:
 
 def gain(state: GameState, skill: str, xp: int) -> None:
     p = state.player
-    before = level_of(p.skills.get(skill, 0))
-    p.skills[skill] = p.skills.get(skill, 0) + xp
+    cap = MAX_LEVEL * XP_PER_LEVEL
+    cur = p.skills.get(skill, 0)
+    if cur >= cap:
+        return                       # skill maxed — no more XP, and no more
+                                     # character XP fed from it (keeps HP &
+                                     # produce quality from inflating forever)
+    before = level_of(cur)
+    applied = min(xp, cap - cur)     # never bank XP past the level-10 cap
+    p.skills[skill] = cur + applied
     if level_of(p.skills[skill]) > before:
         state.log.add(f"{skill} skill is now level {level_of(p.skills[skill])}!", (170, 210, 240))
-    gain_char_xp(state, xp)          # all activity feeds general experience
+    gain_char_xp(state, applied)     # all activity feeds general experience
 
 
 # --- general character level (raises max HP & stamina) -----------------------
@@ -84,7 +91,7 @@ def roll_quality(state: GameState, skill: str) -> int:
     """Quality of freshly produced goods: mostly the relevant skill, a little
     the overall character level, plus luck. Returns 0-5 stars."""
     lvl = skill_level(state, skill)                       # 0..10
-    clvl = state.player.level                             # character level (1..)
+    clvl = min(state.player.level, 10)                    # character level, capped
     score = lvl * 0.42 + clvl * 0.12 + random.uniform(-1.3, 1.3)
     return max(0, min(5, round(score - 0.8)))
 

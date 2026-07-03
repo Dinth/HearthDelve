@@ -945,4 +945,4 @@ QUESTS: list[Quest] = [
 # --- Convenience views for the encyclopedia ----------------------------------
 ALL_TOOLS = [items.HOE, items.WATERING_CAN, items.AXE, items.PICKAXE, items.MACHETE, items.FISHING_ROD]
 ALL_WEAPONS = [items.SWORD]
-ALL_SEEDS = [items.PARSNIP_SEEDS]
+ALL_SEEDS = [c.seed for c in CROPS] + [t.sapling for t in TREES]

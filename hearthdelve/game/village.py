@@ -190,12 +190,16 @@ def _heart_reward(state: GameState, npc: NPC):
     return None
 
 
-def gift(state: GameState, npc: NPC, item) -> None:
+def gift(state: GameState, npc: NPC, item, quality: int = 0) -> None:
     if npc.gifted_today:
         state.log.add(f"{npc.name} has already had a gift today.", C.DIM)
         return
     points, line = npc.gift_reaction(item)
-    state.player.inventory.remove(item, 1)
+    # Give the exact stack the player picked (the menu is per-quality), and let
+    # a finer gift please a little more.
+    state.player.inventory.remove(item, 1, quality=quality)
+    if points > 0:
+        points += quality
     points = karma.scale(state.player.karma, points)
     npc.friendship = max(0, min(MAX_HEARTS * 100, npc.friendship + points))
     npc.gifted_today = True
@@ -206,9 +210,9 @@ def gift(state: GameState, npc: NPC, item) -> None:
 
 
 def giftable_items(state: GameState):
-    """Inventory items that can be given (anything but tools/weapon)."""
+    """Inventory items that can be given (anything but tools/weapon/livestock)."""
     return [(it, q, ql) for it, q, ql in state.player.inventory.slots
-            if it.kind in ("crop", "artisan", "material", "food", "fish")]
+            if it.kind in ("crop", "artisan", "material", "food", "fish", "animal")]
 
 
 # --- shops ------------------------------------------------------------------
@@ -251,7 +255,8 @@ def purchase(state: GameState, entry) -> None:
         from . import turns
         from ..engine import constants as _C
         turns.advance_time(state, _C.USE_SECONDS)
-        state.log.add(f"You tuck into {label.lower()}. (+{stam} stamina)", (180, 230, 160))
+        gains = f"+{stam} stamina" + (f", +{hp} HP" if hp else "")
+        state.log.add(f"You tuck into {label.lower()}. ({gains})", (180, 230, 160))
     elif entry[0] == "commission":
         _, label, kind, gold, mats = entry
         p = state.player

@@ -1,6 +1,8 @@
 """Entering, leaving, and seeing inside dungeons."""
 from __future__ import annotations
 
+import zlib
+
 import tcod.map
 
 from ..world import dungeon, tile
@@ -53,7 +55,10 @@ def update_fov(state: GameState) -> None:
 
 
 def _floor_seed(state: GameState, depth: int) -> int:
-    return (hash((state.seed, state.dungeon_kind, depth, state.day)) & 0x7FFFFFFF)
+    # hash() is salted per process (PYTHONHASHSEED), which would re-roll floors
+    # on every reload — combine the inputs arithmetically instead.
+    kind_id = zlib.crc32(state.dungeon_kind.encode())
+    return (state.seed * 1_000_003 + depth * 7919 + state.day * 104_729 + kind_id) & 0x7FFFFFFF
 
 
 def _go_to_floor(state: GameState, depth: int, descending: bool) -> None:

@@ -1173,7 +1173,28 @@ def _carve_homestead(gm: GameMap, seed: int) -> None:
 
     # 2. house: kept EAST of the river (which meanders the clearing's west side)
     #    so building it never severs the river — roads must then bridge it.
-    hx, hy, hw, hh = cx + 2, cy - 7, 6, 5
+    #    On unlucky seeds the meander swings east across the footprint, which
+    #    would punch river-holes in the walls and strand the spawn on water. So
+    #    first scan the actual tiles across the whole homestead y-span, find the
+    #    river's east-most x, and if the plot's west edge (fence at cx+1) isn't
+    #    clear of it, shove the WHOLE homestead east by a matching offset.
+    hw, hh, pw, ph = 6, 5, 6, 5
+    y_top = cy - 7 - 2                                 # house top, with margin
+    y_bot = cy + 1 + ph + 1 + 2                        # plot + fence, with margin
+    river_max_x = -1
+    for x in range(cx, gm.width):
+        for y in range(y_top, y_bot + 1):
+            if gm.in_bounds(x, y) and t[x, y] == tile.RIVER:
+                river_max_x = max(river_max_x, x)
+    offset = 0
+    west_edge = cx + 1                                 # left fence of the plot
+    if river_max_x >= 0 and west_edge <= river_max_x + 2:
+        offset = (river_max_x + 2) - west_edge + 1
+    # keep the shifted footprint (plot fence reaches cx+2+pw) inside bounds
+    offset = max(0, min(offset, gm.width - 2 - (cx + 2 + pw)))
+    hcx = cx + offset
+
+    hx, hy = hcx + 2, cy - 7
     for x in range(hx, hx + hw):
         for y in range(hy, hy + hh):
             if not gm.in_bounds(x, y) or t[x, y] in (tile.RIVER, tile.SAND):
@@ -1197,7 +1218,7 @@ def _carve_homestead(gm: GameMap, seed: int) -> None:
         gm.post_box = box_pos
 
     # 4. fenced tilled plot below the house (also east of the river)
-    px, py, pw, ph = cx + 2, cy + 1, 6, 5
+    px, py = hcx + 2, cy + 1
     for x in range(px - 1, px + pw + 1):
         for y in range(py - 1, py + ph + 1):
             if not gm.in_bounds(x, y):
@@ -1213,10 +1234,27 @@ def _carve_homestead(gm: GameMap, seed: int) -> None:
             if gm.in_bounds(x, y) and t[x, y] not in (tile.RIVER, tile.SAND):
                 t[x, y] = tile.TILLED
 
-    # 5. spawn just below the door, on walkable ground
+    # 5. spawn just below the door, on walkable ground. If that tile is blocked
+    #    (a stray river/sand), search outward in expanding rings for the nearest
+    #    walkable spot rather than blindly dropping the player on (cx, cy).
     sx, sy = door[0], door[1] + 1
     if not gm.walkable(sx, sy):
-        sx, sy = cx, cy
+        sx, sy = None, None
+        for r in range(1, 32):
+            for dx in range(-r, r + 1):
+                for dy in range(-r, r + 1):
+                    if max(abs(dx), abs(dy)) != r:     # ring perimeter only
+                        continue
+                    x, y = door[0] + dx, door[1] + 1 + dy
+                    if gm.walkable(x, y):
+                        sx, sy = x, y
+                        break
+                if sx is not None:
+                    break
+            if sx is not None:
+                break
+        if sx is None:
+            sx, sy = cx, cy
     gm.spawn = (sx, sy)
 
 
@@ -1224,19 +1262,6 @@ def _place_dungeons(gm: GameMap, wild: np.ndarray, flora: np.ndarray) -> None:
     """Drop two dungeon entrances: a mine (rocky T2/T3) and a woodland grotto."""
     t = gm.tiles
     cx, cy = C.WORLD_CENTER
-
-    def find(pred, prefer_far=True):
-        ys, xs = np.where(pred)
-        if len(xs) == 0:
-            return None
-        d = (xs - cx) ** 2 + (ys - cy) ** 2
-        idx = np.argsort(d)
-        order = idx[::-1] if prefer_far else idx
-        for i in order:
-            x, y = int(xs[i]), int(ys[i])
-            if gm.walkable(x, y):
-                return x, y
-        return None
 
     # np.where on a (w,h) array returns (x_index, y_index); name accordingly
     mine_mask = (wild >= C.TIER1_MAX) & (flora < 0.30)

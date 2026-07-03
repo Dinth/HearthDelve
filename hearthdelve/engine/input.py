@@ -98,6 +98,8 @@ def _sym_to_action(event: tcod.event.KeyDown):
         return ("help",)
     if sym == K.q:
         return ("quitgame",)
+    if sym == K.BACKSPACE:
+        return ("discard",)
     if sym == K.x:
         return ("eat",)
     if sym == K.ESCAPE:

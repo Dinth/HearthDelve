@@ -11,6 +11,7 @@ from __future__ import annotations
 import base64
 import json
 import os
+import shutil
 
 import numpy as np
 
@@ -23,8 +24,14 @@ from ..world import worldgen
 from ..world.crops import CropPlot, Tree
 from ..game.state import GameState, MessageLog
 
-SAVE_VERSION = 4
+# Bump whenever the on-disk format changes so an older/newer binary refuses a
+# save it can't read instead of crashing partway through a load.
+SAVE_VERSION = 5
 SAVE_PATH = os.path.join(os.path.expanduser("~"), ".hearthdelve_save.json")
+
+# Housing the carpenter/player raises (not produced by worldgen), so it must be
+# persisted and re-registered on load — otherwise look-mode forgets the barn.
+_PLAYER_BUILT_KINDS = ("coop_small", "coop_big", "barn")
 
 
 def exists(path: str = SAVE_PATH) -> bool:
@@ -36,6 +43,19 @@ def delete(path: str = SAVE_PATH) -> None:
         os.remove(path)
     except OSError:
         pass
+
+
+def backup(path: str = SAVE_PATH) -> str | None:
+    """Copy an existing save aside (e.g. before abandoning an unreadable one so
+    a version mismatch never silently destroys it). Returns the backup path."""
+    if not os.path.isfile(path):
+        return None
+    bak = path + ".bak"
+    try:
+        shutil.copy2(path, bak)
+        return bak
+    except OSError:
+        return None
 
 
 # --- save --------------------------------------------------------------------
@@ -81,8 +101,17 @@ def save(state: GameState, path: str = SAVE_PATH) -> None:
                                    m.ready_at, m.has_queen, m.out_quality, m.build_kind]
                      for (x, y), m in surf.machines.items()},
         "animals": [[a.kind, a.name, a.x, a.y, list(a.home),
-                     a.happiness, a.age_days, a.produce_ready]
+                     a.happiness, a.age_days, a.produce_ready, a.petted_today]
                     for a in surf.animals],
+        # Surface wildlife is persistent (a boar you put down stays down, and
+        # its karma cost sticks) rather than re-scattered from the seed on load.
+        "wildlife": [[m.name, m.glyph, list(m.color), m.hp, m.max_hp, m.atk,
+                      m.defense, m.speed, m.behavior, m.x, m.y, m.awake,
+                      m.kind, m.diet, m.hostile, list(m.seasons)]
+                     for m in surf.monsters],
+        # Player-raised outbuildings (worldgen doesn't recreate these).
+        "buildings": [b for b in surf.buildings
+                      if b.get("kind") in _PLAYER_BUILT_KINDS and not b.get("village")],
         "npcs": {n.name: [n.friendship, n.gifted_today, n.talked_today, n._blurb_i, n.met]
                  for n in surf.npcs},
     }
@@ -138,13 +167,31 @@ def load(path: str = SAVE_PATH) -> GameState:
     from ..game.husbandry import SPECIES
     world.animals = []
     for rec in data.get("animals", []):
-        kind, name, ax, ay, home, happ, age, ready = rec
+        kind, name, ax, ay, home, happ, age, ready = rec[:8]
+        petted = rec[8] if len(rec) > 8 else False
         spec = SPECIES.get(kind)
         if not spec:
             continue
         world.animals.append(Animal(kind=kind, name=name, glyph=spec.glyph, color=spec.color,
-                                    x=ax, y=ay, home=tuple(home),
-                                    happiness=happ, age_days=age, produce_ready=ready))
+                                    x=ax, y=ay, home=tuple(home), happiness=happ,
+                                    age_days=age, produce_ready=ready, petted_today=petted))
+
+    # Restore persistent surface wildlife exactly (replacing the freshly
+    # seed-scattered set) so kills and roused states carry across a reload.
+    if "wildlife" in data:
+        from ..entities.monster import Mob
+        world.monsters = []
+        for rec in data["wildlife"]:
+            (nm, glyph, color, hp, mhp, atk, dfn, spd, behavior,
+             mx, my, awake, mkind, diet, hostile, seasons) = rec
+            world.monsters.append(Mob(nm, glyph, tuple(color), hp, mhp, atk, dfn, spd,
+                                      behavior, mx, my, awake=awake, kind=mkind,
+                                      diet=diet, hostile=hostile, seasons=tuple(seasons)))
+
+    # Re-register player-raised outbuildings (their tiles + housing machine are
+    # restored above; this puts back the record the look tool names them by).
+    for b in data.get("buildings", []):
+        world.buildings.append(dict(b))
 
     for n in world.npcs:
         rec = data["npcs"].get(n.name)

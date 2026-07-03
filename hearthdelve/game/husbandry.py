@@ -17,6 +17,7 @@ import random
 from dataclasses import dataclass
 
 from ..data.content import MACHINES
+from ..engine import constants as C
 from ..entities import items
 from ..entities.animal import Animal
 from ..entities.machine import Machine
@@ -271,8 +272,10 @@ def place_commission(state: GameState) -> None:
 
     for cx, cy in cells:                      # frame it off while it goes up
         surf.tiles[cx, cy] = tile.SCAFFOLD
-    surf.machines[door] = Machine(kind="site", build_kind=kind,
-                                  ready_at=state.abs_minutes + BUILD_DAYS * DAY)
+    # Finish on the morning BUILD_DAYS mornings from now — anchored to dawn so
+    # it lines up exactly with the new_day check (not a fractional day later).
+    ready = (state.day + BUILD_DAYS) * DAY + C.DAY_START_MIN
+    surf.machines[door] = Machine(kind="site", build_kind=kind, ready_at=ready)
     state.pending_build = ""
     name = MACHINES[kind].name.lower()
     state.log.add(f"Tomas sets to work. Your {name} will be ready in {BUILD_DAYS} mornings.",

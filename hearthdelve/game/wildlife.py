@@ -36,8 +36,10 @@ def _sign(n: int) -> int:
 
 
 def _occupied(state: GameState, x: int, y: int) -> bool:
+    season = state.season
     for m in state.world.monsters:
-        if m.alive and m.x == x and m.y == y:
+        if m.alive and m.x == x and m.y == y and present(m, season):
+            # an out-of-season critter isn't really here, so it can't block
             return True
     return False
 
@@ -126,8 +128,8 @@ def _nearest_food(state: GameState, m):
                         best, best_d = (x, y), d
     elif m.diet == "honey":                       # bears make for beehives
         for (hx, hy), mac in state.world.machines.items():
-            if mac.kind != "beehive":
-                continue
+            if mac.kind != "beehive" or not mac.has_queen:
+                continue                          # empty hives hold no honey
             d = max(abs(hx - m.x), abs(hy - m.y))
             if d < best_d:
                 best, best_d = (hx, hy), d
@@ -136,7 +138,7 @@ def _nearest_food(state: GameState, m):
 
 def _raid_hive(state: GameState, m, hx: int, hy: int) -> bool:
     mac = state.world.machines.get((hx, hy))
-    if mac is None or mac.kind != "beehive":
+    if mac is None or mac.kind != "beehive" or not mac.has_queen:
         return False
     # a bear tears into the hive, setting the colony's honey-making right back
     mac.ready_at = state.abs_minutes + 480
@@ -202,6 +204,13 @@ def act(state: GameState) -> None:
     for m in list(w.monsters):
         if not m.alive or not present(m, season):
             continue
+        if (m.x, m.y) == (p.x, p.y):
+            # a dormant critter can wake sharing the player's tile at a season
+            # rollover — step it aside to the first free neighbour.
+            for nx, ny in _neighbours(m):
+                if _can_stand(state, nx, ny):
+                    m.x, m.y = nx, ny
+                    break
         if max(abs(m.x - p.x), abs(m.y - p.y)) > ACTIVE_RADIUS:
             m.energy = 0                        # dormant until you come near
             continue

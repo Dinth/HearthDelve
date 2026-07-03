@@ -384,7 +384,7 @@ def collapse(state: GameState, reason: str) -> None:
     dropped = 0
     if state.depth > 0:                     # drop the loose loot carried in the dark
         for it, q, ql in list(p.inventory.slots):
-            if it.kind in ("crop", "material", "artisan", "food", "fish"):
+            if it.kind in ("crop", "material", "artisan", "food", "fish", "animal"):
                 p.inventory.remove(it, q, quality=ql)
                 dropped += q
         from . import delve

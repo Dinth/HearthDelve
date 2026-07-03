@@ -722,20 +722,21 @@ def render_mail(con: tcod.console.Console, state: GameState, sel: int) -> None:
 
 def render_eat(con: tcod.console.Console, state: GameState, sel: int) -> None:
     from ..game import skills
-    from ..main import edible_items
+    from ..game.crafting import edible_items
     foods = edible_items(state)
     w, h = 50, max(8, len(foods) + 6)
-    x, y = _modal(con, w, h, "Eat  (restores stamina)")
+    x, y = _modal(con, w, h, "Eat  (restores stamina & health)")
     if not foods:
-        con.print(x + 2, y + 2, "No cooked food — craft a dish first (c).", fg=C.DIM)
+        con.print(x + 2, y + 2, "Nothing to eat — cook a dish (c) or gather eggs/milk.", fg=C.DIM)
     for i, (it, q, ql) in enumerate(foods):
         bg = (54, 50, 36) if i == sel else (20, 22, 32)
         if i == sel:
             con.draw_rect(x + 1, y + 2 + i, w - 2, 1, ch=ord(" "), bg=bg)
         star = (" " + skills.stars(ql)) if ql else ""
         gain = round(it.energy * (1 + 0.12 * ql))
+        hp = max(1, gain // 6)
         con.print(x + 2, y + 2 + i, ("▸ " if i == sel else "  ") + f"{q:>2} {it.name}{star}", fg=C.WHITE, bg=bg)
-        con.print(x + w - 13, y + 2 + i, f"+{gain} stamina", fg=(150, 210, 150), bg=bg)
+        con.print(x + w - 18, y + 2 + i, f"+{gain} st  +{hp} hp", fg=(150, 210, 150), bg=bg)
     con.print(x + 2, y + h - 2, "↑↓ select   Enter eat   Esc close", fg=C.DIM)
 
 
@@ -761,9 +762,9 @@ def render_quit(con: tcod.console.Console, state: GameState) -> None:
     rows = [
         ("The game auto-saves each morning you sleep.", C.DIM),
         ("", C.WHITE),
-        ("[S] / [Enter]   Save and quit", (180, 230, 160)),
-        ("[Q]             Quit without saving", (232, 178, 120)),
-        ("[Esc]           Keep playing", (210, 210, 220)),
+        ("[S] / [Enter] / [Q]   Save and quit", (180, 230, 160)),
+        ("[Backspace]           Quit without saving", (232, 178, 120)),
+        ("[Esc]                 Keep playing", (210, 210, 220)),
     ]
     for i, (text, colour) in enumerate(rows):
         con.print(x + 3, y + 2 + i, text, fg=colour)
@@ -860,7 +861,12 @@ def build_codex_pages(state: GameState):
     for r in content.RECIPES:
         ins = ", ".join(f"{q} {it.name}" for it, q in r.inputs)
         craftp.append((f" {r.name}", _KEY))
-        tag = "build" if r.kind == "build" else f"cook (+{r.energy} stamina)"
+        if r.kind == "build":
+            tag = "build"
+        elif r.kind == "cook":
+            tag = f"cook (+{r.energy} stamina)"
+        else:
+            tag = "craft"
         craftp.append((f"      {tag}:  {ins}", C.WHITE))
     craftp.append(("", C.WHITE))
     craftp.append(("Machines  (g to load / collect)", _HDR))
@@ -1034,7 +1040,7 @@ def render_craft(con: tcod.console.Console, state: GameState, sel: int) -> None:
     for i, r in enumerate(recipes):
         if r.kind != last_kind:
             last_kind = r.kind
-            label = "Build" if r.kind == "build" else "Cook"
+            label = {"build": "Build", "cook": "Cook"}.get(r.kind, "Craft")
             con.print(x + 2, y + 2 + row, label, fg=_HDR)
             row += 1
         ok = crafting.has_inputs(state, r)
@@ -1177,10 +1183,11 @@ def render_shop(con: tcod.console.Console, state: GameState, npc, sel: int, line
         if i == sel:
             con.draw_rect(x + 1, yy, w - 2, 1, ch=ord(" "), bg=rowbg)
         if e[0] == "meal":
-            _, label, price, stam, _hp = e
+            _, label, price, stam, hp = e
             afford = p.gold >= price
+            gains = f"+{stam}st" + (f" +{hp}hp" if hp else "")
             con.print(x + 2, yy, ("▸ " if i == sel else "  ") + label, fg=C.WHITE if afford else C.DIM, bg=rowbg)
-            con.print(x + w - 18, yy, f"+{stam} stam", fg=(150, 210, 150), bg=rowbg)
+            con.print(x + w - 20, yy, gains, fg=(150, 210, 150), bg=rowbg)
             con.print(x + w - 8, yy, f"{price}g", fg=C.GOLD_COLOR if afford else C.DIM, bg=rowbg)
         elif e[0] == "buy":
             _, item, price = e

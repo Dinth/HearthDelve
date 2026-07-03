@@ -21,7 +21,7 @@ def resolve_tool(tool: Item, t: TileType) -> tuple[bool, int | None, str]:
 
     if tool is items.WATERING_CAN:
         if t.name == "tilled":
-            return True, None, "You water the soil. (plant seeds once farming opens in M2)"
+            return True, None, "You water the bare soil."
         if t.kind == "water":
             return True, None, "You refill the watering can."
         return False, None, "There's nothing here to water."
@@ -51,7 +51,7 @@ def resolve_tool(tool: Item, t: TileType) -> tuple[bool, int | None, str]:
 
     if tool is items.FISHING_ROD:
         if t.kind == "water":
-            return True, None, "You cast your line... nothing bites yet. (fishing in M4)"
+            return True, None, "You cast your line."
         return False, None, "You can only fish in water."
 
     return False, None, f"You can't use the {tool.name} on that."

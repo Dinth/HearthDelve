@@ -214,12 +214,13 @@ class Inventory:
                    if e[0] is item and (quality is None or e[2] == quality))
 
     def remove(self, item: Item, qty: int = 1, quality: int | None = None) -> bool:
-        """Remove up to qty (lowest quality first unless a quality is given)."""
+        """Remove up to qty (lowest quality first unless a quality is given).
+        Returns True only if the FULL qty was removed (False on a short stack),
+        so callers can trust the bool rather than being told a partial take
+        succeeded."""
         stacks = sorted((e for e in self.slots if e[0] is item
                          and (quality is None or e[2] == quality)),
                         key=lambda e: e[2])
-        if not stacks:
-            return False
         need = qty
         for e in stacks:
             take = min(e[1], need)
@@ -228,7 +229,7 @@ class Inventory:
             if need <= 0:
                 break
         self.slots = [e for e in self.slots if e[1] > 0]
-        return True
+        return need <= 0
 
     def pop_quality(self, item: Item, qty: int = 1) -> float:
         """Remove qty (lowest quality first) and return the average quality of

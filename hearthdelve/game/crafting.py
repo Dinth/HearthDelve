@@ -68,6 +68,11 @@ def craft(state: GameState, recipe: Recipe) -> bool:
 
 def _place_machine(state: GameState, kind: str) -> bool:
     p = state.player
+    if state.world.is_dungeon:
+        # Machines (and the animals a coop would house) live only on the farm;
+        # placed underground they'd be lost when the floor re-rolls.
+        state.log.add(f"You can only set down a {MACHINES[kind].name.lower()} on the surface.", C.DIM)
+        return False
     tx, ty = p.x + p.facing[0], p.y + p.facing[1]
     if not state.world.in_bounds(tx, ty):
         state.log.add("There's no room to place that there.", C.DIM)
@@ -162,20 +167,21 @@ def _load_machine(state: GameState, m: Machine, mdef) -> bool:
         output = items.SUNFLOWER_OIL
 
     elif mdef.accepts == "fruit":
-        # Keg: honey -> mead; mead -> aged mead; otherwise fruit -> wine.
+        # Keg: honey -> mead, mead -> aged mead, grapes -> grape wine, other
+        # fruit -> wine. Ferment whichever the player holds gains the most value,
+        # so a keg never picks a conversion that loses gold (or blocks the best).
+        cands = []
         if inv.count(items.HONEY) > 0:
-            in_quality = inv.pop_quality(items.HONEY, 1)
-            output = items.MEAD
-        elif inv.count(items.MEAD) > 0:
-            in_quality = inv.pop_quality(items.MEAD, 1)
-            output = items.AGED_MEAD
-        else:
-            crop_item = items.GRAPE if inv.count(items.GRAPE) > 0 else _best_crop(state, fruit_only=True)
-            if crop_item is None:
-                state.log.add(f"The {mdef.name.lower()} ferments fruit into wine, or honey into mead.", C.DIM)
-                return True
-            in_quality = inv.pop_quality(crop_item, 1)
-            output = items.GRAPE_WINE if crop_item is items.GRAPE else items.WINE
+            cands.append((items.HONEY, items.MEAD))
+        if inv.count(items.MEAD) > 0:
+            cands.append((items.MEAD, items.AGED_MEAD))
+        for it in {e[0] for e in inv.slots if e[0].kind == "crop" and content.is_fruit(e[0])}:
+            cands.append((it, items.GRAPE_WINE if it is items.GRAPE else items.WINE))
+        if not cands:
+            state.log.add(f"The {mdef.name.lower()} ferments fruit into wine, or honey into mead.", C.DIM)
+            return True
+        crop_item, output = max(cands, key=lambda c: c[1].value - c[0].value)
+        in_quality = inv.pop_quality(crop_item, 1)
 
     elif mdef.accepts == "dairy":
         # Churn: a pail of milk -> a wheel of cheese.
@@ -187,21 +193,21 @@ def _load_machine(state: GameState, m: Machine, mdef) -> bool:
 
     elif mdef.accepts == "crop":
         # Preserves Jar: fruit -> jam, vegetables -> pickles, eel -> jellied eel.
-        # (Flowers aren't preserved.)
+        # (Flowers aren't preserved.) Preserve whichever the player holds gains
+        # the most value, so a jar never turns a prize pumpkin into cheap pickles.
+        def _preserve_of(it):
+            if it is items.EEL:
+                return items.JELLIED_EEL
+            return items.JAM if content.is_fruit(it) else items.PICKLES
         candidates = [it for it, _q, _ql in inv.slots
                       if (it.kind == "crop" and content.PRODUCE_CATEGORY.get(it) != "flower")
                       or it is items.EEL]
         if not candidates:
             state.log.add(f"The {mdef.name.lower()} needs a crop or an eel.", C.DIM)
             return True
-        chosen = max(candidates, key=lambda it: it.value)
+        chosen = max(candidates, key=lambda it: _preserve_of(it).value - it.value)
+        output = _preserve_of(chosen)
         in_quality = inv.pop_quality(chosen, 1)
-        if chosen is items.EEL:
-            output = items.JELLIED_EEL
-        elif content.is_fruit(chosen):
-            output = items.JAM
-        else:
-            output = items.PICKLES
 
     m.loaded_output = output
     m.ready_at = state.abs_minutes + mdef.minutes
@@ -260,12 +266,6 @@ def _tend_beehive(state: GameState, m, mdef, x: int, y: int) -> bool:
     return True
 
 
-def _best_crop(state: GameState, fruit_only: bool = False):
-    crops = [e[0] for e in state.player.inventory.slots
-             if e[0].kind == "crop" and (not fruit_only or content.is_fruit(e[0]))]
-    return max(crops, key=lambda it: it.value, default=None)
-
-
 # --- morning processing -----------------------------------------------------
 def run_sprinklers(state: GameState) -> None:
     """Sprinklers water adjacent crops at dawn."""
@@ -281,6 +281,12 @@ def run_sprinklers(state: GameState) -> None:
 def sellable_items(state: GameState):
     """Inventory stacks that can be shipped (value>0), one per (item, quality)."""
     return [(it, q, ql) for it, q, ql in state.player.inventory.slots if it.value > 0]
+
+
+def edible_items(state: GameState):
+    """Anything nourishing in the pack (cooked dishes plus raw eggs/milk/cheese),
+    one entry per (item, quality)."""
+    return [(it, q, ql) for it, q, ql in state.player.inventory.slots if it.energy > 0]
 
 
 def slot_value(item, quality: int) -> int:
