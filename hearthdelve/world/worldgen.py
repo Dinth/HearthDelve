@@ -757,6 +757,7 @@ def _build_garden(gm: GameMap, b: dict, rng, placed: list) -> None:
                     gm.tiles[xx, yy] = tile.FENCE
                 else:
                     gm.tiles[xx, yy] = tile.BUSH if rng.random() < 0.7 else tile.TILLED
+                    gm.village_gardens.append((xx, yy))    # the resident's plot
         gm.tiles[gx + gw // 2, gy + gh] = tile.GRASS       # a little gate
         placed.append((gx - 1, gy - 1, gw + 2, gh + 2))
         return

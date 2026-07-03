@@ -140,6 +140,9 @@ def _finish_busy(state: GameState, b: dict) -> None:
     p.energy = max(0, p.energy - b["stamina"])
     state.log.add(b["msg"])
     _gather_drop(state, b["item"], b["target"])
+    if b.get("steal"):
+        from .game import land
+        land.penalize(state, b["tx"], b["ty"], "growth")
 
 
 def try_move(state: GameState, dx: int, dy: int) -> None:
@@ -299,6 +302,21 @@ def use_tool(state: GameState) -> None:
     if not success:
         state.log.add(msg, C.DIM)
         return None
+
+    # Whose land is this? Tilling/working another's land is refused; felling
+    # their tree or clearing their brush is vandalism — allowed once confirmed,
+    # but it costs karma and the owner's regard.
+    from .game import land
+    steal = False
+    if land.owned_by_other(state, tx, ty):
+        if item is items.HOE or new_tile == tile.TILLED:
+            state.log.add(f"You can't work {land.owner_label(state, tx, ty)} land.", C.DIM)
+            return None
+        gate = land.check_take(state, tx, ty, "growth")
+        if gate == "confirm":
+            return None
+        steal = gate == "steal"
+
     if p.energy <= 0:
         state.log.add("You're too exhausted. Rest first.", C.DIM)
         return None
@@ -324,7 +342,7 @@ def use_tool(state: GameState) -> None:
             return None
         state.log.add(f"You set to work with the {item.name.lower()}...", C.DIM)
         return {"left": seconds, "item": item, "tx": tx, "ty": ty, "target": target,
-                "new_tile": new_tile, "stamina": stamina, "msg": msg}
+                "new_tile": new_tile, "stamina": stamina, "msg": msg, "steal": steal}
 
     # Short tasks resolve at once.
     if new_tile is not None:
@@ -333,6 +351,10 @@ def use_tool(state: GameState) -> None:
     turns.advance_time(state, seconds)
     state.log.add(msg)
     _gather_drop(state, item, target)
+    if steal:
+        land.penalize(state, tx, ty, "growth")
+    elif new_tile == tile.TILLED:
+        land.note_claim(state, [(tx, ty)])
     return None
 
 
@@ -449,11 +471,24 @@ def _equip(state: GameState, item) -> None:
 
 def do_grab(state: GameState) -> None:
     """Harvest a crop or interact with a machine — faced tile, then underfoot."""
+    from .game import land
     p = state.player
     for gx, gy in ((p.x + p.facing[0], p.y + p.facing[1]), (p.x, p.y)):
         if not state.world.in_bounds(gx, gy):
             continue
         tk = state.world.tile_at(gx, gy).kind
+
+        # Taking crops/fruit/berries/fungus off another's land is theft: warn
+        # once, then it's allowed at the cost of karma and the owner's regard.
+        stealing = False
+        if tk in ("mushroom", "glowcap", "shrub_berry") or (gx, gy) in state.world.crops \
+                or (gx, gy) in state.world.trees:
+            if land.owned_by_other(state, gx, gy):
+                gate = land.check_take(state, gx, gy, "harvest")
+                if gate == "confirm":
+                    return None
+                stealing = gate == "steal"
+
         if tk == "chest":
             _open_chest(state, gx, gy)
             return
@@ -476,15 +511,23 @@ def do_grab(state: GameState) -> None:
             star = (" " + skills.stars(q)) if q else ""
             state.log.add(f"You gather a {item.name.lower()}{star}.", col)
             turns.advance_time(state, C.HARVEST_COST[1])
+            if stealing:
+                land.penalize(state, gx, gy, "harvest")
             return
         if tk == "shrub_berry":                          # pick berries; the bush stays
             _pick_berries(state, gx, gy)
+            if stealing:
+                land.penalize(state, gx, gy, "harvest")
             return
         if (gx, gy) in state.world.crops:
             if farming.harvest(state, gx, gy):
+                if stealing:
+                    land.penalize(state, gx, gy, "harvest")
                 return
         if (gx, gy) in state.world.trees:
             if farming.pick_tree(state, gx, gy):
+                if stealing:
+                    land.penalize(state, gx, gy, "harvest")
                 return
         if (gx, gy) in state.world.machines:
             res = crafting.interact_machine(state, gx, gy)
@@ -556,9 +599,14 @@ def _at_postbox(state: GameState) -> bool:
 
 
 def collect_letter(state: GameState, letter) -> None:
-    """Take a letter's contents into the pack and read it out."""
+    """Take a letter's contents into the pack and read it out. A tax notice
+    settles the land tax instead of holding items."""
     from .game import skills
     p = state.player
+    if letter.get("tax"):
+        from .game import land
+        land.settle_tax(state)
+        return
     got = []
     for name, qty, ql in letter.get("items", ()):
         it = items.by_name(name) if isinstance(name, str) else name
@@ -1282,7 +1330,11 @@ def main() -> None:
                         mail_sel = (mail_sel + action[2]) % len(state.mail)
                     elif cmd == "confirm" and state.mail:
                         mail_sel = min(mail_sel, len(state.mail) - 1)
-                        collect_letter(state, state.mail.pop(mail_sel))
+                        letter = state.mail[mail_sel]
+                        if letter.get("tax"):
+                            collect_letter(state, letter)   # settles & refreshes the notice
+                        else:
+                            collect_letter(state, state.mail.pop(mail_sel))
                         mail_sel = 0
                         if not state.mail:
                             mode = "play"

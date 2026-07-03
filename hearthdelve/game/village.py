@@ -209,6 +209,22 @@ def gift(state: GameState, npc: NPC, item, quality: int = 0) -> None:
     state.log.add(line, color)
 
 
+def anger_owner(state: GameState, owner: str, amount: int) -> None:
+    """Sour a landowner's regard after theft or vandalism. A named resident
+    takes the full slight; village-communal property (shops, wells, the square)
+    sours the whole village a little instead."""
+    surf = state.surface or state.world
+    npcs = getattr(surf, "npcs", [])
+    named = next((n for n in npcs if n.name == owner), None)
+    if named is not None:
+        named.friendship = max(0, named.friendship + karma.scale(state.player.karma, -amount))
+        return
+    share = max(1, amount // 4)
+    for n in npcs:
+        if getattr(n, "village", "") == owner:
+            n.friendship = max(0, n.friendship + karma.scale(state.player.karma, -share))
+
+
 def giftable_items(state: GameState):
     """Inventory items that can be given (anything but tools/weapon/livestock)."""
     return [(it, q, ql) for it, q, ql in state.player.inventory.slots

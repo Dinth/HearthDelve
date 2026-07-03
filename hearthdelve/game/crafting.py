@@ -66,8 +66,42 @@ def craft(state: GameState, recipe: Recipe) -> bool:
     return True
 
 
+def _place_fence(state: GameState) -> bool:
+    """Set a fence panel on the faced tile (placed like any built object). Wild
+    ground it stands on — and any land a closed loop encloses — becomes a claim."""
+    from . import land
+    from ..world import tile
+    p = state.player
+    surf = state.world
+    if surf.is_dungeon:
+        state.log.add("There's nothing to fence off down here.", C.DIM)
+        return False
+    tx, ty = p.x + p.facing[0], p.y + p.facing[1]
+    if not surf.in_bounds(tx, ty):
+        state.log.add("There's nothing there to fence.", C.DIM)
+        return False
+    if land.owned_by_other(state, tx, ty):
+        state.log.add(f"You can't fence {land.owner_label(state, tx, ty)} land.", C.DIM)
+        return False
+    if surf.tile_at(tx, ty).name not in land.FENCEABLE:
+        state.log.add("A fence needs open ground to stand on.", C.DIM)
+        return False
+    if (tx, ty) in surf.crops or (tx, ty) in surf.trees or (tx, ty) in surf.machines:
+        state.log.add("Something's in the way there.", C.DIM)
+        return False
+    surf.tiles[tx, ty] = tile.FENCE
+    newly = land.note_claim(state, [(tx, ty)]) + land.note_claim(state, land.enclosed_tiles(state, (tx, ty)))
+    if newly:
+        state.log.add(f"You set a fence — {newly} tile(s) of wild land claimed.", (200, 220, 160))
+    else:
+        state.log.add("You set a fence.")
+    return True
+
+
 def _place_machine(state: GameState, kind: str) -> bool:
     p = state.player
+    if kind == "fence":
+        return _place_fence(state)
     if state.world.is_dungeon:
         # Machines (and the animals a coop would house) live only on the farm;
         # placed underground they'd be lost when the floor re-rolls.
@@ -83,7 +117,12 @@ def _place_machine(state: GameState, kind: str) -> bool:
     if not state.world.walkable(tx, ty):
         state.log.add(f"You need open ground to place the {MACHINES[kind].name.lower()}.", C.DIM)
         return False
+    from . import land
+    if land.owned_by_other(state, tx, ty):
+        state.log.add(f"You can't set that down on {land.owner_label(state, tx, ty)} land.", C.DIM)
+        return False
     state.world.machines[(tx, ty)] = Machine(kind=kind)
+    land.claim(state, [(tx, ty)])
     state.log.add(f"You set down a {MACHINES[kind].name.lower()}.")
     return True
 

@@ -54,6 +54,12 @@ class GameState:
     mail: list = field(default_factory=list)           # letters in the post box: {sender, body, items}
     pending_build: str = ""        # outbuilding ordered from the carpenter, awaiting placement
 
+    # land: wilderness tiles the player has claimed (fenced/farmed/built on), and
+    # the weekly land-tax standing charged on them.
+    claims: set = field(default_factory=set)           # {(x, y)} of claimed surface tiles
+    tax_owed: int = 0                                  # unpaid land tax (gold)
+    last_tax_day: int = 0                              # day the tax was last assessed
+
     # transient view/UI state (never serialized)
     cam_focus: tuple | None = None                     # camera centres here if set (look/aim modes)
     warned: dict = field(default_factory=dict)         # one-shot alert flags, reset each morning

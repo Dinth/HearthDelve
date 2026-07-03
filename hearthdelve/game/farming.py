@@ -290,6 +290,10 @@ def new_day(state: GameState, rested: bool = True) -> None:
 
     _deliver_mail(state)
 
+    # The crown's weekly land tax on claimed wilderness (karma-only if unpaid).
+    from . import land
+    land.weekly_tax(state)
+
     p = state.player
     p.energy = p.max_energy if rested else p.max_energy // 2
     p.hp = p.max_hp if rested else max(1, p.max_hp // 2)

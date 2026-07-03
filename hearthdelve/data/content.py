@@ -369,6 +369,10 @@ RECIPES: list[Recipe] = [
            desc="Aim & throw with 't' to harm monsters and shatter rock."),
     Recipe("Leather Armor", "item", ((items.BOAR_HIDE, 3), (items.FIBER, 4)),
            output=items.LEATHER_ARMOR, out_qty=1, desc="Tanned boar-hide body armour (+2 Protection)."),
+    Recipe("Fence Panels", "item", ((items.WOOD, 1),), output=items.FENCE, out_qty=2,
+           desc="Timber fence panels for your pack — set them down with 'Set Fence'."),
+    Recipe("Set Fence", "build", ((items.FENCE, 1),), machine="fence",
+           desc="Plant a fence panel on the faced tile; fence off wild land to claim it."),
     # --- Cooking: makes a carryable dish; eat it (x) for stamina -------------
     Recipe("Parsnip Soup", "cook", ((items.PARSNIP, 2),), output=items.PARSNIP_SOUP,
            desc="A warming bowl."),

@@ -47,6 +47,8 @@ class GameMap:
     animals: list = field(default_factory=list)
     # tilled tiles of village farmhouse fields, re-stocked seasonally
     village_fields: list = field(default_factory=list)
+    # interior tiles of cottage kitchen-gardens (owned by the adjacent resident)
+    village_gardens: list = field(default_factory=list)
     # village buildings for look/identification: dicts {x,y,w,h,kind,village,owner}
     buildings: list = field(default_factory=list)
     # wild-mushroom spots (x, y, variety_tile_id, base_tile_id): only sprout in

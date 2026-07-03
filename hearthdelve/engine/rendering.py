@@ -702,21 +702,24 @@ def describe(state: GameState, x: int, y: int) -> str:
         if tname in ("hearth", "counter", "table", "barrel"):
             return f"{_TILE_DESC.get(tname, tname)} — inside {label}."
         return f"{label}."
+    from ..game import land
+    theft = " — another's; taking it is theft" if land.owned_by_other(state, x, y) else ""
     plot = state.world.crops.get((x, y))
     if plot is not None:
         name = plot.crop.name.lower()
+        poss = f"{land.owner_label(state, x, y)} " if theft else ""
         if plot.dead:
             return f"a withered {name}. Clear it with g."
         if plot.mature:
-            return f"{name} — ripe! Harvest it with g."
+            return f"{poss}{name} — ripe! Harvest it with g{theft}."
         water = "watered" if plot.watered else "needs watering"
-        return f"{name}, still growing ({water})."
+        return f"{poss}{name}, still growing ({water}){theft}."
     tree = state.world.trees.get((x, y))
     if tree is not None:
         if not tree.mature:
             return f"a young {tree.name.lower()} sapling, still growing."
         if tree.has_fruit:
-            return f"a {tree.name.lower()} tree, heavy with fruit — pick it (g)."
+            return f"a {tree.name.lower()} tree, heavy with fruit — pick it (g){theft}."
         return f"a {tree.name.lower()} tree; bears fruit in {tree.season}."
     m = state.world.machines.get((x, y))
     if m is not None:
@@ -754,8 +757,16 @@ def describe(state: GameState, x: int, y: int) -> str:
         from ..data.content import SHRUB_FRUIT
         fruit = SHRUB_FRUIT.get(t.name)
         fn = fruit.name.lower() if fruit else "berry"
-        return f"a {fn} shrub, ripe — pick it (g) and it bears again; machete clears it."
-    return _TILE_DESC.get(t.name, f"{t.name.replace('_', ' ')}.")
+        return f"a {fn} shrub, ripe — pick it (g) and it bears again; machete clears it{theft}."
+    base = _TILE_DESC.get(t.name, f"{t.name.replace('_', ' ')}.")
+    # Whose ground is this? Note owned/claimed land on open, workable tiles.
+    if t.walkable and t.kind in ("terrain", "soil", "road"):
+        owner = land.owner_at(state, x, y)
+        if owner == "player" and (x, y) in state.claims:
+            return base.rstrip(".") + " — your claim (taxed weekly)."
+        if owner is not None and owner != "player":
+            return base.rstrip(".") + f" — {land.owner_label(state, x, y)} land; you can't build here."
+    return base
 
 
 def render_look(con: tcod.console.Console, state: GameState, lx: int, ly: int) -> None:
@@ -867,7 +878,7 @@ def render_mail(con: tcod.console.Console, state: GameState, sel: int) -> None:
         bg = (54, 50, 36) if i == sel else (20, 22, 32)
         if i == sel:
             con.draw_rect(x + 1, y + 2 + row, w - 2, 1, ch=ord(" "), bg=bg)
-        tag = " ✉+gift" if letter.get("items") else " ✉"
+        tag = " ⚖ tax due" if letter.get("tax") else " ✉+gift" if letter.get("items") else " ✉"
         con.print(x + 2, y + 2 + row, ("▸ " if i == sel else "  ") + f"From {letter['sender']}{tag}",
                   fg=C.WHITE, bg=bg)
     if start > 0:
@@ -878,7 +889,9 @@ def render_mail(con: tcod.console.Console, state: GameState, sel: int) -> None:
     ly = y + 3 + list_h
     for j, bl in enumerate(body):
         con.print(x + 3, ly + j, bl[:w - 6], fg=(210, 205, 190))
-    con.print(x + 2, y + h - 2, "↑↓ select   Enter take letter   Esc close", fg=C.DIM)
+    hint = ("↑↓ select   Enter settle tax / take letter   Esc close"
+            if any(m.get("tax") for m in mail) else "↑↓ select   Enter take letter   Esc close")
+    con.print(x + 2, y + h - 2, hint, fg=C.DIM)
 
 
 def render_eat(con: tcod.console.Console, state: GameState, sel: int) -> None:
@@ -1014,6 +1027,35 @@ def build_codex_pages(state: GameState):
         ("  Esc              quit / close a screen", C.WHITE),
     ]
     pages.append(("Controls", controls))
+
+    # --- Page: Land & Home ---------------------------------------------------
+    landpg = [
+        ("Land & Ownership", _HDR),
+        ("", C.WHITE),
+        ("Every patch of ground has an owner.", C.WHITE),
+        ("", C.WHITE),
+        ("  Your homestead", _KEY),
+        ("      The land around your farm is granted freehold — yours,", C.WHITE),
+        ("      and never taxed. Build and farm freely here.", C.DIM),
+        ("  Village land", _KEY),
+        ("      Cottages, farm plots and gardens belong to their", C.WHITE),
+        ("      residents; shops and greens to the village. You may not", C.DIM),
+        ("      build there, and taking a villager's crop, fruit or", C.DIM),
+        ("      berries is theft — it costs karma and their regard.", C.DIM),
+        ("      (You'll be asked to confirm before you take.)", C.DIM),
+        ("  Wilderness", _KEY),
+        ("      Ownerless. Till it, build on it, or fence it off to", C.WHITE),
+        ("      CLAIM it as your own. Craft Fence Panels (c), then", C.DIM),
+        ("      'Set Fence' to lay them; close a loop and every tile", C.DIM),
+        ("      inside becomes your claim.", C.DIM),
+        ("", C.WHITE),
+        ("Land tax", _HDR),
+        ("      The crown levies a small weekly tax on your claimed", C.WHITE),
+        ("      wilderness. A notice arrives at your post box — open it", C.DIM),
+        ("      (g at the box) to settle up. Ignoring the bill costs a", C.DIM),
+        ("      little karma each week, but your gold and land are safe.", C.DIM),
+    ]
+    pages.append(("Land & Home", landpg))
 
     # --- Page: Tools & Equipment --------------------------------------------
     tools = [("Tools  (energy cost per use)", _HDR), ("", C.WHITE)]

@@ -321,6 +321,9 @@ def can_place_building(state: GameState, door, kind: str):
         if ((cx, cy) in surf.crops or (cx, cy) in surf.machines or (cx, cy) in surf.trees
                 or animal_at(state, cx, cy) or (cx, cy) == (state.player.x, state.player.y)):
             return False, cells, "Something's in the way there."
+    from . import land
+    if any(land.owned_by_other(state, cx, cy) for cx, cy in cells):
+        return False, cells, "That land belongs to someone else — you can't build there."
     return True, cells, ""
 
 
@@ -378,6 +381,9 @@ def _raise_building(state: GameState, x: int, y: int, kind: str) -> None:
         surf.machines[(x, y)] = Machine(kind=kind)
     surf.buildings.append({"x": left, "y": top, "w": w, "h": h,
                            "kind": kind, "village": "", "owner": None})
+    from . import land
+    land.invalidate(surf)
+    land.claim(state, [(cx, cy) for cx in range(left, left + w) for cy in range(top, top + h)])
     state.log.add(f"Your {_build_name(kind)} is finished!", (200, 230, 170))
 
 

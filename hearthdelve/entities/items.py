@@ -108,6 +108,7 @@ FIBER       = Item("Fiber",       ";", "material", "Plant fibre from foliage.", 
 CUT_GRASS   = Item("Cut Grass",   "\"","material", "Freshly scythed grass — dries into straw on a fair day.", value=2)
 STRAW       = Item("Straw",       "~", "material", "Dried grass; winter feed for your animals.", value=5)
 STONE       = Item("Stone",       "o", "material", "Broken from rock.",         value=4)
+FENCE       = Item("Fence",       "│", "material", "A timber fence panel; set it down (build menu) to bound and claim wild land.", value=6)
 COAL        = Item("Coal",        "♦", "material", "Fuel for the furnace.",     value=12)
 # Dungeon reagents: foraged fungus and creature drops (cook/sell/gift).
 CAVE_MUSHROOM = Item("Cave Mushroom", "τ", "material", "An earthy cave fungus — good in a stew.", value=30)

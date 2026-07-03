@@ -26,7 +26,7 @@ from ..game.state import GameState, MessageLog
 
 # Bump whenever the on-disk format changes so an older/newer binary refuses a
 # save it can't read instead of crashing partway through a load.
-SAVE_VERSION = 5
+SAVE_VERSION = 6
 SAVE_PATH = os.path.join(os.path.expanduser("~"), ".hearthdelve_save.json")
 
 # Housing the carpenter/player raises (not produced by worldgen), so it must be
@@ -89,6 +89,9 @@ def save(state: GameState, path: str = SAVE_PATH) -> None:
         "ship_bin": [[it.name, q, ql] for it, q, ql in state.ship_bin.slots],
         "stats": dict(state.stats),
         "pending_build": state.pending_build,
+        "claims": [f"{x},{y}" for (x, y) in state.claims],
+        "tax_owed": state.tax_owed,
+        "last_tax_day": state.last_tax_day,
         "quests_done": list(state.quests_done),
         "mail": [{"sender": m["sender"], "body": m["body"],
                   "items": [[(it.name if hasattr(it, "name") else it), q, ql]
@@ -253,4 +256,7 @@ def load(path: str = SAVE_PATH) -> GameState:
     state.quests_done = set(data.get("quests_done", []))
     state.mail = data.get("mail", [])
     state.pending_build = data.get("pending_build", "")
+    state.claims = {tuple(map(int, k.split(","))) for k in data.get("claims", [])}
+    state.tax_owed = data.get("tax_owed", 0)
+    state.last_tax_day = data.get("last_tax_day", state.day)
     return state
