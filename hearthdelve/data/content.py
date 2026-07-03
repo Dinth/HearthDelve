@@ -54,7 +54,7 @@ WEAPON_STATS: dict[Item, CombatProfile] = {
     items.HOE:          CombatProfile("polearm", -1, (1, 4)),   # long-hafted, a bit of reach
     items.WATERING_CAN: CombatProfile("blunt", -3, (1, 2)),
     items.AXE:          CombatProfile("axe",    0, (2, 6)),
-    items.PICKAXE:      CombatProfile("pick",  -1, (2, 5)),
+    items.PICKAXE:      CombatProfile("axe",   -1, (2, 5)),
     items.MACHETE:      CombatProfile("blade",  0, (2, 5)),
     items.FISHING_ROD:  CombatProfile("blunt", -4, (1, 1)),
     # dedicated weapons
