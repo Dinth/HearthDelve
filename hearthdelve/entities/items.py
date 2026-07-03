@@ -57,7 +57,7 @@ PARSNIP     = Item("Parsnip",     "♠", "crop", "A pale, hardy root.",   value=
 POTATO      = Item("Potato",      "o", "crop", "An earthy staple.",     value=80)
 CAULIFLOWER = Item("Cauliflower", "%", "crop", "A big, prized head.",   value=175)
 PUMPKIN     = Item("Pumpkin",     "O", "crop", "A heavy autumn gourd.", value=320)
-SNOW_TURNIP = Item("Snow Turnip", "♠", "crop", "A frost-sweetened winter root.", value=90)
+SNOW_TURNIP = Item("Snow Turnip", "♠", "crop", "A frost-sweetened winter root.", value=130)
 
 # --- Flowers (grown for beauty, gifts, and to feed the bees) ----------------
 TULIP       = Item("Tulip",       "*", "crop", "A cheerful spring bloom.",  value=40)
@@ -134,16 +134,16 @@ SAPPHIRE    = Item("Sapphire",    "◊", "material", "A blue gemstone.",   value
 DIAMOND     = Item("Diamond",     "◊", "material", "The most prized gem.", value=320)
 
 # --- Artisan goods (made in machines — the value ladder) --------------------
-JAM         = Item("Jam",         "■", "artisan",  "Preserved fruit; sells well.", value=110)
+JAM         = Item("Jam",         "■", "artisan",  "Preserved fruit; sells well.", value=160)
 WINE        = Item("Wine",        "ø", "artisan",  "Aged fruit wine.",            value=200)
-GRAPE_WINE  = Item("Grape Wine",  "ø", "artisan",  "Vintage grape wine; the finest.", value=450)
-PICKLES     = Item("Pickles",     "■", "artisan",  "Pickled vegetables; tangy and tidy.", value=95)
+GRAPE_WINE  = Item("Grape Wine",  "ø", "artisan",  "Vintage grape wine; the finest.", value=260)
+PICKLES     = Item("Pickles",     "■", "artisan",  "Pickled vegetables; tangy and tidy.", value=130)
 JELLIED_EEL = Item("Jellied Eel", "■", "artisan",  "Eel set in savoury jelly; a delicacy.", value=150)
 MEAD        = Item("Mead",        "u", "artisan",  "Fermented honey mead (miód pitny).", value=180)
 
 # --- Cooked dishes (kind 'food'; eat to restore stamina, scaled by quality) --
-PARSNIP_SOUP     = Item("Parsnip Soup",     "≈", "food", "A warming bowl of soup.",        value=60, energy=45, buff="tiller")
-ROASTED_VEG      = Item("Roasted Veg",      "≈", "food", "Hearty roasted vegetables.",     value=95, energy=70, buff="tiller")
+PARSNIP_SOUP     = Item("Parsnip Soup",     "≈", "food", "A warming bowl of soup.",        value=90, energy=45, buff="tiller")
+ROASTED_VEG      = Item("Roasted Veg",      "≈", "food", "Hearty roasted vegetables.",     value=135, energy=70, buff="tiller")
 FISH_STEW        = Item("Fish Stew",        "≈", "food", "A rich fisherman's stew.",       value=85, energy=60, buff="hearty")
 GRILLED_FISH     = Item("Grilled Fish",     "≈", "food", "Simply grilled and restorative.", value=65, energy=45, buff="hearty")
 MUSHROOM_STEW    = Item("Mushroom Stew",    "≈", "food", "Earthy cave-mushroom stew.",     value=90, energy=65, buff="forager")
@@ -151,9 +151,9 @@ GLOWCAP_BROTH    = Item("Glowcap Broth",    "≈", "food", "A radiant, deeply re
 SAUTEED_MUSH     = Item("Sauteed Mushrooms","≈", "food", "Wild field mushrooms in butter.", value=60, energy=45, buff="forager")
 CHANTERELLE_SAUTE= Item("Chanterelle Saute","≈", "food", "Golden chanterelles, gently fried.", value=90, energy=60, buff="forager")
 BOLETE_BROTH     = Item("Bolete Broth",     "≈", "food", "A rich woodland mushroom broth.", value=100, energy=70, buff="forager")
-GLAZED_VEG       = Item("Glazed Vegetables","≈", "food", "Vegetables glazed in honey.",    value=110, energy=75, buff="tiller")
-FRIED_FISH       = Item("Fried Fish",       "≈", "food", "Fish fried in sunflower oil.",   value=95, energy=65, buff="hearty")
-CANDIED_FRUIT    = Item("Candied Fruit",    "≈", "food", "Fruit candied in honey; a sweet treat.", value=140, energy=85, buff="brisk")
+GLAZED_VEG       = Item("Glazed Vegetables","≈", "food", "Vegetables glazed in honey.",    value=150, energy=75, buff="tiller")
+FRIED_FISH       = Item("Fried Fish",       "≈", "food", "Fish fried in sunflower oil.",   value=180, energy=65, buff="hearty")
+CANDIED_FRUIT    = Item("Candied Fruit",    "≈", "food", "Fruit candied in honey; a sweet treat.", value=190, energy=85, buff="brisk")
 # Dishes made from the farm's own eggs, milk and cheese — the husbandry->kitchen tie-in.
 FRIED_EGG        = Item("Fried Egg",        "≈", "food", "A quick fried egg.",             value=45, energy=30, buff="hearty")
 OMELETTE         = Item("Omelette",         "≈", "food", "A fluffy two-egg omelette.",     value=90, energy=60, buff="hearty")

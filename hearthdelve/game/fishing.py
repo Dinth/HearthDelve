@@ -37,6 +37,6 @@ def cast(state: GameState) -> None:
     q = skills.roll_quality(state, "Fishing")
     p.inventory.add(fish, 1, quality=q)
     state.bump("fish_caught")
-    skills.gain(state, "Fishing", 12)
+    skills.gain(state, "Fishing", 24)          # a slow, patient skill — worth more per catch
     star = (" " + skills.stars(q)) if q else ""
     state.log.add(f"A tug on the line — you reel in a {fish.name}{star}!", (150, 200, 224))

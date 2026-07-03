@@ -344,7 +344,7 @@ def _gather_drop(state: GameState, item, target) -> None:
         gem = content.random_gem(random)
         inv.add(gem, 1)
         state.bump("ore_mined")
-        skills.gain(state, "Mining", 12)
+        skills.gain(state, "Mining", 20)
         if random.random() < 0.3:
             inv.add(items.STONE, 1)
         state.log.add(f"  (+1 {gem.name})", C.DIM)
@@ -362,12 +362,12 @@ def _gather_drop(state: GameState, item, target) -> None:
         if not got:                       # always yield something
             inv.add(items.STONE, 1); got.append("Stone")
         state.bump("ore_mined")
-        skills.gain(state, "Mining", 10)
+        skills.gain(state, "Mining", 16)
         state.log.add("  (+" + ", +".join(got) + ")", C.DIM)
     elif item is items.PICKAXE and target.name in ("rock", "ruins_wall"):
         inv.add(items.STONE, 2)
         state.bump("ore_mined")
-        skills.gain(state, "Mining", 6)
+        skills.gain(state, "Mining", 10)
         state.log.add("  (+2 Stone)", C.DIM)
     elif item is items.MACHETE and target.name == "tall_grass":
         n = random.randint(1, 2)

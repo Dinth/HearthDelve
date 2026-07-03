@@ -139,7 +139,7 @@ ASTER = Crop(
 # village fields fall back to), so winter isn't a dead season on the farm.
 SNOW_TURNIP = Crop(
     name="Snow Turnip", glyph="♠", color=(210, 220, 232), season="Winter",
-    days_to_mature=5, regrows=False, sell_price=90,
+    days_to_mature=5, regrows=False, sell_price=130,
     seed=items.SNOW_TURNIP_SEEDS, produce=items.SNOW_TURNIP,
     desc="A hardy winter root, sweetened by the frost.",
 )
@@ -776,7 +776,7 @@ GENERAL_STOCK: list[tuple[Item, int]] = [
     (items.CHERRY_SAPLING, 600), (items.PEACH_SAPLING, 600),
     (items.APPLE_SAPLING, 700), (items.ORANGE_SAPLING, 700),
     (items.TULIP_SEEDS, 40), (items.SUNFLOWER_SEEDS, 50), (items.ASTER_SEEDS, 50),
-    (items.SNOW_TURNIP_SEEDS, 70), (items.WINTERBERRY_SEEDS, 90),
+    (items.SNOW_TURNIP_SEEDS, 40), (items.WINTERBERRY_SEEDS, 90),
     (items.CHICK, 120), (items.CALF, 400),
 ]
 # Blacksmith also sells fuel/metal: (item, buy price)
