@@ -962,7 +962,7 @@ def main() -> None:
                         if ord(ch) - ord("a") < n:
                             inv_sel = ord(ch) - ord("a")
                         continue
-                    if mode == "equipment" and ch in "abcdef":
+                    if mode == "equipment" and ch and ch in "abcdef":
                         select_slot(state, "abcdef".index(ch))
                         continue
 
