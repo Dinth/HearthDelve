@@ -63,6 +63,7 @@ class GameState:
     # transient view/UI state (never serialized)
     cam_focus: tuple | None = None                     # camera centres here if set (look/aim modes)
     warned: dict = field(default_factory=dict)         # one-shot alert flags, reset each morning
+    aim_target: object = None                          # last mob fired at; re-aims onto it if still alive
 
     def bump(self, key: str, amount: int = 1) -> None:
         self.stats[key] = self.stats.get(key, 0) + amount

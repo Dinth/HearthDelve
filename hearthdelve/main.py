@@ -1166,8 +1166,7 @@ def main() -> None:
                             state.log.add("Nothing to loose or throw — equip a bow (+ arrows) "
                                           "or craft a bomb (c).", C.DIM)
                         else:
-                            fx, fy = state.player.facing
-                            cur = clamp_look(state, state.player.x + fx, state.player.y + fy)
+                            cur = clamp_look(state, *combat.aim_start(state))
                             target_ctx = {"purpose": combat.aim_purpose(state), "cursor": cur}
                             state.cam_focus = tuple(cur)
                             mode = "target"

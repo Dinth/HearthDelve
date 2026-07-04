@@ -365,6 +365,19 @@ def aim_range(state: GameState) -> int:
     return ready[1].rng if ready else BOMB_RANGE
 
 
+def aim_start(state: GameState) -> tuple[int, int]:
+    """Where the reticle opens: back onto the last monster you fired at, if it
+    survived and is still in range; otherwise the tile you're facing."""
+    p = state.player
+    m = state.aim_target
+    if (m is not None and getattr(m, "alive", False)
+            and any(x is m for x in state.world.monsters)
+            and in_range(state, m.x, m.y, aim_range(state))):
+        return m.x, m.y
+    state.aim_target = None
+    return p.x + p.facing[0], p.y + p.facing[1]
+
+
 def _ranged_to_hit(state: GameState, stat) -> int:
     from . import skills
     lvl = skills.mastery_level(state, stat.category)
@@ -401,6 +414,7 @@ def fire_ranged_at(state: GameState, tx: int, ty: int) -> bool:
     if m is None:
         state.log.add(f"Your {stat.ammo.name.lower()} flies wide and clatters down.", C.DIM)
         return True
+    state.aim_target = m                       # re-aim onto this foe next time (until it dies)
 
     dmg_bonus = skills.mastery_dmg(skills.mastery_level(state, stat.category))
     crit = 0.03 + skills.skill_level(state, "Combat") * 0.01 + skills.mastery_crit(
