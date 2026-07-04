@@ -16,7 +16,7 @@ def _starter_hotbar() -> list[Item]:
 
 
 # ADOM-style worn/ranged slots (melee weapon is whatever you hold, above).
-EQUIP_SLOTS = ("head", "body", "hands", "waist", "legs", "feet", "ranged", "ammo")
+EQUIP_SLOTS = ("head", "body", "cloak", "hands", "waist", "legs", "feet", "ranged", "ammo")
 
 
 def _starter_equipment() -> dict:

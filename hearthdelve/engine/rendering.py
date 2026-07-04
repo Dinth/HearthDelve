@@ -1102,6 +1102,14 @@ def build_codex_pages(state: GameState):
     tools.append(("with penalties — a battle axe fells trees, a blade clears brush.", C.DIM))
     tools.append(("Combat: 1d20 + to-hit vs the foe's DV; damage - its PV. Armour", C.DIM))
     tools.append(("gives PV; Dodge & mastery give DV. Land hits to master a weapon.", C.DIM))
+    tools.append(("", C.WHITE))
+    tools.append(("Materials & affixes", _HDR))
+    tools.append(("Every weapon & armour is made of a material — copper..adamantium", C.DIM))
+    tools.append(("for metal, leather/hide & cloth for soft gear, birch..composite", C.DIM))
+    tools.append(("for bows. Finer material = better. Deeper dungeon loot trends to", C.DIM))
+    tools.append(("finer stuff (with a pinch of luck), and may carry a prefix/suffix", C.DIM))
+    tools.append(("(Fine, Masterwork, of Slaying, of Warding...). Smelt ore to bars,", C.DIM))
+    tools.append(("then forge gear of that metal at an Anvil (build it with 'c').", C.DIM))
     pages.append(("Tools & Equipment", tools))
 
     # --- Page: Seeds & Crops -------------------------------------------------
@@ -1374,8 +1382,8 @@ def render_inventory(con: tcod.console.Console, state: GameState, sel: int = 0) 
     con.print(x + 2, y + h - 2, "[a-z] pick  [⇧D] drop  [e] equipment  [Esc] close", fg=_FOOT_FG)
 
 
-_SLOT_LABEL = {"head": "Head", "body": "Body", "hands": "Gauntlets", "waist": "Girdle",
-               "legs": "Legs", "feet": "Feet", "ranged": "Ranged", "ammo": "Ammo"}
+_SLOT_LABEL = {"head": "Head", "body": "Body", "cloak": "Cloak", "hands": "Gauntlets",
+               "waist": "Girdle", "legs": "Legs", "feet": "Feet", "ranged": "Ranged", "ammo": "Ammo"}
 
 
 def equippables(state: GameState) -> list:
@@ -1408,7 +1416,7 @@ def render_equipment(con: tcod.console.Console, state: GameState) -> None:
               f"  ({prof.category} {lo}-{hi}, mastery {ml})"[:w - 14], fg=C.WHITE)
     row += 1
     # worn paperdoll + ranged/ammo
-    for slot in ("head", "body", "hands", "waist", "legs", "feet", "ranged", "ammo"):
+    for slot in ("head", "body", "cloak", "hands", "waist", "legs", "feet", "ranged", "ammo"):
         it = p.equipment.get(slot)
         if slot == "ammo":
             n = p.inventory.count(it) if it else 0

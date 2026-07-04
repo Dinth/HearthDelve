@@ -222,6 +222,16 @@ def machine_load_options(state: GameState, mdef) -> list:
         for it in {e[0] for e in inv.slots if e[0].kind == "crop" and content.is_fruit(e[0])}:
             out = content.FRUIT_WINE.get(it, items.WINE)      # wine inherits the fruit's value
             opts.append({"inputs": [(it, 1)], "output": out, "quality_from": it})
+    elif a == "bars":
+        # Forge a piece of any base from the metal bars you carry (deeper metals
+        # make finer gear). One entry per (metal, base) you can currently afford.
+        for metal in content.FORGE_METALS:
+            bar = content.MATERIALS[metal].bar
+            for base in list(content.WEAPON_BASES) + list(content.ARMOR_BASES):
+                cost = content.forge_cost(base)
+                if bar is not None and inv.count(bar) >= cost:
+                    opts.append({"inputs": [(bar, cost)], "output": content.make_gear(base, metal),
+                                 "quality_from": None})
     elif a == "crop":
         seen = set()
         for it, _q, _ql in inv.slots:

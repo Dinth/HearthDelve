@@ -23,6 +23,13 @@ class Item:
                          # so NPC gift tastes & the like match any variant
     source: object = None  # the fruit/veg this good was made from (artisan goods);
                            # its price already reflects the source's value
+    # Weapons & armour are made of a material (iron, steel, mithril, ...) and may
+    # carry a prefix and/or suffix affix. Stats derive from base + material +
+    # affixes (see content.make_gear); the name encodes all three so a save
+    # round-trips by name alone.
+    material: str = ""
+    prefix: str = ""
+    suffix: str = ""
 
 
 # --- Tools (hotbar) ----------------------------------------------------------
@@ -39,15 +46,18 @@ FISHING_ROD  = Item("Fishing Rod",  "{", "tool", "Cast at water to catch fish.",
 TIERED_TOOLS = (HOE, WATERING_CAN, AXE, PICKAXE, MACHETE)
 
 # --- Weapons (held like a tool; see content.WEAPON_STATS for combat profiles) -
-SWORD        = Item("Rusty Sword",  "|", "weapon", "A basic blade for the wilds.", stackable=False, value=40)
-DAGGER       = Item("Dagger",       "†", "weapon", "A quick, light blade — deft and accurate.", stackable=False, value=70)
-BATTLE_AXE   = Item("Battle Axe",   "¶", "weapon", "A heavy axe; fells foes and trees alike.", stackable=False, value=180)
-WAR_MACE     = Item("War Mace",     "‡", "weapon", "A crushing head that shrugs off armour.", stackable=False, value=150)
+# These are the iron-tier "canonical" pieces; content.make_gear seeds itself with
+# them and generates the other materials/affixes. The starter blade is a humble
+# rusty one — the affix system in miniature from turn one.
+SWORD        = Item("Rusty Iron Sword", "|", "weapon", "A basic blade for the wilds.", stackable=False, value=40, material="iron", prefix="rusty")
+DAGGER       = Item("Iron Dagger",      "†", "weapon", "A quick, light blade — deft and accurate.", stackable=False, value=70, material="iron")
+BATTLE_AXE   = Item("Iron Battle Axe",  "¶", "weapon", "A heavy axe; fells foes and trees alike.", stackable=False, value=180, material="iron")
+WAR_MACE     = Item("Iron War Mace",    "‡", "weapon", "A crushing head that shrugs off armour.", stackable=False, value=150, material="iron")
 
 # --- Armor (worn; grants Protection, sometimes at a Dodge cost) --------------
-LEATHER_ARMOR = Item("Leather Armor", "]", "armor", "Boar-hide armour; light and unencumbering.", stackable=False, value=90)
-CHAIN_MAIL    = Item("Chain Mail",    "]", "armor", "Linked steel rings; solid cover, a touch bulky.", stackable=False, value=280)
-PLATE_ARMOR   = Item("Plate Armor",   "]", "armor", "Heavy plate; the best protection, but it slows your dodge.", stackable=False, value=650)
+LEATHER_ARMOR = Item("Leather Armour", "]", "armor", "Boar-hide armour; light and unencumbering.", stackable=False, value=90, material="leather")
+CHAIN_MAIL    = Item("Iron Armour",    "]", "armor", "Linked iron rings; solid cover, a touch bulky.", stackable=False, value=280, material="iron")
+PLATE_ARMOR   = Item("Steel Armour",   "]", "armor", "Heavy steel plate; the best protection, but it slows your dodge.", stackable=False, value=650, material="steel")
 
 # --- Seeds -------------------------------------------------------------------
 PARSNIP_SEEDS     = Item("Parsnip Seeds",     "_", "seed", "Plant in spring; matures in ~4 days.")
@@ -215,9 +225,9 @@ GLOWFISH    = Item("Glowfish",    "»", "fish", "Faintly luminescent; prized.", 
 # --- Ranged weapons & ammo ---------------------------------------------------
 # Equip a launcher in the ranged slot and its ammo in the ammo slot, then aim
 # with (t). Bombs need no launcher — they're thrown by hand from the ammo slot.
-SHORT_BOW   = Item("Short Bow",   ")", "ranged", "A quick hunting bow; looses arrows (t).", value=90, stackable=False)
-LONG_BOW    = Item("Long Bow",    "}", "ranged", "A tall war bow — longer reach, harder hits.", value=190, stackable=False)
-SLING       = Item("Sling",       "?", "ranged", "A leather sling; hurls stones cheaply.", value=35, stackable=False)
+SHORT_BOW   = Item("Short Bow",   ")", "ranged", "A quick hunting bow; looses arrows (t).", value=90, stackable=False, material="birch")
+LONG_BOW    = Item("Long Bow",    "}", "ranged", "A tall war bow — longer reach, harder hits.", value=190, stackable=False, material="yew")
+SLING       = Item("Sling",       "?", "ranged", "A leather sling; hurls stones cheaply.", value=35, stackable=False, material="leather")
 ARROW       = Item("Arrow",       "/", "ammo",   "Fletched arrows for a bow.", value=3)
 SLING_STONE = Item("Sling Stone", ".", "ammo",   "Smooth stones for a sling.", value=1)
 
@@ -229,6 +239,20 @@ BOMB        = Item("Bomb",        "*", "bomb",     "Aim & throw (t): harms monst
 BY_NAME: dict[str, Item] = {v.name: v for v in list(globals().values()) if isinstance(v, Item)}
 
 
+# Legacy save names (pre-material rework) -> the current canonical item, so old
+# saves still resolve. Filled after the registry is built.
+_ALIASES: dict[str, Item] = {
+    "Sword": SWORD, "Rusty Sword": SWORD, "Dagger": DAGGER,
+    "Battle Axe": BATTLE_AXE, "War Mace": WAR_MACE,
+    "Leather Armor": LEATHER_ARMOR, "Chain Mail": CHAIN_MAIL, "Plate Armor": PLATE_ARMOR,
+}
+
+# Callbacks that can build an item from its name on a registry miss (e.g. a
+# composed "Fine Steel Helm of Warding"). content registers the gear resolver
+# here — items stays free of any dependency on content.
+_RESOLVERS: list = []
+
+
 def register(item: Item) -> Item:
     """Add a dynamically-built item (e.g. a per-fruit jam) to the save/load
     registry. Returns the item for convenient assignment."""
@@ -236,8 +260,21 @@ def register(item: Item) -> Item:
     return item
 
 
+def register_resolver(fn) -> None:
+    """Register a name -> Item|None builder, tried by by_name on a miss."""
+    _RESOLVERS.append(fn)
+
+
 def by_name(name: str) -> Item | None:
-    return BY_NAME.get(name)
+    it = BY_NAME.get(name)
+    if it is not None:
+        return it
+    for fn in _RESOLVERS:
+        it = fn(name)
+        if it is not None:
+            BY_NAME[name] = it       # cache the reconstructed piece
+            return it
+    return _ALIASES.get(name)
 
 
 @dataclass
