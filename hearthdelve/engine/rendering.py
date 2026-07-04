@@ -410,16 +410,18 @@ def render_panel(con: tcod.console.Console, state: GameState) -> None:
             con.print(x0 + C.PANEL_W - 1 - len(cnt), yy, cnt, fg=fg, bg=rowbg)
         else:
             con.print(x, yy, f"{i + 1} {p.display_name(it)}"[:C.PANEL_W - 3], fg=fg, bg=rowbg)
+    row = 18 + len(p.hotbar) + 1            # a blank spacer below the hotbar
     if p.weapon:
-        con.print(x, 18 + len(p.hotbar) + 1, f"⚔ {p.weapon.name}", fg=C.DIM)
+        con.print(x, row, f"⚔ {p.weapon.name}"[:C.PANEL_W - 2], fg=C.DIM)
+        row += 2                            # weapon line, then a spacer
 
-    # goals progress
+    # goals progress — flows below the weapon line so it can't overdraw it
     from ..game import quests
     dn, tot = quests.progress(state)
-    con.print(x, 27, f"Goals {dn}/{tot}", fg=(224, 204, 128))
+    con.print(x, row, f"Goals {dn}/{tot}", fg=(224, 204, 128))
     goal = quests.active(state)
     if goal:
-        con.print(x, 28, f"▸ {goal.title}"[:C.PANEL_W - 2], fg=C.DIM)
+        con.print(x, row + 1, f"▸ {goal.title}"[:C.PANEL_W - 2], fg=C.DIM)
 
     con.print(x, C.SCREEN_H - 3, "Space use  ? help", fg=C.DIM)
     con.print(x, C.SCREEN_H - 2, "l look  i/e bags", fg=C.DIM)
@@ -671,7 +673,8 @@ def describe(state: GameState, x: int, y: int) -> str:
                          if m.behavior == "defensive"
                          else "skittish; it bolts if you get too close")
                 return f"a {m.name.lower()} — {trait}."
-            return (f"a {m.name.lower()} — HP {m.hp}/{m.max_hp}, DV {m.dv}, PV {m.pv}. "
+            tier = f" (level {m.level})" if getattr(m, "level", 1) > 1 else ""
+            return (f"a {m.name.lower()}{tier} — HP {m.hp}/{m.max_hp}, DV {m.dv}, PV {m.pv}. "
                     "Bump it to attack.")
     for npc in state.world.npcs:
         if (npc.x, npc.y) == (x, y):
@@ -771,18 +774,34 @@ def describe(state: GameState, x: int, y: int) -> str:
 
 def render_look(con: tcod.console.Console, state: GameState, lx: int, ly: int) -> None:
     ox, oy = camera_origin(state)
+    p = state.player
+
+    # A faint tether from you to the cursor, so the cursor is unmistakably YOURS
+    # and easy to find again if it has roamed off across the map. Tints the path
+    # cells' background (leaving their glyphs readable); skips the endpoints.
+    from ..game.combat import _line
+    path = _line(p.x, p.y, lx, ly)                    # excludes the start (you)
+    for tx, ty in path[:-1]:                          # excludes the cursor itself
+        tsx, tsy = tx - ox, ty - oy
+        if 0 <= tsx < C.VIEW_W and 0 <= tsy < C.VIEW_H:
+            con.rgb["bg"][tsx, tsy] = (66, 62, 44)
+
     sx, sy = lx - ox, ly - oy
     if 0 <= sx < C.VIEW_W and 0 <= sy < C.VIEW_H:
-        con.rgb["bg"][sx, sy] = (120, 110, 40)
+        con.rgb["bg"][sx, sy] = (150, 135, 45)
         con.rgb["fg"][sx, sy] = (20, 20, 20)
-    # Word-wrapped readout box across the top of the viewport, so long
-    # descriptions (a signpost's directions, say) aren't clipped to one row.
-    lines = _wrap("Look: " + describe(state, lx, ly), C.VIEW_W - 2)[:5]
-    h = len(lines) + 1
-    con.draw_rect(0, 0, C.VIEW_W, h, ch=ord(" "), bg=(40, 38, 30))
+
+    # A clear mode banner (not a log line) names the repurposed keys, so a new
+    # player never wonders why "moving" doesn't move them. Below it, a
+    # word-wrapped readout so long descriptions (a signpost's bearings) fit.
+    banner = "» LOOK — arrows move the cursor, not you · Esc/l to exit"
+    lines = _wrap(describe(state, lx, ly), C.VIEW_W - 2)[:5]
+    h = len(lines) + 2
+    con.draw_rect(0, 0, C.VIEW_W, h, ch=ord(" "), bg=(46, 52, 40))
+    con.draw_rect(0, 0, C.VIEW_W, 1, ch=ord(" "), bg=(70, 96, 78))
+    con.print(1, 0, banner[:C.VIEW_W - 1], fg=(238, 244, 210), bg=(70, 96, 78))
     for i, ln in enumerate(lines):
-        con.print(1, i, ln[:C.VIEW_W - 1], fg=(245, 235, 200), bg=(40, 38, 30))
-    con.print(1, len(lines), "(move cursor · Esc/l to close)", fg=C.DIM, bg=(40, 38, 30))
+        con.print(1, i + 1, ln[:C.VIEW_W - 1], fg=(245, 235, 200), bg=(46, 52, 40))
 
 
 def render_target(con: tcod.console.Console, state: GameState, ctx) -> None:
@@ -951,7 +970,9 @@ def render_load_machine(con: tcod.console.Console, state: GameState, ctx) -> Non
             con.draw_rect(x + 1, y + 2 + row, w - 2, 1, ch=ord(" "), bg=bg)
         out = opt["output"]
         ins = ", ".join(f"{q} {it.name}" for it, q in opt["inputs"])
-        con.print(x + 2, y + 2 + row, ("▸ " if i == sel else "  ") + out.name, fg=C.WHITE, bg=bg)
+        oq = opt.get("out_qty", 1)
+        label = (f"{oq}x {out.name}" if oq > 1 else out.name)
+        con.print(x + 2, y + 2 + row, ("▸ " if i == sel else "  ") + label, fg=C.WHITE, bg=bg)
         con.print(x + 20, y + 2 + row, f"from {ins}"[:w - 30], fg=(160, 180, 205), bg=bg)
         con.print(x + w - 8, y + 2 + row, f"{out.value}g", fg=C.GOLD_COLOR, bg=bg)
     if start > 0:
@@ -1595,7 +1616,7 @@ def render_shop(con: tcod.console.Console, state: GameState, npc, sel: int, line
     entries = village.shop_entries(npc.shop, state)
     title = {"general": "General Store", "blacksmith": "Blacksmith",
              "tavern": "Tavern", "carpenter": "Carpentry"}.get(npc.shop, "Shop")
-    header = line.split("\n") if (npc.shop in ("tavern", "carpenter") and line) else []
+    header = line.split("\n") if line else []             # the keeper's greeting
     w = 68 if npc.shop == "carpenter" else 56
     h = len(entries) + 6 + len(header)
     x, y = _modal(con, w, h, f"{npc.name}'s {title}")
@@ -1629,6 +1650,10 @@ def render_shop(con: tcod.console.Console, state: GameState, npc, sel: int, line
             con.print(x + 2, yy, ("▸ " if i == sel else "  ") + f"Sell {item.name}{star}",
                       fg=(200, 220, 160), bg=rowbg)
             con.print(x + w - 10, yy, f"+{price}g", fg=C.GOLD_COLOR, bg=rowbg)
+        elif e[0] == "cancel_build":
+            con.print(x + 2, yy, ("▸ " if i == sel else "  ") + "Cancel current order",
+                      fg=(224, 180, 120), bg=rowbg)
+            con.print(x + w - 12, yy, "refund", fg=(190, 180, 150), bg=rowbg)
         elif e[0] == "commission":
             _, label, kind, price, mats = e
             matstr = ", ".join(f"{q} {it.name.split()[0].lower()}" for it, q in mats)
@@ -1671,7 +1696,11 @@ def render_gift(con: tcod.console.Console, state: GameState, npc, sel: int) -> N
         rowbg = (54, 50, 36) if i == sel else (20, 22, 32)
         if i == sel:
             con.draw_rect(x + 1, yy, w - 2, 1, ch=ord(" "), bg=rowbg)
-        tag = " (loves!)" if it in npc.loves else " (likes)" if it in npc.likes else " (dislikes)" if it in npc.dislikes else ""
+        # Match the same family-aware taste logic the gift actually uses, so the
+        # tag never lies (a "loves Jam" NPC tags any jam variant as loved).
+        tag = (" (loves!)" if npc._matches(it, npc.loves)
+               else " (likes)" if npc._matches(it, npc.likes)
+               else " (dislikes)" if npc._matches(it, npc.dislikes) else "")
         star = (" " + skills.stars(ql)) if ql else ""
         con.print(x + 2, yy, ("▸ " if i == sel else "  ") + f"{q:>3} {it.name}{star}{tag}", fg=C.WHITE, bg=rowbg)
     if start > 0:

@@ -201,7 +201,6 @@ def generate(seed: int, kind: str, depth: int) -> GameMap:
     # A few gentle monsters, never in the entry room. More on deeper floors.
     # Track occupied tiles (seeded with the stairs) so no two mobs share a spot.
     from ..data import content
-    from ..entities.monster import Mob
     occupied = {up, down}
     pool = [m for m in content.MONSTERS if m.min_depth <= depth]
     n_mon = rng.randint(2, 3 + depth)
@@ -215,8 +214,7 @@ def generate(seed: int, kind: str, depth: int) -> GameMap:
             continue
         occupied.add((mx, my))
         t = rng.choice(pool)
-        gm.monsters.append(Mob(t.name, t.glyph, t.color, t.hp, t.hp, t.speed, t.behavior, mx, my,
-                               dv=t.dv, pv=t.pv, to_hit=t.to_hit, dmg=t.dmg))
+        gm.monsters.append(content.make_mob(t, mx, my, depth, rng))
 
     # A boss lurks on deep floors (near the down-stairs).
     bosses = [b for b in content.BOSSES if b.min_depth <= depth]
@@ -227,8 +225,7 @@ def generate(seed: int, kind: str, depth: int) -> GameMap:
         by = rng.randint(room.y + 1, room.y + room.h - 2)
         if tiles[bx, by] == tile.DUNGEON_FLOOR and (bx, by) not in occupied:
             occupied.add((bx, by))
-            gm.monsters.append(Mob(b.name, b.glyph, b.color, b.hp, b.hp, b.speed, b.behavior, bx, by,
-                                   dv=b.dv, pv=b.pv, to_hit=b.to_hit, dmg=b.dmg, boss=True))
+            gm.monsters.append(content.make_mob(b, bx, by, depth, rng, boss=True))
 
     # Vault: a big chamber on deep floors, packed with gold and its guardians.
     if depth >= 3 and rng.random() < 0.5:
@@ -256,8 +253,7 @@ def generate(seed: int, kind: str, depth: int) -> GameMap:
                 if tiles[mx, my] == tile.DUNGEON_FLOOR and (mx, my) not in occupied:
                     occupied.add((mx, my))
                     t = rng.choice(guards)
-                    gm.monsters.append(Mob(t.name, t.glyph, t.color, t.hp, t.hp, t.speed, t.behavior, mx, my,
-                                           dv=t.dv, pv=t.pv, to_hit=t.to_hit, dmg=t.dmg))
+                    gm.monsters.append(content.make_mob(t, mx, my, depth, rng))
 
     # Glimmerwood Hollow: a rare, peaceful glowing grove — fungal trees, giant
     # luminous caps and a still pool. Commoner in damp grottoes; a cozy find.

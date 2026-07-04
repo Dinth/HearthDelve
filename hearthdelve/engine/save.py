@@ -26,7 +26,7 @@ from ..game.state import GameState, MessageLog
 
 # Bump whenever the on-disk format changes so an older/newer binary refuses a
 # save it can't read instead of crashing partway through a load.
-SAVE_VERSION = 6
+SAVE_VERSION = 7
 SAVE_PATH = os.path.join(os.path.expanduser("~"), ".hearthdelve_save.json")
 
 # Housing the carpenter/player raises (not produced by worldgen), so it must be
@@ -96,7 +96,8 @@ def save(state: GameState, path: str = SAVE_PATH) -> None:
         "quests_done": list(state.quests_done),
         "mail": [{"sender": m["sender"], "body": m["body"],
                   "items": [[(it.name if hasattr(it, "name") else it), q, ql]
-                            for it, q, ql in m.get("items", [])]}
+                            for it, q, ql in m.get("items", [])],
+                  **({"tax": True} if m.get("tax") else {})}
                  for m in state.mail],
         "tiles_shape": [surf.width, surf.height],
         "tiles": base64.b64encode(np.ascontiguousarray(surf.tiles).tobytes()).decode("ascii"),

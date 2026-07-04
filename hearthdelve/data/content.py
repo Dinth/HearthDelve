@@ -427,6 +427,66 @@ def ranged_stat(item) -> RangedStat | None:
     return RANGED.get(item)
 
 
+# --- Ammo: tiered arrows (& sling stones) ------------------------------------
+# A launcher rolls its own damage; the loosed round adds to it. A plain wooden
+# arrow is weak and flies a touch wide; tipping it with metal ore makes it bite
+# harder (a finer ore = a better head). All arrows share the "arrow" family, so
+# any bow can loose any of them — a shot spends the BEST arrow you carry.
+@dataclass(frozen=True)
+class AmmoStat:
+    family: str            # "arrow" | "stone" — which launchers can loose it
+    dmg: int = 0           # damage added on top of the launcher's roll
+    to_hit: int = 0        # to-hit added on top of the launcher's aim
+
+
+AMMO: dict[Item, AmmoStat] = {
+    items.ARROW:       AmmoStat("arrow", 0, -1),   # plain wooden: weak & a bit wobbly
+    items.SLING_STONE: AmmoStat("stone", 0, 0),
+}
+
+# ore -> (tip name, +dmg, +to-hit, value each) for the metal-tipped arrow it makes.
+_ARROW_TIPS = [
+    (items.COPPER_ORE,     "Copper",     1, 0, 6),
+    (items.TIN_ORE,        "Tin",        1, 0, 6),
+    (items.IRON_ORE,       "Iron",       2, 0, 9),
+    (items.SILVER_ORE,     "Silver",     2, 1, 14),
+    (items.GOLD_ORE,       "Gilded",     2, 0, 16),
+    (items.ADAMANTITE_ORE, "Adamantine", 3, 1, 22),
+    (items.MITHRIL_ORE,    "Mithril",    4, 1, 30),
+]
+# ore item -> the tipped arrow it fletches (for the craft chooser).
+ARROW_FROM_ORE: dict[Item, Item] = {}
+for _ore, _tip, _d, _th, _val in _ARROW_TIPS:
+    _arrow = items.register(items.Item(
+        f"{_tip} Arrow", "/", "ammo",
+        f"A {_tip.lower()}-tipped arrow — hits harder than plain wood.", value=_val))
+    AMMO[_arrow] = AmmoStat("arrow", _d, _th)
+    ARROW_FROM_ORE[_ore] = _arrow
+
+
+def ammo_stat(item) -> AmmoStat | None:
+    return AMMO.get(item)
+
+
+def ammo_family(stat: RangedStat) -> str:
+    """The ammo family a launcher looses (from its canonical ammo item)."""
+    st = AMMO.get(stat.ammo)
+    return st.family if st else ""
+
+
+def best_ammo(inv, family: str):
+    """The strongest ammo of a family the inventory holds (by +dmg, then +to-hit),
+    or None. A bow thus spends your finest arrows first — crafting better ones
+    pays off immediately."""
+    best = None
+    for e in inv.slots:
+        st = AMMO.get(e[0])
+        if st and st.family == family and e[1] > 0:
+            if best is None or (st.dmg, st.to_hit) > (AMMO[best].dmg, AMMO[best].to_hit):
+                best = e[0]
+    return best
+
+
 
 
 # --- Crops -------------------------------------------------------------------
@@ -724,7 +784,9 @@ RECIPES: list[Recipe] = [
     Recipe("Set Fence", "build", ((items.FENCE, 1),), machine="fence",
            desc="Plant a fence panel on the faced tile; fence off wild land to claim it."),
     Recipe("Arrows", "item", ((items.WOOD, 1),), output=items.ARROW, out_qty=5,
-           desc="Fletch arrows for a bow (aim & loose with t)."),
+           desc="Fletch 5 plain wooden arrows — weak, but free (aim & loose with t)."),
+    Recipe("Metal-tipped Arrows", "choose", ((items.WOOD, 1),), out_qty=5,
+           desc="1 Wood + 1 metal ore -> 5 arrows tipped with that metal (pick the ore)."),
     Recipe("Sling Stones", "item", ((items.STONE, 1),), output=items.SLING_STONE, out_qty=4,
            desc="Knap stones for a sling."),
     # --- Cooking: makes a carryable dish; eat it (x) for stamina -------------
@@ -847,6 +909,27 @@ BOSSES: list[Monster] = [
             dv=10, pv=8, to_hit=8, dmg=(11, 20), boss=True,
             desc="Warden of the deep vaults — vast, armoured, and terribly strong."),
 ]
+
+
+def make_mob(template: Monster, x: int, y: int, depth: int, rng, boss: bool = False):
+    """Spawn a live :class:`Mob` from a template, scaled to the floor.
+
+    Each mob gets a ``level`` ≈ the dungeon depth, nudged ±1 so two of the same
+    kind on one floor differ. Stats scale with the levels the mob stands *above*
+    its introduction depth (``min_depth``): a monster met on the floor it first
+    appears reads exactly as authored, and only grows tougher when it turns up
+    deeper. Level also feeds :func:`monster_drops` — a harder kill pays better."""
+    from ..entities.monster import Mob
+    lvl = max(template.min_depth, depth + rng.choice((-1, 0, 0, 1)))
+    k = lvl - template.min_depth                     # levels above baseline
+    hp = max(1, round(template.hp * (1 + 0.18 * k)))
+    lo, hi = template.dmg
+    scale = 1 + 0.12 * k
+    dmg = (max(1, round(lo * scale)), max(1, round(hi * scale)))
+    return Mob(template.name, template.glyph, template.color, hp, hp,
+               template.speed, template.behavior, x, y,
+               dv=template.dv + k // 3, pv=template.pv + k // 3,
+               to_hit=template.to_hit + k // 2, dmg=dmg, boss=boss, level=lvl)
 
 
 # --- Surface wildlife --------------------------------------------------------
@@ -1366,12 +1449,21 @@ MONSTER_DROPS: dict[str, list] = {
 }
 
 
-def monster_drops(name: str, rng) -> list:
-    """Roll a slain creature's reagent drops (list of items)."""
+def monster_drops(name: str, rng, level: int = 1) -> list:
+    """Roll a slain creature's reagent drops. A higher-``level`` specimen (see
+    :func:`make_mob`) drops more reliably, may yield a second reagent, and — for
+    a real bruiser — leaves a depth-appropriate ore or gem as a trophy, so
+    fighting the tougher monsters is worth the risk."""
     out = []
+    bonus = 0.04 * max(0, level - 1)
     for item, chance in MONSTER_DROPS.get(name, ()):
-        if rng.random() < chance:
+        if rng.random() < min(0.95, chance + bonus):
             out.append(item)
+            if level >= 4 and rng.random() < 0.07 * (level - 3):
+                out.append(item)                       # a hefty specimen yields extra
+    if level >= 3 and rng.random() < 0.06 * (level - 2):
+        out.append(random_gem(rng) if rng.random() < 0.3
+                   else ore_for_depth(level, rng))     # a trophy from a tough kill
     return out
 
 

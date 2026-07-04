@@ -25,6 +25,8 @@ class Mob:
     pv: int = 0             # Protection Value — flat damage it soaks
     to_hit: int = 0         # its bonus to hit the player
     dmg: tuple = (1, 3)     # (min, max) damage it deals
+    level: int = 1          # dungeon depth-scaled power (see content.make_mob);
+                            # differentiates same-kind mobs & drives loot
     energy: int = 0     # accumulates by speed; acts when >= 2
     awake: bool = False
     boss: bool = False

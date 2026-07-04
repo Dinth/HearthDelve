@@ -63,7 +63,36 @@ def craft(state: GameState, recipe: Recipe) -> bool:
         state.log.add(f"You craft {recipe.out_qty}x {recipe.output.name}.")
         for it, qty in recipe.inputs:
             state.player.inventory.remove(it, qty)
+    else:
+        return False        # "choose" recipes are resolved via a chooser (see below)
     return True
+
+
+def arrow_choice_options(state: GameState) -> list:
+    """Ore-tipped arrows the player can currently fletch: 1 Wood + 1 ore -> 5
+    arrows of that metal. One entry per ore held (shape matches the machine
+    chooser, so it reuses render_load_machine)."""
+    inv = state.player.inventory
+    if inv.count(items.WOOD) < 1:
+        return []
+    opts = []
+    for ore, arrow in content.ARROW_FROM_ORE.items():
+        if inv.count(ore) >= 1:
+            opts.append({"inputs": [(items.WOOD, 1), (ore, 1)], "output": arrow, "out_qty": 5})
+    return opts
+
+
+def craft_choice(state: GameState, opt) -> None:
+    """Resolve a chosen craft option (e.g. metal-tipped arrows): spend the inputs,
+    make ``out_qty`` of the output."""
+    inv = state.player.inventory
+    if not all(inv.count(it) >= q for it, q in opt["inputs"]):
+        return
+    for it, q in opt["inputs"]:
+        inv.remove(it, q)
+    qty = opt.get("out_qty", 1)
+    inv.add(opt["output"], qty)
+    state.log.add(f"You fletch {qty}x {opt['output'].name}.", (200, 220, 160))
 
 
 def _place_fence(state: GameState) -> bool:

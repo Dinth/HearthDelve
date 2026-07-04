@@ -154,6 +154,10 @@ def _festival_treat(state: GameState, npc: NPC):
     treat = fest[3]
     state.player.inventory.add(treat, 1)
     name = fest[1][0].upper() + fest[1][1:]
+    # Log it too: a shop greeting opens the trade panel, which may not surface
+    # the line, and a once-per-festival treat must never be silently pocketed.
+    state.log.add(f"{npc.name} presses a {treat.name.lower()} on you for the {fest[1]}.",
+                  (232, 200, 120))
     return (f"\"{name}! So glad you came,\" says {npc.name}.\n"
             f"\"Here — a {treat.name.lower()} for the day. Enjoy!\"")
 
@@ -172,19 +176,24 @@ def _heart_reward(state: GameState, npc: NPC):
     if npc.role == "forester" and npc.hearts >= 6 and random.random() < 0.30:
         gift = random.choice(npc.gifts)
         p.inventory.add(gift, 1)
+        state.log.add(f"{npc.name} gives you a {gift.name.lower()}.", (200, 220, 160))
         if gift is items.BEE_QUEEN:
             return ("Yew cups his hands and hums low; something within them stirs:\n"
                     "\"A queen for a friend — go raise her a hall of gold!\"")
         return (f"Yew tucks a {gift.name.lower()} into your pack with a wink:\n"
                 "\"The wood shares with them as shares with the wood!\"")
 
-    # One-time tokens of friendship at heart milestones, from their own pool.
-    for th in (8, 5):
+    # One-time tokens of friendship at heart milestones, from their own pool
+    # (ascending, so the 5-heart token always lands before the 8-heart one).
+    for th in (5, 8):
         key = f"heartgift_{npc.name}_{th}"
         if npc.hearts >= th and not state.stats.get(key):
             state.stats[key] = 1
             gift = random.choice(npc.gifts)
             p.inventory.add(gift, 1)
+            # Log it too — the gift may arrive via a shop greeting whose panel
+            # doesn't show the line.
+            state.log.add(f"{npc.name} gives you a {gift.name.lower()}.", (200, 220, 160))
             return (f"{npc.name} presses a {gift.name.lower()} into your hands.\n"
                     "\"For a good friend. I mean it — take it.\"")
     return None
@@ -269,9 +278,22 @@ def shop_entries(shop: str, state: GameState | None = None):
                  for (label, price, stam, hp) in content.TAVERN_MENU]
         return meals + (_inn_purchases(state) if state is not None else [])
     if shop == "carpenter":
-        return [("commission", label, kind, gold, mats)
+        jobs = [("commission", label, kind, gold, mats)
                 for (label, kind, gold, mats) in content.CARPENTER_JOBS]
+        # If an order is outstanding, offer to cancel it (with a full refund) so
+        # you're never locked out of the carpenter by a build you can't site.
+        if state is not None and state.pending_build:
+            return [("cancel_build", state.pending_build)] + jobs
+        return jobs
     return []
+
+
+def _job_for(kind: str):
+    """The (label, gold, mats) of a carpenter job by its build kind, or None."""
+    for label, k, gold, mats in content.CARPENTER_JOBS:
+        if k == kind:
+            return label, gold, mats
+    return None
 
 
 def purchase(state: GameState, entry) -> None:
@@ -310,6 +332,20 @@ def purchase(state: GameState, entry) -> None:
         star = (" " + skills.stars(q)) if q else ""
         state.log.add(f"The innkeeper takes your {item.name.lower()}{star} for {price}g.",
                       (240, 214, 120))
+    elif entry[0] == "cancel_build":
+        _, kind = entry
+        job = _job_for(kind)
+        if not state.pending_build or job is None:
+            return
+        label, gold, mats = job
+        p = state.player
+        p.gold += gold
+        for it, q in mats:
+            p.inventory.add(it, q)
+        state.pending_build = ""
+        state.log.add(f"Tomas tears up the order for the "
+                      f"{label.split('(')[0].strip().lower()} and returns your {gold}g and materials.",
+                      (200, 220, 160))
     elif entry[0] == "commission":
         _, label, kind, gold, mats = entry
         p = state.player

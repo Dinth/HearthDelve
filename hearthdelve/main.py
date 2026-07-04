@@ -1163,6 +1163,11 @@ def main() -> None:
                         mode = "look"
                         look = [state.player.x, state.player.y]
                         state.cam_focus = tuple(look)
+                        if not state.stats.get("look_intro"):
+                            state.stats["look_intro"] = 1
+                            state.log.add("Looking around — the arrow keys now move a cursor to "
+                                          "inspect tiles, not you. Press Esc or l to walk again.",
+                                          (200, 220, 160))
                     elif cmd == "use":
                         busy = use_tool(state)
                         if busy is not None:
@@ -1315,10 +1320,13 @@ def main() -> None:
                     elif cmd == "move" and action[2]:
                         load_ctx["sel"] = (load_ctx["sel"] + action[2]) % len(opts)
                     elif cmd == "confirm":
-                        m = state.world.machines.get(load_ctx["pos"])
-                        if m is not None:
-                            crafting.load_machine_choice(state, m, crafting.MACHINES[m.kind],
-                                                         opts[min(load_ctx["sel"], len(opts) - 1)])
+                        opt = opts[min(load_ctx["sel"], len(opts) - 1)]
+                        if load_ctx.get("craft"):        # a bench chooser (metal-tipped arrows)
+                            crafting.craft_choice(state, opt)
+                        else:
+                            m = state.world.machines.get(load_ctx["pos"])
+                            if m is not None:
+                                crafting.load_machine_choice(state, m, crafting.MACHINES[m.kind], opt)
                         mode, load_ctx = "play", None
                         quests.check(state)
 
@@ -1372,7 +1380,16 @@ def main() -> None:
                     elif cmd == "move" and action[2]:
                         craft_sel = (craft_sel + action[2]) % len(crafting.content.RECIPES)
                     elif cmd == "confirm":
-                        crafting.craft(state, crafting.content.RECIPES[craft_sel])
+                        r = crafting.content.RECIPES[min(craft_sel, len(crafting.content.RECIPES) - 1)]
+                        if r.kind == "choose":
+                            opts = crafting.arrow_choice_options(state)
+                            if opts:
+                                load_ctx = {"options": opts, "sel": 0, "name": r.name, "craft": True}
+                                mode = "loadmachine"
+                            else:
+                                state.log.add("You need 1 Wood and a metal ore to tip arrows.", C.DIM)
+                        else:
+                            crafting.craft(state, r)
 
                 elif mode == "mail":
                     if cmd in ("cancel", "grab", "quit") or not state.mail:

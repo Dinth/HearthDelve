@@ -46,7 +46,7 @@ def _on_kill(state: GameState, m, award_combat: bool = True) -> None:
         if award_combat:
             skills.gain(state, "Combat", 20)
         state.log.add(f"You strike down the {m.name.lower()}!", (200, 220, 160))
-        for drop in content.monster_drops(m.name, random):
+        for drop in content.monster_drops(m.name, random, getattr(m, "level", 1)):
             p.inventory.add(drop, 1)
             state.log.add(f"  It drops {drop.name.lower()}.", C.DIM)
 
@@ -76,7 +76,9 @@ def player_dv(state: GameState) -> int:
     prof = held_profile(state)
     wdv, _ = _worn(state)
     lvl = skills.mastery_level(state, prof.category)
-    return (BASE_DV + skills.skill_level(state, "Combat")   # Dodge
+    # Combat lends only half its level to Dodge (it also feeds to-hit & crit);
+    # letting it add its full level here made a trained player near-unhittable.
+    return (BASE_DV + skills.skill_level(state, "Combat") // 2   # Dodge
             + prof.dv + wdv + skills.mastery_parry(lvl))
 
 
@@ -101,15 +103,18 @@ def player_crit(state: GameState) -> float:
 
 
 def _resolve(to_hit: int, dmg_range, dmg_bonus: int, crit_chance: float,
-             target_dv: int, target_pv: int):
+             target_dv: int, target_pv: int, min_dmg: int = 0):
     """One attack. Returns (damage, crit) if it lands, or None on a miss. A crit
-    doubles the damage and ignores Protection."""
+    doubles the damage and ignores Protection. ``min_dmg`` floors a landed hit —
+    the player's blows always chip at least 1 through Protection (so a heavily
+    armoured foe is slow to fell, never truly immune), while a monster's blow can
+    still be fully turned by the player's armour (``min_dmg=0``)."""
     if random.randint(1, 20) + to_hit < target_dv:
         return None
     dmg = random.randint(dmg_range[0], dmg_range[1]) + dmg_bonus
     if random.random() < crit_chance:
         return dmg * 2, True
-    return max(0, dmg - target_pv), False
+    return max(min_dmg, dmg - target_pv), False
 
 
 # --- player attacks ----------------------------------------------------------
@@ -119,7 +124,7 @@ def player_attack(state: GameState, m) -> None:
     prof = held_profile(state)
     p.energy = max(0, p.energy - C.ATTACK_COST[0])
     dmg_bonus = skills.mastery_dmg(skills.mastery_level(state, prof.category))
-    res = _resolve(player_to_hit(state), prof.dmg, dmg_bonus, player_crit(state), m.dv, m.pv)
+    res = _resolve(player_to_hit(state), prof.dmg, dmg_bonus, player_crit(state), m.dv, m.pv, min_dmg=1)
     wild = getattr(m, "kind", "monster") == "wildlife"
 
     if res is None:
@@ -342,10 +347,13 @@ def throw_bomb(state: GameState) -> bool:
 # --- ranged weapons (bows & sling) -------------------------------------------
 def equipped_ranged(state: GameState):
     """The (weapon, stat) in the ranged slot whose ammo you actually carry, or
-    None — so a bow with an empty quiver falls back to hand-thrown bombs."""
+    None — so a bow with an empty quiver falls back to hand-thrown bombs. Any
+    arrow (plain or metal-tipped) feeds a bow; the shot spends your best one."""
     it = state.player.equipment.get("ranged")
     stat = content.ranged_stat(it) if it else None
-    if stat is None or state.player.inventory.count(stat.ammo) < 1:
+    if stat is None:
+        return None
+    if content.best_ammo(state.player.inventory, content.ammo_family(stat)) is None:
         return None
     return it, stat
 
@@ -404,7 +412,9 @@ def fire_ranged_at(state: GameState, tx: int, ty: int) -> bool:
         state.log.add("Aim away from yourself.", C.DIM)
         return False
 
-    p.inventory.remove(stat.ammo, 1)
+    ammo = content.best_ammo(p.inventory, content.ammo_family(stat))
+    astat = content.ammo_stat(ammo)
+    p.inventory.remove(ammo, 1)
     p.energy = max(0, p.energy - C.ATTACK_COST[0])
     from . import turns
     turns.advance_time(state, C.ATTACK_COST[1])
@@ -412,14 +422,15 @@ def fire_ranged_at(state: GameState, tx: int, ty: int) -> bool:
     lx, ly = projectile_landing(state, tx, ty, stat.rng)
     m = mob_at(state, lx, ly)
     if m is None:
-        state.log.add(f"Your {stat.ammo.name.lower()} flies wide and clatters down.", C.DIM)
+        state.log.add(f"Your {ammo.name.lower()} flies wide and clatters down.", C.DIM)
         return True
     state.aim_target = m                       # re-aim onto this foe next time (until it dies)
 
-    dmg_bonus = skills.mastery_dmg(skills.mastery_level(state, stat.category))
+    dmg_bonus = skills.mastery_dmg(skills.mastery_level(state, stat.category)) + astat.dmg
     crit = 0.03 + skills.skill_level(state, "Combat") * 0.01 + skills.mastery_crit(
         skills.mastery_level(state, stat.category))
-    res = _resolve(_ranged_to_hit(state, stat), stat.dmg, dmg_bonus, crit, m.dv, m.pv)
+    res = _resolve(_ranged_to_hit(state, stat) + astat.to_hit, stat.dmg, dmg_bonus, crit,
+                   m.dv, m.pv, min_dmg=1)
     wild = getattr(m, "kind", "monster") == "wildlife"
     m.awake = True
     if wild and m.behavior == "defensive":
@@ -431,7 +442,7 @@ def fire_ranged_at(state: GameState, tx: int, ty: int) -> bool:
     dmg, was_crit = res
     skills.gain_mastery(state, stat.category, 3)
     if dmg <= 0:
-        state.log.add(f"Your {stat.ammo.name.lower()} glances off the {m.name.lower()}.", C.DIM)
+        state.log.add(f"Your {ammo.name.lower()} glances off the {m.name.lower()}.", C.DIM)
         return True
     m.hp -= dmg
     if m.hp <= 0:
