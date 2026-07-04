@@ -467,6 +467,20 @@ def _equip(state: GameState, item) -> None:
         if old:
             p.inventory.add(old)
         state.log.add(f"You don the {item.name.lower()}.", (200, 220, 160))
+    elif item.kind in ("ranged", "ammo", "bomb"):
+        # ranged launchers go in the ranged slot; arrows/stones/bombs in the ammo
+        # slot. Ammo is a stackable type, so the panel just marks which you'll
+        # loose — the count stays in your pack; the old item isn't pulled out.
+        slot = "ranged" if item.kind == "ranged" else "ammo"
+        old = p.equipment.get(slot)
+        if slot == "ranged":
+            if not p.inventory.remove(item, 1):
+                return
+            if old:
+                p.inventory.add(old)
+        p.equipment[slot] = item
+        verb = "take up" if slot == "ranged" else "ready"
+        state.log.add(f"You {verb} the {item.name.lower()}.", (200, 220, 160))
 
 
 def do_grab(state: GameState) -> None:
@@ -1148,12 +1162,13 @@ def main() -> None:
                             state.cam_focus = tuple(cur)
                             mode = "target"
                     elif cmd == "target":
-                        if state.player.inventory.count(items.BOMB) < 1:
-                            state.log.add("You've nothing to aim — craft a bomb first (c).", C.DIM)
+                        if not combat.can_fire(state):
+                            state.log.add("Nothing to loose or throw — equip a bow (+ arrows) "
+                                          "or craft a bomb (c).", C.DIM)
                         else:
                             fx, fy = state.player.facing
                             cur = clamp_look(state, state.player.x + fx, state.player.y + fy)
-                            target_ctx = {"purpose": "throw", "cursor": cur}
+                            target_ctx = {"purpose": combat.aim_purpose(state), "cursor": cur}
                             state.cam_focus = tuple(cur)
                             mode = "target"
                     elif cmd == "descend":
@@ -1250,6 +1265,9 @@ def main() -> None:
                         tx, ty = target_ctx["cursor"]
                         if target_ctx["purpose"] == "throw":
                             combat.throw_bomb_at(state, tx, ty)
+                            check_faint(state)
+                        elif target_ctx["purpose"] == "shoot":
+                            combat.fire_ranged_at(state, tx, ty)
                             check_faint(state)
                         else:
                             from .game import husbandry

@@ -262,14 +262,14 @@ def _line(x0: int, y0: int, x1: int, y1: int):
     return pts
 
 
-def bomb_landing(state: GameState, tx: int, ty: int) -> tuple[int, int]:
-    """Where a bomb aimed at (tx, ty) actually detonates: it flies along the
+def projectile_landing(state: GameState, tx: int, ty: int, rng: int) -> tuple[int, int]:
+    """Where a projectile aimed at (tx, ty) actually lands: it flies along the
     line from the player, stopping at the first wall (thunking short), a mob it
     strikes, the aimed tile, or its maximum range."""
     p = state.player
     bx, by = p.x, p.y
     for nx, ny in _line(p.x, p.y, tx, ty):
-        if (max(abs(nx - p.x), abs(ny - p.y)) > BOMB_RANGE
+        if (max(abs(nx - p.x), abs(ny - p.y)) > rng
                 or not state.world.in_bounds(nx, ny)
                 or not state.world.walkable(nx, ny)):
             break                               # can't fly past a wall / its range
@@ -279,8 +279,16 @@ def bomb_landing(state: GameState, tx: int, ty: int) -> tuple[int, int]:
     return bx, by
 
 
+def bomb_landing(state: GameState, tx: int, ty: int) -> tuple[int, int]:
+    return projectile_landing(state, tx, ty, BOMB_RANGE)
+
+
+def in_range(state: GameState, tx: int, ty: int, rng: int) -> bool:
+    return max(abs(tx - state.player.x), abs(ty - state.player.y)) <= rng
+
+
 def in_bomb_range(state: GameState, tx: int, ty: int) -> bool:
-    return max(abs(tx - state.player.x), abs(ty - state.player.y)) <= BOMB_RANGE
+    return in_range(state, tx, ty, BOMB_RANGE)
 
 
 def _detonate(state: GameState, bx: int, by: int) -> None:
@@ -329,6 +337,101 @@ def throw_bomb(state: GameState) -> bool:
     """Lob straight ahead (kept for convenience / callers without a target)."""
     fx, fy = state.player.facing
     return throw_bomb_at(state, state.player.x + fx * BOMB_RANGE, state.player.y + fy * BOMB_RANGE)
+
+
+# --- ranged weapons (bows & sling) -------------------------------------------
+def equipped_ranged(state: GameState):
+    """The (weapon, stat) in the ranged slot whose ammo you actually carry, or
+    None — so a bow with an empty quiver falls back to hand-thrown bombs."""
+    it = state.player.equipment.get("ranged")
+    stat = content.ranged_stat(it) if it else None
+    if stat is None or state.player.inventory.count(stat.ammo) < 1:
+        return None
+    return it, stat
+
+
+def can_fire(state: GameState) -> bool:
+    """True if the player can loose a shot (bow+ammo) or throw a bomb."""
+    return equipped_ranged(state) is not None or state.player.inventory.count(items.BOMB) >= 1
+
+
+def aim_purpose(state: GameState) -> str:
+    """"shoot" if a loaded ranged weapon is readied, else "throw" (bombs)."""
+    return "shoot" if equipped_ranged(state) is not None else "throw"
+
+
+def aim_range(state: GameState) -> int:
+    ready = equipped_ranged(state)
+    return ready[1].rng if ready else BOMB_RANGE
+
+
+def _ranged_to_hit(state: GameState, stat) -> int:
+    from . import skills
+    lvl = skills.mastery_level(state, stat.category)
+    bonus = stat.to_hit + skills.skill_level(state, "Combat") // 2 + skills.mastery_to_hit(lvl)
+    if skills.active_buff(state) == "hearty":
+        bonus += 2
+    return bonus
+
+
+def fire_ranged_at(state: GameState, tx: int, ty: int) -> bool:
+    """Loose the readied ranged weapon at an aimed tile: the shot flies to the
+    first foe (or wall) in its path and strikes that one target."""
+    from . import skills
+    p = state.player
+    ready = equipped_ranged(state)
+    if ready is None:                          # quiver ran dry between aim & loose
+        state.log.add("You've nothing to shoot.", C.DIM)
+        return False
+    weapon, stat = ready
+    if p.energy < C.ATTACK_COST[0]:
+        state.log.add("You're too winded to draw.", C.DIM)
+        return False
+    if (tx, ty) == (p.x, p.y):
+        state.log.add("Aim away from yourself.", C.DIM)
+        return False
+
+    p.inventory.remove(stat.ammo, 1)
+    p.energy = max(0, p.energy - C.ATTACK_COST[0])
+    from . import turns
+    turns.advance_time(state, C.ATTACK_COST[1])
+
+    lx, ly = projectile_landing(state, tx, ty, stat.rng)
+    m = mob_at(state, lx, ly)
+    if m is None:
+        state.log.add(f"Your {stat.ammo.name.lower()} flies wide and clatters down.", C.DIM)
+        return True
+
+    dmg_bonus = skills.mastery_dmg(skills.mastery_level(state, stat.category))
+    crit = 0.03 + skills.skill_level(state, "Combat") * 0.01 + skills.mastery_crit(
+        skills.mastery_level(state, stat.category))
+    res = _resolve(_ranged_to_hit(state, stat), stat.dmg, dmg_bonus, crit, m.dv, m.pv)
+    wild = getattr(m, "kind", "monster") == "wildlife"
+    m.awake = True
+    if wild and m.behavior == "defensive":
+        m.hostile = True
+
+    if res is None:
+        state.log.add(f"Your shot streaks past the {m.name.lower()}.", C.DIM)
+        return True
+    dmg, was_crit = res
+    skills.gain_mastery(state, stat.category, 3)
+    if dmg <= 0:
+        state.log.add(f"Your {stat.ammo.name.lower()} glances off the {m.name.lower()}.", C.DIM)
+        return True
+    m.hp -= dmg
+    if m.hp <= 0:
+        _on_kill(state, m)
+        return True
+    if wild and not m.hostile:
+        state.log.add(f"You hit the {m.name.lower()} for {dmg} — it bolts!", C.DIM)
+    else:
+        lead = "A critical shot! " if was_crit else ""
+        state.log.add(f"{lead}You shoot the {m.name.lower()} for {dmg}.",
+                      (240, 220, 140) if was_crit else C.WHITE)
+        if not wild:
+            skills.gain(state, "Combat", 4)
+    return True
 
 
 def _shatter(state: GameState, x: int, y: int, t) -> None:

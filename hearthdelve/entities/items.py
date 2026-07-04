@@ -212,6 +212,15 @@ EEL         = Item("Eel",         "»", "fish", "A slippery cave eel.",         
 BLINDFISH   = Item("Blindfish",   "»", "fish", "Eyeless and ghostly.",           value=45)
 GLOWFISH    = Item("Glowfish",    "»", "fish", "Faintly luminescent; prized.",   value=180)
 
+# --- Ranged weapons & ammo ---------------------------------------------------
+# Equip a launcher in the ranged slot and its ammo in the ammo slot, then aim
+# with (t). Bombs need no launcher — they're thrown by hand from the ammo slot.
+SHORT_BOW   = Item("Short Bow",   ")", "ranged", "A quick hunting bow; looses arrows (t).", value=90, stackable=False)
+LONG_BOW    = Item("Long Bow",    "}", "ranged", "A tall war bow — longer reach, harder hits.", value=190, stackable=False)
+SLING       = Item("Sling",       "?", "ranged", "A leather sling; hurls stones cheaply.", value=35, stackable=False)
+ARROW       = Item("Arrow",       "/", "ammo",   "Fletched arrows for a bow.", value=3)
+SLING_STONE = Item("Sling Stone", ".", "ammo",   "Smooth stones for a sling.", value=1)
+
 # --- Consumables -------------------------------------------------------------
 BOMB        = Item("Bomb",        "*", "bomb",     "Aim & throw (t): harms monsters and shatters rock/ore.", value=0)
 

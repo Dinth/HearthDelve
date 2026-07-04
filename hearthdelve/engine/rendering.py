@@ -811,6 +811,18 @@ def render_target(con: tcod.console.Console, state: GameState, ctx) -> None:
             con.rgb["fg"][sx, sy] = (20, 20, 20)
         banner = (f" Aim — throw a bomb (range {combat.BOMB_RANGE})"
                   if ok else " Aim — out of range")
+    elif ctx["purpose"] == "shoot":
+        rng = combat.aim_range(state)
+        ok = combat.in_range(state, cx, cy, rng)
+        lx, ly = combat.projectile_landing(state, cx, cy, rng)
+        _paint(lx, ly, ok)                             # the single struck tile
+        sx, sy = cx - ox, cy - oy
+        if 0 <= sx < C.VIEW_W and 0 <= sy < C.VIEW_H:
+            con.rgb["ch"][sx, sy] = ord("*")
+            con.rgb["fg"][sx, sy] = (20, 20, 20)
+        weap = state.player.equipment.get("ranged")
+        banner = (f" Aim — loose the {weap.name.lower()} (range {rng})"
+                  if ok else " Aim — out of range")
     else:  # build
         from ..data.content import MACHINES
         kind = ctx["build_kind"]
@@ -1007,7 +1019,7 @@ def build_codex_pages(state: GameState):
         ("                   (it turns green when the tool can act there)", C.DIM),
         ("  1-9              select hotbar tool / seed", C.WHITE),
         ("  g                gather / harvest / use a machine", C.WHITE),
-        ("  t                aim & throw a bomb (move to aim, Enter to throw)", C.WHITE),
+        ("  t                aim & fire: a readied bow/sling, else a bomb", C.WHITE),
         ("  c                craft, build machines, cook dishes", C.WHITE),
         ("  p                site a carpenter building (opens aiming)", C.WHITE),
         ("  x                eat (restores stamina & health)", C.WHITE),
@@ -1075,6 +1087,16 @@ def build_codex_pages(state: GameState):
         tools.append((f" {it.glyph}  {it.name}   {w.category}  hit {w.to_hit:+d}  dmg {lo}-{hi}"
                       + (f"  DV {w.dv:+d}" if w.dv else ""), _KEY))
         tools.append((f"      {it.desc}", C.DIM))
+    tools.append(("", C.WHITE))
+    tools.append(("Ranged  (equip in the ranged slot; aim & fire with t)", _HDR))
+    tools.append(("", C.WHITE))
+    for it in content.ALL_RANGED:
+        rs = content.RANGED[it]
+        lo, hi = rs.dmg
+        tools.append((f" {it.glyph}  {it.name}   hit {rs.to_hit:+d}  dmg {lo}-{hi}"
+                      f"  range {rs.rng}  ({rs.ammo.name.lower()}s)", _KEY))
+        tools.append((f"      {it.desc}", C.DIM))
+    tools.append(("Bombs need no bow — thrown by hand from the ammo slot.", C.DIM))
     tools.append(("", C.WHITE))
     tools.append(("Any tool can fight too (badly); a weapon can do a tool's job", C.DIM))
     tools.append(("with penalties — a battle axe fells trees, a blade clears brush.", C.DIM))
@@ -1357,9 +1379,10 @@ _SLOT_LABEL = {"head": "Head", "body": "Body", "hands": "Gauntlets", "waist": "G
 
 
 def equippables(state: GameState) -> list:
-    """Carried weapons and armour — the equipment screen equips these by letter."""
+    """Carried gear the equipment screen equips by letter: weapons, armour,
+    ranged launchers, and ammunition."""
     return [(it, q, ql) for it, q, ql in state.player.inventory.slots
-            if it.kind in ("weapon", "armor")]
+            if it.kind in ("weapon", "armor", "ranged", "ammo", "bomb")]
 
 
 def render_equipment(con: tcod.console.Console, state: GameState) -> None:
@@ -1391,7 +1414,9 @@ def render_equipment(con: tcod.console.Console, state: GameState) -> None:
             n = p.inventory.count(it) if it else 0
             val = f"{it.name} x{n}" if it else "-"
         elif slot == "ranged":
-            val = it.name if it else "- (none yet)"
+            rs = content.ranged_stat(it) if it else None
+            val = f"{it.name}  [dmg {rs.dmg[0]}-{rs.dmg[1]}, range {rs.rng}]" if rs else (
+                it.name if it else "- (none yet)")
         else:
             st = content.ARMOR_STATS.get(it)
             val = f"{it.name}  [DV {st[0]:+d}, PV +{st[1]}]" if (it and st) else "-"
@@ -1406,8 +1431,16 @@ def render_equipment(con: tcod.console.Console, state: GameState) -> None:
         if row >= y + h - 2:
             break
         st = content.ARMOR_STATS.get(it)
-        tag = (f"[DV {st[0]:+d}, PV +{st[1]}]" if st
-               else f"{content.profile_of(it).category}, dmg {content.profile_of(it).dmg[0]}-{content.profile_of(it).dmg[1]}")
+        rs = content.ranged_stat(it)
+        if st:
+            tag = f"[DV {st[0]:+d}, PV +{st[1]}]"
+        elif rs:
+            tag = f"ranged  dmg {rs.dmg[0]}-{rs.dmg[1]}, range {rs.rng}"
+        elif it.kind in ("ammo", "bomb"):
+            tag = "ammo"
+        else:
+            pr = content.profile_of(it)
+            tag = f"{pr.category}, dmg {pr.dmg[0]}-{pr.dmg[1]}"
         con.print(x + 3, row, f"{inv_letter(i)} - {it.glyph} {it.name}", fg=C.WHITE)
         con.print(x + 34, row, tag, fg=_BRACKET_FG)
         row += 1

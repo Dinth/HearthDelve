@@ -77,6 +77,29 @@ def profile_of(item) -> CombatProfile:
     return WEAPON_STATS.get(item, UNARMED) if item is not None else UNARMED
 
 
+@dataclass(frozen=True)
+class RangedStat:
+    category: str          # mastery bucket (all ranged share "archery")
+    to_hit: int            # flat bonus to the to-hit roll
+    dmg: tuple             # (min, max) damage before bonuses
+    rng: int               # how far it can reach
+    ammo: Item             # the ammunition it spends
+
+
+# Launchers equipped in the ranged slot. Bows want arrows; the sling wants
+# stones. Bombs need no launcher (thrown by hand — see combat.throw_bomb).
+RANGED: dict[Item, RangedStat] = {
+    items.SHORT_BOW: RangedStat("archery", 1, (2, 5), 7, items.ARROW),
+    items.LONG_BOW:  RangedStat("archery", 2, (4, 8), 9, items.ARROW),
+    items.SLING:     RangedStat("archery", 0, (2, 4), 6, items.SLING_STONE),
+}
+ALL_RANGED = [items.SHORT_BOW, items.LONG_BOW, items.SLING]
+
+
+def ranged_stat(item) -> RangedStat | None:
+    return RANGED.get(item)
+
+
 # Which paperdoll slot each armour piece fills. Body is hand-defined above; the
 # rest (helmets, gauntlets, girdles, leggings, boots) are generated per slot.
 ARMOR_SLOT: dict[Item, str] = {
@@ -373,6 +396,10 @@ RECIPES: list[Recipe] = [
            desc="Timber fence panels for your pack — set them down with 'Set Fence'."),
     Recipe("Set Fence", "build", ((items.FENCE, 1),), machine="fence",
            desc="Plant a fence panel on the faced tile; fence off wild land to claim it."),
+    Recipe("Arrows", "item", ((items.WOOD, 1),), output=items.ARROW, out_qty=5,
+           desc="Fletch arrows for a bow (aim & loose with t)."),
+    Recipe("Sling Stones", "item", ((items.STONE, 1),), output=items.SLING_STONE, out_qty=4,
+           desc="Knap stones for a sling."),
     # --- Cooking: makes a carryable dish; eat it (x) for stamina -------------
     Recipe("Parsnip Soup", "cook", ((items.PARSNIP, 2),), output=items.PARSNIP_SOUP,
            desc="A warming bowl."),
@@ -890,6 +917,8 @@ GENERAL_STOCK: list[tuple[Item, int]] = [
 BLACKSMITH_STOCK: list[tuple[Item, int]] = [
     (items.COAL, 25), (items.COPPER_BAR, 120),
     (items.DAGGER, 90), (items.WAR_MACE, 220), (items.BATTLE_AXE, 260),
+    (items.SLING, 45), (items.SHORT_BOW, 110), (items.LONG_BOW, 230),
+    (items.ARROW, 4), (items.SLING_STONE, 1),
 ] + [(it, it.value) for it in ALL_ARMOR]
 
 # --- Festivals ---------------------------------------------------------------
