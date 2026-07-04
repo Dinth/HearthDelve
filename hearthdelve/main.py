@@ -329,6 +329,8 @@ def use_tool(state: GameState) -> None:
     else:
         stat = content.TOOL_STATS.get(item)
         stamina = max(1, stat.stamina - p.tool_tier.get(item, 0)) if stat else 1
+        if item in p.tool_affix:                 # an imbued tool works with less effort
+            stamina = max(1, stamina - 1)
         seconds = stat.seconds if stat else C.USE_SECONDS
     if new_tile is not None and state.world.is_dungeon and new_tile == tile.GRASS:
         new_tile = tile.DUNGEON_FLOOR         # mined rock/ore leaves dungeon floor
@@ -436,6 +438,20 @@ def _gather_drop(state: GameState, item, target) -> None:
             parts.append("+1 Fiber")
         if parts:
             state.log.add("  (" + ", ".join(parts) + ")", C.DIM)
+
+    # An imbued gather tool now and then yields a little extra of its craft.
+    affix = state.player.tool_affix.get(item)
+    if affix and random.random() < 0.45:
+        extra = None
+        if item is items.AXE and target.kind == "tree":
+            extra = items.WOOD
+        elif item is items.PICKAXE and target.name in ("ore_vein", "rock", "ruins_wall"):
+            extra = items.STONE
+        elif item is items.MACHETE and target.kind in ("tall_grass", "foliage", "shrub", "shrub_berry"):
+            extra = items.FIBER
+        if extra:
+            inv.add(extra, 1)
+            state.log.add(f"  ({affix}: +1 {extra.name})", (180, 220, 150))
 
 
 def _equip(state: GameState, item) -> None:
@@ -665,7 +681,25 @@ def _open_chest(state: GameState, x: int, y: int) -> None:
         got.append(p.display_name(it) if hasattr(p, "display_name") else it.name)
     state.bump("chests_opened")
     state.log.add("You pry open the chest! " + ", ".join(got) + ".", (244, 216, 120))
+    _maybe_imbue_tool(state)
     turns.advance_time(state, C.USE_SECONDS)
+
+
+def _maybe_imbue_tool(state: GameState) -> None:
+    """A rare chest holds an old charm that imbues one of your plain tools with a
+    themed affix (a lasting bonus in that tool's craft)."""
+    from .data import content
+    p = state.player
+    if random.random() >= 0.12:
+        return
+    plain = [t for t in content.TOOL_AFFIX_NAMES if t in p.tool_tier and t not in p.tool_affix]
+    if not plain:
+        return
+    tool = random.choice(plain)
+    affix = content.TOOL_AFFIX_NAMES[tool]
+    p.tool_affix[tool] = affix
+    state.log.add(f"An old charm lies within — your {tool.name} is now a "
+                  f"{tool.name} {affix}!", (200, 230, 160))
 
 
 def near_bin(state: GameState) -> bool:

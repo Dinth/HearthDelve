@@ -662,6 +662,18 @@ MACHINES: dict[str, MachineDef] = {
 }
 
 
+# Themed affixes a tool can be imbued with (a rare dungeon find). The effect is
+# a bonus in that tool's own craft — a chance at extra yield, and less effort.
+TOOL_AFFIX_NAMES = {
+    items.HOE:          "of Plentiful Harvest",
+    items.MACHETE:      "of Plentiful Harvest",
+    items.AXE:          "of the Forester",
+    items.PICKAXE:      "of Prospecting",
+    items.WATERING_CAN: "of Tending",
+    items.FISHING_ROD:  "of the Angler",
+}
+
+
 def forge_cost(base: str) -> int:
     """How many bars it takes to forge a piece of the given base."""
     if base in WEAPON_BASES:

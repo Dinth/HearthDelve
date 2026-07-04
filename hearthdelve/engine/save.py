@@ -83,6 +83,7 @@ def save(state: GameState, path: str = SAVE_PATH) -> None:
             "mastery": dict(p.mastery),
             "inventory": [[it.name, q, ql] for it, q, ql in p.inventory.slots],
             "tool_tier": {it.name: t for it, t in p.tool_tier.items()},
+            "tool_affix": {it.name: a for it, a in p.tool_affix.items()},
             "active_seed": p.active_seed.name if p.active_seed else None,
             "skills": dict(p.skills),
         },
@@ -242,6 +243,7 @@ def load(path: str = SAVE_PATH) -> GameState:
     player.inventory = Inventory(slots=[[items.by_name(rec[0]), rec[1], rec[2] if len(rec) > 2 else 0]
                                         for rec in pd["inventory"] if items.by_name(rec[0])])
     player.tool_tier = {items.by_name(n): t for n, t in pd["tool_tier"].items() if items.by_name(n)}
+    player.tool_affix = {items.by_name(n): a for n, a in pd.get("tool_affix", {}).items() if items.by_name(n)}
     player.active_seed = items.by_name(pd.get("active_seed") or "") or items.PARSNIP_SEEDS
     player.skills = dict(pd.get("skills", {}))
 

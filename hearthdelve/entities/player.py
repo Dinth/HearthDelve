@@ -60,6 +60,7 @@ class Player:
     mastery: dict = field(default_factory=dict)                        # weapon category -> mastery xp
     inventory: Inventory = field(default_factory=_starter_inventory)
     tool_tier: dict = field(default_factory=_starter_tiers)
+    tool_affix: dict = field(default_factory=dict)   # tool -> themed affix name ("of Plentiful Harvest")
     active_seed: Item = field(default_factory=lambda: items.PARSNIP_SEEDS)
     skills: dict = field(default_factory=dict)   # skill name -> xp
     level: int = 1                               # general character level
@@ -75,7 +76,10 @@ class Player:
         return None
 
     def display_name(self, item: Item) -> str:
-        """Tool names take their material-tier prefix (e.g. 'Wooden Hoe')."""
+        """Tool names take their material-tier prefix (e.g. 'Wooden Hoe') and any
+        imbued affix suffix ('Iron Axe of the Forester')."""
         if item in self.tool_tier:
-            return f"{C.TOOL_TIERS[self.tool_tier[item]]} {item.name}"
+            name = f"{C.TOOL_TIERS[self.tool_tier[item]]} {item.name}"
+            affix = self.tool_affix.get(item)
+            return f"{name} {affix}" if affix else name
         return item.name
