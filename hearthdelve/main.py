@@ -10,6 +10,7 @@ import tcod.console
 import tcod.context
 import tcod.event
 
+from .engine import audio
 from .engine import constants as C
 from .engine import font, input as game_input, rendering, save
 from .entities import items
@@ -33,7 +34,7 @@ def new_game(seed: int = 1337) -> GameState:
     state.log.add("Hoe (1) the soil, plant seeds (6), water them (2), then sleep (s).", C.DIM)
     state.log.add("Chop/mine for materials, c to craft & build, b at the bin to sell.", C.DIM)
     state.log.add("Space uses the active tool. ? for help, l to look, g to gather.", C.DIM)
-    state.log.add("Visit Mossford (east) & Cinderhope (west): Shift+C to talk/shop, f to gift.", C.DIM)
+    state.log.add("Visit Mossford (SE) & Cinderhope (SW): Shift+C to talk/shop, f to gift.", C.DIM)
     return state
 
 
@@ -328,10 +329,15 @@ def use_tool(state: GameState) -> None:
         stamina, seconds = base[0] + 2, int(base[1] * 1.5)
     else:
         stat = content.TOOL_STATS.get(item)
-        stamina = max(1, stat.stamina - p.tool_tier.get(item, 0)) if stat else 1
+        tier = p.tool_tier.get(item, 0)          # 0 Wooden … 5 Mithril
+        stamina = max(1, stat.stamina - tier) if stat else 1
         if item in p.tool_affix:                 # an imbued tool works with less effort
             stamina = max(1, stamina - 1)
-        seconds = stat.seconds if stat else C.USE_SECONDS
+        # Finer tools also work FASTER — each tier shaves 10% off the action time,
+        # so a full upgrade (Mithril) halves it. Time is the day's real currency,
+        # so this is what makes the tool ladder worth the metal.
+        base_secs = stat.seconds if stat else C.USE_SECONDS
+        seconds = max(1, round(base_secs * (1 - 0.10 * tier)))
     if new_tile is not None and state.world.is_dungeon and new_tile == tile.GRASS:
         new_tile = tile.DUNGEON_FLOOR         # mined rock/ore leaves dungeon floor
 
@@ -499,6 +505,22 @@ def _equip(state: GameState, item) -> None:
         state.log.add(f"You {verb} the {item.name.lower()}.", (200, 220, 160))
 
 
+def _unequip(state: GameState, slot: str) -> None:
+    """Take off a worn piece, returning it to the pack. Ammo just clears its
+    ready-marker (the stack lives in the pack); other slots hand the item back."""
+    p = state.player
+    it = p.equipment.get(slot)
+    if it is None:
+        state.log.add("Nothing worn in that slot.", C.DIM)
+        return
+    p.equipment[slot] = None
+    if slot == "ammo":                      # ammo was only marked, never pulled out
+        state.log.add(f"You unready the {it.name.lower()}.", (200, 200, 180))
+    else:
+        p.inventory.add(it)
+        state.log.add(f"You take off the {it.name.lower()}.", (200, 200, 180))
+
+
 def do_grab(state: GameState) -> None:
     """Harvest a crop or interact with a machine — faced tile, then underfoot."""
     from .game import land
@@ -569,9 +591,6 @@ def do_grab(state: GameState) -> None:
     return None
 
 
-BERRY_REGROW_DAYS = 3            # a picked berry shrub bears again after ~this many days
-
-
 def _pick_berries(state: GameState, x: int, y: int) -> None:
     """Forage a berry shrub without destroying it — it's stripped to a plain bush
     and re-berries a few days later (see farming._regrow_berries)."""
@@ -587,7 +606,7 @@ def _pick_berries(state: GameState, x: int, y: int) -> None:
     if random.random() < 0.4:
         p.inventory.add(items.FIBER, 1)
     state.world.tiles[x, y] = tile.SHRUB                 # picked bare; it will regrow
-    state.world.berry_regrow[(x, y)] = [btile, state.day + BERRY_REGROW_DAYS + random.randint(0, 1)]
+    farming.schedule_berry_regrow(state, x, y, btile)
     skills.gain(state, "Foraging", 8)
     star = (" " + skills.stars(q)) if q else ""
     fn = fruit.name.lower() if fruit else "berries"
@@ -988,6 +1007,11 @@ def main() -> None:
             print("smoketest ok")
             return
 
+        # Background music: a looping chiptune, synthesised on start. Silent if
+        # the machine has no audio device (start() swallows that).
+        music = audio.Music()
+        music.start()
+
         running = True
         start = time.perf_counter()
         while running:
@@ -1135,6 +1159,12 @@ def main() -> None:
                     save_on_exit = False
                     running = False
                     break
+
+                # Mute / unmute the music from any screen (Shift+M).
+                if cmd == "mutemusic":
+                    off = music.toggle_mute()
+                    state.log.add("Music muted." if off else "Music on.", C.DIM)
+                    continue
 
                 if mode == "play":
                     if awaiting_run:
@@ -1294,6 +1324,17 @@ def main() -> None:
                 elif mode == "target":
                     if cmd in ("cancel", "target", "quit"):
                         mode, target_ctx, state.cam_focus = "play", None, None
+                    elif cmd == "swap" and target_ctx["purpose"] in ("shoot", "throw"):
+                        # Tab toggles bow<->bomb when you carry both, so a readied
+                        # launcher never locks bombs (needed for ore/gem veins) away.
+                        if target_ctx["purpose"] == "shoot" and combat.can_throw(state):
+                            target_ctx["purpose"] = "throw"
+                            state.log.add("You ready a bomb to throw.", (200, 220, 160))
+                        elif target_ctx["purpose"] == "throw" and combat.can_shoot(state):
+                            target_ctx["purpose"] = "shoot"
+                            state.log.add("You draw your bow.", (200, 220, 160))
+                        else:
+                            state.log.add("You've nothing else to switch to.", C.DIM)
                     elif cmd == "move":
                         cur = clamp_look(state, target_ctx["cursor"][0] + action[1],
                                          target_ctx["cursor"][1] + action[2])
@@ -1371,8 +1412,9 @@ def main() -> None:
                         mode, inv_sel = "inventory", 0
                     elif cmd in ("cancel", "equipment", "quit"):
                         mode = "play"
-                    elif cmd == "slot":
-                        select_slot(state, action[1])
+                    elif cmd == "slot":                 # 1-0 take off the matching paperdoll slot
+                        if action[1] < len(rendering.PAPERDOLL_SLOTS):
+                            _unequip(state, rendering.PAPERDOLL_SLOTS[action[1]])
 
                 elif mode == "craft":
                     if cmd in ("cancel", "craft", "quit"):
@@ -1503,6 +1545,8 @@ def main() -> None:
                             _cheat_go(state, locs[cheat_sel - 4][1])
                             state.log.add("You blink across the Vale.", (200, 180, 240))
                             mode = "play"
+
+        music.stop()
 
         # Save on exit (unless the player chose to quit without saving).
         if save_on_exit:

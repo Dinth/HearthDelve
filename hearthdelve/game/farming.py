@@ -244,22 +244,27 @@ def new_day(state: GameState, rested: bool = True) -> None:
         state.weather = fest[4]
     raining = is_wet_weather(state.weather)
 
-    # Watering: rain soaks every plot; sprinklers water their neighbours. Rain
-    # doesn't reach crops under a greenhouse's glass — those you tend yourself.
-    if raining:
-        for (cx, cy), plot in state.world.crops.items():
-            if not plot.dead and not plot.mature and not in_greenhouse(state.world, cx, cy):
-                plot.watered = True
-    from . import crafting
-    crafting.run_sprinklers(state)
-
-    # Growth tick. Greenhouse crops always count as in-season (never wither, keep
+    # Growth tick FIRST — crops advance on the care they were given *yesterday*
+    # (manual watering, or yesterday's rain/sprinklers). Consuming and clearing
+    # the watered flag here, before today's weather is applied below, is what
+    # lets a rainy day water crops for *tonight's* growth instead of the rain
+    # being swallowed by this same dawn's tick (which cost diligent players a
+    # day). Greenhouse crops always count as in-season (never wither, keep
     # growing) — they use their own season instead of the calendar's.
     for (cx, cy), plot in state.world.crops.items():
         grow_season = plot.crop.season if in_greenhouse(state.world, cx, cy) else season
         advance_growth(plot, grow_season)
     for tree in state.world.trees.values():
         advance_tree(tree, season)
+
+    # Watering for the day now beginning: rain soaks every plot; sprinklers water
+    # their neighbours. Rain doesn't reach crops under a greenhouse's glass —
+    # those you tend yourself. This watered state is consumed by tomorrow's tick.
+    if raining:
+        for (cx, cy), plot in state.world.crops.items():
+            if not plot.dead and not plot.mature and not in_greenhouse(state.world, cx, cy):
+                plot.watered = True
+    crafting.run_sprinklers(state)
 
     # The meadow around the homestead grows tall through the growing seasons
     # (twice as fast in autumn) — scythe it for hay.
@@ -310,7 +315,10 @@ def new_day(state: GameState, rested: bool = True) -> None:
 # Seasonal, drifting flora (mushrooms & wildflowers). Each is a pool of spots
 # on natural ground; while in season a rough fraction is "standing" and the set
 # drifts day to day (some wither, a random scattering sprouts elsewhere).
-_NATURAL_GROUND = {tile.GRASS, tile.MEADOW, tile.TALL_GRASS, tile.FOG_GRASS, tile.MOOR}
+# Ground a drifting flower/mushroom may sprout onto. Deliberately excludes
+# TALL_GRASS: sprouting there would delete a grown hay tuft and then "wither" back
+# to plain grass, quietly eroding the hay meadow — flora and hay share no tile.
+_NATURAL_GROUND = {tile.GRASS, tile.MEADOW, tile.FOG_GRASS, tile.MOOR}
 #            spots attr        seasons                 active  wither  rng salt
 _FLORA = {
     "mushroom_spots": (("Summer", "Fall"),           0.5,    0.16,   7919),
@@ -431,6 +439,16 @@ _SPREAD_GROUND = {tile.GRASS, tile.MEADOW, tile.TALL_GRASS}
 _BERRY_IDS = (tile.SHRUB_RASPBERRY, tile.SHRUB_GOOSEBERRY, tile.SHRUB_CURRANT)
 
 
+BERRY_REGROW_DAYS = 3           # a stripped berry shrub bears again after ~this many days
+
+
+def schedule_berry_regrow(state: GameState, x: int, y: int, btile: int) -> None:
+    """Mark a just-stripped berry shrub to re-berry in a few days — whether it was
+    picked by the player or eaten by wildlife, so both drain and renewal use the
+    same clock (see _regrow_berries)."""
+    state.world.berry_regrow[(x, y)] = [btile, state.day + BERRY_REGROW_DAYS + random.randint(0, 1)]
+
+
 def _regrow_berries(state: GameState) -> None:
     """Re-berry any picked shrubs whose regrow day has come (unless the bush was
     since cleared away)."""
@@ -490,6 +508,7 @@ def _tend_village_fields(state: GameState, season: str) -> None:
         plot = surf.crops.get((x, y))
         keep = (plot is not None and not plot.dead and plot.crop.season == season)
         if keep:
+            plot.watered = True            # villagers tend their own fields daily, rain or shine
             continue
         if not in_season:
             surf.crops.pop((x, y), None)               # nothing grows now — fallow

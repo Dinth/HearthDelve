@@ -300,6 +300,13 @@ def generate(seed: int, kind: str, depth: int) -> GameMap:
                 if spot:
                     tiles[spot] = tile.CHEST
 
+    # The vault/grove tunnels above start from the last room's centre — which is
+    # the down-stairs tile — and _tunnel paints floor over its own endpoints, so
+    # re-assert the stairs before anything relies on them (nearly half of deep
+    # floors would otherwise have no way down).
+    tiles[up] = tile.STAIRS_UP
+    tiles[down] = tile.DUNGEON_DOWN
+
     # --- connectivity repair -------------------------------------------------
     # The room/tunnel carve can leave a room stranded when ore/gem veins grow
     # across a one-wide corridor's flanks and pinch it shut. Flood from the

@@ -22,36 +22,37 @@ def skill_level(state: GameState, skill: str) -> int:
     return level_of(state.player.skills.get(skill, 0))
 
 
-def char_level(state: GameState) -> int:
-    """Overall level = sum of skill levels (0-50)."""
-    return sum(skill_level(state, s) for s in SKILLS)
-
-
 def gain(state: GameState, skill: str, xp: int) -> None:
+    """Add skill XP (capped at the skill's level-10 ceiling) and, *separately*, feed
+    the character's own experience. Character XP is an independent track: every deed
+    feeds it and it keeps growing even after a skill has maxed, so character level is
+    no longer bounded by (nor derived from) the skills."""
     p = state.player
     cap = MAX_LEVEL * XP_PER_LEVEL
     cur = p.skills.get(skill, 0)
-    if cur >= cap:
-        return                       # skill maxed — no more XP, and no more
-                                     # character XP fed from it (keeps HP &
-                                     # produce quality from inflating forever)
     before = level_of(cur)
-    applied = min(xp, cap - cur)     # never bank XP past the level-10 cap
-    p.skills[skill] = cur + applied
-    if level_of(p.skills[skill]) > before:
-        state.log.add(f"{skill} skill is now level {level_of(p.skills[skill])}!", (170, 210, 240))
-    gain_char_xp(state, applied)     # all activity feeds general experience
+    applied = min(xp, max(0, cap - cur))     # never bank skill XP past the level-10 cap
+    if applied:
+        p.skills[skill] = cur + applied
+        if level_of(p.skills[skill]) > before:
+            state.log.add(f"{skill} skill is now level {level_of(p.skills[skill])}!", (170, 210, 240))
+    gain_char_xp(state, xp)                   # the character track is never capped by skills
 
 
-# --- general character level (raises max HP & stamina) -----------------------
+# --- general character level (its own track; raises max HP & stamina) --------
+MAX_CHAR_LEVEL = 15
+
+
 def xp_to_next(level: int) -> int:
     return level * 150
 
 
 def gain_char_xp(state: GameState, amount: int) -> None:
     p = state.player
+    if p.level >= MAX_CHAR_LEVEL:
+        return
     p.xp += amount
-    while p.xp >= xp_to_next(p.level):
+    while p.level < MAX_CHAR_LEVEL and p.xp >= xp_to_next(p.level):
         p.xp -= xp_to_next(p.level)
         p.level += 1
         p.max_hp += 8
@@ -59,6 +60,8 @@ def gain_char_xp(state: GameState, amount: int) -> None:
         p.hp = min(p.max_hp, p.hp + 8)
         p.energy = min(p.max_energy, p.energy + 12)
         state.log.add(f"You reach level {p.level}! (+8 max HP, +12 max stamina)", (240, 220, 140))
+    if p.level >= MAX_CHAR_LEVEL:
+        p.xp = 0                              # maxed — stop banking overflow
 
 
 # --- food buffs (a cooked dish grants a temporary boon; see main._eat) -------

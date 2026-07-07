@@ -44,7 +44,11 @@ def _on_kill(state: GameState, m, award_combat: bool = True) -> None:
     else:
         state.bump("monsters_slain")
         if award_combat:
-            skills.gain(state, "Combat", 20)
+            # Depth pays: a deep, tough kill is worth far more than a floor-1 slime,
+            # and a boss is a windfall — so fighting downward actually levels Combat.
+            lvl = getattr(m, "level", 1)
+            xp = 12 + 6 * lvl + (60 if getattr(m, "boss", False) else 0)
+            skills.gain(state, "Combat", xp)
         state.log.add(f"You strike down the {m.name.lower()}!", (200, 220, 160))
         for drop in content.monster_drops(m.name, random, getattr(m, "level", 1)):
             p.inventory.add(drop, 1)
@@ -62,8 +66,12 @@ def held_profile(state: GameState):
 
 
 def _worn(state: GameState):
+    p = state.player
+    two_handed = content.is_two_handed(p.active_tool)   # both hands full — no shield
     dv = pv = 0
-    for it in state.player.equipment.values():
+    for slot, it in p.equipment.items():
+        if slot == "shield" and two_handed:
+            continue
         stats = content.ARMOR_STATS.get(it)
         if stats:
             dv += stats[0]
@@ -103,18 +111,22 @@ def player_crit(state: GameState) -> float:
 
 
 def _resolve(to_hit: int, dmg_range, dmg_bonus: int, crit_chance: float,
-             target_dv: int, target_pv: int, min_dmg: int = 0):
+             target_dv: int, target_pv: int, min_dmg: int = 1):
     """One attack. Returns (damage, crit) if it lands, or None on a miss. A crit
-    doubles the damage and ignores Protection. ``min_dmg`` floors a landed hit —
-    the player's blows always chip at least 1 through Protection (so a heavily
-    armoured foe is slow to fell, never truly immune), while a monster's blow can
-    still be fully turned by the player's armour (``min_dmg=0``)."""
+    doubles the damage and ignores Protection.
+
+    Protection soaks at most ~2/3 of any single blow, so at least a third always
+    lands — heavy armour is a huge advantage but never total immunity (a fully
+    plated hero still takes real chip damage from a deep monster), and a stoutly
+    armoured foe is slow to fell but never invulnerable to a weak weapon. ``min_dmg``
+    floors a landed hit at 1 by default."""
     if random.randint(1, 20) + to_hit < target_dv:
         return None
     dmg = random.randint(dmg_range[0], dmg_range[1]) + dmg_bonus
     if random.random() < crit_chance:
         return dmg * 2, True
-    return max(min_dmg, dmg - target_pv), False
+    soak = min(target_pv, dmg * 2 // 3)
+    return max(min_dmg, dmg - soak), False
 
 
 # --- player attacks ----------------------------------------------------------
@@ -139,9 +151,6 @@ def player_attack(state: GameState, m) -> None:
     m.awake = True
     if wild and m.behavior == "defensive":
         m.hostile = True
-    if dmg <= 0:
-        state.log.add(f"Your blow glances off the {m.name.lower()}'s hide.", C.DIM)
-        return
     m.hp -= dmg
     if m.hp <= 0:
         _on_kill(state, m)
@@ -230,16 +239,19 @@ def _step(state: GameState, m) -> None:
 
 
 def _attack_player(state: GameState, m) -> None:
+    lo, hi = m.dmg
     res = _resolve(m.to_hit, m.dmg, 0, 0.0, player_dv(state), player_pv(state))
     if res is None:
         state.log.add(f"The {m.name.lower()} lunges — you dodge.", C.DIM)
         return
     dmg, _crit = res
-    if dmg <= 0:
-        state.log.add(f"The {m.name.lower()} strikes, but your armour holds.", C.DIM)
-        return
     state.player.hp -= dmg
-    state.log.add(f"The {m.name.lower()} hits you for {dmg}!", (224, 140, 120))
+    # If armour turned most of the blow aside, say so — but it still stings.
+    if dmg <= max(1, hi // 3) and player_pv(state) > 0:
+        state.log.add(f"The {m.name.lower()} strikes — your armour holds, but it still bites for {dmg}.",
+                      (210, 170, 140))
+    else:
+        state.log.add(f"The {m.name.lower()} hits you for {dmg}!", (224, 140, 120))
 
 
 # --- the Bomb ability --------------------------------------------------------
@@ -358,13 +370,38 @@ def equipped_ranged(state: GameState):
     return it, stat
 
 
+def can_shoot(state: GameState) -> bool:
+    """True if a loaded ranged weapon (bow/sling + matching ammo) is readied."""
+    return equipped_ranged(state) is not None
+
+
+def can_throw(state: GameState) -> bool:
+    """True if the player is carrying at least one bomb to lob."""
+    return state.player.inventory.count(items.BOMB) >= 1
+
+
 def can_fire(state: GameState) -> bool:
     """True if the player can loose a shot (bow+ammo) or throw a bomb."""
-    return equipped_ranged(state) is not None or state.player.inventory.count(items.BOMB) >= 1
+    return can_shoot(state) or can_throw(state)
+
+
+def chosen_ammo(state: GameState, stat):
+    """The ammo a shot will actually spend: the ammo you've readied in the ammo
+    slot if it fits this launcher and you still carry it (so readying plain arrows
+    really does save your finer ones), otherwise your best matching ammo."""
+    p = state.player
+    fam = content.ammo_family(stat)
+    picked = p.equipment.get("ammo")
+    pst = content.ammo_stat(picked) if picked else None
+    if pst is not None and pst.family == fam and p.inventory.count(picked) >= 1:
+        return picked
+    return content.best_ammo(p.inventory, fam)
 
 
 def aim_purpose(state: GameState) -> str:
-    """"shoot" if a loaded ranged weapon is readied, else "throw" (bombs)."""
+    """The aim mode's opening intent: "shoot" if a loaded ranged weapon is readied,
+    else "throw" (bombs). In aim mode the player can toggle between the two (if they
+    carry both) so a readied bow never locks bombs away — see main's target mode."""
     return "shoot" if equipped_ranged(state) is not None else "throw"
 
 
@@ -412,18 +449,29 @@ def fire_ranged_at(state: GameState, tx: int, ty: int) -> bool:
         state.log.add("Aim away from yourself.", C.DIM)
         return False
 
-    ammo = content.best_ammo(p.inventory, content.ammo_family(stat))
+    ammo = chosen_ammo(state, stat)
     astat = content.ammo_stat(ammo)
     p.inventory.remove(ammo, 1)
     p.energy = max(0, p.energy - C.ATTACK_COST[0])
+
+    # Resolve the shot against the world as it stands *now* — like a melee blow —
+    # and only then let the world take its turn. (Advancing time first let erratic
+    # movers step off the aimed tile before the arrow "landed", so shots at exactly
+    # the foes bows are for flew wide with no to-hit roll and silently ate ammo.)
+    _resolve_shot(state, stat, ammo, astat, tx, ty)
     from . import turns
     turns.advance_time(state, C.ATTACK_COST[1])
+    return True
 
+
+def _resolve_shot(state: GameState, stat, ammo, astat, tx: int, ty: int) -> None:
+    """Fly the loosed shot to the first foe/wall in its path and strike it."""
+    from . import skills
     lx, ly = projectile_landing(state, tx, ty, stat.rng)
     m = mob_at(state, lx, ly)
     if m is None:
         state.log.add(f"Your {ammo.name.lower()} flies wide and clatters down.", C.DIM)
-        return True
+        return
     state.aim_target = m                       # re-aim onto this foe next time (until it dies)
 
     dmg_bonus = skills.mastery_dmg(skills.mastery_level(state, stat.category)) + astat.dmg
@@ -438,16 +486,13 @@ def fire_ranged_at(state: GameState, tx: int, ty: int) -> bool:
 
     if res is None:
         state.log.add(f"Your shot streaks past the {m.name.lower()}.", C.DIM)
-        return True
+        return
     dmg, was_crit = res
     skills.gain_mastery(state, stat.category, 3)
-    if dmg <= 0:
-        state.log.add(f"Your {ammo.name.lower()} glances off the {m.name.lower()}.", C.DIM)
-        return True
     m.hp -= dmg
     if m.hp <= 0:
         _on_kill(state, m)
-        return True
+        return
     if wild and not m.hostile:
         state.log.add(f"You hit the {m.name.lower()} for {dmg} — it bolts!", C.DIM)
     else:
@@ -456,7 +501,6 @@ def fire_ranged_at(state: GameState, tx: int, ty: int) -> bool:
                       (240, 220, 140) if was_crit else C.WHITE)
         if not wild:
             skills.gain(state, "Combat", 4)
-    return True
 
 
 def _shatter(state: GameState, x: int, y: int, t) -> None:

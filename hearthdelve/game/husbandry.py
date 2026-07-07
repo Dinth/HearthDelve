@@ -132,10 +132,10 @@ def interact_building(state: GameState, m: Machine, x: int, y: int) -> bool:
     flock = _flock(state, (x, y))
     p = state.player
 
-    if p.inventory.count(spec.buy_item) > 0:
-        if len(flock) >= mdef.capacity:
-            state.log.add(f"The {mdef.name.lower()} is full ({mdef.capacity}).", C_DIM)
-            return True
+    has_young = p.inventory.count(spec.buy_item) > 0
+    straw = p.inventory.count(items.STRAW)
+
+    if has_young and len(flock) < mdef.capacity:
         spot = _free_tile_near(state, x, y)
         if spot is None:
             state.log.add("There's no room beside it for the little one.", C_DIM)
@@ -149,13 +149,17 @@ def interact_building(state: GameState, m: Machine, x: int, y: int) -> bool:
                       (200, 220, 160))
         return True
 
-    # straw in hand — fork it into the building's trough for the animals to eat
-    straw = p.inventory.count(items.STRAW)
+    # straw in hand — fork it into the building's trough for the animals to eat.
+    # (Reachable even when the coop is full and you're also carrying a young one.)
     if straw > 0:
         p.inventory.remove(items.STRAW, straw)
         m.feed += straw
         state.log.add(f"You fork {straw} straw into the {mdef.name.lower()}'s trough "
                       f"({m.feed} in store).", (200, 220, 160))
+        return True
+
+    if has_young:                      # carrying a young one, but the coop was full
+        state.log.add(f"The {mdef.name.lower()} is full ({mdef.capacity}).", C_DIM)
         return True
 
     # nothing in hand — report the flock and the trough
@@ -253,8 +257,10 @@ def new_day(state: GameState) -> None:
             a.happiness = max(10, a.happiness - HUNGER_DRIFT)
             hungry += 1
         if _is_adult(a):
-            a.produce_ready = fed          # a hungry beast gives nothing that day
-            if fed and not was_adult:
+            # A fed adult leaves produce; a hungry one gives nothing — but don't
+            # wipe an egg/milk you simply hadn't collected yet.
+            a.produce_ready = a.produce_ready or fed
+            if not was_adult:              # just grew up — announce it even on a hungry morning
                 spec = SPECIES[a.kind]
                 state.log.add(f"{a.name} the {spec.young_name} has grown into a {spec.grown_name}.",
                               (200, 220, 160))

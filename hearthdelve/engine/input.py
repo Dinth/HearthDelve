@@ -67,6 +67,8 @@ def _sym_to_action(event: tcod.event.KeyDown):
         return ("confirm",)
     if sym == K.SPACE:
         return ("use",)
+    if sym == K.TAB:
+        return ("swap",)         # in aim mode: toggle between loosing the bow and lobbing a bomb
     # '?' is its own keysym on some builds; also accept shift+'/' for robustness.
     if sym == getattr(K, "QUESTION", object()) or (sym == K.SLASH and shift):
         return ("help",)
@@ -78,8 +80,12 @@ def _sym_to_action(event: tcod.event.KeyDown):
     ch = chr(int(sym)) if 0x20 <= int(sym) <= 0x7E else ""
     if ch and ch in "123456789":
         return ("slot", int(ch) - 1)
+    if ch == "0":
+        return ("slot", 9)          # 10th hotbar slot / 10th equipment paperdoll slot
     if ch == "c" and shift:
         return ("talk",)             # Shift+C: chat with a villager / open a shop
+    if ch == "m" and shift:
+        return ("mutemusic",)        # Shift+M: mute / unmute the background music
     if ch in _LETTER_CMD:
         return _LETTER_CMD[ch]
     return None

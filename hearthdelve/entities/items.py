@@ -49,15 +49,20 @@ TIERED_TOOLS = (HOE, WATERING_CAN, AXE, PICKAXE, MACHETE)
 # These are the iron-tier "canonical" pieces; content.make_gear seeds itself with
 # them and generates the other materials/affixes. The starter blade is a humble
 # rusty one — the affix system in miniature from turn one.
-SWORD        = Item("Rusty Iron Sword", "|", "weapon", "A basic blade for the wilds.", stackable=False, value=40, material="iron", prefix="rusty")
+# Values below match the gear factory (base × material [+ affix]); content.make_gear
+# re-derives them at import so the formula stays the single source of truth.
+SWORD        = Item("Rusty Iron Sword", "|", "weapon", "A basic blade for the wilds.", stackable=False, value=30, material="iron", prefix="rusty")
 DAGGER       = Item("Iron Dagger",      "†", "weapon", "A quick, light blade — deft and accurate.", stackable=False, value=70, material="iron")
-BATTLE_AXE   = Item("Iron Battle Axe",  "¶", "weapon", "A heavy axe; fells foes and trees alike.", stackable=False, value=180, material="iron")
-WAR_MACE     = Item("Iron War Mace",    "‡", "weapon", "A crushing head that shrugs off armour.", stackable=False, value=150, material="iron")
+BATTLE_AXE   = Item("Iron Battle Axe",  "¶", "weapon", "A heavy axe; fells foes and trees alike.", stackable=False, value=110, material="iron")
+WAR_MACE     = Item("Iron War Mace",    "‡", "weapon", "A crushing head that shrugs off armour.", stackable=False, value=90, material="iron")
 
 # --- Armor (worn; grants Protection, sometimes at a Dodge cost) --------------
-LEATHER_ARMOR = Item("Leather Armour", "]", "armor", "Boar-hide armour; light and unencumbering.", stackable=False, value=90, material="leather")
-CHAIN_MAIL    = Item("Iron Armour",    "]", "armor", "Linked iron rings; solid cover, a touch bulky.", stackable=False, value=280, material="iron")
-PLATE_ARMOR   = Item("Steel Armour",   "]", "armor", "Heavy steel plate; the best protection, but it slows your dodge.", stackable=False, value=650, material="steel")
+# Values follow the gear factory (base × material multiplier), matching every other
+# piece — so armour is always worth far less than the bars it takes to forge, and
+# forging is for wearing, never for flipping into profit.
+LEATHER_ARMOR = Item("Leather Armour", "]", "armor", "Boar-hide armour; light and unencumbering.", stackable=False, value=60, material="leather")
+CHAIN_MAIL    = Item("Iron Armour",    "]", "armor", "Linked iron rings; solid cover, a touch bulky.", stackable=False, value=100, material="iron")
+PLATE_ARMOR   = Item("Steel Armour",   "]", "armor", "Heavy steel plate; the best protection, but it slows your dodge.", stackable=False, value=190, material="steel")
 
 # --- Seeds -------------------------------------------------------------------
 PARSNIP_SEEDS     = Item("Parsnip Seeds",     "_", "seed", "Plant in spring; matures in ~4 days.")
@@ -73,6 +78,13 @@ SUNFLOWER_SEEDS   = Item("Sunflower Seeds",   "_", "seed", "Tall summer blooms. 
 ASTER_SEEDS       = Item("Aster Seeds",       "_", "seed", "Autumn flowers. Bees love them.")
 SNOW_TURNIP_SEEDS = Item("Snow Turnip Seeds", "_", "seed", "Plant in winter; a hardy frost-sweet root.")
 WINTERBERRY_SEEDS = Item("Winterberry Seeds", "_", "seed", "Winter berry; re-fruits in the cold.")
+CARROT_SEEDS   = Item("Carrot Seeds",   "_", "seed", "A quick, sweet spring root.")
+KALE_SEEDS     = Item("Kale Seeds",     "_", "seed", "Spring greens; keeps re-leafing.")
+CORN_SEEDS     = Item("Corn Seeds",     "_", "seed", "Summer stalks; keeps cropping ears.")
+CUCUMBER_SEEDS = Item("Cucumber Seeds", "_", "seed", "A summer vine; superb pickled.")
+CABBAGE_SEEDS  = Item("Cabbage Seeds",  "_", "seed", "A big, prized autumn head.")
+BEET_SEEDS     = Item("Beet Seeds",     "_", "seed", "A deep-red autumn root.")
+LEEK_SEEDS     = Item("Leek Seeds",     "_", "seed", "A hardy winter allium.")
 
 # --- Produce: vegetables ----------------------------------------------------
 PARSNIP     = Item("Parsnip",     "♠", "crop", "A pale, hardy root.",   value=35)
@@ -80,6 +92,13 @@ POTATO      = Item("Potato",      "o", "crop", "An earthy staple.",     value=80
 CAULIFLOWER = Item("Cauliflower", "%", "crop", "A big, prized head.",   value=175)
 PUMPKIN     = Item("Pumpkin",     "O", "crop", "A heavy autumn gourd.", value=320)
 SNOW_TURNIP = Item("Snow Turnip", "♠", "crop", "A frost-sweetened winter root.", value=130)
+CARROT      = Item("Carrot",      "v", "crop", "A crisp, sweet root.",  value=50)
+KALE        = Item("Kale",        "%", "crop", "Hardy leafy greens.",   value=75)
+CORN        = Item("Corn",        "Y", "crop", "Golden summer ears.",   value=110)
+CUCUMBER    = Item("Cucumber",    "c", "crop", "A cool summer vine fruit.", value=65)
+CABBAGE     = Item("Cabbage",     "%", "crop", "A dense autumn head.",   value=180)
+BEET        = Item("Beet",        "o", "crop", "An earthy crimson root.", value=95)
+LEEK        = Item("Leek",        "i", "crop", "A mild winter allium.",  value=100)
 
 # --- Flowers (grown for beauty, gifts, and to feed the bees) ----------------
 TULIP       = Item("Tulip",       "*", "crop", "A cheerful spring bloom.",  value=40)
@@ -125,6 +144,9 @@ CAVE_MUSHROOM = Item("Cave Mushroom", "τ", "material", "An earthy cave fungus �
 SLIME_GEL     = Item("Slime Gel",     "*", "material", "Sticky residue from a cave slime.",       value=15)
 BAT_WING      = Item("Bat Wing",      "~", "material", "A leathery wing from a cave bat.",         value=20)
 BOAR_HIDE     = Item("Boar Hide",     "u", "material", "Tough hide from a wild boar.",             value=40)
+SPIDER_SILK   = Item("Spider Silk",   "~", "material", "Strong, fine silk from a cave spider.",    value=35)
+LURKER_SCALE  = Item("Lurker Scale",  "u", "material", "A thick armoured scale from a deep lurker.", value=55)
+WRAITH_ESSENCE= Item("Wraith Essence","*", "material", "Cold, half-real essence bled from a wraith.", value=75)
 GLOWCAP       = Item("Glowcap",       "î", "material", "A luminous cave fungus from the Glimmerwood — prized by cooks.", value=65)
 # Wild mushrooms — field species (open ground) and forest species (woodland).
 BUTTON_MUSHROOM  = Item("Button Mushroom",  "τ", "material", "A small, common field mushroom.",            value=20)

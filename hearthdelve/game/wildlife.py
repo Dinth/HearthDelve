@@ -23,7 +23,7 @@ from ..engine import constants as C
 from ..world import tile
 from .state import GameState
 
-WILDLIFE_CAP = 140    # the Vale's rough carrying capacity (matches worldgen)
+WILDLIFE_CAP = C.WILDLIFE_CAP    # the Vale's rough carrying capacity (matches worldgen)
 FLEE_RANGE = 5        # skittish critters shy away inside this Chebyshev distance
 PANIC_RANGE = 2       # ...but a feeding critter only bolts at point-blank range
 FORAGE_RADIUS = 8     # how far a hungry critter will spot and stalk toward food
@@ -104,7 +104,10 @@ def _eat_crops(state: GameState, m) -> bool:
 def _eat_berries(state: GameState, m) -> bool:
     for bx, by in _neighbours(m):
         if state.world.tile_at(bx, by).kind == "shrub_berry":
+            btile = int(state.world.tiles[bx, by])
             state.world.tiles[bx, by] = tile.SHRUB
+            from . import farming                    # stripped bushes re-berry, same as picking
+            farming.schedule_berry_regrow(state, bx, by, btile)
             _notice(state, m, f"A {m.name.lower()} strips a berry shrub bare.", (200, 170, 120))
             return True
     return False
@@ -217,7 +220,7 @@ def act(state: GameState) -> None:
             m.energy = 0                        # dormant until you come near
             continue
         m.energy += m.speed
-        while m.energy >= 2 and m.alive:
+        while m.energy >= 2 and m.alive and p.hp > 0:   # stop piling on a downed player
             m.energy -= 2
             _behave(state, m)
     w.monsters = [m for m in w.monsters if m.alive]
@@ -242,6 +245,8 @@ def respawn(state: GameState, rng: random.Random) -> None:
                 continue
             if max(abs(x - cx), abs(y - cy)) < 20:  # not right on the farmyard
                 continue
+            if any(m.x == x and m.y == y for m in surf.monsters):
+                continue                            # don't drop a critter onto another
             c = rng.choice(content.WILDLIFE)
             surf.monsters.append(Mob(c.name, c.glyph, c.color, c.hp, c.hp, c.speed, c.behavior, x, y,
                                      dv=c.dv, pv=c.pv, to_hit=c.to_hit, dmg=c.dmg,

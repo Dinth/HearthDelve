@@ -16,9 +16,13 @@ VIEW_W = SCREEN_W - PANEL_W        # world viewport width  -> 58
 VIEW_H = SCREEN_H - LOG_H          # world viewport height -> 44
 
 # --- World -------------------------------------------------------------------
-WORLD_W = 512
-WORLD_H = 512
+WORLD_W = 1024
+WORLD_H = 1024
 WORLD_CENTER = (WORLD_W // 2, WORLD_H // 2)
+
+# Rough carrying capacity of surface wildlife, scaled with map area so a bigger
+# Vale feels equally alive (worldgen seeds this many; respawn tops back up to it).
+WILDLIFE_CAP = int(140 * (WORLD_W * WORLD_H) / (512 * 512))
 
 # Wildness tier thresholds (0..1 field): below T1 = homestead, etc.
 TIER1_MAX = 0.34                   # homestead / safe
@@ -57,6 +61,7 @@ FISH_SECONDS_MIN = 600     # 10 min
 FISH_SECONDS_MAX = 3600    # 60 min
 ATTACK_COST  = (3, 20)
 BOMB_COST    = (8, 60)
+CRAFT_COST   = (3, 300)    # cooking a dish / fletching a batch: 5 min at the bench
 USE_SECONDS  = 45         # fallback time for misc uses
 
 # Combat (DESIGN §7) — light bump combat.

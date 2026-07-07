@@ -22,6 +22,10 @@ from ..engine import constants as C
 from ..data import content
 
 
+# Region ids for the deliberate four-region composition (see generate()).
+REG_FOREST, REG_MARSH, REG_HILLS, REG_PLAINS = 0, 1, 2, 3
+
+
 def _noise_field(seed: int, w: int, h: int, scale: float, octaves: int = 4) -> np.ndarray:
     """Return a (w, h) array in roughly [0, 1] from simplex noise."""
     noise = tcod.noise.Noise(
@@ -74,6 +78,7 @@ def _grow_veins(tiles, w, h, host_id, ore_veins, max_len, gems, rng) -> None:
 
 def generate(seed: int = 1337) -> GameMap:
     w, h = C.WORLD_W, C.WORLD_H
+    cx, cy = C.WORLD_CENTER
     tiles = np.full((w, h), tile.GRASS, dtype=np.uint8)
 
     wild = _wildness(w, h, seed)
@@ -82,50 +87,79 @@ def generate(seed: int = 1337) -> GameMap:
     variety = _noise_field(seed + 41, w, h, scale=0.16, octaves=2)   # tree/shrub kind
     rare = _noise_field(seed + 57, w, h, scale=0.55, octaves=1)       # rare-feature mask
 
-    t1 = wild < C.TIER1_MAX
-    t2 = (wild >= C.TIER1_MAX) & (wild < C.TIER2_MAX)
-    t3 = wild >= C.TIER2_MAX
+    t1 = wild < C.TIER1_MAX                               # gentle homestead belt
 
-    # --- T1 homestead belt: gentle grass & meadow ---------------------------
+    # --- Deliberate regions -------------------------------------------------
+    # The Vale is composed of four regions meeting at the homestead: deep wood to
+    # the NW, a fen to the NE, rocky hills to the SW (mining country, around
+    # Cinderhope) and open plains to the SE. Rather than hard wedges, each region
+    # grows from a seed point and claims the ground nearest it, with the boundary
+    # ruffled by noise so borders drift and interlock organically.
+    off = int(0.30 * w)                                   # region seeds, on the diagonals
+    seeds = ((cx - off, cy - off),                        # NW forest
+             (cx + off, cy - off),                        # NE marsh
+             (cx - off, cy + off),                        # SW hills
+             (cx + off, cy + off))                        # SE plains
+    yy, xx = np.meshgrid(np.arange(h), np.arange(w))      # both (w, h)
+    warp = 0.16 * w                                       # how far noise bends a border
+    dsets = []
+    for i, (sx, sy) in enumerate(seeds):
+        nz = _noise_field(seed + 601 + i * 6, w, h, scale=0.018, octaves=3)
+        dsets.append(np.sqrt((xx - sx) ** 2 + (yy - sy) ** 2) - (nz - 0.5) * warp)
+    region = np.argmin(np.stack(dsets, axis=0), axis=0)   # (w, h) region id
+    forest = region == REG_FOREST
+    marsh = region == REG_MARSH
+    hills = region == REG_HILLS
+    plains = region == REG_PLAINS
+
+    # Homestead belt — gentle grass & meadow near the centre in every region, so
+    # home is green and safe whichever way you first set out.
     tiles[t1] = tile.GRASS
     tiles[t1 & (detail > 0.62)] = tile.MEADOW
 
-    # --- T2 edge: meadow, then woods where flora is dense -------------------
-    tiles[t2] = tile.MEADOW
-    tiles[t2 & (detail > 0.55)] = tile.TALL_GRASS
-    woods = t2 & (flora > 0.58)
-    tiles[woods] = tile.GRASS
-    treemask = woods & (detail > 0.42)
-    # broadleaf varieties in smooth groves (passable on their own)
-    tiles[treemask & (variety < 0.20)] = tile.TREE_OAK
-    tiles[treemask & (variety >= 0.20) & (variety < 0.40)] = tile.TREE_MAPLE
-    tiles[treemask & (variety >= 0.40) & (variety < 0.60)] = tile.TREE_BIRCH
-    tiles[treemask & (variety >= 0.60) & (variety < 0.80)] = tile.TREE_POPLAR
-    tiles[treemask & (variety >= 0.80)] = tile.TREE_WILLOW
-    # dense grove cores choke with impassable foliage
-    tiles[woods & (flora > 0.74) & (detail > 0.60)] = tile.FOLIAGE
-    # surface rock outcrops in the edge (ore is added sparsely as veins later)
-    rocky = t2 & (flora < 0.30)
-    tiles[rocky] = tile.GRASS
-    tiles[rocky & (detail > 0.66)] = tile.ROCK
+    # --- Plains (SE): open farming country — meadow, tall grass, lone trees ----
+    p = plains & ~t1
+    tiles[p] = tile.MEADOW
+    tiles[p & (detail > 0.55)] = tile.TALL_GRASS
+    tiles[p & (flora > 0.62) & (detail > 0.30) & (detail < 0.38)] = tile.GRASS
+    lone = p & (flora > 0.60) & (detail > 0.68)                 # scattered lone trees
+    tiles[lone & (variety < 0.33)] = tile.TREE_OAK
+    tiles[lone & (variety >= 0.33) & (variety < 0.66)] = tile.TREE_MAPLE
+    tiles[lone & (variety >= 0.66)] = tile.TREE_BIRCH
 
-    # --- T3 wilds: old forest / moor / ruins by flora value -----------------
-    old_forest = t3 & (flora > 0.55)
-    moor = t3 & (flora <= 0.55) & (flora > 0.32)
-    ruins = t3 & (flora <= 0.32)
-    tiles[old_forest] = tile.GRASS
-    conif = old_forest & (detail > 0.38)
-    tiles[conif & (variety < 0.5)] = tile.TREE_PINE
-    tiles[conif & (variety >= 0.5)] = tile.TREE_SPRUCE
-    tiles[old_forest & (flora > 0.70) & (detail > 0.50)] = tile.FOLIAGE
-    tiles[moor] = tile.MOOR
-    tiles[moor & (detail > 0.6)] = tile.FOG_GRASS
-    tiles[ruins] = tile.RUINS_FLOOR
-    tiles[ruins & (detail > 0.58)] = tile.RUINS_WALL
+    # --- Forest (NW): dense woodland, thickening with wildness ----------------
+    f = forest & ~t1
+    tiles[f] = tile.GRASS
+    treemask = f & (detail > 0.36 - (wild - C.TIER1_MAX) * 0.3)  # denser deeper in
+    tiles[treemask & (variety < 0.18)] = tile.TREE_OAK
+    tiles[treemask & (variety >= 0.18) & (variety < 0.34)] = tile.TREE_MAPLE
+    tiles[treemask & (variety >= 0.34) & (variety < 0.50)] = tile.TREE_BIRCH
+    tiles[treemask & (variety >= 0.50) & (variety < 0.66)] = tile.TREE_POPLAR
+    tiles[treemask & (variety >= 0.66) & (variety < 0.80)] = tile.TREE_WILLOW
+    tiles[treemask & (variety >= 0.80) & (detail > 0.5)] = tile.TREE_PINE
+    tiles[treemask & (variety >= 0.80) & (detail <= 0.5)] = tile.TREE_SPRUCE
+    tiles[f & (flora > 0.68) & (detail > 0.58)] = tile.FOLIAGE   # impassable thickets
 
-    # Shrubs: plain shrubs scatter through wooded land; fruit-bearing shrubs
-    # are much rarer (a sparse subset), split between the three berry kinds.
-    shrubland = (t2 | t3) & (flora > 0.45)
+    # --- Hills (SW): rocky upland, mining country around Cinderhope -----------
+    hl = hills & ~t1
+    tiles[hl] = tile.HILL
+    tiles[hl & (detail > 0.42) & (detail < 0.52)] = tile.SCREE   # loose stone
+    tiles[hl & (detail >= 0.60)] = tile.ROCK                     # crags & outcrops
+    conif_hill = hl & (flora > 0.50) & (detail > 0.28) & (detail < 0.40)
+    tiles[conif_hill & (variety < 0.5)] = tile.TREE_PINE         # hardy slopes
+    tiles[conif_hill & (variety >= 0.5)] = tile.TREE_SPRUCE
+
+    # --- Marsh (NE): a soggy fen — reeds, moor and open bog pools -------------
+    m = marsh & ~t1
+    tiles[m] = tile.MARSH
+    tiles[m & (detail > 0.30) & (detail < 0.42)] = tile.MOOR
+    tiles[m & (detail >= 0.42) & (detail < 0.48)] = tile.FOG_GRASS
+    tiles[m & (flora > 0.50) & (detail > 0.58) & (detail < 0.66)] = tile.REEDS
+    tiles[m & (detail >= 0.72)] = tile.WATER                     # bog pools
+    tiles[m & (flora > 0.66) & (detail > 0.30) & (detail < 0.36)] = tile.TREE_WILLOW
+
+    # Shrubs: plain shrubs scatter through wood & plains edges; berry shrubs rare.
+    shrubland = (forest | plains) & ~t1 & (flora > 0.45)
     shrub_spots = shrubland & (detail > 0.50) & (detail < 0.56)
     tiles[shrub_spots] = tile.SHRUB
     fruit_spots = shrub_spots & (rare > 0.76)              # a touch more berry shrubs
@@ -137,10 +171,10 @@ def generate(seed: int = 1337) -> GameMap:
     # grass under the woods; field species (button, parasol) dot open grass and
     # meadow. We only RECORD the spots here — the day cycle sprouts them in
     # summer/autumn and clears them otherwise (farming._seasonal_flora).
-    forest_m = ((tiles == tile.GRASS) | (tiles == tile.MOOR) | (tiles == tile.FOG_GRASS)) \
-        & (t2 | t3) & (flora > 0.5) & (detail > 0.40) & (detail < 0.47)
+    forest_m = (((tiles == tile.GRASS) & forest) | (tiles == tile.MOOR) | (tiles == tile.FOG_GRASS)) \
+        & ~t1 & (flora > 0.5) & (detail > 0.40) & (detail < 0.47)
     field_m = ((tiles == tile.GRASS) | (tiles == tile.MEADOW)) \
-        & (t1 | t2) & (flora < 0.40) & (detail > 0.44) & (detail < 0.47)
+        & plains & (flora < 0.40) & (detail > 0.44) & (detail < 0.47)
     mushroom_spots = []
     for mask, lo, hi in ((forest_m, tile.BOLETE, tile.CHANTERELLE),
                          (field_m, tile.BUTTON_MUSHROOM, tile.PARASOL_MUSHROOM)):
@@ -159,8 +193,9 @@ def generate(seed: int = 1337) -> GameMap:
         col = _flower_cols[min(3, int(variety[x, y] * 4))]
         flower_spots.append((x, y, int(col), int(tiles[x, y])))
 
-    # Sparse ore: a handful of short veins in rock outcrops, plus a few lone gems.
-    _grow_veins(tiles, w, h, tile.ROCK, ore_veins=12, max_len=6, gems=6,
+    # Ore: short veins through the hill crags (where ROCK is abundant), plus a
+    # scatter of lone gems. Richer than before, matching the larger, hillier map.
+    _grow_veins(tiles, w, h, tile.ROCK, ore_veins=34, max_len=7, gems=16,
                 rng=random.Random(seed + 71))
 
     # --- River: a meandering watercourse -----------------------------------
@@ -209,9 +244,12 @@ def generate(seed: int = 1337) -> GameMap:
     coast = _carve_sea(gm, seed)
     _carve_homestead(gm, seed)
     centers = _carve_villages(gm, seed, coast)
-    gm.village_centers = dict(centers)
-    _place_dungeons(gm, wild, flora)
+    _place_dungeons(gm, wild, flora, region, centers)
     forest_track = _carve_forest(gm, seed)
+    camp = _carve_camp(gm, seed)                     # woodcutters' camp in the NW wood
+    if camp is not None:
+        centers["Thornwake Camp"] = camp
+    gm.village_centers = dict(centers)
     _scatter_wild_fruit(gm, wild, seed)
     _draw_roads(gm, centers)
     if forest_track is not None:                    # a track links the hut to the network
@@ -229,7 +267,7 @@ def _scatter_wild_fruit(gm: GameMap, wild: np.ndarray, seed: int) -> None:
     rng = random.Random((seed + 321) & 0x7FFFFFFF)
     start_season = C.SEASONS[0]                       # a new game opens in spring
     placed, tries = 0, 0
-    while placed < 55 and tries < 6000:
+    while placed < 200 and tries < 24000:
         tries += 1
         x, y = rng.randint(4, gm.width - 5), rng.randint(4, gm.height - 5)
         if wild[x, y] < C.TIER1_MAX:                  # only out in the edge/wilds
@@ -282,7 +320,7 @@ def _populate_wildlife(gm: GameMap, rng: random.Random) -> None:
     from ..entities.monster import Mob
 
     cx, cy = C.WORLD_CENTER
-    count = 140
+    count = C.WILDLIFE_CAP
     placed = 0
     attempts = 0
     while placed < count and attempts < count * 40:
@@ -368,7 +406,8 @@ def _place_waypoints(gm: GameMap) -> None:
 # Built features a road must route AROUND, never through (impassable to roads).
 _ROAD_BLOCK = {"house_wall", "house_floor", "door", "bed", "shipping_bin",
                "fence", "tilled", "dungeon_down", "well", "lamp", "stall",
-               "statue", "hearth", "table", "counter", "barrel", "altar", "grave"}
+               "statue", "hearth", "table", "counter", "barrel", "altar", "grave",
+               "tent", "campfire"}
 _BLOCK_BY_ID = np.array([t.name in _ROAD_BLOCK for t in tile.TILES])
 _WATER_BY_ID = np.array([t.kind == "water" for t in tile.TILES])
 # Existing paving (dirt road, bridge, cobble) is reused by A* so lanes braid
@@ -919,14 +958,16 @@ def _lay_square(gm: GameMap, vx: int, vy: int, R: int, rng) -> list:
 def _carve_villages(gm: GameMap, seed: int, coast: np.ndarray) -> dict:
     import math
     cx, cy = C.WORLD_CENTER
+    h = gm.height
     groups = content.village_npcs()
 
-    salt_x = cx - 30
-    salt_cy = int(coast[salt_x]) if 0 <= salt_x < len(coast) else int(cy + 150)
+    salt_x = cx - 20
+    salt_cy = int(coast[salt_x]) if 0 <= salt_x < len(coast) else int(h * 0.82)
     sites = {
-        "Mossford":   (cx + 150, cy - 70, False),          # farming hamlet, NE
-        "Cinderhope": (cx - 165, cy + 55, False),          # mining outpost, SW
-        "Saltmere":   (salt_x, salt_cy - 22, True),        # fishing village on the coast
+        "Mossford":   (cx + 300, cy + 205, False),         # farming town, SE plains
+        "Cinderhope": (cx - 300, cy + 215, False),         # mining outpost, SW hills
+        "Saltmere":   (salt_x, salt_cy - 10, True),        # fishing village on the south coast
+        "Fenwick":    (cx + 250, cy - 230, False),         # fen hamlet, NE marsh
     }
     centers: dict = {}
 
@@ -1118,8 +1159,8 @@ def _carve_forest(gm: GameMap, seed: int):
     from ..data import content
     rng = random.Random((seed + 4242) & 0x7FFFFFFF)
     cx, cy = C.WORLD_CENTER
-    fx, fy = cx - 150, cy - 140                      # NW quarter, clear of the villages
-    R = 42
+    fx, fy = cx - 320, cy - 300                      # deep in the NW wood, past the village
+    R = 78
     ph = [rng.uniform(0, 6.28) for _ in range(3)]
     trees = (tile.TREE_OAK, tile.TREE_MAPLE, tile.TREE_BIRCH, tile.TREE_POPLAR,
              tile.TREE_WILLOW, tile.TREE_PINE, tile.TREE_SPRUCE)
@@ -1185,6 +1226,85 @@ def _carve_forest(gm: GameMap, seed: int):
         hut["owner"] = npc.name
         gm.npcs.append(npc)
     return hut["front"]
+
+
+def _carve_camp(gm: GameMap, seed: int):
+    """A woodcutters' camp in the NW wood: canvas tents ringed round a campfire
+    in a small rough clearing — no houses, gardens or shops. The folk work the
+    wood by day and gather at the fire come evening. Returns the fireside spot
+    (to hook into the road network), or None if the wood left no room."""
+    import math
+    rng = random.Random((seed + 5150) & 0x7FFFFFFF)
+    cx, cy = C.WORLD_CENTER
+    fx, fy = cx - 250, cy - 215                       # forest, nearer than the deep hut
+    R = 9
+
+    # a rough, organic clearing hacked out of the trees
+    ph = [rng.uniform(0, 6.28) for _ in range(3)]
+    for x in range(fx - R - 1, fx + R + 2):
+        for y in range(fy - R - 1, fy + R + 2):
+            if not gm.in_bounds(x, y) or tile.TILES[gm.tiles[x, y]].name not in _FOREST_OK:
+                continue
+            dx, dy = x - fx, y - fy
+            ang = math.atan2(dy, dx)
+            rr = R * (0.78 + 0.12 * math.sin(ang * 2 + ph[0]) + 0.08 * math.sin(ang * 3 + ph[1]))
+            if dx * dx + dy * dy <= rr * rr:
+                gm.tiles[x, y] = tile.GRASS
+    if not gm.walkable(fx, fy):
+        return None
+
+    # the campfire at the heart, a couple of supply barrels beside it
+    gm.tiles[fx, fy] = tile.CAMPFIRE
+    for bx, by in ((fx + 2, fy), (fx - 2, fy + 1)):
+        if gm.in_bounds(bx, by) and gm.tiles[bx, by] == tile.GRASS:
+            gm.tiles[bx, by] = tile.BARREL
+    fire_seat = next(((fx + dx, fy + dy) for dx, dy in ((0, 1), (1, 0), (-1, 0), (0, -1))
+                      if gm.walkable(fx + dx, fy + dy)), (fx, fy))
+
+    # tents ringed round the fire; each woodcutter sleeps at their tent door,
+    # works the wood by day, and drifts back to the fire in the evening (their
+    # inn/square/temple anchors all resolve to the fireside).
+    npcs = content.camp_npcs()
+    for i, npc in enumerate(npcs):
+        a = 2 * math.pi * i / max(1, len(npcs)) + 0.4
+        tent = None
+        for r in (R - 3, R - 4, R - 2, R - 5):        # step inward to find open grass
+            tx = int(round(fx + r * math.cos(a)))
+            ty = int(round(fy + r * math.sin(a)))
+            if gm.in_bounds(tx, ty) and gm.tiles[tx, ty] == tile.GRASS:
+                tent = (tx, ty)
+                break
+        if tent is None:
+            continue
+        tx, ty = tent
+        gm.tiles[tx, ty] = tile.TENT
+        # doorstep faces the fire, on walkable ground
+        sx = tx + ((fx > tx) - (fx < tx))
+        sy = ty + ((fy > ty) - (fy < ty))
+        door = next((c for c in ((sx, ty), (tx, sy), (sx, sy)) if gm.walkable(*c)), fire_seat)
+        work = _camp_work_spot(gm, fx, fy, R, rng) or fire_seat
+        npc.home, npc.work, npc.village = door, work, "Thornwake Camp"
+        npc.spots = {"home": door, "work": work, "inn": fire_seat,
+                     "temple": fire_seat, "square": fire_seat}
+        npc.x, npc.y = work
+        gm.buildings.append({"x": tx, "y": ty, "w": 1, "h": 1, "kind": "tent",
+                             "village": "Thornwake Camp", "owner": npc.name,
+                             "front": door, "inner": door, "door": (tx, ty)})
+        gm.npcs.append(npc)
+    return fire_seat
+
+
+def _camp_work_spot(gm: GameMap, fx: int, fy: int, R: int, rng) -> tuple | None:
+    """A walkable spot toward the edge of the camp clearing — where a woodcutter
+    stands to their day's work."""
+    import math
+    for _ in range(30):
+        a = rng.uniform(0, 2 * math.pi)
+        r = rng.uniform(R - 2, R)
+        x, y = int(round(fx + r * math.cos(a))), int(round(fy + r * math.sin(a)))
+        if gm.walkable(x, y) and gm.tiles[x, y] == tile.GRASS:
+            return (x, y)
+    return None
 
 
 def _carve_homestead(gm: GameMap, seed: int) -> None:
@@ -1289,30 +1409,40 @@ def _carve_homestead(gm: GameMap, seed: int) -> None:
     gm.spawn = (sx, sy)
 
 
-def _place_dungeons(gm: GameMap, wild: np.ndarray, flora: np.ndarray) -> None:
-    """Drop two dungeon entrances: a mine (rocky T2/T3) and a woodland grotto."""
+def _place_dungeons(gm: GameMap, wild: np.ndarray, flora: np.ndarray,
+                    region: np.ndarray, centers: dict) -> None:
+    """Root a dungeon mouth in each region that suits it: a mine in the rocky
+    hills beside Cinderhope, a grotto deep in the NW wood, and a barrow out in
+    the fen. Each picks the nearest fitting tile to its anchor (past a small
+    stand-off), with a walkable neighbour to descend from."""
     t = gm.tiles
     cx, cy = C.WORLD_CENTER
 
-    # np.where on a (w,h) array returns (x_index, y_index); name accordingly
-    mine_mask = (wild >= C.TIER1_MAX) & (flora < 0.30)
-    grotto_mask = (wild >= C.TIER1_MAX) & (flora > 0.62)
-
-    for mask, kind in ((mine_mask, "mine"), (grotto_mask, "grotto")):
-        xs, ys = np.where(mask)
+    def _drop(mask, kind, anchor, min_d):
+        xs, ys = np.where(mask)          # (w,h) array -> (x_index, y_index)
         if len(xs) == 0:
-            continue
-        d = (xs - cx) ** 2 + (ys - cy) ** 2
+            return
+        ax, ay = anchor
+        d = (xs - ax) ** 2 + (ys - ay) ** 2
         for i in np.argsort(d):
             x, y = int(xs[i]), int(ys[i])
-            # well out into the wilds, with a walkable neighbour to stand on
-            if d[i] < (130 ** 2):
+            if d[i] < (min_d ** 2):      # a stand-off from the anchor
                 continue
             if any(gm.walkable(x + dx, y + dy) for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1))):
                 _carve_dungeon_site(gm, x, y, kind)
                 gm.dungeons.append((x, y))
                 gm.dungeon_kind[(x, y)] = kind
-                break
+                return
+
+    stony = (t == tile.HILL) | (t == tile.SCREE)                     # walkable upland ground
+    deep_wood = (region == REG_FOREST) & (wild >= C.TIER2_MAX)       # far in the wildwood
+    fen = (region == REG_MARSH) & (wild >= C.TIER2_MAX) \
+        & ((t == tile.MARSH) | (t == tile.MOOR) | (t == tile.FOG_GRASS))
+
+    cinder = centers.get("Cinderhope", (cx, cy))
+    _drop(stony, "mine", cinder, min_d=30)                           # in the hills by the village
+    _drop(deep_wood, "grotto", (cx, cy), min_d=int(0.30 * gm.width))
+    _drop(fen, "barrow", (cx, cy), min_d=int(0.30 * gm.width))
 
 
 def _carve_dungeon_site(gm: GameMap, ex: int, ey: int, kind: str) -> None:

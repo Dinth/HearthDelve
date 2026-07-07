@@ -65,6 +65,11 @@ def craft(state: GameState, recipe: Recipe) -> bool:
             state.player.inventory.remove(it, qty)
     else:
         return False        # "choose" recipes are resolved via a chooser (see below)
+    # Every craft takes a little time and effort at the bench — so bulk-converting
+    # a stack (e.g. wood into arrows) costs a real slice of the day, not nothing.
+    from . import turns
+    state.player.energy = max(0, state.player.energy - C.CRAFT_COST[0])
+    turns.advance_time(state, C.CRAFT_COST[1])
     return True
 
 
@@ -93,6 +98,9 @@ def craft_choice(state: GameState, opt) -> None:
     qty = opt.get("out_qty", 1)
     inv.add(opt["output"], qty)
     state.log.add(f"You fletch {qty}x {opt['output'].name}.", (200, 220, 160))
+    from . import turns
+    state.player.energy = max(0, state.player.energy - C.CRAFT_COST[0])
+    turns.advance_time(state, C.CRAFT_COST[1])
 
 
 def _place_fence(state: GameState) -> bool:
@@ -256,7 +264,9 @@ def machine_load_options(state: GameState, mdef) -> list:
         # make finer gear). One entry per (metal, base) you can currently afford.
         for metal in content.FORGE_METALS:
             bar = content.MATERIALS[metal].bar
-            for base in list(content.WEAPON_BASES) + list(content.ARMOR_BASES):
+            forgeable = list(content.WEAPON_BASES) + [
+                b for b in content.ARMOR_BASES if b not in content._SOFT_BASES]
+            for base in forgeable:
                 cost = content.forge_cost(base)
                 if bar is not None and inv.count(bar) >= cost:
                     opts.append({"inputs": [(bar, cost)], "output": content.make_gear(base, metal),
@@ -302,9 +312,9 @@ def _flowers_near(state: GameState, x: int, y: int, r: int = 10) -> int:
             if surf.in_bounds(xx, yy) and surf.tile_at(xx, yy).kind == "flower":
                 n += 1
     for (cx, cy), plot in surf.crops.items():
-        if (not plot.dead and abs(cx - x) <= r and abs(cy - y) <= r
+        if (not plot.dead and plot.mature and abs(cx - x) <= r and abs(cy - y) <= r
                 and getattr(plot.crop, "category", "") == "flower"):
-            n += 1
+            n += 1                        # only blooms feed the bees, not fresh seedlings
     return n
 
 

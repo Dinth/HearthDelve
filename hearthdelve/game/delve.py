@@ -62,7 +62,17 @@ def _floor_seed(state: GameState, depth: int) -> int:
 
 
 def _go_to_floor(state: GameState, depth: int, descending: bool) -> None:
-    gm = dungeon.generate(_floor_seed(state, depth), state.dungeon_kind, depth)
+    # Re-use the floor if we've already been on it today (so opened chests, scooped
+    # gold and slain monsters stay gone); otherwise generate it and remember it.
+    # The cache is dropped on a new day, so floors still re-roll daily.
+    if state.floor_cache_day != state.day:
+        state.floor_cache.clear()
+        state.floor_cache_day = state.day
+    key = (state.dungeon_kind, depth)
+    gm = state.floor_cache.get(key)
+    if gm is None:
+        gm = dungeon.generate(_floor_seed(state, depth), state.dungeon_kind, depth)
+        state.floor_cache[key] = gm
     state.world = gm
     state.stats["deepest_depth"] = max(state.stats.get("deepest_depth", 0), depth)
     # arrive at the up-stairs when descending into a floor, down-stairs when rising

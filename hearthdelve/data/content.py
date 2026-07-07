@@ -134,18 +134,22 @@ class Affix:
 
 
 # Bounded but meaningful — roughly one material tier's worth, never dominating.
+# A bow only realises to-hit and damage affixes (a RangedStat carries no DV/PV),
+# so affixes whose only effect would be DV/PV — or a DV downside — must NOT list
+# "ranged", else they'd charge for a stat the bow can't use (or hand it a free
+# upside). Only to-hit/damage affixes carry the "ranged" tag.
 PREFIXES: dict[str, Affix] = {
     "rusty":      Affix("Rusty",      to_hit=-1, pv=-1, value_mult=0.5),
     "cracked":    Affix("Cracked",    dmg=-1, pv=-1, value_mult=0.5),
-    "fine":       Affix("Fine",       to_hit=1, value_mult=1.6),
-    "keen":       Affix("Keen",       to_hit=2, value_mult=1.8, kinds=("weapon",)),
+    "fine":       Affix("Fine",       to_hit=1, value_mult=1.6, kinds=("weapon", "armor", "ranged")),
+    "keen":       Affix("Keen",       to_hit=2, value_mult=1.8, kinds=("weapon", "ranged")),
     "heavy":      Affix("Heavy",      dmg=2, dv=-1, value_mult=1.5, kinds=("weapon",)),
-    "masterwork": Affix("Masterwork", to_hit=2, dmg=1, pv=1, value_mult=2.6),
+    "masterwork": Affix("Masterwork", to_hit=2, dmg=1, pv=1, value_mult=2.6, kinds=("weapon", "armor", "ranged")),
     "reinforced": Affix("Reinforced", pv=1, value_mult=1.7, kinds=("armor",)),
 }
 SUFFIXES: dict[str, Affix] = {
-    "slaying":    Affix("of Slaying",    dmg=2, value_mult=2.0, kinds=("weapon",)),
-    "accuracy":   Affix("of Accuracy",   to_hit=2, value_mult=1.8, kinds=("weapon",)),
+    "slaying":    Affix("of Slaying",    dmg=2, value_mult=2.0, kinds=("weapon", "ranged")),
+    "accuracy":   Affix("of Accuracy",   to_hit=2, value_mult=1.8, kinds=("weapon", "ranged")),
     "warding":    Affix("of Warding",    dv=1, value_mult=1.8),
     "protection": Affix("of Protection", pv=1, value_mult=2.0, kinds=("armor",)),
 }
@@ -153,26 +157,40 @@ SUFFIXES: dict[str, Affix] = {
 # Base types: their stats are the IRON / leather baseline (material adds on top).
 #   weapon -> (category, to_hit, (lo,hi), dv, glyph, base_value, desc)
 WEAPON_BASES: dict[str, tuple] = {
-    "Dagger":     ("blade", 3, (2, 5), 0,  "†", 70,  "A quick, light blade — deft and accurate."),
-    "Sword":      ("blade", 2, (3, 7), 0,  "|", 60,  "A versatile blade for the wilds."),
-    "War Mace":   ("blunt", 1, (3, 8), -1, "‡", 90,  "A crushing head that shrugs off armour."),
-    "Battle Axe": ("axe",   1, (4, 9), -1, "¶", 110, "A heavy axe; fells foes and trees alike."),
+    "Dagger":     ("blade",   3, (2, 5),  0,  "†", 70,  "A quick, light blade — deft and accurate."),
+    "Sword":      ("blade",   2, (3, 7),  0,  "|", 60,  "A versatile blade for the wilds."),
+    "Rapier":     ("blade",   4, (2, 6),  1,  "†", 85,  "A slender dueling blade — swift, precise, quick to parry."),
+    "Greatsword": ("blade",   0, (5, 11), -1, "|", 160, "A massive two-handed blade — slow, but it cleaves deep."),
+    "War Mace":   ("blunt",   1, (3, 8),  -1, "‡", 90,  "A crushing head that shrugs off armour."),
+    "Warhammer":  ("blunt",   0, (4, 10), -1, "‡", 140, "A two-handed hammer that caves in armour."),
+    "Battle Axe": ("axe",     1, (4, 9),  -1, "¶", 110, "A heavy axe; fells foes and trees alike."),
+    "Spear":      ("polearm", 2, (3, 8),  0,  "|", 90,  "A long-hafted spear — reach and a keen point."),
+    "Halberd":    ("polearm", 1, (4, 10), -1, "¶", 150, "A pole-axe: it cleaves with reach, but is unwieldy."),
 }
+# Two-handed weapons occupy both hands, so you can't also carry a shield (its DV/PV
+# is ignored while one is wielded). Their base names are single, distinctive words.
+TWO_HANDED_BASES = {"Greatsword", "Warhammer", "Halberd"}
+
+
+def is_two_handed(item) -> bool:
+    return item is not None and bool(TWO_HANDED_BASES & set(item.name.split()))
 #   armour -> (slot, base_dv, slot_weight, base_value)
 # The head takes EITHER a Helm (metal) or a Hat (cloth/straw); the cloak slot
 # takes a Cloak (cloth). Both share the paperdoll slot with their metal kin.
 ARMOR_BASES: dict[str, tuple] = {
-    "Helm":      ("head",  0, 0.30, 45),
-    "Hat":       ("head",  0, 0.30, 30),
-    "Armour":    ("body",  0, 1.00, 100),
-    "Cloak":     ("cloak", 0, 0.35, 50),
-    "Gauntlets": ("hands", 0, 0.20, 40),
-    "Girdle":    ("waist", 0, 0.15, 35),
-    "Leggings":  ("legs",  0, 0.40, 50),
-    "Boots":     ("feet",  0, 0.20, 40),
+    "Helm":      ("head",   0, 0.30, 45),
+    "Hat":       ("head",   0, 0.30, 30),
+    "Armour":    ("body",   0, 1.00, 100),
+    "Robe":      ("body",   1, 0.50, 40),   # light cloth body: some Dodge, little Protection
+    "Cloak":     ("cloak",  0, 0.35, 50),
+    "Gauntlets": ("hands",  0, 0.20, 40),
+    "Girdle":    ("waist",  0, 0.15, 35),
+    "Leggings":  ("legs",   0, 0.40, 50),
+    "Boots":     ("feet",   0, 0.20, 40),
+    "Shield":    ("shield", 1, 0.50, 60),   # held guard: blocks (Dodge) and soaks (Protection)
 }
 # Bases that are made of soft materials (cloth/straw/hide), not metal.
-_SOFT_BASES = {"Hat", "Cloak"}
+_SOFT_BASES = {"Hat", "Cloak", "Robe"}
 _ALL_BASES = set(WEAPON_BASES) | set(ARMOR_BASES)
 
 # Pre-existing canonical items reused by the factory so code references stay
@@ -226,19 +244,24 @@ def make_gear(base: str, material: str, prefix: str = "", suffix: str = "") -> I
         db = mat.w_dmg + (pfx.dmg if pfx else 0) + (sfx.dmg if sfx else 0)
         to_hit = th + mat.w_to_hit + (pfx.to_hit if pfx else 0) + (sfx.to_hit if sfx else 0)
         wdv = dv + mat.w_dv + (pfx.dv if pfx else 0) + (sfx.dv if sfx else 0)
+        val = _affix_value(bval, mat, pfx, sfx)
         if it is None:
             it = items.register(items.Item(name, glyph, "weapon", desc, stackable=False,
-                                            value=_affix_value(bval, mat, pfx, sfx),
-                                            material=material, prefix=prefix, suffix=suffix))
+                                            value=val, material=material, prefix=prefix, suffix=suffix))
+        else:                                    # canonical piece keeps its identity (save/recipe
+            object.__setattr__(it, "value", val) # refs) but takes the formula value — the single
         WEAPON_STATS[it] = CombatProfile(cat, to_hit, (max(1, lo + db), max(1, hi + db)), wdv)
     else:
         slot, bdv, weight, bval = ARMOR_BASES[base]
         pv = round(weight * mat.a_pv) + (pfx.pv if pfx else 0) + (sfx.pv if sfx else 0)
         dv = bdv + mat.a_dv + (pfx.dv if pfx else 0) + (sfx.dv if sfx else 0)
-        if it is None:
+        val = _affix_value(bval, mat, pfx, sfx)  # source of truth for price, so no hand-tuned
+        if it is None:                           # literal can drift off the curve (or be forge-flipped)
             it = items.register(items.Item(name, "]", "armor", f"Armour worn on the {slot}.",
-                                            stackable=False, value=_affix_value(bval, mat, pfx, sfx),
+                                            stackable=False, value=val,
                                             material=material, prefix=prefix, suffix=suffix))
+        else:
+            object.__setattr__(it, "value", val)
         ARMOR_STATS[it] = (dv, max(0, pv))
         ARMOR_SLOT[it] = slot
     _GEAR[key] = it
@@ -292,9 +315,11 @@ items.register_resolver(_resolve_gear)
 # slot (the smith's baseline range).
 ALL_WEAPONS = [make_gear(b, "iron") for b in WEAPON_BASES]
 ALL_ARMOR = sorted(
-    (make_gear(b, m) for b in ARMOR_BASES for m in ("leather", "iron", "steel")),
+    (make_gear(b, m) for b in ARMOR_BASES if b not in _SOFT_BASES
+     for m in ("leather", "iron", "steel")),
     key=lambda it: it.value,
-)
+)   # metal/leather range covers the hard bases only — cloth bases (Hat/Cloak/Robe)
+    # come as soft goods (general store rack) or loot, never forged from metal.
 
 
 # --- depth-scaled gear loot --------------------------------------------------
@@ -347,7 +372,7 @@ def random_gear(depth: int, rng, kind: str | None = None) -> Item:
     """A weapon, bow, or armour piece scaled to dungeon depth, with a
     depth-rising chance of a good prefix and/or suffix."""
     kind = kind or rng.choices(("weapon", "armor", "ranged"), weights=(4, 4, 2))[0]
-    affix_kind = "weapon" if kind == "ranged" else kind
+    affix_kind = kind                       # bows filter to ranged-appropriate affixes only
     if kind == "ranged":
         base = rng.choice(list(RANGED_BASES))
         mat = _loot_wood(depth, rng)
@@ -452,7 +477,7 @@ _ARROW_TIPS = [
     (items.SILVER_ORE,     "Silver",     2, 1, 14),
     (items.GOLD_ORE,       "Gilded",     2, 0, 16),
     (items.ADAMANTITE_ORE, "Adamantine", 3, 1, 22),
-    (items.MITHRIL_ORE,    "Mithril",    4, 1, 30),
+    (items.MITHRIL_ORE,    "Mithril",    4, 1, 34),   # priciest tip; matches the +profit of lower tiers
 ]
 # ore item -> the tipped arrow it fletches (for the craft chooser).
 ARROW_FROM_ORE: dict[Item, Item] = {}
@@ -593,7 +618,53 @@ WINTERBERRY = Crop(
     desc="A tart berry that keeps fruiting in the snow; makes a fine wine.",
 )
 
+# Extra vegetables — round out the seasons (notably summer, which had none) and
+# feed the pickle jar. Prices track the existing curve (~10-20 g per grow-day).
+CARROT = Crop(
+    name="Carrot", glyph="v", color=(228, 132, 48), season="Spring",
+    days_to_mature=4, regrows=False, sell_price=50,
+    seed=items.CARROT_SEEDS, produce=items.CARROT,
+    desc="A quick spring root — sweet and crisp.",
+)
+KALE = Crop(
+    name="Kale", glyph="%", color=(86, 168, 96), season="Spring",
+    days_to_mature=6, regrows=True, sell_price=75, regrow_days=4,
+    seed=items.KALE_SEEDS, produce=items.KALE,
+    desc="Leafy spring greens that keep re-leafing after a cut.",
+)
+CORN = Crop(
+    name="Corn", glyph="Y", color=(226, 196, 90), season="Summer",
+    days_to_mature=11, regrows=True, sell_price=110, regrow_days=4,
+    seed=items.CORN_SEEDS, produce=items.CORN,
+    desc="Tall summer stalks that keep cropping ears.",
+)
+CUCUMBER = Crop(
+    name="Cucumber", glyph="c", color=(120, 180, 90), season="Summer",
+    days_to_mature=5, regrows=False, sell_price=65,
+    seed=items.CUCUMBER_SEEDS, produce=items.CUCUMBER,
+    desc="A cool summer vine — makes the finest pickles.",
+)
+CABBAGE = Crop(
+    name="Cabbage", glyph="%", color=(70, 150, 80), season="Fall",
+    days_to_mature=9, regrows=False, sell_price=180,
+    seed=items.CABBAGE_SEEDS, produce=items.CABBAGE,
+    desc="A dense autumn head; slow, but a prize.",
+)
+BEET = Crop(
+    name="Beet", glyph="o", color=(170, 50, 60), season="Fall",
+    days_to_mature=6, regrows=False, sell_price=95,
+    seed=items.BEET_SEEDS, produce=items.BEET,
+    desc="A deep-red autumn root, earthy and sweet.",
+)
+LEEK = Crop(
+    name="Leek", glyph="i", color=(180, 220, 170), season="Winter",
+    days_to_mature=6, regrows=False, sell_price=100,
+    seed=items.LEEK_SEEDS, produce=items.LEEK,
+    desc="A hardy winter allium that shrugs off the frost.",
+)
+
 CROPS: list[Crop] = [PARSNIP, POTATO, CAULIFLOWER, PUMPKIN,
+                     CARROT, KALE, CORN, CUCUMBER, CABBAGE, BEET, LEEK,
                      TOMATO, STRAWBERRY, BLUEBERRY, GRAPE,
                      TULIP, SUNFLOWER, ASTER,
                      SNOW_TURNIP, WINTERBERRY]
@@ -651,6 +722,7 @@ def is_fruit(produce: Item) -> bool:
 # source; each carries its `source` and a shared `family` so gift tastes match
 # "any jam". Grape wine keeps its hand-tuned premium item.
 JAM_MULT, WINE_MULT, PICKLE_MULT = 1.6, 2.2, 1.5
+GRAPE_WINE_MULT = 3.75          # grape is *the* wine fruit — its vintage tops every other
 
 _FRUIT_ITEMS = [c.produce for c in CROPS if c.category == "fruit"] + \
     [items.RASPBERRY, items.GOOSEBERRY, items.CURRANT,
@@ -667,8 +739,11 @@ def _variant(name: str, glyph: str, source: Item, mult: float, family: str) -> I
 FRUIT_JAM = {f: _variant(f"{f.name} Jam", "■", f, JAM_MULT, "jam") for f in _FRUIT_ITEMS}
 FRUIT_WINE = {}
 for _f in _FRUIT_ITEMS:
-    FRUIT_WINE[_f] = items.GRAPE_WINE if _f is items.GRAPE \
-        else _variant(f"{_f.name} Wine", "ø", _f, WINE_MULT, "wine")
+    if _f is items.GRAPE:                       # keep the hand-tuned item, price it as the premium
+        object.__setattr__(items.GRAPE_WINE, "value", round(items.GRAPE.value * GRAPE_WINE_MULT))
+        FRUIT_WINE[_f] = items.GRAPE_WINE
+    else:
+        FRUIT_WINE[_f] = _variant(f"{_f.name} Wine", "ø", _f, WINE_MULT, "wine")
 VEG_PICKLE = {v: _variant(f"Pickled {v.name}", "■", v, PICKLE_MULT, "pickles") for v in _VEG_ITEMS}
 
 
@@ -693,18 +768,18 @@ MACHINES: dict[str, MachineDef] = {
                           items.COPPER_BAR, "Smelts ore + coal into bars (alloys need two ores)."),
     "jar":     MachineDef("jar", "Preserves Jar", "J", (202, 170, 110), 240, "crop",
                           None, "Fruit->jam, veg->pickles, eel->jellied eel."),
-    "keg":     MachineDef("keg", "Keg", "K", (172, 110, 72), 480, "fruit",
-                          items.WINE, "Ferments fruit into wine."),
+    "keg":     MachineDef("keg", "Keg", "K", (172, 110, 72), 2400, "fruit",
+                          items.WINE, "Ferments fruit into wine, honey into mead — a slow craft (days)."),
     "sawmill": MachineDef("sawmill", "Sawmill", "≠", (176, 134, 90), 90, "wood",
                           items.TIMBER_PLANK, "Saws logs into timber planks (2 wood each)."),
-    "beehive": MachineDef("beehive", "Beehive", "⌂", (222, 178, 84), 480, "bees",
-                          items.HONEY, "Add a bee queen; makes honey & wax, more with flowers near."),
+    "beehive": MachineDef("beehive", "Beehive", "⌂", (222, 178, 84), 1440, "bees",
+                          items.HONEY, "Add a bee queen; makes honey & wax over a day, more with flowers near."),
     "press":   MachineDef("press", "Oil Press", "P", (172, 172, 184), 120, "oil",
                           items.SUNFLOWER_OIL, "Presses sunflowers into oil (2 sunflowers each)."),
     "sprinkler": MachineDef("sprinkler", "Sprinkler", "¤", (120, 188, 222), 0, "",
                             None, "Waters the 4 neighbouring tiles each morning."),
-    "churn":   MachineDef("churn", "Churn", "Ö", (206, 196, 176), 360, "dairy",
-                          items.CHEESE, "Churns milk into a wheel of cheese."),
+    "churn":   MachineDef("churn", "Churn", "Ö", (206, 196, 176), 1200, "dairy",
+                          items.CHEESE, "Churns milk into a wheel of cheese over a day."),
     # Animal housing. The little coop is a 1-tile placeable you build yourself;
     # the roomy coop and barn are outbuildings the carpenter raises on your farm.
     "coop_small": MachineDef("coop_small", "Little Coop", "n", (170, 130, 96), 0, "",
@@ -1282,7 +1357,145 @@ def village_npcs() -> dict[str, list[NPC]]:
                 gifts=(items.MINNOW, items.TULIP, items.STRAWBERRY),
                 bio="A Saltmere child; a would-be sailor, brave as he can manage."),
         ],
+        "Fenwick": [
+            NPC("Maren", "M", (150, 176, 150), shop="tavern", role="innkeeper",
+                blurbs=("Mind the boards on the way in — half of Fenwick's built\n"
+                        "on stilts over the mire. Dry seat by the fire's yours.",
+                        "We brew a mead here with fen-honey and bog-myrtle.\n"
+                        "Cures a chill, loosens a tongue. Careful with the second cup."),
+                heart_blurbs=((3, "Folk think the fen's a sad, grey place. They've not\n"
+                                  "seen the mist come off it gold at dawn. I have. Daily."),
+                              (6, "My inn's the only warm light for a league of marsh.\n"
+                                  "Some nights that feels like a duty. Most, a gift.")),
+                loves=(items.HONEY, items.MEAD, items.JELLIED_EEL),
+                likes=(items.JAM, items.PICKLES, items.WINE), dislikes=(items.STONE,),
+                gifts=(items.MEAD, items.HONEY, items.JAM),
+                bio="Keeps the stilt-house inn at Fenwick; steady warmth in a cold fen."),
+            NPC("Sedge", "S", (170, 190, 148), shop=None, role="forager",
+                blurbs=("The fen gives up its cures to them as knows where to look.\n"
+                        "Bog-bean, sundew, marsh-mallow root — all physic, all free.",
+                        "Never eat a fen mushroom you can't name three times over.\n"
+                        "I've buried folk who trusted a pretty cap."),
+                heart_blurbs=((3, "I was a town apothecary once, in a clean white coat.\n"
+                                  "The fen taught me more in a season than the guild in ten years."),
+                              (6, "Bring me the strange ones you find out in the wet.\n"
+                                  "Between us, I think we could physic the whole Vale.")),
+                loves=(items.CAVE_MUSHROOM, items.CHANTERELLE, items.HONEY),
+                likes=(items.BOLETE, items.PARASOL_MUSHROOM, items.FIBER),
+                dislikes=(items.COAL, items.STONE),
+                gifts=(items.ASTER_SEEDS, items.STRAWBERRY_SEEDS, items.CAVE_MUSHROOM),
+                bio="Fenwick's herbalist; reads the marsh like a book of remedies."),
+            NPC("Quill", "Q", (140, 172, 190), shop=None, role="fisher",
+                blurbs=("Eels, mostly. Slippery livelihood, but a steady one —\n"
+                        "the fen's thick with them if you've the patience.",
+                        "Set your traps at dusk, lift them at dawn. The fen keeps\n"
+                        "its own hours, and I've learned to keep them with it."),
+                heart_blurbs=((3, "My grandfather drowned setting these same traps.\n"
+                                  "I still set them. What else is there? The eels don't mourn."),
+                              (6, "First good eel of the season, I'll smoke it for you.\n"
+                                  "Don't argue — it's how we say a thing here that words won't.")),
+                loves=(items.JELLIED_EEL, items.EEL, items.MEAD),
+                likes=(items.MINNOW, items.FIBER), dislikes=(items.COAL,),
+                gifts=(items.EEL, items.MINNOW, items.FIBER),
+                bio="Fenwick's eel-catcher; quiet, weathered, wed to the water."),
+            NPC("Rushel", "R", (188, 172, 132), shop=None, role="villager",
+                blurbs=("Cutting peat's black work — but dried in stacks it burns\n"
+                        "slow and warm all winter. The whole fen smells of it come autumn.",
+                        "Every brick I cut is a thousand years of the fen, pressed down.\n"
+                        "Feels wrong to burn it, some days. Then the frost comes."),
+                heart_blurbs=((3, "Found a whole deer, once, in the deep peat — antlers, hide,\n"
+                                  "the lot, brown as tea and older than the kingdom. Put it back."),
+                              (6, "I'll cut and dry you a winter's worth, friend, and gladly.\n"
+                                  "A cold hearth's the loneliest thing I know.")),
+                loves=(items.MEAD, items.PICKLES, items.COAL),
+                likes=(items.WOOD, items.JAM), dislikes=(items.RUBY, items.DIAMOND)),
+            NPC("Willa", "w", (196, 184, 168), shop=None, role="trader",
+                blurbs=("I take the fen's goods up the causeway to the towns —\n"
+                        "peat, physic, smoked eel — and bring back what we can't grow.",
+                        "You've the look of someone with odd things to sell.\n"
+                        "I like odd things. Odd things travel well."),
+                heart_blurbs=((3, "One road in, one road out, and it floods twice a year.\n"
+                                  "Fenwick would wither without a trader mad enough to walk it."),
+                              (6, "Whatever you can't shift elsewhere, bring to me.\n"
+                                  "A friend's goods always find room on my cart.")),
+                loves=(items.AMETHYST, items.TOPAZ, items.WINE),
+                likes=(items.JAM, items.PICKLES, items.HONEY), dislikes=(),
+                gifts=(items.MEAD, items.PICKLES),
+                bio="Fenwick's trader; the causeway's lifeline, and knows everyone's business."),
+            NPC("Reed", "r", (180, 200, 160), shop=None, role="child",
+                blurbs=("I can walk the whole bog blindfold and not sink once!\n"
+                        "...Don't tell Mum I tried the blindfold part.",
+                        "There's frogs out there BIGGER than my two fists.\n"
+                        "I named one Sir Hoppy. He's the king of the fen now."),
+                heart_blurbs=((3, "The mist makes shapes at night. Sedge says it's just mist.\n"
+                                  "But I've seen it wave. I waved back, to be polite."),
+                              (6, "When you go off to the deep marsh — take me? I know\n"
+                                  "the safe tufts. I'd keep you from the sucking mud. Promise.")),
+                loves=(items.HONEY, items.JAM),
+                likes=(items.MINNOW, items.STRAWBERRY), dislikes=(items.STONE,),
+                gifts=(items.MINNOW, items.HONEY),
+                bio="A Fenwick child; fearless of the bog, forever muddy to the ears."),
+        ],
     }
+
+
+def camp_npcs() -> list[NPC]:
+    """The woodcutters of the NW wildwood — they live rough in a tent camp round
+    a fire, not a village, so they carry no shop, shrine or inn of their own."""
+    return [
+        NPC("Burl", "B", (198, 158, 110), shop=None, role="forester",
+            blurbs=("This is Burl's camp, and Burl's rule is simple: fell one, plant two,\n"
+                    "and don't wake the deep wood. It doesn't wake gentle.",
+                    "No walls, no roofs but canvas, no lock on a thing.\n"
+                    "Out here your axe is your name and your word is your coin."),
+            heart_blurbs=((3, "Had a house in a town once. Four walls and a mortgage and a\n"
+                              "wife who left. Traded the lot for a tent and the smell of sap. Fair swap."),
+                          (6, "You've camped at our fire enough now, friend. That makes you\n"
+                              "one of Burl's own. Anyone gives you grief in this wood, you tell me.")),
+            loves=(items.TIMBER_PLANK, items.WOOD, items.MEAD),
+            likes=(items.COAL, items.PICKLES), dislikes=(items.RUBY, items.DIAMOND),
+            gifts=(items.TIMBER_PLANK, items.WOOD, items.COAL),
+            bio="Boss of the woodcutters' camp; broad as an oak, twice as stubborn."),
+        NPC("Rowan", "W", (204, 176, 128), shop=None, role="forester",
+            blurbs=("I read the grain before I ever swing. A tree tells you\n"
+                    "how it wants to fall, if you've the sense to listen.",
+                    "Sap's rising — you can hear the whole wood drinking at dawn.\n"
+                    "Best time to be alive, and the worst time to fell. So we wait."),
+            heart_blurbs=((3, "The others swing harder. I swing truer. We've never once\n"
+                              "had a tree come down wrong on my mark. Never will."),
+                          (6, "Cut you a stave of good ash, I did — seasoned two years.\n"
+                              "A tool's only as honest as the wood inside it. Use it well.")),
+            loves=(items.TIMBER_PLANK, items.CHANTERELLE, items.MEAD),
+            likes=(items.WOOD, items.BOLETE, items.RASPBERRY), dislikes=(items.STONE,),
+            gifts=(items.TIMBER_PLANK, items.WOOD),
+            bio="The camp's finest axe; calm, exact, half in love with the trees she fells."),
+        NPC("Holt", "H", (176, 150, 116), shop=None, role="forester",
+            blurbs=("Somebody's got to put meat on the fire, so that's me —\n"
+                    "snares by day, and a stew going by the time the axes rest.",
+                    "The wood's full of eyes after dark. Most are deer.\n"
+                    "Most. Keep to the firelight and you'll keep your fingers."),
+            heart_blurbs=((3, "Lost the taste for towns years back. Too many faces,\n"
+                              "not one of them looking at you. Out here, folk see you."),
+                          (6, "Share our stew tonight, eh? Rowan sings after the second cup.\n"
+                              "It's terrible. You have to hear it. That's what a fire's for.")),
+            loves=(items.MEAD, items.JELLIED_EEL, items.PICKLES),
+            likes=(items.HONEY, items.CAVE_MUSHROOM), dislikes=(items.STONE,),
+            gifts=(items.WOOD, items.COAL),
+            bio="The camp's hunter and cook; gruff, watchful, keeper of the fire."),
+        NPC("Sorrel", "o", (210, 190, 150), shop=None, role="forager",
+            blurbs=("I'm the young one, so I haul, I stack, I fetch. And I learn.\n"
+                    "One day this'll be my axe and my mark on the trees.",
+                    "Burl says I ask too many questions. Rowan says keep asking.\n"
+                    "I'm going with Rowan on that one."),
+            heart_blurbs=((3, "Ran off to the camp at fifteen to be a woodcutter.\n"
+                              "Best thing I ever did. Don't tell my mother I said so."),
+                          (6, "You come and go from the whole Vale — the towns, the sea,\n"
+                              "the deeps. Tell me about it, by the fire? I want to see it all.")),
+            loves=(items.RASPBERRY, items.HONEY, items.CHANTERELLE),
+            likes=(items.BOLETE, items.WOOD, items.FIBER), dislikes=(items.COAL,),
+            gifts=(items.RASPBERRY, items.FIBER),
+            bio="The camp's apprentice; green, eager, and quietly dreaming bigger."),
+    ]
 
 
 def solo_npcs() -> list[NPC]:
@@ -1319,12 +1532,16 @@ GENERAL_STOCK: list[tuple[Item, int]] = [
     (items.BLUEBERRY_SEEDS, 80), (items.GRAPE_SEEDS, 60),
     (items.CHERRY_SAPLING, 600), (items.PEACH_SAPLING, 600),
     (items.APPLE_SAPLING, 700), (items.ORANGE_SAPLING, 700),
+    (items.CARROT_SEEDS, 30), (items.KALE_SEEDS, 70), (items.CORN_SEEDS, 90),
+    (items.CUCUMBER_SEEDS, 45), (items.CABBAGE_SEEDS, 90), (items.BEET_SEEDS, 55),
+    (items.LEEK_SEEDS, 60),
     (items.TULIP_SEEDS, 40), (items.SUNFLOWER_SEEDS, 50), (items.ASTER_SEEDS, 50),
     (items.SNOW_TURNIP_SEEDS, 40), (items.WINTERBERRY_SEEDS, 90),
     (items.CHICK, 120), (items.CALF, 400),
-    # a little soft-goods rack: hats & cloaks (no forging needed)
+    # a little soft-goods rack: hats, cloaks & robes (cloth, no forging needed)
     (make_gear("Hat", "straw"), 20), (make_gear("Hat", "wool"), 45),
     (make_gear("Cloak", "wool"), 70), (make_gear("Cloak", "linen"), 110),
+    (make_gear("Robe", "wool"), 60), (make_gear("Robe", "linen"), 100),
 ]
 # Blacksmith sells fuel/metal, weapons, and armour: (item, buy price)
 # The smith sells iron & steel of each weapon (forge finer metals yourself, or
@@ -1442,10 +1659,14 @@ def random_gem(rng) -> object:
 # --- dungeon texture: monster reagent drops & treasure chests ----------------
 # monster name -> list of (item, drop chance)
 MONSTER_DROPS: dict[str, list] = {
-    "Cave Slime": [(items.SLIME_GEL, 0.7)],
-    "Bat":        [(items.BAT_WING, 0.6)],
-    "Boar":       [(items.BOAR_HIDE, 0.5)],
-    "Cave Troll": [(items.BOAR_HIDE, 1.0), (items.COAL, 1.0)],
+    "Cave Slime":   [(items.SLIME_GEL, 0.7)],
+    "Bat":          [(items.BAT_WING, 0.6)],
+    "Boar":         [(items.BOAR_HIDE, 0.5)],
+    "Cave Spider":  [(items.SPIDER_SILK, 0.6)],
+    "Deep Lurker":  [(items.LURKER_SCALE, 0.6)],
+    "Wraith":       [(items.WRAITH_ESSENCE, 0.5)],
+    "Cave Troll":   [(items.BOAR_HIDE, 1.0), (items.COAL, 1.0)],
+    "Gloom Warden": [(items.WRAITH_ESSENCE, 1.0), (items.LURKER_SCALE, 0.8)],
 }
 
 

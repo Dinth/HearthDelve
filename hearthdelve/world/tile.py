@@ -88,6 +88,23 @@ RUINS_WALL  = _add(TileType("ruins_wall", "▒", (150, 144, 134),(46, 44, 40), w
 ROCK        = _add(TileType("rock",       "▒", (120, 116, 112),(40, 38, 36), walkable=False, kind="wall"))
 ORE_VEIN    = _add(TileType("ore_vein",   "*", (236, 196, 110),(48, 42, 32), walkable=False, kind="ore"))
 
+# --- Rocky highland (the hills around Cinderhope) ----------------------------
+# Walkable upland ground; ROCK (above) crags dot it and ore veins run through it.
+HILL        = _add(TileType("hill",       "^", (158, 144, 108),(46, 43, 34)))
+SCREE       = _add(TileType("scree",      "░", (156, 150, 138),(41, 39, 36)))
+
+# --- Wetland (the fen / marsh, NE) -------------------------------------------
+# Soggy walkable ground; reeds are impassable tall marsh growth (machete-free
+# but they block, like foliage). Open bog uses WATER pools.
+MARSH       = _add(TileType("marsh",      ";", (78, 118, 84),  (19, 35, 28)))
+REEDS       = _add(TileType("reeds",      "‖", (162, 184, 110),(21, 38, 30), walkable=False, kind="reeds"))
+
+# --- Woodcutters' camp (deep in the NW wood) ---------------------------------
+# A rough camp: canvas tents to sleep in and a campfire to gather round. No
+# houses, no gardens. The fire glows warm at night, like the village lamps.
+TENT        = _add(TileType("tent",       "▲", (202, 178, 138),(40, 33, 25), walkable=False, kind="tent"))
+CAMPFIRE    = _add(TileType("campfire",   "♨", (242, 150, 66), (52, 30, 20), walkable=False, kind="campfire"))
+
 # --- Homestead built features ------------------------------------------------
 HOUSE_WALL  = _add(TileType("house_wall", "#", (170, 130, 96), (44, 32, 24), walkable=False, kind="wall"))
 HOUSE_FLOOR = _add(TileType("house_floor",".", (150, 130, 110),(40, 32, 26)))

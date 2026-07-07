@@ -20,6 +20,16 @@ _CH = np.array([ord(t.glyph) for t in tile.TILES], dtype=np.int32)
 _FG = np.array([t.fg for t in tile.TILES], dtype=np.uint8)
 _BG = np.array([t.bg for t in tile.TILES], dtype=np.uint8)
 
+# Depth & texture: natural ground/veg/stone gets a stable per-tile brightness
+# jitter so large flats read as organic texture rather than solid blocks; any
+# non-walkable tile acts as an occluder that shades its neighbours (fake AO).
+# Water and paved/built surfaces are left crisp (they have their own treatment).
+_TEX_KINDS = {"terrain", "soil", "tree", "foliage", "shrub", "shrub_berry",
+              "flower", "mushroom", "ore", "gem", "reeds", "wall", "rubble"}
+_TEX_BY_ID = np.array([t.kind in _TEX_KINDS and t.name not in ("cobble", "path")
+                       for t in tile.TILES], dtype=bool)
+_OCCLUDER_BY_ID = np.array([not t.walkable for t in tile.TILES], dtype=bool)
+
 # Tile-id groups that get ambient animation.
 _GRASS_IDS = np.array([tile.GRASS, tile.MEADOW, tile.TALL_GRASS, tile.FOG_GRASS, tile.BUSH,
                        tile.FLOWER_RED, tile.FLOWER_YELLOW, tile.FLOWER_VIOLET, tile.FLOWER_WHITE])
@@ -38,13 +48,14 @@ _SEASON_VEG_IDS = np.array([
     tile.FLOWER_RED, tile.FLOWER_YELLOW, tile.FLOWER_VIOLET, tile.FLOWER_WHITE,
     tile.SHRUB, tile.SHRUB_RASPBERRY, tile.SHRUB_GOOSEBERRY, tile.SHRUB_CURRANT,
     tile.TREE_OAK, tile.TREE_MAPLE, tile.TREE_BIRCH, tile.TREE_POPLAR, tile.TREE_WILLOW,
-    tile.FOLIAGE,
+    tile.FOLIAGE, tile.MARSH, tile.REEDS,
 ])
 # Open ground that gets a coat of snow in winter.
 _SEASON_GROUND_IDS = np.array([
     tile.GRASS, tile.MEADOW, tile.TALL_GRASS, tile.FOG_GRASS, tile.DIRT_PATH,
     tile.MOOR, tile.SAND, tile.RUINS_FLOOR, tile.BUSH,
     tile.FLOWER_RED, tile.FLOWER_YELLOW, tile.FLOWER_VIOLET, tile.FLOWER_WHITE,
+    tile.HILL, tile.SCREE, tile.MARSH,
 ])
 # Per-season channel multiplier laid over the vegetation.
 _SEASON_TINT = {
@@ -149,6 +160,31 @@ def render_world(con: tcod.console.Console, state: GameState, anim_time: float =
     xs = (ox + np.arange(C.VIEW_W, dtype=np.float32))[:, None]
     ys = (oy + np.arange(C.VIEW_H, dtype=np.float32))[None, :]
 
+    # --- Per-tile texture: a stable hash breaks up large flats of identical
+    # terrain into organic light/shade. A fine jitter grains each tile; a
+    # coarser hash drifts broad patches of sun and shadow across the ground.
+    textured = _TEX_BY_ID[view]
+    if textured.any():
+        grain = 0.85 + 0.30 * _hash01(xs, ys)                       # ~±15% per tile
+        patch = 0.93 + 0.14 * _hash01(np.floor(xs / 4.0), np.floor(ys / 4.0))
+        tex = np.where(textured, grain * patch, 1.0).astype(np.float32)
+        fg *= tex[..., None]
+        bg *= tex[..., None]
+
+    # --- Fake ambient occlusion: ground beside water, crags and walls sits in
+    # their shadow. Count occluding neighbours (cardinals full, diagonals half)
+    # and darken open ground a touch per neighbour, giving coasts & cliffs relief.
+    solid = _OCCLUDER_BY_ID[view].astype(np.float32)
+    occ = np.zeros_like(solid)
+    occ[1:, :] += solid[:-1, :]; occ[:-1, :] += solid[1:, :]
+    occ[:, 1:] += solid[:, :-1]; occ[:, :-1] += solid[:, 1:]
+    occ[1:, 1:] += 0.5 * solid[:-1, :-1]; occ[:-1, 1:] += 0.5 * solid[1:, :-1]
+    occ[1:, :-1] += 0.5 * solid[:-1, 1:]; occ[:-1, :-1] += 0.5 * solid[1:, 1:]
+    ao = np.clip(occ / 6.0, 0.0, 1.0)
+    shade = np.where(~_OCCLUDER_BY_ID[view], 1.0 - 0.34 * ao, 1.0).astype(np.float32)
+    bg *= shade[..., None]
+    fg *= (0.45 + 0.55 * shade)[..., None]              # glyphs dim less than their cell
+
     fg_mul = np.ones((C.VIEW_W, C.VIEW_H), dtype=np.float32)
     bg_mul = np.ones((C.VIEW_W, C.VIEW_H), dtype=np.float32)
 
@@ -191,6 +227,12 @@ def render_world(con: tcod.console.Console, state: GameState, anim_time: float =
         pulse = np.exp(-(tau ** 2) / (2 * pw * pw))
         pulse = np.maximum(pulse, np.exp(-((tau - cycle) ** 2) / (2 * pw * pw)))
         fg_mul = np.where(ore, 1.0 + 1.2 * pulse, fg_mul)
+
+    # Campfire: a restless warm flicker so the flames never sit still.
+    fire = view == tile.CAMPFIRE
+    if fire.any():
+        flick = (np.sin(t * 6.3 + xs * 2.1) + 0.6 * np.sin(t * 11.0 + ys * 1.7))
+        fg_mul = np.where(fire, 1.0 + 0.22 * flick, fg_mul)
 
     fg *= fg_mul[..., None]
     bg *= bg_mul[..., None]
@@ -258,10 +300,10 @@ def render_world(con: tcod.console.Console, state: GameState, anim_time: float =
         fg[..., 0] *= dr; fg[..., 1] *= dg; fg[..., 2] *= db
         bg[..., 0] *= dr; bg[..., 1] *= dg; bg[..., 2] *= db
 
-        # Lamp posts cast a warm glow once it gets dark.
+        # Lamp posts (and the woodcutters' campfire) cast a warm glow after dark.
         night = max(0.0, 1.0 - (dr + dg + db) / 3.0)
         if night > 0.06:
-            lamps = np.argwhere(view == tile.LAMP)
+            lamps = np.argwhere((view == tile.LAMP) | (view == tile.CAMPFIRE))
             if len(lamps):
                 glow = np.zeros((C.VIEW_W, C.VIEW_H), np.float32)
                 rad = 4
@@ -275,6 +317,20 @@ def render_world(con: tcod.console.Console, state: GameState, anim_time: float =
                 add = (glow * (night * 150.0))[..., None] * np.array([1.0, 0.82, 0.5], np.float32)
                 fg += add
                 bg += add * 0.5
+
+            # The player carries a lantern: a warm pool of light after dark so
+            # the night is navigable and cosy rather than a wall of black.
+            px, py = state.player.x - ox, state.player.y - oy
+            if 0 <= px < C.VIEW_W and 0 <= py < C.VIEW_H:
+                rad = 6
+                x0, x1 = max(0, px - rad), min(C.VIEW_W, px + rad + 1)
+                y0, y1 = max(0, py - rad), min(C.VIEW_H, py + rad + 1)
+                sx = (np.arange(x0, x1) - px)[:, None]
+                sy = (np.arange(y0, y1) - py)[None, :]
+                bump = np.exp(-(sx * sx + sy * sy) / 18.0)
+                lantern = (bump * (night * 130.0))[..., None] * np.array([1.0, 0.86, 0.58], np.float32)
+                fg[x0:x1, y0:y1] += lantern
+                bg[x0:x1, y0:y1] += lantern * 0.55
 
     np.clip(fg, 0, 255, out=fg)
     np.clip(bg, 0, 255, out=bg)
@@ -444,6 +500,23 @@ def render_weather(con: tcod.console.Console, state: GameState, t: float, occupi
     if state.world.is_dungeon:
         return
     w = state.weather
+    if w == "Fog":
+        # A haze veil: blend the whole viewport toward soft grey so distance
+        # washes out, then drift a few motes over the top.
+        veil = np.array([150, 156, 164], dtype=np.float32)
+        for chan, k in (("bg", 0.18), ("fg", 0.11)):
+            buf = con.rgb[chan][:C.VIEW_W, :C.VIEW_H].astype(np.float32)
+            con.rgb[chan][:C.VIEW_W, :C.VIEW_H] = (buf * (1 - k) + veil * k).astype(np.uint8)
+    if w == "Storm":
+        # Occasional lightning: a brief, near-white flash over the whole view on
+        # a slow cycle (a double-strike for that thunderclap feel).
+        cyc = t % 6.5
+        flash = np.exp(-(cyc ** 2) / 0.010) + 0.6 * np.exp(-((cyc - 0.22) ** 2) / 0.010)
+        if flash > 0.03:
+            add = np.array([min(130.0, flash * 150.0)] * 2 + [min(140.0, flash * 165.0)], np.float32)
+            for chan in ("bg", "fg"):
+                buf = con.rgb[chan][:C.VIEW_W, :C.VIEW_H].astype(np.float32)
+                con.rgb[chan][:C.VIEW_W, :C.VIEW_H] = np.clip(buf + add, 0, 255).astype(np.uint8)
     if w in ("Rain", "Storm"):
         n, speed, drift = (95, 30, 0.5) if w == "Storm" else (55, 17, 0.25)
         glyph, color = ord("/"), (130, 160, 215)
@@ -530,8 +603,8 @@ _TILE_DESC = {
     "house_wall": "the wall of your farmhouse.",
     "house_floor": "the floorboards of your home.",
     "door": "your front door.",
-    "bed": "your bed. Sleep here to end the day (coming soon).",
-    "shipping_bin": "the shipping bin. Drop goods to sell (coming soon).",
+    "bed": "your bed. Sleep here (s) to end the day.",
+    "shipping_bin": "the shipping bin. Ship goods here (b) to sell overnight.",
     "post_box": "your post box — letters, invitations and gifts arrive here (g).",
     "fence": "a wooden fence around the plot.",
     "tilled": "tilled soil, ready for seeds.",
@@ -597,6 +670,13 @@ def _building_label(state: GameState, b: dict) -> str:
         return f"the {v} general store"
     if kind == "smithy":
         return f"the {v} smithy"
+    if kind == "tent":
+        owner = b.get("owner")
+        if owner:
+            npc = _npc_by_name(state, owner)
+            if npc and npc.met:
+                return f"{owner}'s tent"
+        return "a woodcutter's tent"
     # private dwelling
     owner = b.get("owner")
     if owner:
@@ -853,7 +933,9 @@ def render_target(con: tcod.console.Console, state: GameState, ctx) -> None:
 
     con.draw_rect(0, 0, C.VIEW_W, 1, ch=ord(" "), bg=(40, 38, 30))
     con.print(0, 0, banner[:C.VIEW_W], fg=(245, 235, 200), bg=(40, 38, 30))
-    hint = "(move to aim · Enter/Space confirm · Esc cancel)"
+    swap = " · Tab bow/bomb" if (ctx["purpose"] in ("shoot", "throw")
+                                 and combat.can_shoot(state) and combat.can_throw(state)) else ""
+    hint = f"(move to aim · Enter/Space confirm{swap} · Esc cancel)"
     con.print(max(0, C.VIEW_W - len(hint) - 1), 0, hint, fg=C.DIM, bg=(40, 38, 30))
 
 
@@ -1049,7 +1131,7 @@ def build_codex_pages(state: GameState):
         ("  f                give a villager a gift", C.WHITE),
         ("  > / <            descend / climb a dungeon (on stairs)", C.WHITE),
         ("  s                sleep in bed -> next day", C.WHITE),
-        ("  i                inventory  (d drops the selected stack)", C.WHITE),
+        ("  i                inventory  (a-z select; Shift+D drops the stack)", C.WHITE),
         ("  e                equipment", C.WHITE),
         ("  m                message log (scrollback)", C.WHITE),
         ("  v                character sheet (level & skills)", C.WHITE),
@@ -1404,7 +1486,12 @@ def render_inventory(con: tcod.console.Console, state: GameState, sel: int = 0) 
 
 
 _SLOT_LABEL = {"head": "Head", "body": "Body", "cloak": "Cloak", "hands": "Gauntlets",
-               "waist": "Girdle", "legs": "Legs", "feet": "Feet", "ranged": "Ranged", "ammo": "Ammo"}
+               "waist": "Girdle", "legs": "Legs", "feet": "Feet", "shield": "Shield",
+               "ranged": "Ranged", "ammo": "Ammo"}
+# Worn slots in paperdoll order; the index doubles as the number key that takes
+# the piece off (1-9 then 0 for the tenth). Shared with main's unequip handler.
+PAPERDOLL_SLOTS = ("head", "body", "cloak", "hands", "waist", "legs", "feet",
+                   "shield", "ranged", "ammo")
 
 
 def equippables(state: GameState) -> list:
@@ -1419,7 +1506,7 @@ def render_equipment(con: tcod.console.Console, state: GameState) -> None:
     from ..game import combat, skills
     p = state.player
     gear = equippables(state)
-    w, h = 60, min(C.SCREEN_H - 2, 15 + len(gear))
+    w, h = 60, min(C.SCREEN_H - 2, 18 + len(gear))   # stats + in-hand + 10 slots + 2 headers + gear + footer
     x, y = _modal(con, w, h, "PERSONAL EQUIPMENT")
 
     dv, pv, th = combat.player_dv(state), combat.player_pv(state), combat.player_to_hit(state)
@@ -1436,8 +1523,8 @@ def render_equipment(con: tcod.console.Console, state: GameState) -> None:
     con.print(x + 12, row, f": {p.display_name(p.active_tool) if p.active_tool else '-'}"
               f"  ({prof.category} {lo}-{hi}, mastery {ml})"[:w - 14], fg=C.WHITE)
     row += 1
-    # worn paperdoll + ranged/ammo
-    for slot in ("head", "body", "cloak", "hands", "waist", "legs", "feet", "ranged", "ammo"):
+    # worn paperdoll + ranged/ammo. The leading digit takes the piece off.
+    for i, slot in enumerate(PAPERDOLL_SLOTS):
         it = p.equipment.get(slot)
         if slot == "ammo":
             n = p.inventory.count(it) if it else 0
@@ -1449,8 +1536,11 @@ def render_equipment(con: tcod.console.Console, state: GameState) -> None:
         else:
             st = content.ARMOR_STATS.get(it)
             val = f"{it.name}  [DV {st[0]:+d}, PV +{st[1]}]" if (it and st) else "-"
-        con.print(x + 2, row, _SLOT_LABEL[slot], fg=_SECTION_FG)
-        con.print(x + 12, row, ": " + val, fg=C.WHITE if it else C.DIM)
+            if slot == "shield" and it and content.is_two_handed(p.active_tool):
+                val += "  (unused — two-handed weapon)"
+        key = (i + 1) % 10                            # 1..9 then 0 for the tenth slot
+        con.print(x + 2, row, f"{key} {_SLOT_LABEL[slot]}", fg=_SECTION_FG if it else C.DIM)
+        con.print(x + 14, row, ": " + val, fg=C.WHITE if it else C.DIM)
         row += 1
 
     row += 1
@@ -1473,7 +1563,7 @@ def render_equipment(con: tcod.console.Console, state: GameState) -> None:
         con.print(x + 3, row, f"{inv_letter(i)} - {it.glyph} {it.name}", fg=C.WHITE)
         con.print(x + 34, row, tag, fg=_BRACKET_FG)
         row += 1
-    con.print(x + 2, y + h - 2, "[a-z] equip  [i] pack  [Esc] close", fg=_FOOT_FG)
+    con.print(x + 2, y + h - 2, "[a-z] equip  [1-0] take off  [i] pack  [Esc] close", fg=_FOOT_FG)
 
 
 def render_craft(con: tcod.console.Console, state: GameState, sel: int) -> None:
@@ -1481,16 +1571,20 @@ def render_craft(con: tcod.console.Console, state: GameState, sel: int) -> None:
     from ..game import crafting
 
     recipes = content.RECIPES
-    w, h = 56, len(recipes) + 8
+    labels = [{"build": "Build", "cook": "Cook"}.get(r.kind, "Craft") for r in recipes]
+    # A category header prints whenever the label changes, so height must count
+    # those rows too (else the last recipes spill past the frame).
+    n_headers = sum(1 for i in range(len(labels)) if i == 0 or labels[i] != labels[i - 1])
+    w = 56
+    h = min(C.SCREEN_H - 2, len(recipes) + n_headers + 4)
     x, y = _modal(con, w, h, "Craft  (build machines & cook)")
 
-    last_kind = None
+    last_label = None
     row = 0
     for i, r in enumerate(recipes):
-        if r.kind != last_kind:
-            last_kind = r.kind
-            label = {"build": "Build", "cook": "Cook"}.get(r.kind, "Craft")
-            con.print(x + 2, y + 2 + row, label, fg=_HDR)
+        if labels[i] != last_label:
+            last_label = labels[i]
+            con.print(x + 2, y + 2 + row, last_label, fg=_HDR)
             row += 1
         ok = crafting.has_inputs(state, r)
         marker = "▸" if i == sel else " "
@@ -1518,6 +1612,7 @@ def render_ship(con: tcod.console.Console, state: GameState, sel: int) -> None:
 
     if not items_:
         con.print(x + 2, y + 2, "Nothing to sell — grow and gather first.", fg=C.DIM)
+    sel = max(0, min(sel, len(items_) - 1)) if items_ else 0   # keep the cursor on-list as it shrinks
     for i, (it, q, ql) in enumerate(items_):
         marker = "▸" if i == sel else " "
         if i == sel:
@@ -1554,7 +1649,7 @@ def render_relationships(con: tcod.console.Console, state: GameState) -> None:
     x, y = _modal(con, w, h, "Relationships")
     if not met:
         con.print(x + 2, y + 2, "You haven't met anyone yet.", C.WHITE)
-        con.print(x + 2, y + 3, "Visit Mossford or Cinderhope and talk (t).", C.DIM)
+        con.print(x + 2, y + 3, "Visit a village and talk (Shift+C).", C.DIM)
     row = 0
     for n in met:
         hearts = "♥" * n.hearts + "·" * (10 - n.hearts)
@@ -1618,7 +1713,7 @@ def render_shop(con: tcod.console.Console, state: GameState, npc, sel: int, line
              "tavern": "Tavern", "carpenter": "Carpentry"}.get(npc.shop, "Shop")
     header = line.split("\n") if line else []             # the keeper's greeting
     w = 68 if npc.shop == "carpenter" else 56
-    h = len(entries) + 6 + len(header)
+    h = min(C.SCREEN_H - 4, len(entries) + 6 + len(header))
     x, y = _modal(con, w, h, f"{npc.name}'s {title}")
     p = state.player
     top = y + 2
@@ -1626,8 +1721,12 @@ def render_shop(con: tcod.console.Console, state: GameState, npc, sel: int, line
         con.print(x + 2, top, hl[:w - 4], fg=(210, 205, 190))
         top += 1
 
-    for i, e in enumerate(entries):
-        yy = top + i
+    body = (y + h - 2) - top                              # rows for the (scrolling) list
+    sel = max(0, min(sel, len(entries) - 1)) if entries else 0
+    start, end = _window(sel, len(entries), body)
+    for row, e in enumerate(entries[start:end]):
+        i = start + row
+        yy = top + row
         rowbg = (54, 50, 36) if i == sel else (20, 22, 32)
         if i == sel:
             con.draw_rect(x + 1, yy, w - 2, 1, ch=ord(" "), bg=rowbg)
@@ -1677,6 +1776,10 @@ def render_shop(con: tcod.console.Console, state: GameState, npc, sel: int, line
             con.print(x + 2, yy, ("▸ " if i == sel else "  ") + txt, fg=col, bg=rowbg)
             con.print(x + w - 16, yy, cost, fg=(200, 190, 150), bg=rowbg)
 
+    if start > 0:
+        con.print(x + w - 4, top, "▲", fg=_HDR)
+    if end < len(entries):
+        con.print(x + w - 4, y + h - 3, "▼", fg=_HDR)
     con.print(x + 2, y + h - 2, f"Gold {p.gold}g   ↑↓ Enter buy/upgrade   Esc close", fg=C.DIM)
 
 
