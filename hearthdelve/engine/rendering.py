@@ -948,6 +948,39 @@ def _modal(con, w, h, title):
     return x, y
 
 
+def render_fishing(con: tcod.console.Console, state: GameState, ctx) -> None:
+    """The reel-it-in minigame: a horizontal track with a catch bracket, the
+    darting fish, and a progress bar. ←/→ (fed by the loop) slide the bracket."""
+    if not ctx:
+        return
+    from ..game import fishing
+    L = fishing.TRACK_LEN
+    w, h = L + 10, 9
+    x, y = _modal(con, w, h, "A bite!  Reel it in")
+    inside = ctx.get("inside", False)
+    green, amber = (120, 200, 140), (222, 182, 110)
+    bar_col = green if inside else amber
+    tx0 = x + (w - L) // 2                          # left edge of the track
+    trow = y + 3                                    # the track row
+    prow = y + 5                                    # the progress-bar row
+    bar = int(round(ctx["bar"])); bl = ctx["bar_len"]
+    fp = int(round(ctx["fish_pos"]))
+    filled = int(round(L * ctx["prog"]))
+    con.print(x + 2, y + 1, "Keep the fish in the bracket:", fg=C.DIM)
+    for c in range(L):
+        in_bar = bar <= c < bar + bl
+        con.print(tx0 + c, trow, "░" if in_bar else "·",
+                  fg=(70, 84, 70) if in_bar else (58, 66, 82))
+    con.print(tx0 + bar, trow, "[", fg=bar_col)                     # bracket ends
+    con.print(tx0 + min(L - 1, bar + bl - 1), trow, "]", fg=bar_col)
+    con.print(tx0 + fp, trow, "»", fg=(150, 200, 224) if inside else (232, 150, 140))
+    for c in range(L):                              # progress bar, filling left→right
+        con.print(tx0 + c, prow, "█", fg=(120, 200, 140) if c < filled else (44, 52, 48))
+    pct = int(ctx["prog"] * 100)
+    con.print(tx0, y + 6, f"{pct}%", fg=green if pct >= 60 else amber)
+    con.print(x + 2, y + h - 2, "←/→ move the bracket  ·  Esc to cut the line", fg=C.DIM)
+
+
 def _window(sel: int, total: int, height: int) -> tuple[int, int]:
     """First/last row index to show so `sel` stays visible in a `height`-row list."""
     if total <= height:

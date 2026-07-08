@@ -284,8 +284,8 @@ def use_tool(state: GameState) -> None:
         if threat is not None:
             state.log.add(f"You can't fish with a {threat.name.lower()} lurking so near.", C.DIM)
             return None
-        fishing.cast(state)
-        return None
+        ctx = fishing.begin(state, tx, ty)
+        return {"fishing": ctx} if ctx else None
 
     # Watering can over a planted tile waters the crop directly.
     if item is items.WATERING_CAN and (tx, ty) in state.world.crops:
@@ -1022,6 +1022,9 @@ def main() -> None:
     run_ctx = None           # active run
     rest_left = 0            # seconds left in an active rest
     busy_ctx = None          # active long tool action (chop/mine), animating
+    fishing_ctx = None       # active reel-it-in fishing minigame
+    reel_left = reel_right = False   # which arrow is held (slides the catch bracket)
+    input_lock_until = 0.0   # brief post-minigame keypress lockout (monotonic secs)
     save_on_exit = True      # cleared by "quit without saving"
     cheat_sel = 0            # cursor in the Konami cheat menu
     konami: list = []        # rolling buffer of recent keys
@@ -1101,6 +1104,18 @@ def main() -> None:
                         check_faint(state)
                         quests.check(state)
 
+            # The reel-it-in minigame advances in real time, frame by frame.
+            if mode == "fishing" and fishing_ctx is not None:
+                move_dir = -1 if (reel_left and not reel_right) else (1 if (reel_right and not reel_left) else 0)
+                res = fishing.update(state, fishing_ctx, move_dir)
+                if res != "running":
+                    fishing.resolve(state, fishing_ctx, caught=(res == "caught"))
+                    mode, fishing_ctx = "play", None
+                    reel_left = reel_right = False
+                    input_lock_until = time.monotonic() + 0.35   # don't walk off on a held arrow
+                    check_faint(state)
+                    quests.check(state)
+
             rendering.render_all(console, state, anim_time)
             if mode == "play":
                 rendering.render_facing(console, state)
@@ -1140,6 +1155,8 @@ def main() -> None:
                 rendering.render_target(console, state, target_ctx)
             elif mode == "loadmachine":
                 rendering.render_load_machine(console, state, load_ctx)
+            elif mode == "fishing":
+                rendering.render_fishing(console, state, fishing_ctx)
             elif mode == "log":
                 rendering.render_message_log(console, state, msg_scroll)
             context.present(console)
@@ -1160,6 +1177,36 @@ def main() -> None:
                         mode, cheat_sel = "cheats", 0
                         state.log.add("A hidden door creaks open...", (250, 230, 140))
                         continue
+
+                # Fishing minigame: ←/→ (held) slide the catch bracket; Esc cuts
+                # the line. Track the held arrows here and swallow the event so it
+                # never leaks into the normal command mapping.
+                if mode == "fishing":
+                    _KS = tcod.event.KeySym
+                    left_keys = (_KS.LEFT, _KS.KP_4)
+                    right_keys = (_KS.RIGHT, _KS.KP_6)
+                    if isinstance(event, tcod.event.KeyDown):
+                        if event.sym in left_keys:
+                            reel_left = True
+                        elif event.sym in right_keys:
+                            reel_right = True
+                        elif event.sym == _KS.ESCAPE:
+                            fishing.resolve(state, fishing_ctx, caught=False)
+                            mode, fishing_ctx = "play", None
+                            reel_left = reel_right = False
+                            input_lock_until = time.monotonic() + 0.35
+                    elif isinstance(event, tcod.event.KeyUp):
+                        if event.sym in left_keys:
+                            reel_left = False
+                        elif event.sym in right_keys:
+                            reel_right = False
+                    continue
+
+                # For a beat after the minigame closes, swallow keypresses so a
+                # still-held ←/→ (or the key that landed the fish) doesn't send
+                # the player walking off unintentionally.
+                if isinstance(event, tcod.event.KeyDown) and time.monotonic() < input_lock_until:
+                    continue
 
                 # A fresh key press interrupts an in-progress run or rest — but
                 # NOT OS key-repeat from still holding the direction that began
@@ -1247,7 +1294,10 @@ def main() -> None:
                                           (200, 220, 160))
                     elif cmd == "use":
                         busy = use_tool(state)
-                        if busy is not None:
+                        if isinstance(busy, dict) and "fishing" in busy:
+                            mode, fishing_ctx = "fishing", busy["fishing"]
+                            reel_left = reel_right = False
+                        elif busy is not None:
                             busy_ctx = busy          # a long task begins — it animates
                         else:
                             check_faint(state)
