@@ -561,6 +561,14 @@ def _unequip(state: GameState, slot: str) -> None:
         state.log.add(f"You take off the {it.name.lower()}.", (200, 200, 180))
 
 
+def _beside_sea(state: GameState, x: int, y: int) -> bool:
+    """Whether (x, y) borders open water — a genuine sea beach, not inland sand."""
+    for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+        if state.world.in_bounds(x + dx, y + dy) and state.world.tile_at(x + dx, y + dy).kind == "water":
+            return True
+    return False
+
+
 def do_grab(state: GameState) -> None:
     """Harvest a crop or interact with a machine — faced tile, then underfoot."""
     from .game import land
@@ -610,6 +618,16 @@ def do_grab(state: GameState) -> None:
             _pick_berries(state, gx, gy)
             if stealing:
                 land.penalize(state, gx, gy, "harvest")
+            return
+        if state.world.tile_at(gx, gy).name == "sand" and _beside_sea(state, gx, gy):  # scrape sea salt off the strand
+            from .game import skills
+            if random.random() < 0.55:
+                p.inventory.add(items.SALT_LUMP, 1)
+                skills.gain(state, "Foraging", 6)
+                state.log.add("You scrape a lump of sea salt from the strand.", (206, 216, 224))
+            else:
+                state.log.add("Only damp sand here — try again.", C.DIM)
+            turns.advance_time(state, C.HARVEST_COST[1])
             return
         if (gx, gy) in state.world.crops:
             if farming.harvest(state, gx, gy):

@@ -59,7 +59,7 @@ def advance_growth(plot: CropPlot, season: str) -> None:
     if plot.crop.season != season:
         plot.dead = True
         return
-    if not plot.mature and plot.watered:
+    if not plot.mature and (plot.watered or plot.crop.paddy):   # a paddy floods itself
         plot.days_grown += 1
     plot.watered = False
 

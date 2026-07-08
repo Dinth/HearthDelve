@@ -58,9 +58,14 @@ SPECIES = {
                        items.MILK, 5, 7, 1, "calf", "cow", items.CALF,
                        ("Buttercup", "Clover", "Daisy", "Bess", "Maisie", "Bramble",
                         "Willow", "Rosie", "Primrose", "Moo")),
+    "sheep":   Species("sheep", "y", (232, 230, 216), (216, 214, 200),
+                       items.WOOL, 5, 6, 1, "lamb", "sheep", items.LAMB,
+                       ("Woolly", "Snowy", "Cloud", "Nimbus", "Fluff", "Barley",
+                        "Comet", "Pebble", "Tuft", "Dolly")),
 }
 
-_HOUSE_SPECIES = {"coop_small": "chicken", "coop_big": "chicken", "barn": "cow"}
+_HOUSE_SPECIES = {"coop_small": "chicken", "coop_big": "chicken",
+                  "barn": "cow", "pen": "sheep"}
 
 
 # --- helpers ----------------------------------------------------------------
@@ -187,7 +192,8 @@ def interact_animal(state: GameState, a: Animal) -> None:
         skills.gain(state, "Farming", 8)
         state.bump("produce_collected")
         star = (" " + skills.stars(q)) if q else ""
-        verb = "an egg" if a.kind == "chicken" else "a pail of milk"
+        verb = {"chicken": "an egg", "cow": "a pail of milk",
+                "sheep": "a fleece of wool"}.get(a.kind, "some produce")
         state.log.add(f"You collect {verb}{star} from {a.name}.", (232, 220, 150))
         return
 

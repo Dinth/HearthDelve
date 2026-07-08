@@ -55,7 +55,12 @@ def begin(state: GameState, tx: int, ty: int):
         return None
     p.facing = (max(-1, min(1, tx - p.x)), max(-1, min(1, ty - p.y)))
     from . import skills
-    table = content.CAVE_FISH if state.world.is_dungeon else content.fish_in_season(state.season)
+    if state.world.is_dungeon:
+        table = content.CAVE_FISH
+    elif state.world.tile_at(tx, ty).name == "water":     # open sea (rivers/lakes are "river")
+        table = content.SEA_FISH
+    else:
+        table = content.fish_in_season(state.season)
     chance = content.FISH_CATCH_CHANCE + skills.fishing_catch_bonus(state)
     if not table or random.random() > chance:
         # a "cast that finds nothing" still costs a little time & effort

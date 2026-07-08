@@ -245,7 +245,10 @@ def render_world(con: tcod.console.Console, state: GameState, anim_time: float =
         if 0 <= sx < C.VIEW_W and 0 <= sy < C.VIEW_H:
             ch[sx, sy] = ord(plot.glyph())
             fg[sx, sy] = plot.color()
-            bg[sx, sy] = (26, 34, 46) if plot.watered else (44, 30, 20)
+            if plot.crop.paddy:                       # rice sits in a flooded pool
+                bg[sx, sy] = (40, 78, 108)
+            else:
+                bg[sx, sy] = (26, 34, 46) if plot.watered else (44, 30, 20)
 
     # Orchard trees overlay (passable; fruited trees glow in the fruit's colour).
     for (tx, ty), tree in state.world.trees.items():

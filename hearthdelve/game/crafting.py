@@ -176,7 +176,7 @@ def interact_machine(state: GameState, x: int, y: int) -> bool:
     if m.kind == "beehive":
         return _tend_beehive(state, m, mdef, x, y)
 
-    if m.kind in ("coop_small", "coop_big", "barn", "site"):
+    if m.kind in ("coop_small", "coop_big", "barn", "pen", "site"):
         from . import husbandry
         return husbandry.interact_building(state, m, x, y)
 
@@ -198,12 +198,18 @@ def interact_machine(state: GameState, x: int, y: int) -> bool:
         q = m.out_quality if skills.has_quality(out) else 0
         state.player.inventory.add(out, 1, quality=q)
         star = (" " + skills.stars(q)) if q else ""
-        if out.kind in ("weapon", "armor"):
+        if m.kind in ("spinner", "loom"):
+            skills.gain(state, "Farming", 7)         # spinning & weaving; cloth garments too
+            if out.kind == "artisan":
+                state.bump("artisan_made")
+        elif out.kind in ("weapon", "armor"):
             skills.gain(state, "Smithing", 12)       # forging hones the smith
         elif out.kind == "gem":
             skills.gain(state, "Gemcutting", 14)     # cutting hones the cutter
         elif m.kind in ("furnace", "kiln"):
             skills.gain(state, "Smithing", 8)        # smelting & fuel-making, too
+        elif m.kind in ("quern", "windmill"):
+            skills.gain(state, "Cooking", 6)         # milling is kitchen work
         elif out.kind == "artisan":
             state.bump("artisan_made")
             skills.gain(state, "Cooking", 8)         # processing hones the craft
@@ -231,6 +237,10 @@ def _needs_hint(mdef) -> str:
         "fuel":  "The kiln chars wood into charcoal, or bakes coal into coke.",
         "gem":   "The gemcutting station needs a rough gem or a geode.",
         "jewelcraft": "The jeweller's bench needs a metal bar + a cut gem, or gear + a cut gem to embed.",
+        "mill":  "The mill grinds grain into flour, cane into sugar, or salt lumps into sea salt.",
+        "smoke": "The smoker cures meat into jerky, or fish into smoked fish.",
+        "fiber": "The spinning wheel needs wool, cotton, flax or spider silk.",
+        "weave": "The loom needs yarn to weave into cloth, or cloth to tailor into garments.",
         "wood":  "The sawmill needs at least 2 wood.",
         "oil":   "The press needs at least 2 sunflowers.",
         "dairy": "The churn needs milk.",
@@ -283,6 +293,10 @@ def machine_load_options(state: GameState, mdef) -> list:
                          "geode": True, "label": "Crack a Geode → a cut gem"})
     elif a == "jewelcraft":
         return _jeweller_options(state)
+    elif a == "mill":
+        for src, out in content.MILL_RECIPES.items():
+            if inv.count(src) >= 1:
+                opts.append({"inputs": [(src, 1)], "output": out, "quality_from": src})
     elif a == "wood":
         if inv.count(items.WOOD) >= 2:
             opts.append({"inputs": [(items.WOOD, 2)], "output": mdef.output, "quality_from": None})
@@ -293,6 +307,28 @@ def machine_load_options(state: GameState, mdef) -> list:
     elif a == "dairy":
         if inv.count(items.MILK) >= 1:
             opts.append({"inputs": [(items.MILK, 1)], "output": items.CHEESE, "quality_from": items.MILK})
+            opts.append({"inputs": [(items.MILK, 1)], "output": items.YOGURT,
+                         "quality_from": items.MILK, "minutes": 600})   # cultures faster than cheese ages
+            opts.append({"inputs": [(items.MILK, 1)], "output": items.BUTTER,
+                         "quality_from": items.MILK, "minutes": 400})   # churns quickest of the three
+    elif a == "smoke":
+        for src, out in content.SMOKE_RECIPES:
+            if inv.count(src) >= 1:
+                opts.append({"inputs": [(src, 1)], "output": out, "quality_from": src})
+    elif a == "fiber":
+        for src, out in content.SPIN_RECIPES.items():
+            if inv.count(src) >= 1:
+                opts.append({"inputs": [(src, 1)], "output": out, "quality_from": src})
+    elif a == "weave":
+        for yarn, cloth in content.WEAVE_RECIPES.items():       # weave yarn into cloth
+            if inv.count(yarn) >= 1:
+                opts.append({"inputs": [(yarn, 1)], "output": cloth, "quality_from": yarn})
+        for cloth, material in content.CLOTH_MATERIAL.items():  # tailor cloth into garments
+            if inv.count(cloth) >= 1:
+                for base in ("Hat", "Cloak", "Robe"):
+                    opts.append({"inputs": [(cloth, 1)], "output": content.make_gear(base, material),
+                                 "quality_from": None,
+                                 "label": f"{material.capitalize()} {base}"})
     elif a == "fruit":
         if inv.count(items.HONEY) > 0:
             opts.append({"inputs": [(items.HONEY, 1)], "output": items.MEAD, "quality_from": items.HONEY})
@@ -318,7 +354,8 @@ def machine_load_options(state: GameState, mdef) -> list:
         for it, _q, _ql in inv.slots:
             if it in seen:
                 continue
-            if (it.kind == "crop" and content.PRODUCE_CATEGORY.get(it) != "flower") or it is items.EEL:
+            if (it.kind == "crop" and content.PRODUCE_CATEGORY.get(it) not in ("flower", "grain", "fiber")) \
+                    or it is items.EEL:
                 seen.add(it)
                 opts.append({"inputs": [(it, 1)], "output": _preserve_of(it), "quality_from": it})
     return opts
@@ -357,6 +394,8 @@ def load_machine_choice(state: GameState, m: Machine, mdef, opt) -> None:
     if skills.has_quality(output):
         m.out_quality = (skills.roll_quality(state, "Gemcutting") if output.kind == "gem"
                          else skills.process_quality(in_quality, state, "Cooking"))
+        if mdef.kind == "quern":                       # the hand-mill grinds a touch coarse
+            m.out_quality = max(0, m.out_quality - 1)
     else:
         m.out_quality = 0
     state.log.add(f"You load the {mdef.name.lower()} ({output.name}). Ready in {_fmt_remaining(minutes)}.")

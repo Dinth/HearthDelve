@@ -721,6 +721,7 @@ class Crop:
     produce: Item
     category: str = "vegetable"     # "vegetable" | "fruit" — gates artisan goods
     regrow_days: int = 0            # if regrows, days to re-ripen after harvest
+    paddy: bool = False            # grows in flooded ground; never needs watering
     desc: str = ""
 
 
@@ -856,8 +857,48 @@ LEEK = Crop(
     desc="A hardy winter allium that shrugs off the frost.",
 )
 
+# Grains & cane — grown to be milled into flour, rice flour and sugar.
+BARLEY = Crop(
+    name="Barley", glyph="≈", color=(214, 196, 120), season="Spring",
+    days_to_mature=7, regrows=False, sell_price=40, category="grain",
+    seed=items.BARLEY_SEEDS, produce=items.BARLEY,
+    desc="A hardy spring grain — mill it into flour.",
+)
+RICE = Crop(
+    name="Rice", glyph="≈", color=(210, 214, 176), season="Summer",
+    days_to_mature=8, regrows=False, sell_price=60, category="grain", paddy=True,
+    seed=items.RICE_SEEDS, produce=items.RICE,
+    desc="A summer paddy grain — floods its own plot; never needs watering. Mill into rice flour.",
+)
+SUGARCANE = Crop(
+    name="Sugarcane", glyph="‖", color=(170, 210, 120), season="Summer",
+    days_to_mature=9, regrows=True, regrow_days=4, sell_price=55, category="grain",
+    seed=items.SUGARCANE_SEEDS, produce=items.SUGARCANE,
+    desc="A tall summer cane that re-crops — milled into sugar.",
+)
+WHEAT = Crop(
+    name="Wheat", glyph="≈", color=(226, 200, 110), season="Fall",
+    days_to_mature=8, regrows=False, sell_price=45, category="grain",
+    seed=items.WHEAT_SEEDS, produce=items.WHEAT,
+    desc="Golden autumn wheat — mill it into flour.",
+)
+# Fibre crops — spun into thread, woven into cloth.
+COTTON = Crop(
+    name="Cotton", glyph="*", color=(236, 232, 220), season="Summer",
+    days_to_mature=9, regrows=True, regrow_days=4, sell_price=45, category="fiber",
+    seed=items.COTTON_SEEDS, produce=items.COTTON,
+    desc="Summer bolls that keep cropping — spin them into thread.",
+)
+FLAX = Crop(
+    name="Flax", glyph="|", color=(150, 190, 210), season="Spring",
+    days_to_mature=7, regrows=False, sell_price=40, category="fiber",
+    seed=items.FLAX_SEEDS, produce=items.FLAX,
+    desc="A spring fibre crop, retted and spun into linen.",
+)
+
 CROPS: list[Crop] = [PARSNIP, POTATO, CAULIFLOWER, PUMPKIN,
                      CARROT, KALE, CORN, CUCUMBER, CABBAGE, BEET, LEEK,
+                     BARLEY, RICE, SUGARCANE, WHEAT, COTTON, FLAX,
                      TOMATO, STRAWBERRY, BLUEBERRY, GRAPE,
                      TULIP, SUNFLOWER, ASTER,
                      SNOW_TURNIP, WINTERBERRY]
@@ -867,12 +908,12 @@ CROP_BY_NAME: dict[str, Crop] = {c.name: c for c in CROPS}
 
 def crops_in_season(season: str) -> list[Crop]:
     """Food crops that grow in the given season (for stocking village fields)."""
-    return [c for c in CROPS if c.season == season and c.category != "flower"]
+    return [c for c in CROPS if c.season == season and c.category not in ("flower", "fiber")]
 # produce item -> "fruit" | "vegetable"
 PRODUCE_CATEGORY: dict[Item, str] = {c.produce: c.category for c in CROPS}
 # fruits not grown as field crops (shrubs & orchard trees) still count as fruit
 _EXTRA_FRUIT = {items.RASPBERRY, items.GOOSEBERRY, items.CURRANT,
-                items.CHERRY, items.PEACH, items.APPLE, items.ORANGE}
+                items.CHERRY, items.PEACH, items.APPLE, items.PEAR, items.ORANGE}
 
 
 # --- Orchard trees -----------------------------------------------------------
@@ -891,6 +932,7 @@ TREES: list[TreeDef] = [
     TreeDef("Cherry", items.CHERRY_SAPLING, items.CHERRY, (224, 72, 96), "Spring", 7),
     TreeDef("Peach", items.PEACH_SAPLING, items.PEACH, (236, 150, 90), "Summer", 7),
     TreeDef("Apple", items.APPLE_SAPLING, items.APPLE, (216, 70, 62), "Fall", 8),
+    TreeDef("Pear", items.PEAR_SAPLING, items.PEAR, (190, 210, 120), "Fall", 8),
     TreeDef("Orange", items.ORANGE_SAPLING, items.ORANGE, (236, 150, 60), "Winter", 8),
 ]
 SAPLING_TO_TREE: dict[Item, TreeDef] = {t.sapling: t for t in TREES}
@@ -919,7 +961,7 @@ GRAPE_WINE_MULT = 3.75          # grape is *the* wine fruit — its vintage tops
 
 _FRUIT_ITEMS = [c.produce for c in CROPS if c.category == "fruit"] + \
     [items.RASPBERRY, items.GOOSEBERRY, items.CURRANT,
-     items.CHERRY, items.PEACH, items.APPLE, items.ORANGE]
+     items.CHERRY, items.PEACH, items.APPLE, items.PEAR, items.ORANGE]
 _VEG_ITEMS = [c.produce for c in CROPS if c.category == "vegetable"]
 
 
@@ -931,10 +973,17 @@ def _variant(name: str, glyph: str, source: Item, mult: float, family: str) -> I
 
 FRUIT_JAM = {f: _variant(f"{f.name} Jam", "■", f, JAM_MULT, "jam") for f in _FRUIT_ITEMS}
 FRUIT_WINE = {}
+# Apples and pears ferment into their own named drinks, not generic "wine".
+_NAMED_FERMENT = {items.APPLE: items.CIDER, items.PEAR: items.PERRY}
 for _f in _FRUIT_ITEMS:
     if _f is items.GRAPE:                       # keep the hand-tuned item, price it as the premium
         object.__setattr__(items.GRAPE_WINE, "value", round(items.GRAPE.value * GRAPE_WINE_MULT))
         FRUIT_WINE[_f] = items.GRAPE_WINE
+    elif _f in _NAMED_FERMENT:                   # apple -> cider, pear -> perry
+        drink = _NAMED_FERMENT[_f]
+        object.__setattr__(drink, "value", round(_f.value * WINE_MULT))
+        object.__setattr__(drink, "source", _f)
+        FRUIT_WINE[_f] = drink
     else:
         FRUIT_WINE[_f] = _variant(f"{_f.name} Wine", "ø", _f, WINE_MULT, "wine")
 VEG_PICKLE = {v: _variant(f"Pickled {v.name}", "■", v, PICKLE_MULT, "pickles") for v in _VEG_ITEMS}
@@ -993,6 +1042,53 @@ MACHINES: dict[str, MachineDef] = {
                              None, "Facets rough gems into cut stones; cracks open geodes."),
     "jeweller":   MachineDef("jeweller", "Jeweller's Bench", "⊛", (224, 200, 120), 60, "jewelcraft",
                              None, "Sets cut gems into rings & amulets, or embeds them into gear."),
+    "quern":      MachineDef("quern", "Quern", "○", (180, 176, 168), 300, "mill",
+                             None, "A hand-mill: grinds grain, cane & salt — slow, and a little coarse."),
+    "windmill":   MachineDef("windmill", "Windmill", "‼", (196, 170, 120), 90, "mill",
+                             None, "Mills grain, cane & salt swiftly and finely.", footprint=(3, 3)),
+    "smoker":     MachineDef("smoker", "Smoker", "≡", (150, 120, 96), 720, "smoke",
+                             None, "Slow-smokes meat into jerky, or fish into a smoked delicacy."),
+    "spinner":    MachineDef("spinner", "Spinning Wheel", "Ø", (196, 176, 140), 120, "fiber",
+                             None, "Spins wool, cotton, flax or spider silk into yarn & thread."),
+    "loom":       MachineDef("loom", "Loom", "π", (176, 150, 110), 180, "weave",
+                             None, "Weaves yarn into cloth, and tailors cloth into hats, cloaks & robes."),
+    "pen":        MachineDef("pen", "Sheep Pen", "n", (196, 200, 176), 0, "",
+                             None, "A pen for sheep; shear them for wool.", capacity=4, houses="sheep",
+                             footprint=(5, 4)),
+}
+
+
+# Textile chain: raw fibre -> yarn (spinning wheel) -> cloth (loom) -> garments.
+SPIN_RECIPES = {
+    items.WOOL: items.WOOL_YARN, items.COTTON: items.COTTON_YARN,
+    items.FLAX: items.LINEN_YARN, items.SPIDER_SILK: items.SILK_YARN,
+}
+WEAVE_RECIPES = {
+    items.WOOL_YARN: items.WOOLEN_CLOTH, items.COTTON_YARN: items.COTTON_CLOTH,
+    items.LINEN_YARN: items.LINEN_CLOTH, items.SILK_YARN: items.SILK_CLOTH,
+}
+# Which soft-armour material each bolt of cloth tailors into.
+CLOTH_MATERIAL = {
+    items.WOOLEN_CLOTH: "wool", items.COTTON_CLOTH: "cotton",
+    items.LINEN_CLOTH: "linen", items.SILK_CLOTH: "silk",
+}
+
+
+# What a smoker cures inputs into (a slow, premium transformation). A list, not
+# a map, so one input (meat) can offer several products (jerky/sausages/bacon).
+SMOKE_RECIPES = [
+    (items.MEAT, items.JERKY), (items.MEAT, items.SAUSAGES), (items.MEAT, items.BACON),
+    (items.SALMON, items.SMOKED_FISH), (items.TROUT, items.SMOKED_FISH),
+    (items.TUNA, items.SMOKED_FISH), (items.MACKEREL, items.SMOKED_FISH),
+    (items.SEA_BASS, items.SMOKED_FISH),
+]
+
+
+# What a quern or windmill grinds each input into.
+MILL_RECIPES = {
+    items.WHEAT: items.FLOUR, items.BARLEY: items.FLOUR,
+    items.RICE: items.RICE_FLOUR, items.SUGARCANE: items.SUGAR,
+    items.SALT_LUMP: items.SEA_SALT,
 }
 
 
@@ -1055,6 +1151,14 @@ RECIPES: list[Recipe] = [
            desc="Facet rough gems into cut stones; crack open geodes."),
     Recipe("Jeweller's Bench", "build", ((items.TIMBER_PLANK, 6), (items.COPPER_BAR, 2)),
            machine="jeweller", desc="Set cut gems into rings & amulets, or embed them into gear."),
+    Recipe("Quern", "build", ((items.STONE, 8),), machine="quern",
+           desc="A hand-mill for grain, cane & salt — slow and a touch coarse (a windmill does better)."),
+    Recipe("Smoker", "build", ((items.STONE, 6), (items.WOOD, 8)), machine="smoker",
+           desc="Slow-smoke meat into jerky, or fish into a smoked delicacy."),
+    Recipe("Spinning Wheel", "build", ((items.TIMBER_PLANK, 4), (items.WOOD, 4)), machine="spinner",
+           desc="Spins wool, cotton, flax & spider silk into yarn and thread."),
+    Recipe("Loom", "build", ((items.TIMBER_PLANK, 6), (items.WOOD, 6)), machine="loom",
+           desc="Weaves yarn into cloth, and tailors cloth into hats, cloaks & robes."),
     Recipe("Bomb", "item", ((items.COAL, 1), (items.FIBER, 2)), output=items.BOMB, out_qty=1,
            desc="Aim & throw with 't' to harm monsters and shatter rock."),
     Recipe("Leather Armor", "item", ((items.BOAR_HIDE, 3), (items.FIBER, 4)),
@@ -1105,6 +1209,59 @@ RECIPES: list[Recipe] = [
            desc="Potato simmered in fresh milk."),
     Recipe("Custard", "cook", ((items.MILK, 1), (items.EGG, 1), (items.HONEY, 1)), output=items.CUSTARD,
            desc="Silky honey-and-egg custard."),
+    # --- Baking (the grain-milling payoff: needs flour, and often sugar/salt) --
+    Recipe("Bread", "cook", ((items.FLOUR, 2), (items.SEA_SALT, 1)), output=items.BREAD,
+           desc="A crusty loaf — flour and a pinch of sea salt."),
+    Recipe("Pancakes", "cook", ((items.FLOUR, 1), (items.EGG, 1), (items.HONEY, 1)), output=items.PANCAKES,
+           desc="Honey-drizzled pancakes."),
+    Recipe("Berry Pie", "cook", ((items.FLOUR, 1), (items.SUGAR, 1), (items.BLUEBERRY, 1)),
+           output=items.BERRY_PIE, desc="A golden pie brimming with berries."),
+    Recipe("Cake", "cook", ((items.FLOUR, 2), (items.SUGAR, 1), (items.EGG, 1), (items.MILK, 1)),
+           output=items.CAKE, desc="A rich, sweet celebration cake."),
+    Recipe("Fried Rice", "cook", ((items.RICE_FLOUR, 1), (items.EGG, 1), (items.SEA_SALT, 1)),
+           output=items.FRIED_RICE, desc="Rice fried with egg and a pinch of salt."),
+    Recipe("Meat Pie", "cook", ((items.FLOUR, 1), (items.MEAT, 1), (items.POTATO, 1)),
+           output=items.MEAT_PIE, desc="A hearty pie of game meat and potato."),
+    Recipe("Pumpkin Pie", "cook", ((items.FLOUR, 1), (items.SUGAR, 1), (items.PUMPKIN, 1)),
+           output=items.PUMPKIN_PIE, desc="Spiced pumpkin in a golden crust."),
+    Recipe("Fish Pie", "cook", ((items.FLOUR, 1), (items.PERCH, 1), (items.POTATO, 1)),
+           output=items.FISH_PIE, desc="Flaky fish and potato under a pastry lid."),
+    Recipe("Pizza", "cook", ((items.FLOUR, 2), (items.TOMATO, 1), (items.CHEESE, 1)),
+           output=items.PIZZA, desc="Tomato and melted cheese on a crisp base."),
+    Recipe("Cookies", "cook", ((items.FLOUR, 1), (items.SUGAR, 1), (items.EGG, 1)),
+           output=items.COOKIES, desc="A batch of sweet, buttery cookies."),
+    # --- Dairy: yogurt (churned from milk) & what it makes -------------------
+    Recipe("Fruit Parfait", "cook", ((items.YOGURT, 1), (items.BLUEBERRY, 1), (items.HONEY, 1)),
+           output=items.FRUIT_PARFAIT, desc="Layers of yogurt, berries and honey."),
+    Recipe("Frozen Yogurt", "cook", ((items.YOGURT, 1), (items.SUGAR, 1)),
+           output=items.FROZEN_YOGURT, desc="Sweet, chilled frozen yogurt."),
+    Recipe("Yogurt Pie", "cook", ((items.FLOUR, 1), (items.EGG, 2), (items.STRAWBERRY, 2), (items.YOGURT, 1)),
+           output=items.YOGURT_PIE, desc="A creamy fruit-and-yogurt custard pie."),
+    # --- Condiments & the savoury / pasta line -------------------------------
+    Recipe("Mayonnaise", "cook", ((items.EGG, 1), (items.SUNFLOWER_OIL, 1), (items.SEA_SALT, 1)),
+           output=items.MAYONNAISE, desc="Whisk egg and oil into a creamy mayo."),
+    Recipe("Ketchup", "cook", ((items.TOMATO, 2), (items.SUGAR, 1), (items.SEA_SALT, 1)),
+           output=items.KETCHUP, desc="A tangy-sweet tomato sauce."),
+    Recipe("Coleslaw", "cook", ((items.CABBAGE, 1), (items.MAYONNAISE, 1)),
+           output=items.COLESLAW, desc="Shredded cabbage in creamy mayo."),
+    Recipe("Potato Salad", "cook", ((items.POTATO, 1), (items.EGG, 1), (items.MAYONNAISE, 1)),
+           output=items.POTATO_SALAD, desc="Potato and egg bound in mayonnaise."),
+    Recipe("Egg Sandwich", "cook", ((items.BREAD, 1), (items.EGG, 1), (items.MAYONNAISE, 1)),
+           output=items.EGG_SANDWICH, desc="Egg mayo between slices of fresh bread."),
+    Recipe("Tuna Salad", "cook", ((items.TUNA, 1), (items.MAYONNAISE, 1), (items.KALE, 1)),
+           output=items.TUNA_SALAD, desc="Flaked tuna, mayo and crisp greens."),
+    Recipe("Tuna Sandwich", "cook", ((items.BREAD, 1), (items.TUNA, 1), (items.MAYONNAISE, 1)),
+           output=items.TUNA_SANDWICH, desc="A hearty tuna-mayo sandwich."),
+    Recipe("Shortbread", "cook", ((items.FLOUR, 1), (items.BUTTER, 1), (items.SUGAR, 1)),
+           output=items.SHORTBREAD, desc="Crumbly, buttery shortbread."),
+    Recipe("Noodles", "cook", ((items.FLOUR, 1), (items.EGG, 1)),
+           output=items.NOODLES, desc="Fresh egg noodles."),
+    Recipe("Pasta", "cook", ((items.NOODLES, 1), (items.KETCHUP, 1), (items.CHEESE, 1)),
+           output=items.PASTA, desc="Noodles in a rich tomato sauce with cheese."),
+    Recipe("Bacon & Eggs", "cook", ((items.BACON, 1), (items.EGG, 2)),
+           output=items.BACON_AND_EGGS, desc="Crispy bacon with fried eggs."),
+    Recipe("Sausage Roll", "cook", ((items.SAUSAGES, 1), (items.FLOUR, 1)),
+           output=items.SAUSAGE_ROLL, desc="A sausage baked in flaky pastry."),
 ]
 
 
@@ -1140,6 +1297,11 @@ FISH_CATCH_CHANCE = 0.75
 # Distinct catches from underground lakes (not seasonal).
 CAVE_FISH: list[tuple[Item, int]] = [
     (items.CAVE_BASS, 30), (items.EEL, 22), (items.BLINDFISH, 30), (items.GLOWFISH, 6),
+]
+
+# Catches from the open sea (cast from the coast); tuna is the rare prize.
+SEA_FISH: list[tuple[Item, int]] = [
+    (items.SARDINE, 34), (items.MACKEREL, 26), (items.SEA_BASS, 14), (items.TUNA, 5),
 ]
 
 
@@ -1736,13 +1898,15 @@ GENERAL_STOCK: list[tuple[Item, int]] = [
     (items.PUMPKIN_SEEDS, 100), (items.TOMATO_SEEDS, 50), (items.STRAWBERRY_SEEDS, 100),
     (items.BLUEBERRY_SEEDS, 80), (items.GRAPE_SEEDS, 60),
     (items.CHERRY_SAPLING, 600), (items.PEACH_SAPLING, 600),
-    (items.APPLE_SAPLING, 700), (items.ORANGE_SAPLING, 700),
+    (items.APPLE_SAPLING, 700), (items.PEAR_SAPLING, 700), (items.ORANGE_SAPLING, 700),
     (items.CARROT_SEEDS, 30), (items.KALE_SEEDS, 70), (items.CORN_SEEDS, 90),
     (items.CUCUMBER_SEEDS, 45), (items.CABBAGE_SEEDS, 90), (items.BEET_SEEDS, 55),
     (items.LEEK_SEEDS, 60),
+    (items.BARLEY_SEEDS, 30), (items.WHEAT_SEEDS, 35), (items.RICE_SEEDS, 45),
+    (items.SUGARCANE_SEEDS, 55), (items.COTTON_SEEDS, 45), (items.FLAX_SEEDS, 40),
     (items.TULIP_SEEDS, 40), (items.SUNFLOWER_SEEDS, 50), (items.ASTER_SEEDS, 50),
     (items.SNOW_TURNIP_SEEDS, 40), (items.WINTERBERRY_SEEDS, 90),
-    (items.CHICK, 120), (items.CALF, 400),
+    (items.CHICK, 120), (items.CALF, 400), (items.LAMB, 260),
     # a little soft-goods rack: hats, cloaks & robes (cloth, no forging needed)
     (make_gear("Hat", "straw"), 20), (make_gear("Hat", "wool"), 45),
     (make_gear("Cloak", "wool"), 70), (make_gear("Cloak", "linen"), 110),
@@ -1810,6 +1974,10 @@ CARPENTER_JOBS: list = [
      ((items.TIMBER_PLANK, 32), (items.STONE, 18), (items.COPPER_BAR, 2))),
     ("Greenhouse (grow any crop, any season)", "greenhouse", 1200,
      ((items.TIMBER_PLANK, 28), (items.STONE, 12), (items.COPPER_BAR, 3))),
+    ("Windmill (mills grain fast & fine)", "windmill", 800,
+     ((items.TIMBER_PLANK, 24), (items.STONE, 14), (items.IRON_BAR, 2))),
+    ("Sheep Pen (raise sheep for wool)", "pen", 500,
+     ((items.TIMBER_PLANK, 22), (items.STONE, 8))),
 ]
 
 
@@ -1900,7 +2068,7 @@ def random_gem(rng) -> object:
 MONSTER_DROPS: dict[str, list] = {
     "Cave Slime":   [(items.SLIME_GEL, 0.7)],
     "Bat":          [(items.BAT_WING, 0.6)],
-    "Boar":         [(items.BOAR_HIDE, 0.5)],
+    "Boar":         [(items.BOAR_HIDE, 0.5), (items.MEAT, 0.7)],
     "Cave Spider":  [(items.SPIDER_SILK, 0.6)],
     "Deep Lurker":  [(items.LURKER_SCALE, 0.6)],
     "Wraith":       [(items.WRAITH_ESSENCE, 0.5)],

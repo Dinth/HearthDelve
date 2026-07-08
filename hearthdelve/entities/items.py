@@ -89,6 +89,12 @@ CUCUMBER_SEEDS = Item("Cucumber Seeds", "_", "seed", "A summer vine; superb pick
 CABBAGE_SEEDS  = Item("Cabbage Seeds",  "_", "seed", "A big, prized autumn head.")
 BEET_SEEDS     = Item("Beet Seeds",     "_", "seed", "A deep-red autumn root.")
 LEEK_SEEDS     = Item("Leek Seeds",     "_", "seed", "A hardy winter allium.")
+COTTON_SEEDS   = Item("Cotton Seeds",   "_", "seed", "A summer fibre crop; spin the bolls into thread.")
+FLAX_SEEDS     = Item("Flax Seeds",     "_", "seed", "A spring fibre crop; spun into linen thread.")
+BARLEY_SEEDS   = Item("Barley Seeds",   "_", "seed", "A spring grain; mill it into flour.")
+WHEAT_SEEDS    = Item("Wheat Seeds",    "_", "seed", "An autumn grain; mill it into flour.")
+RICE_SEEDS     = Item("Rice Seeds",     "_", "seed", "A summer paddy grain; mill it into rice flour.")
+SUGARCANE_SEEDS= Item("Sugarcane Seeds","_", "seed", "A summer cane; mill it into sugar.")
 
 # --- Produce: vegetables ----------------------------------------------------
 PARSNIP     = Item("Parsnip",     "♠", "crop", "A pale, hardy root.",   value=35)
@@ -103,6 +109,16 @@ CUCUMBER    = Item("Cucumber",    "c", "crop", "A cool summer vine fruit.", valu
 CABBAGE     = Item("Cabbage",     "%", "crop", "A dense autumn head.",   value=180)
 BEET        = Item("Beet",        "o", "crop", "An earthy crimson root.", value=95)
 LEEK        = Item("Leek",        "i", "crop", "A mild winter allium.",  value=100)
+
+# --- Grains & cane (milled at a quern or windmill) --------------------------
+BARLEY      = Item("Barley",      "≈", "crop", "A spring grain.",         value=40)
+WHEAT       = Item("Wheat",       "≈", "crop", "Golden autumn grain.",    value=45)
+RICE        = Item("Rice",        "≈", "crop", "Summer paddy grain.",     value=60)
+SUGARCANE   = Item("Sugarcane",   "‖", "crop", "A tall, sweet summer cane.", value=55)
+
+# --- Fibre crops (spun & woven into cloth) ----------------------------------
+COTTON      = Item("Cotton",      "*", "crop", "Fluffy cotton bolls for spinning.", value=45)
+FLAX        = Item("Flax",        "|", "crop", "Flax stalks, retted for linen thread.", value=40)
 
 # --- Flowers (grown for beauty, gifts, and to feed the bees) ----------------
 TULIP       = Item("Tulip",       "*", "crop", "A cheerful spring bloom.",  value=40)
@@ -123,12 +139,14 @@ CURRANT     = Item("Currant",     "♦", "crop", "Jewel-like shrub berry.",  val
 CHERRY      = Item("Cherry",      "♦", "crop", "Sweet spring cherry.",     value=80)
 PEACH       = Item("Peach",       "♦", "crop", "Juicy summer peach.",      value=90)
 APPLE       = Item("Apple",       "♦", "crop", "Crisp autumn apple.",      value=100)
+PEAR        = Item("Pear",        "♦", "crop", "A sweet autumn pear; ferments into perry.", value=100)
 ORANGE      = Item("Orange",      "♦", "crop", "Bright winter orange.",    value=100)
 
 # --- Saplings (plant to grow a fruit tree) ----------------------------------
 CHERRY_SAPLING = Item("Cherry Sapling", "↑", "sapling", "Grows to bear cherries each spring.")
 PEACH_SAPLING  = Item("Peach Sapling",  "↑", "sapling", "Grows to bear peaches each summer.")
 APPLE_SAPLING  = Item("Apple Sapling",  "↑", "sapling", "Grows to bear apples each autumn.")
+PEAR_SAPLING   = Item("Pear Sapling",   "↑", "sapling", "Grows to bear pears each autumn.")
 ORANGE_SAPLING = Item("Orange Sapling", "↑", "sapling", "Grows to bear oranges each winter.")
 
 # --- Seed pouch (hotbar slot for planting; cycles through what you carry) ----
@@ -143,6 +161,12 @@ STRAW       = Item("Straw",       "~", "material", "Dried grass; winter feed for
 STONE       = Item("Stone",       "o", "material", "Broken from rock.",         value=4)
 FENCE       = Item("Fence",       "│", "material", "A timber fence panel; set it down (build menu) to bound and claim wild land.", value=6)
 COAL        = Item("Coal",        "♦", "material", "A hot furnace fuel.",       value=12)
+# Milled goods (ground at a quern or windmill; carry a 0-5 star quality).
+FLOUR       = Item("Flour",       "▪", "material", "Ground from grain; the heart of baking.", value=55)
+RICE_FLOUR  = Item("Rice Flour",  "▪", "material", "Fine flour ground from rice.",  value=70)
+SUGAR       = Item("Sugar",       "▪", "material", "Milled from pressed cane; sweetens any bake.", value=80)
+SALT_LUMP   = Item("Salt Lump",   "○", "material", "A crust of sea salt scraped from the strand — mill it fine.", value=12)
+SEA_SALT    = Item("Sea Salt",    "▪", "material", "Finely milled sea salt; seasons a dish.", value=45)
 CHARCOAL    = Item("Charcoal",    "♦", "material", "Wood charred in a kiln; a modest, self-sufficient fuel.", value=10)
 COKE        = Item("Coke",        "♦", "material", "Coal baked in a kiln; the hottest fuel — smelts the deepest metals fast.", value=28)
 # Dungeon reagents: foraged fungus and creature drops (cook/sell/gift).
@@ -150,6 +174,7 @@ CAVE_MUSHROOM = Item("Cave Mushroom", "τ", "material", "An earthy cave fungus �
 SLIME_GEL     = Item("Slime Gel",     "*", "material", "Sticky residue from a cave slime.",       value=15)
 BAT_WING      = Item("Bat Wing",      "~", "material", "A leathery wing from a cave bat.",         value=20)
 BOAR_HIDE     = Item("Boar Hide",     "u", "material", "Tough hide from a wild boar.",             value=40)
+MEAT          = Item("Meat",          "▬", "material", "Game meat from a wild boar; good in a pie.", value=55)
 SPIDER_SILK   = Item("Spider Silk",   "~", "material", "Strong, fine silk from a cave spider.",    value=35)
 LURKER_SCALE  = Item("Lurker Scale",  "u", "material", "A thick armoured scale from a deep lurker.", value=55)
 WRAITH_ESSENCE= Item("Wraith Essence","*", "material", "Cold, half-real essence bled from a wraith.", value=75)
@@ -227,8 +252,52 @@ OMELETTE         = Item("Omelette",         "≈", "food", "A fluffy two-egg ome
 CHEESE_OMELETTE  = Item("Cheese Omelette",  "≈", "food", "An omelette folded with farmhouse cheese.", value=240, energy=95, buff="hearty")
 CREAMY_SOUP      = Item("Creamy Soup",      "≈", "food", "Potato simmered in fresh milk.", value=150, energy=80, buff="tiller")
 CUSTARD          = Item("Custard",          "≈", "food", "Silky honey-and-egg custard.",   value=160, energy=85, buff="brisk")
+# Baked goods — the grain-milling payoff.
+BREAD            = Item("Bread",            "≈", "food", "A warm loaf of crusty bread.",   value=120, energy=60, buff="brisk")
+CAKE             = Item("Cake",             "≈", "food", "A rich, sweet celebration cake.", value=320, energy=110, buff="brisk")
+BERRY_PIE        = Item("Berry Pie",        "≈", "food", "A golden pie brimming with berries.", value=260, energy=95, buff="forager")
+PANCAKES         = Item("Pancakes",         "≈", "food", "A honey-drizzled stack of pancakes.", value=180, energy=80, buff="tiller")
+FRIED_RICE       = Item("Fried Rice",       "≈", "food", "Rice fried with egg and a pinch of salt.", value=170, energy=80, buff="hearty")
+MEAT_PIE         = Item("Meat Pie",         "≈", "food", "A hearty pie of game meat and potato.", value=280, energy=110, buff="hearty")
+PUMPKIN_PIE      = Item("Pumpkin Pie",      "≈", "food", "Spiced pumpkin in a golden crust.", value=300, energy=100, buff="tiller")
+FISH_PIE         = Item("Fish Pie",         "≈", "food", "Flaky fish and potato under a pastry lid.", value=240, energy=95, buff="hearty")
+PIZZA            = Item("Pizza",            "≈", "food", "Tomato and melted cheese on a crisp base.", value=260, energy=100, buff="brisk")
+COOKIES          = Item("Cookies",          "≈", "food", "A batch of sweet, buttery cookies.", value=150, energy=65, buff="brisk")
+FRUIT_PARFAIT    = Item("Fruit Parfait",    "≈", "food", "Layers of yogurt, berries and honey.", value=190, energy=80, buff="forager")
+FROZEN_YOGURT    = Item("Frozen Yogurt",    "≈", "food", "Sweet, chilled frozen yogurt.", value=160, energy=70, buff="brisk")
+YOGURT_PIE       = Item("Yogurt Pie",       "≈", "food", "A creamy fruit-and-yogurt custard pie.", value=300, energy=105, buff="tiller")
+# Salads, sandwiches & the pasta line (savoury cooking).
+COLESLAW         = Item("Coleslaw",         "≈", "food", "Shredded cabbage in creamy mayo.", value=140, energy=55, buff="forager")
+POTATO_SALAD     = Item("Potato Salad",     "≈", "food", "Potato and egg bound in mayonnaise.", value=170, energy=75, buff="hearty")
+EGG_SANDWICH     = Item("Egg Sandwich",     "≈", "food", "Egg mayo between slices of fresh bread.", value=160, energy=70, buff="brisk")
+TUNA_SALAD       = Item("Tuna Salad",       "≈", "food", "Flaked tuna, mayo and crisp greens.", value=220, energy=85, buff="hearty")
+TUNA_SANDWICH    = Item("Tuna Sandwich",    "≈", "food", "A hearty tuna-mayo sandwich.", value=240, energy=95, buff="hearty")
+SHORTBREAD       = Item("Shortbread",       "≈", "food", "Crumbly, buttery shortbread.", value=170, energy=70, buff="brisk")
+NOODLES          = Item("Noodles",          "≈", "food", "Fresh egg noodles.", value=110, energy=55, buff="brisk")
+PASTA            = Item("Pasta",            "≈", "food", "Noodles in a rich tomato sauce with cheese.", value=270, energy=100, buff="hearty")
+BACON_AND_EGGS   = Item("Bacon & Eggs",     "≈", "food", "Crispy bacon with fried eggs.", value=200, energy=95, buff="hearty")
+SAUSAGE_ROLL     = Item("Sausage Roll",     "≈", "food", "A sausage baked in flaky pastry.", value=180, energy=80, buff="hearty")
 AGED_MEAD   = Item("Aged Mead",   "u", "artisan",  "Mead matured in the cask; deep and mellow.", value=360)
 SUNFLOWER_OIL = Item("Sunflower Oil", "ó", "artisan", "Golden oil pressed from sunflowers.", value=130)
+# Condiments, dairy & preserved goods.
+MAYONNAISE  = Item("Mayonnaise",  "◓", "artisan", "Whisked egg and oil — a creamy staple.", value=120, energy=15)
+BUTTER      = Item("Butter",      "▪", "artisan", "A golden pat of churned butter.", value=130, energy=20)
+KETCHUP     = Item("Ketchup",     "■", "artisan", "A tangy-sweet tomato sauce.", value=110)
+CIDER       = Item("Cider",       "ø", "artisan", "Crisp fermented apple cider.", value=220, family="cider", source=None)
+PERRY       = Item("Perry",       "ø", "artisan", "Fermented pear perry; delicate and dry.", value=230, family="perry", source=None)
+# Textiles: raw fibre -> yarn (spinning wheel) -> cloth (loom) -> garments.
+WOOL_YARN   = Item("Wool Yarn",   ";", "material", "Wool spun into yarn.", value=70)
+COTTON_YARN = Item("Cotton Thread", ";", "material", "Cotton spun into thread.", value=70)
+LINEN_YARN  = Item("Linen Thread", ";", "material", "Flax spun into linen thread.", value=90)
+SILK_YARN   = Item("Silk Thread", ";", "material", "Spider silk spun into fine thread.", value=140)
+WOOLEN_CLOTH = Item("Woolen Cloth", "≡", "artisan", "A bolt of warm woven wool.", value=160)
+COTTON_CLOTH = Item("Cotton Cloth", "≡", "artisan", "A bolt of soft cotton cloth.", value=160)
+LINEN_CLOTH  = Item("Linen Cloth",  "≡", "artisan", "A bolt of crisp woven linen.", value=210)
+SILK_CLOTH   = Item("Silk Cloth",   "≡", "artisan", "A bolt of lustrous woven silk.", value=320)
+JERKY       = Item("Jerky",       "▬", "artisan", "Smoke-cured strips of meat; keeps for ages.", value=150, energy=45)
+SAUSAGES    = Item("Sausages",    "▬", "artisan", "Plump smoked sausages.", value=170, energy=55)
+BACON       = Item("Bacon",       "▬", "artisan", "Streaky smoked bacon.", value=180, energy=50)
+SMOKED_FISH = Item("Smoked Fish", "»", "artisan", "Fish slow-smoked to a delicacy.", value=200, energy=50)
 
 # --- Beekeeping -------------------------------------------------------------
 HONEY       = Item("Honey",       "*", "material", "Sweet golden honey from a hive.",       value=45)
@@ -240,9 +309,12 @@ BEE_QUEEN   = Item("Bee Queen",   "Q", "material", "A live queen — install her
 # the cheese it makes carry quality tied to how well the animals are cared for.
 CHICK       = Item("Chick",       "b", "livestock", "A fluffy chick — settle it in a coop.", stackable=False, value=120)
 CALF        = Item("Calf",        "q", "livestock", "A young calf — settle it in a barn.", stackable=False, value=400)
+LAMB        = Item("Lamb",        "y", "livestock", "A young lamb — settle it in a pen; shear it for wool.", stackable=False, value=260)
+WOOL        = Item("Wool",        "%", "material", "A fleece of raw wool, ready to spin.", value=45)
 EGG         = Item("Egg",         "○", "animal",   "A fresh-laid egg.",           value=35, energy=6)
 MILK        = Item("Milk",        "◓", "animal",   "A pail of fresh milk.",       value=55, energy=10)
 CHEESE      = Item("Cheese",      "◍", "artisan",  "A wheel of farmhouse cheese.", value=140, energy=32)
+YOGURT      = Item("Yogurt",      "◓", "artisan",  "Creamy cultured yogurt, churned from fresh milk.", value=90, energy=30)
 
 # --- Fish (caught with the rod at water; most are seasonal) -----------------
 MINNOW      = Item("Minnow",      "»", "fish", "A tiny river fish.",           value=15)
@@ -257,6 +329,11 @@ PIKE        = Item("Pike",        "»", "fish", "A toothy summer predator.",    
 SALMON      = Item("Salmon",      "»", "fish", "Runs the rivers in autumn.",   value=95)
 ICEFISH     = Item("Icefish",     "»", "fish", "Caught through winter ice.",   value=45)
 STURGEON    = Item("Sturgeon",    "»", "fish", "A rare winter leviathan.",     value=160)
+# sea (cast from the coast / beaches)
+SARDINE     = Item("Sardine",     "»", "fish", "A little silver shoaling sea fish.", value=30)
+MACKEREL    = Item("Mackerel",    "»", "fish", "A striped, oily sea fish.",       value=55)
+SEA_BASS    = Item("Sea Bass",    "»", "fish", "A prized coastal sea bass.",      value=110)
+TUNA        = Item("Tuna",        "»", "fish", "A big, prized deep-sea tuna.",    value=200)
 # underground (dungeon lakes)
 CAVE_BASS   = Item("Cave Bass",   "»", "fish", "Pale bass from lightless pools.", value=60)
 EEL         = Item("Eel",         "»", "fish", "A slippery cave eel.",           value=70)

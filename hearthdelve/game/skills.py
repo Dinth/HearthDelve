@@ -149,7 +149,7 @@ def extra_yield_chance(state: GameState, skill: str) -> float:
 # --- quality (0-5 stars) -----------------------------------------------------
 STAR = "★"
 _QUALITY_KINDS = ("crop", "fish", "artisan", "food", "animal", "gem", "jewelry")
-_QUALITY_NAMES = ("Honey",)               # tiered items that aren't one of the kinds
+_QUALITY_NAMES = ("Honey", "Flour", "Rice Flour", "Sugar", "Sea Salt")   # tiered items that aren't one of the kinds
 
 
 # --- crafting-skill bonuses --------------------------------------------------
