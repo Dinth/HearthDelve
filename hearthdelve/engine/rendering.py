@@ -1040,11 +1040,13 @@ def render_load_machine(con: tcod.console.Console, state: GameState, ctx) -> Non
     if not ctx:
         return
     opts, sel, name = ctx["options"], ctx["sel"], ctx["name"]
-    w, h = 56, min(C.SCREEN_H - 4, max(8, len(opts) + 6))
+    w, h = 66, min(C.SCREEN_H - 4, max(8, len(opts) + 6))
     body = h - 4
     x, y = _modal(con, w, h, f"Load {name}  (choose what to make)")
     sel = max(0, min(sel, len(opts) - 1)) if opts else 0
     start, end = _window(sel, len(opts), body)
+    from_col = x + 30            # inputs column — clear of the (wider) label column
+    price_col = x + w - 9
     for row, opt in enumerate(opts[start:end]):
         i = start + row
         bg = (54, 50, 36) if i == sel else (20, 22, 32)
@@ -1054,9 +1056,11 @@ def render_load_machine(con: tcod.console.Console, state: GameState, ctx) -> Non
         ins = ", ".join(f"{q} {it.name}" for it, q in opt["inputs"])
         oq = opt.get("out_qty", 1)
         label = opt.get("label") or (f"{oq}x {out.name}" if oq > 1 else out.name)
-        con.print(x + 2, y + 2 + row, ("▸ " if i == sel else "  ") + label[:w - 24], fg=C.WHITE, bg=bg)
-        con.print(x + 20, y + 2 + row, f"from {ins}"[:w - 30], fg=(160, 180, 205), bg=bg)
-        con.print(x + w - 8, y + 2 + row, f"{out.value}g", fg=C.GOLD_COLOR, bg=bg)
+        con.print(x + 2, y + 2 + row, ("▸ " if i == sel else "  ") + label[:from_col - x - 3],
+                  fg=C.WHITE, bg=bg)
+        con.print(from_col, y + 2 + row, f"from {ins}"[:price_col - from_col - 1],
+                  fg=(160, 180, 205), bg=bg)
+        con.print(price_col, y + 2 + row, f"{out.value}g", fg=C.GOLD_COLOR, bg=bg)
     if start > 0:
         con.print(x + w - 4, y + 2, "▲", fg=_HDR)
     if end < len(opts):

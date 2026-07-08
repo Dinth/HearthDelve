@@ -414,7 +414,7 @@ def _jeweller_options(state: GameState) -> list:
             if "tool" in content.GEM_DOMAIN.get(gemkey, ()):
                 opts.append({"kind": "embed_tool", "inputs": [(cut, 1)], "output": tool,
                              "tool": tool, "gemkey": gemkey,
-                             "label": f"Set {content.GEM_TITLE[gemkey]} in {p.display_name(tool)}"})
+                             "label": f"Set {content.GEM_TITLE[gemkey]} in your {tool.name}"})
     return opts
 
 
