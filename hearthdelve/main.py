@@ -328,11 +328,17 @@ def use_tool(state: GameState) -> None:
         base = C.CHOP_COST if cat == "axe" else C.MACHETE_COST
         stamina, seconds = base[0] + 2, int(base[1] * 1.5)
     else:
+        from .game import jewelry
         stat = content.TOOL_STATS.get(item)
         tier = p.tool_tier.get(item, 0)          # 0 Wooden … 5 Mithril
         stamina = max(1, stat.stamina - tier) if stat else 1
         if item in p.tool_affix:                 # an imbued tool works with less effort
             stamina = max(1, stamina - 1)
+        # An amethyst — set in this tool or worn as jewellery — eases the effort.
+        discount = round(jewelry.tool_gem_bonus(state, item, "energy")
+                         + jewelry.cozy_bonus(state, "energy"))
+        if discount:
+            stamina = max(1, stamina - discount)
         # Finer tools also work FASTER — each tier shaves 10% off the action time,
         # so a full upgrade (Mithril) halves it. Time is the day's real currency,
         # so this is what makes the tool ladder worth the metal.
@@ -392,7 +398,7 @@ def _gather_drop(state: GameState, item, target) -> None:
         state.log.add("  (+2 Wood)", C.DIM)
     elif item is items.PICKAXE and target.name == "gem_vein":
         from .data import content
-        gem = content.random_gem(random)
+        gem = content.gem_for_depth(state.world.depth, random)   # deeper veins, finer gems
         inv.add(gem, 1)
         state.bump("ore_mined")
         skills.gain(state, "Mining", 20)
@@ -400,7 +406,8 @@ def _gather_drop(state: GameState, item, target) -> None:
             inv.add(items.STONE, 1)
         state.log.add(f"  (+1 {gem.name})", C.DIM)
     elif item is items.PICKAXE and target.name == "ore_vein":
-        # An ore vein mostly gives stone, often coal, sometimes ore.
+        # An ore vein mostly gives stone, often coal, sometimes ore — and now and
+        # then a geode to crack open later (a little likelier the deeper you dig).
         got = []
         if random.random() < 0.80:
             inv.add(items.STONE, 1); got.append("Stone")
@@ -410,6 +417,8 @@ def _gather_drop(state: GameState, item, target) -> None:
             from .data import content
             ore = content.ore_for_depth(state.world.depth, random)
             inv.add(ore, 1); got.append(ore.name)
+        if random.random() < 0.05 + 0.02 * state.world.depth:
+            inv.add(items.GEODE, 1); got.append("Geode")
         if not got:                       # always yield something
             inv.add(items.STONE, 1); got.append("Stone")
         state.bump("ore_mined")
@@ -445,19 +454,32 @@ def _gather_drop(state: GameState, item, target) -> None:
         if parts:
             state.log.add("  (" + ", ".join(parts) + ")", C.DIM)
 
+    # What a gather tool drops a bonus unit of, by the tile worked.
+    def _bonus_drop():
+        if item is items.AXE and target.kind == "tree":
+            return items.WOOD
+        if item is items.PICKAXE and target.name in ("ore_vein", "rock", "ruins_wall"):
+            return items.STONE
+        if item is items.MACHETE and target.kind in ("tall_grass", "foliage", "shrub", "shrub_berry"):
+            return items.FIBER
+        return None
+
     # An imbued gather tool now and then yields a little extra of its craft.
     affix = state.player.tool_affix.get(item)
     if affix and random.random() < 0.45:
-        extra = None
-        if item is items.AXE and target.kind == "tree":
-            extra = items.WOOD
-        elif item is items.PICKAXE and target.name in ("ore_vein", "rock", "ruins_wall"):
-            extra = items.STONE
-        elif item is items.MACHETE and target.kind in ("tall_grass", "foliage", "shrub", "shrub_berry"):
-            extra = items.FIBER
+        extra = _bonus_drop()
         if extra:
             inv.add(extra, 1)
             state.log.add(f"  ({affix}: +1 {extra.name})", (180, 220, 150))
+
+    # An emerald (or diamond) set in the tool enriches the same yield.
+    from .game import jewelry
+    gem_yield = jewelry.tool_gem_bonus(state, item, "yield")
+    if gem_yield and random.random() < gem_yield * 4:      # ~0.08 -> ~32% for an extra
+        extra = _bonus_drop()
+        if extra:
+            inv.add(extra, 1)
+            state.log.add(f"  (gem: +1 {extra.name})", (150, 210, 170))
 
 
 def _equip(state: GameState, item) -> None:
@@ -489,6 +511,23 @@ def _equip(state: GameState, item) -> None:
         if old:
             p.inventory.add(old)
         state.log.add(f"You don the {item.name.lower()}.", (200, 220, 160))
+    elif item.kind == "jewelry":
+        # A ring or amulet. Amulets fill the neck slot; rings fill the first free
+        # ring slot (else replace ring1). Star quality rides with the piece into
+        # its slot (equip_quality), so a fine jeweller's work stays fine when worn.
+        want = content.jewel_slot(item)
+        if want == "neck":
+            slot = "neck"
+        else:
+            slot = "ring1" if p.equipment.get("ring1") is None else (
+                "ring2" if p.equipment.get("ring2") is None else "ring1")
+        q = p.inventory.pop_quality(item, 1)     # take one, remember its stars
+        old, oldq = p.equipment.get(slot), p.equip_quality.get(slot, 0)
+        p.equipment[slot] = item
+        p.equip_quality[slot] = int(round(q))
+        if old:
+            p.inventory.add(old, 1, quality=oldq)
+        state.log.add(f"You put on the {item.name.lower()}.", (200, 220, 160))
     elif item.kind in ("ranged", "ammo", "bomb"):
         # ranged launchers go in the ranged slot; arrows/stones/bombs in the ammo
         # slot. Ammo is a stackable type, so the panel just marks which you'll
@@ -517,7 +556,8 @@ def _unequip(state: GameState, slot: str) -> None:
     if slot == "ammo":                      # ammo was only marked, never pulled out
         state.log.add(f"You unready the {it.name.lower()}.", (200, 200, 180))
     else:
-        p.inventory.add(it)
+        q = p.equip_quality.pop(slot, 0)    # hand jewellery back at its stored stars
+        p.inventory.add(it, 1, quality=q)
         state.log.add(f"You take off the {it.name.lower()}.", (200, 200, 180))
 
 
@@ -1142,10 +1182,17 @@ def main() -> None:
                             inv_sel = ord(ch) - ord("a")
                         continue
                     if mode == "equipment" and ch and ch not in ("i", "e"):
-                        gear = rendering.equippables(state)
+                        # One letter namespace: a.. address the worn slots (take
+                        # off), then the carried gear list (equip).
                         idx = ord(ch) - ord("a")
-                        if idx < len(gear):
-                            _equip(state, gear[idx][0])
+                        nslots = len(rendering.PAPERDOLL_SLOTS)
+                        if 0 <= idx < nslots:
+                            _unequip(state, rendering.PAPERDOLL_SLOTS[idx])
+                        else:
+                            gear = rendering.equippables(state)
+                            gi = idx - nslots
+                            if 0 <= gi < len(gear):
+                                _equip(state, gear[gi][0])
                         continue
 
                 action = game_input.event_to_action(event)
@@ -1214,7 +1261,8 @@ def main() -> None:
                             req = do_grab(state)
                             if isinstance(req, dict) and "load" in req:
                                 load_ctx = {"pos": req["load"], "options": req["options"],
-                                            "name": req["name"], "sel": 0}
+                                            "name": req["name"], "sel": 0,
+                                            "jeweller": req.get("jeweller", False)}
                                 mode = "loadmachine"
                             else:
                                 check_faint(state)
@@ -1364,6 +1412,8 @@ def main() -> None:
                         opt = opts[min(load_ctx["sel"], len(opts) - 1)]
                         if load_ctx.get("craft"):        # a bench chooser (metal-tipped arrows)
                             crafting.craft_choice(state, opt)
+                        elif load_ctx.get("jeweller"):   # jeweller's bench (instant: make/embed)
+                            crafting.jeweller_choice(state, opt)
                         else:
                             m = state.world.machines.get(load_ctx["pos"])
                             if m is not None:
@@ -1412,9 +1462,8 @@ def main() -> None:
                         mode, inv_sel = "inventory", 0
                     elif cmd in ("cancel", "equipment", "quit"):
                         mode = "play"
-                    elif cmd == "slot":                 # 1-0 take off the matching paperdoll slot
-                        if action[1] < len(rendering.PAPERDOLL_SLOTS):
-                            _unequip(state, rendering.PAPERDOLL_SLOTS[action[1]])
+                    # Take-off & equip are handled by the unified letter namespace
+                    # above (see the equipment-mode letter handler).
 
                 elif mode == "craft":
                     if cmd in ("cancel", "craft", "quit"):

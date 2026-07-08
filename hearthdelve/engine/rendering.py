@@ -1053,8 +1053,8 @@ def render_load_machine(con: tcod.console.Console, state: GameState, ctx) -> Non
         out = opt["output"]
         ins = ", ".join(f"{q} {it.name}" for it, q in opt["inputs"])
         oq = opt.get("out_qty", 1)
-        label = (f"{oq}x {out.name}" if oq > 1 else out.name)
-        con.print(x + 2, y + 2 + row, ("▸ " if i == sel else "  ") + label, fg=C.WHITE, bg=bg)
+        label = opt.get("label") or (f"{oq}x {out.name}" if oq > 1 else out.name)
+        con.print(x + 2, y + 2 + row, ("▸ " if i == sel else "  ") + label[:w - 24], fg=C.WHITE, bg=bg)
         con.print(x + 20, y + 2 + row, f"from {ins}"[:w - 30], fg=(160, 180, 205), bg=bg)
         con.print(x + w - 8, y + 2 + row, f"{out.value}g", fg=C.GOLD_COLOR, bg=bg)
     if start > 0:
@@ -1213,6 +1213,16 @@ def build_codex_pages(state: GameState):
     tools.append(("finer stuff (with a pinch of luck), and may carry a prefix/suffix", C.DIM))
     tools.append(("(Fine, Masterwork, of Slaying, of Warding...). Smelt ore to bars,", C.DIM))
     tools.append(("then forge gear of that metal at an Anvil (build it with 'c').", C.DIM))
+    tools.append(("", C.WHITE))
+    tools.append(("Fuel, gems & jewellery", _HDR))
+    tools.append(("Fuels have heat: wood < charcoal < coal < coke. A metal needs a", C.DIM))
+    tools.append(("minimum heat to smelt at all, and hotter fuel smelts faster. A Kiln", C.DIM))
+    tools.append(("chars wood into charcoal, or bakes coal into coke.", C.DIM))
+    tools.append(("Mine rough gems (finer the deeper you dig) and crack Geodes; cut", C.DIM))
+    tools.append(("them at a Gemcutting Station. At a Jeweller's Bench, set a cut gem", C.DIM))
+    tools.append(("into a metal band for a Ring or Amulet (neck/ring slots), or embed", C.DIM))
+    tools.append(("it into a weapon, armour, or tool. Ruby/Sapphire/Topaz aid combat;", C.DIM))
+    tools.append(("Emerald/Amethyst aid your work; Diamond does a bit of everything.", C.DIM))
     pages.append(("Tools & Equipment", tools))
 
     # --- Page: Seeds & Crops -------------------------------------------------
@@ -1487,18 +1497,39 @@ def render_inventory(con: tcod.console.Console, state: GameState, sel: int = 0) 
 
 _SLOT_LABEL = {"head": "Head", "body": "Body", "cloak": "Cloak", "hands": "Gauntlets",
                "waist": "Girdle", "legs": "Legs", "feet": "Feet", "shield": "Shield",
+               "neck": "Amulet", "ring1": "Ring", "ring2": "Ring",
                "ranged": "Ranged", "ammo": "Ammo"}
-# Worn slots in paperdoll order; the index doubles as the number key that takes
-# the piece off (1-9 then 0 for the tenth). Shared with main's unequip handler.
+# Worn slots in paperdoll order. Each is addressed on the equipment screen by a
+# letter (a, b, …), continuing into the carried-gear list — one letter namespace
+# for both take-off and equip. Shared with main's equipment-screen handler.
 PAPERDOLL_SLOTS = ("head", "body", "cloak", "hands", "waist", "legs", "feet",
-                   "shield", "ranged", "ammo")
+                   "shield", "neck", "ring1", "ring2", "ranged", "ammo")
 
 
 def equippables(state: GameState) -> list:
     """Carried gear the equipment screen equips by letter: weapons, armour,
-    ranged launchers, and ammunition."""
+    jewellery, ranged launchers, and ammunition."""
     return [(it, q, ql) for it, q, ql in state.player.inventory.slots
-            if it.kind in ("weapon", "armor", "ranged", "ammo", "bomb")]
+            if it.kind in ("weapon", "armor", "jewelry", "ranged", "ammo", "bomb")]
+
+
+def _jewel_desc(it, quality: int) -> str:
+    """A short effect tag for a worn ring/amulet, scaled by its star quality."""
+    from ..data import content
+    from ..game import skills
+    eff = content.JEWEL_EFFECT.get(it, {})
+    qm = skills.value_mult(quality)
+    def r(k):
+        return eff.get(k, 0.0) * qm
+    parts = []
+    if r("dmg"):    parts.append(f"+{round(r('dmg'))} dmg")
+    if r("to_hit"): parts.append(f"+{round(r('to_hit'))} hit")
+    if r("dv"):     parts.append(f"+{round(r('dv'))} DV")
+    if r("pv"):     parts.append(f"+{round(r('pv'))} PV")
+    if r("crit"):   parts.append(f"+{round(r('crit') * 100)}% crit")
+    if r("yield"):  parts.append(f"+{round(r('yield') * 100)}% yield")
+    if r("energy"): parts.append(f"-{round(r('energy'))} energy")
+    return "[" + ", ".join(parts) + "]" if parts else ""
 
 
 def render_equipment(con: tcod.console.Console, state: GameState) -> None:
@@ -1506,7 +1537,8 @@ def render_equipment(con: tcod.console.Console, state: GameState) -> None:
     from ..game import combat, skills
     p = state.player
     gear = equippables(state)
-    w, h = 60, min(C.SCREEN_H - 2, 18 + len(gear))   # stats + in-hand + 10 slots + 2 headers + gear + footer
+    nslots = len(PAPERDOLL_SLOTS)
+    w, h = 60, min(C.SCREEN_H - 2, 8 + nslots + len(gear))   # stats + in-hand + worn slots + 2 headers + gear + footer
     x, y = _modal(con, w, h, "PERSONAL EQUIPMENT")
 
     dv, pv, th = combat.player_dv(state), combat.player_pv(state), combat.player_to_hit(state)
@@ -1523,7 +1555,8 @@ def render_equipment(con: tcod.console.Console, state: GameState) -> None:
     con.print(x + 12, row, f": {p.display_name(p.active_tool) if p.active_tool else '-'}"
               f"  ({prof.category} {lo}-{hi}, mastery {ml})"[:w - 14], fg=C.WHITE)
     row += 1
-    # worn paperdoll + ranged/ammo. The leading digit takes the piece off.
+    # Worn paperdoll (armour, jewellery, ranged/ammo). Each slot is lettered; the
+    # letters continue into the carried list below — one namespace for both.
     for i, slot in enumerate(PAPERDOLL_SLOTS):
         it = p.equipment.get(slot)
         if slot == "ammo":
@@ -1533,25 +1566,30 @@ def render_equipment(con: tcod.console.Console, state: GameState) -> None:
             rs = content.ranged_stat(it) if it else None
             val = f"{it.name}  [dmg {rs.dmg[0]}-{rs.dmg[1]}, range {rs.rng}]" if rs else (
                 it.name if it else "- (none yet)")
+        elif slot in ("neck", "ring1", "ring2"):
+            q = p.equip_quality.get(slot, 0)
+            star = (" " + skills.stars(q)) if q else ""
+            val = f"{it.name}{star}  {_jewel_desc(it, q)}" if it else "-"
         else:
             st = content.ARMOR_STATS.get(it)
             val = f"{it.name}  [DV {st[0]:+d}, PV +{st[1]}]" if (it and st) else "-"
             if slot == "shield" and it and content.is_two_handed(p.active_tool):
                 val += "  (unused — two-handed weapon)"
-        key = (i + 1) % 10                            # 1..9 then 0 for the tenth slot
-        con.print(x + 2, row, f"{key} {_SLOT_LABEL[slot]}", fg=_SECTION_FG if it else C.DIM)
+        con.print(x + 2, row, f"{inv_letter(i)} {_SLOT_LABEL[slot]}", fg=_SECTION_FG if it else C.DIM)
         con.print(x + 14, row, ": " + val, fg=C.WHITE if it else C.DIM)
         row += 1
 
     row += 1
-    con.print(x + 2, row, "Carried gear — press a letter to equip:", fg=_HDR)
+    con.print(x + 2, row, "Carried gear — press a letter to equip / take off:", fg=_HDR)
     row += 1
     for i, (it, _q, _ql) in enumerate(gear):
         if row >= y + h - 2:
             break
         st = content.ARMOR_STATS.get(it)
         rs = content.ranged_stat(it)
-        if st:
+        if it.kind == "jewelry":
+            tag = _jewel_desc(it, _ql)
+        elif st:
             tag = f"[DV {st[0]:+d}, PV +{st[1]}]"
         elif rs:
             tag = f"ranged  dmg {rs.dmg[0]}-{rs.dmg[1]}, range {rs.rng}"
@@ -1560,10 +1598,10 @@ def render_equipment(con: tcod.console.Console, state: GameState) -> None:
         else:
             pr = content.profile_of(it)
             tag = f"{pr.category}, dmg {pr.dmg[0]}-{pr.dmg[1]}"
-        con.print(x + 3, row, f"{inv_letter(i)} - {it.glyph} {it.name}", fg=C.WHITE)
+        con.print(x + 3, row, f"{inv_letter(nslots + i)} - {it.glyph} {it.name}", fg=C.WHITE)
         con.print(x + 34, row, tag, fg=_BRACKET_FG)
         row += 1
-    con.print(x + 2, y + h - 2, "[a-z] equip  [1-0] take off  [i] pack  [Esc] close", fg=_FOOT_FG)
+    con.print(x + 2, y + h - 2, "[letter] equip / take off  [i] pack  [Esc] close", fg=_FOOT_FG)
 
 
 def render_craft(con: tcod.console.Console, state: GameState, sel: int) -> None:
@@ -1664,7 +1702,7 @@ def render_relationships(con: tcod.console.Console, state: GameState) -> None:
 def render_character(con: tcod.console.Console, state: GameState) -> None:
     from ..game import skills, karma
     p = state.player
-    w, h = 50, 18
+    w, h = 50, 12 + len(skills.SKILLS)          # skills list from y+10; grow to fit all of them
     x, y = _modal(con, w, h, f"Character — Level {p.level}")
     nxt = skills.xp_to_next(p.level)
     xpbar = "█" * int(10 * p.xp / nxt) + "·" * (10 - int(10 * p.xp / nxt))

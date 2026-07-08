@@ -101,6 +101,11 @@ MATERIALS: dict[str, Material] = {
     "silver":     Material("silver",     6, w_to_hit=1,  w_dmg=2,  a_pv=6.0, value_mult=2.6, bar=items.SILVER_BAR),
     "mithril":    Material("mithril",    7, w_to_hit=2,  w_dmg=3,  w_dv=1,  a_pv=7.0, value_mult=4.5, bar=items.MITHRIL_BAR),
     "adamantium": Material("adamantium", 8, w_to_hit=2,  w_dmg=4,  a_dv=-1, a_pv=7.5, value_mult=6.5, bar=items.ADAMANTIUM_BAR),
+    # Precious metals — soft, so never forged into gear (not in FORGE_METALS), but
+    # prized for jewellery. Tiers overlap the forge ladder harmlessly (only
+    # FORGE_METALS is indexed by tier for gear loot).
+    "gold":       Material("gold",       6, value_mult=3.2, bar=items.GOLD_BAR),
+    "platinum":   Material("platinum",   8, value_mult=5.0, bar=items.PLATINUM_BAR),
     # Bow woods (ranged only): a lighter ladder, better wood = truer & farther.
     "birch":      Material("birch",      1, value_mult=1.0),
     "willow":     Material("willow",     2, w_dmg=1, r_rng=1, value_mult=1.4),
@@ -120,6 +125,11 @@ CLOTHS = ["straw", "cotton", "wool", "linen", "silk"]
 SOFT_ARMOR_MATERIALS = ["hide", "leather"] + CLOTHS
 # Metals you can forge gear from, weakest first (for the anvil & depth scaling).
 FORGE_METALS = ["copper", "bronze", "iron", "steel", "silver", "mithril", "adamantium"]
+# Metals a ring or amulet can be made from, plainest first. The index into this
+# list is the metal's "jewellery power" (drives effect magnitude); precious metals
+# rank highest. Every entry must have a `bar` in MATERIALS.
+JEWELRY_METALS = ["copper", "bronze", "iron", "steel", "silver", "gold",
+                  "mithril", "adamantium", "platinum"]
 
 
 @dataclass(frozen=True)
@@ -153,6 +163,57 @@ SUFFIXES: dict[str, Affix] = {
     "warding":    Affix("of Warding",    dv=1, value_mult=1.8),
     "protection": Affix("of Protection", pv=1, value_mult=2.0, kinds=("armor",)),
 }
+
+
+# --- Gems: cutting, jewellery, embedding -------------------------------------
+# Every gem carries one themed effect. The same effect powers a worn ring/amulet
+# (magnitude from the metal + star quality) and a gem embedded into gear (a fixed
+# socket bonus). Raw and cut gems share a key so either resolves to the effect.
+GEM_KEY: dict[Item, str] = {
+    items.AMETHYST: "amethyst", items.CUT_AMETHYST: "amethyst",
+    items.TOPAZ: "topaz",       items.CUT_TOPAZ: "topaz",
+    items.EMERALD: "emerald",   items.CUT_EMERALD: "emerald",
+    items.RUBY: "ruby",         items.CUT_RUBY: "ruby",
+    items.SAPPHIRE: "sapphire", items.CUT_SAPPHIRE: "sapphire",
+    items.DIAMOND: "diamond",   items.CUT_DIAMOND: "diamond",
+}
+GEM_ORDER = ["amethyst", "topaz", "emerald", "ruby", "sapphire", "diamond"]
+GEM_TITLE = {k: k.capitalize() for k in GEM_ORDER}
+# The worth of a cut stone of each key (drives jewellery price & embed value).
+GEM_WORTH = {k: it.value for it, k in GEM_KEY.items() if it.kind == "gem"}
+
+# Which item domains a gem may be *embedded* into (socketed). Jewellery can carry
+# any gem; embedding is themed to what the item does.
+GEM_DOMAIN: dict[str, set] = {
+    "ruby":     {"weapon"},
+    "sapphire": {"armor"},
+    "topaz":    {"armor"},
+    "emerald":  {"tool"},
+    "amethyst": {"tool"},
+    "diamond":  {"weapon", "armor", "tool"},
+}
+
+# Fixed stat a gem grants when embedded into gear, by the gear's domain.
+GEM_EMBED: dict[str, dict] = {
+    "ruby":     {"weapon": {"dmg": 2}},
+    "sapphire": {"armor":  {"dv": 1}},
+    "topaz":    {"armor":  {"pv": 1}},
+    "diamond":  {"weapon": {"dmg": 2, "to_hit": 1}, "armor": {"dv": 1, "pv": 1},
+                 "tool":   {"yield": 0.08, "energy": 1}},
+    "emerald":  {"tool":   {"yield": 0.08}},
+    "amethyst": {"tool":   {"energy": 1}},
+}
+
+
+def gem_key(item) -> str:
+    """The effect key for a raw or cut gem item ('' if it isn't a gem)."""
+    return GEM_KEY.get(item, "")
+
+
+def gem_embed_delta(gemkey: str, domain: str) -> dict:
+    """Stat bonus a gem gives when set into gear of the given domain (weapon /
+    armor / tool). Empty if the gem doesn't suit that domain."""
+    return GEM_EMBED.get(gemkey, {}).get(domain, {})
 
 # Base types: their stats are the IRON / leather baseline (material adds on top).
 #   weapon -> (category, to_hit, (lo,hi), dv, glyph, base_value, desc)
@@ -204,7 +265,8 @@ _CANON: dict[tuple, Item] = {
     ("Armour", "iron", "", ""):     items.CHAIN_MAIL,
     ("Armour", "steel", "", ""):    items.PLATE_ARMOR,
 }
-_GEAR: dict[tuple, Item] = {}   # (base, material, prefix, suffix) -> Item
+_GEAR: dict[tuple, Item] = {}   # (base, material, prefix, suffix, gems) -> Item
+_GEAR_BASE: dict[Item, str] = {}   # gear item -> its base type (for re-embedding gems)
 
 
 def _affix_value(base_val: float, mat: Material, pfx, sfx) -> int:
@@ -216,7 +278,7 @@ def _affix_value(base_val: float, mat: Material, pfx, sfx) -> int:
     return max(1, round(v))
 
 
-def _compose_name(base: str, material: str, prefix: str, suffix: str) -> str:
+def _compose_name(base: str, material: str, prefix: str, suffix: str, gems: tuple = ()) -> str:
     parts = []
     if prefix:
         parts.append(PREFIXES[prefix].name)
@@ -225,29 +287,43 @@ def _compose_name(base: str, material: str, prefix: str, suffix: str) -> str:
     name = " ".join(parts)
     if suffix:
         name += " " + SUFFIXES[suffix].name
+    for g in gems:                               # socket tags come last: "... ◊Ruby ◊Sapphire"
+        name += " ◊" + GEM_TITLE.get(g, g.capitalize())
     return name
 
 
-def make_gear(base: str, material: str, prefix: str = "", suffix: str = "") -> Item:
-    """Compose (and register + stat) a gear piece from base + material + affixes.
-    Memoized; reuses a canonical item where one exists."""
-    key = (base, material, prefix, suffix)
+def _gem_worth(gems: tuple) -> float:
+    """The value a set of embedded gems adds to a piece (part of the cut stones'
+    worth is realised in the finished gear)."""
+    return sum(GEM_WORTH.get(g, 0) for g in gems) * 0.4
+
+
+def make_gear(base: str, material: str, prefix: str = "", suffix: str = "",
+              gems: tuple = ()) -> Item:
+    """Compose (and register + stat) a gear piece from base + material + affixes +
+    any embedded gems. Memoized; reuses a canonical item where one exists."""
+    key = (base, material, prefix, suffix, gems)
     if key in _GEAR:
         return _GEAR[key]
     mat = MATERIALS[material]
     pfx = PREFIXES.get(prefix)
     sfx = SUFFIXES.get(suffix)
-    name = _compose_name(base, material, prefix, suffix)
-    it = _CANON.get(key)
+    name = _compose_name(base, material, prefix, suffix, gems)
+    it = _CANON.get((base, material, prefix, suffix)) if not gems else None
     if base in WEAPON_BASES:
         cat, th, (lo, hi), dv, glyph, bval, desc = WEAPON_BASES[base]
         db = mat.w_dmg + (pfx.dmg if pfx else 0) + (sfx.dmg if sfx else 0)
         to_hit = th + mat.w_to_hit + (pfx.to_hit if pfx else 0) + (sfx.to_hit if sfx else 0)
         wdv = dv + mat.w_dv + (pfx.dv if pfx else 0) + (sfx.dv if sfx else 0)
-        val = _affix_value(bval, mat, pfx, sfx)
+        for g in gems:                           # embedded gems add their weapon bonus
+            d = gem_embed_delta(g, "weapon")
+            db += d.get("dmg", 0)
+            to_hit += d.get("to_hit", 0)
+        val = _affix_value(bval, mat, pfx, sfx) + round(_gem_worth(gems))
         if it is None:
             it = items.register(items.Item(name, glyph, "weapon", desc, stackable=False,
-                                            value=val, material=material, prefix=prefix, suffix=suffix))
+                                            value=val, material=material, prefix=prefix,
+                                            suffix=suffix, gems=gems))
         else:                                    # canonical piece keeps its identity (save/recipe
             object.__setattr__(it, "value", val) # refs) but takes the formula value — the single
         WEAPON_STATS[it] = CombatProfile(cat, to_hit, (max(1, lo + db), max(1, hi + db)), wdv)
@@ -255,17 +331,32 @@ def make_gear(base: str, material: str, prefix: str = "", suffix: str = "") -> I
         slot, bdv, weight, bval = ARMOR_BASES[base]
         pv = round(weight * mat.a_pv) + (pfx.pv if pfx else 0) + (sfx.pv if sfx else 0)
         dv = bdv + mat.a_dv + (pfx.dv if pfx else 0) + (sfx.dv if sfx else 0)
-        val = _affix_value(bval, mat, pfx, sfx)  # source of truth for price, so no hand-tuned
+        for g in gems:                           # embedded gems add their armour bonus
+            d = gem_embed_delta(g, "armor")
+            dv += d.get("dv", 0)
+            pv += d.get("pv", 0)
+        val = _affix_value(bval, mat, pfx, sfx) + round(_gem_worth(gems))
         if it is None:                           # literal can drift off the curve (or be forge-flipped)
             it = items.register(items.Item(name, "]", "armor", f"Armour worn on the {slot}.",
-                                            stackable=False, value=val,
-                                            material=material, prefix=prefix, suffix=suffix))
+                                            stackable=False, value=val, material=material,
+                                            prefix=prefix, suffix=suffix, gems=gems))
         else:
             object.__setattr__(it, "value", val)
         ARMOR_STATS[it] = (dv, max(0, pv))
         ARMOR_SLOT[it] = slot
     _GEAR[key] = it
+    _GEAR_BASE[it] = base
     return it
+
+
+def embed_gem(item: Item, gemkey: str) -> Item | None:
+    """The gear item you get by setting one more gem into ``item`` (a new memoized
+    variant with the extra socket filled). None if it isn't gem-settable gear."""
+    base = _GEAR_BASE.get(item)
+    if base is None:
+        return None
+    return make_gear(base, item.material, item.prefix, item.suffix,
+                     gems=tuple(item.gems) + (gemkey,))
 
 
 # Seed the canonical pieces so their stats populate the dicts at import.
@@ -283,10 +374,21 @@ _PREFIX_BY_TITLE = {a.name: k for k, a in PREFIXES.items()}
 
 
 def _resolve_gear(name: str) -> Item | None:
-    """Rebuild a gear piece from its composed name (for save/load & aliases)."""
+    """Rebuild a gear piece from its composed name (for save/load & aliases). The
+    `gems` field is the structured truth at runtime; the name encodes it with
+    unambiguous ' ◊<Gem>' socket tags (always last) so it round-trips cleanly."""
     name = _LEGACY_PIECES.get(name, name)
     prefix = material = suffix = ""
     rest = name
+    gemtoks: list[str] = []
+    while " ◊" in rest:                          # peel socket tags off the end first
+        head, _, tail = rest.rpartition(" ◊")
+        key = tail.strip().lower()
+        if key in GEM_EMBED:
+            gemtoks.insert(0, key)
+            rest = head
+        else:
+            break
     for skey, aff in SUFFIXES.items():
         tail = " " + aff.name
         if rest.endswith(tail):
@@ -305,10 +407,79 @@ def _resolve_gear(name: str) -> Item | None:
         return None
     if base in RANGED_BASES:
         return make_ranged(base, material, prefix, suffix)
-    return make_gear(base, material, prefix, suffix)
+    return make_gear(base, material, prefix, suffix, gems=tuple(gemtoks))
 
 
 items.register_resolver(_resolve_gear)
+
+
+# --- Jewellery: a metal band set with one gem, worn in the neck/ring slots ---
+# A ring or amulet carries its gem's effect; the metal scales the magnitude and an
+# amulet is stronger than a ring. Worn magnitude also scales with the piece's star
+# quality (from Jewelcrafting), applied at wear-time (see game/jewelry.py).
+JEWELRY_BASES = {                     # base -> (glyph, base_value, magnitude mult)
+    "Ring":   ("°", 60, 1.0),
+    "Amulet": ("Ω", 110, 1.6),
+}
+# Per-gem jewellery effect at metal power 0, ring. `dmg`/`to_hit`/`dv`/`pv`/`crit`
+# are combat; `yield` (extra double-drop chance) and `energy` (−cost per action)
+# are cozy. Diamond gives a little of everything.
+_GEM_JEWEL: dict[str, dict] = {
+    "ruby":     {"dmg": 1.0, "crit": 0.02},
+    "sapphire": {"dv": 1.0},
+    "topaz":    {"pv": 1.0},
+    "emerald":  {"yield": 0.05},
+    "amethyst": {"energy": 1.0},
+    "diamond":  {"dmg": 0.7, "dv": 0.7, "pv": 0.7, "yield": 0.03, "energy": 0.7},
+}
+JEWEL_EFFECT: dict[Item, dict] = {}   # item -> {stat: base magnitude (pre-quality)}
+_JEWEL: dict[tuple, Item] = {}
+
+
+def _jewel_effect(metal: str, gemkey: str, base_mult: float) -> dict:
+    power = JEWELRY_METALS.index(metal) if metal in JEWELRY_METALS else 0
+    scale = (1.0 + 0.15 * power) * base_mult
+    return {k: v * scale for k, v in _GEM_JEWEL.get(gemkey, {}).items()}
+
+
+def make_jewel(base: str, metal: str, gem, prefix: str = "") -> Item:
+    """Compose (and register + stat) a ring or amulet from a metal + a gem. `gem`
+    may be a gem Item (raw or cut) or its key string. Memoized."""
+    gemkey = gem if isinstance(gem, str) else gem_key(gem)
+    key = (base, metal, gemkey)
+    if key in _JEWEL:
+        return _JEWEL[key]
+    glyph, bval, bmult = JEWELRY_BASES[base]
+    mat = MATERIALS[metal]
+    name = f"{metal.capitalize()} {GEM_TITLE.get(gemkey, gemkey.capitalize())} {base}"
+    val = max(1, round(bval * mat.value_mult + GEM_WORTH.get(gemkey, 0) * 0.8))
+    it = items.register(items.Item(
+        name, glyph, "jewelry", f"A {metal} {base.lower()} set with a {gemkey}.",
+        stackable=False, value=val, material=metal, gems=(gemkey,)))
+    JEWEL_EFFECT[it] = _jewel_effect(metal, gemkey, bmult)
+    _JEWEL[key] = it
+    return it
+
+
+def jewel_slot(item) -> str:
+    """The equip slot a jewellery piece wants: 'neck' for an amulet, else a ring."""
+    return "neck" if item.name.endswith("Amulet") else "ring"
+
+
+def _resolve_jewel(name: str) -> Item | None:
+    toks = name.split()
+    if len(toks) < 3:
+        return None
+    base = toks[-1]
+    gemtok = toks[-2].lower()
+    metal = toks[0].lower()
+    if base in JEWELRY_BASES and gemtok in GEM_EMBED and metal in JEWELRY_METALS:
+        return make_jewel(base, metal, gemtok)
+    return None
+
+
+items.register_resolver(_resolve_jewel)
+
 
 # Curated listings for the codex & shop. Loot/forging make other combinations on
 # demand. Weapons: a clean iron of each base. Armour: leather/iron/steel of each
@@ -366,6 +537,28 @@ def _roll_affix(pool, kind: str, depth: int, rng, base: float) -> str:
         return ""
     choices = [k for k in pool if kind in (PREFIXES | SUFFIXES)[k].kinds]
     return rng.choice(choices) if choices else ""
+
+
+# Smithing: a seasoned smith works a bonus affix into a forged piece. The chance
+# and the best affix both climb with skill; (min-level, key) pairs, best last.
+_SMITH_PREFIX_LADDER = [(2, "fine"), (5, "keen"), (8, "masterwork")]
+_SMITH_SUFFIX_LADDER = [(4, "accuracy"), (7, "slaying")]
+
+
+def roll_craft_affix(level: int, rng, kind: str) -> tuple[str, str]:
+    """The (prefix, suffix) a smith of the given Smithing level might forge into a
+    piece — usually ('', '') at low skill, better and likelier as it climbs.
+    ``kind`` is 'weapon' or 'armor' (affix pools are filtered to what fits)."""
+    prefix = suffix = ""
+    if rng.random() < min(0.55, 0.04 * level):
+        opts = [k for lv, k in _SMITH_PREFIX_LADDER if level >= lv and kind in PREFIXES[k].kinds]
+        if opts:
+            prefix = opts[-1]
+    if rng.random() < min(0.40, 0.03 * level):
+        opts = [k for lv, k in _SMITH_SUFFIX_LADDER if level >= lv and kind in SUFFIXES[k].kinds]
+        if opts:
+            suffix = opts[-1]
+    return prefix, suffix
 
 
 def random_gear(depth: int, rng, kind: str | None = None) -> Item:
@@ -794,6 +987,12 @@ MACHINES: dict[str, MachineDef] = {
                              None, "The carpenter's work, still going up."),
     "anvil":      MachineDef("anvil", "Anvil", "⚒", (196, 170, 150), 30, "bars",
                              None, "Forge metal bars into weapons & armour of that metal."),
+    "kiln":       MachineDef("kiln", "Kiln", "Ө", (208, 120, 60), 90, "fuel",
+                             None, "Chars wood into charcoal, or bakes coal into hot-burning coke."),
+    "gemcut":     MachineDef("gemcut", "Gemcutting Station", "◈", (150, 200, 224), 60, "gem",
+                             None, "Facets rough gems into cut stones; cracks open geodes."),
+    "jeweller":   MachineDef("jeweller", "Jeweller's Bench", "⊛", (224, 200, 120), 60, "jewelcraft",
+                             None, "Sets cut gems into rings & amulets, or embeds them into gear."),
 }
 
 
@@ -850,6 +1049,12 @@ RECIPES: list[Recipe] = [
            desc="Churns milk into cheese."),
     Recipe("Anvil", "build", ((items.IRON_BAR, 3), (items.STONE, 5)), machine="anvil",
            desc="Forge metal bars into weapons & armour of that metal."),
+    Recipe("Kiln", "build", ((items.STONE, 10),), machine="kiln",
+           desc="Chars wood into charcoal, or coal into hot coke — fuel for the furnace."),
+    Recipe("Gemcutting Station", "build", ((items.IRON_BAR, 1), (items.STONE, 6)), machine="gemcut",
+           desc="Facet rough gems into cut stones; crack open geodes."),
+    Recipe("Jeweller's Bench", "build", ((items.TIMBER_PLANK, 6), (items.COPPER_BAR, 2)),
+           machine="jeweller", desc="Set cut gems into rings & amulets, or embed them into gear."),
     Recipe("Bomb", "item", ((items.COAL, 1), (items.FIBER, 2)), output=items.BOMB, out_qty=1,
            desc="Aim & throw with 't' to harm monsters and shatter rock."),
     Recipe("Leather Armor", "item", ((items.BOAR_HIDE, 3), (items.FIBER, 4)),
@@ -1548,7 +1753,7 @@ GENERAL_STOCK: list[tuple[Item, int]] = [
 # find them below), the bows & ammo, and the leather/iron/steel armour range.
 _SMITH_WEAPONS = [make_gear(b, m) for m in ("iron", "steel") for b in WEAPON_BASES]
 BLACKSMITH_STOCK: list[tuple[Item, int]] = [
-    (items.COAL, 25), (items.COPPER_BAR, 120),
+    (items.COAL, 25), (items.CHARCOAL, 20), (items.COKE, 55), (items.COPPER_BAR, 120),
 ] + [(it, it.value) for it in _SMITH_WEAPONS] + [
     (items.SLING, 45), (make_ranged("Short Bow", "birch"), 110),
     (make_ranged("Long Bow", "yew"), 260), (items.ARROW, 4), (items.SLING_STONE, 1),
@@ -1638,18 +1843,52 @@ def _ore_band(depth: int):
         return [(items.COPPER_ORE, 22), (items.TIN_ORE, 22),
                 (items.IRON_ORE, 42), (items.SILVER_ORE, 14)]
     if depth <= 5:
-        return [(items.IRON_ORE, 24), (items.SILVER_ORE, 30), (items.GOLD_ORE, 24),
-                (items.ADAMANTITE_ORE, 16), (items.TIN_ORE, 6)]
-    return [(items.SILVER_ORE, 14), (items.GOLD_ORE, 24), (items.ADAMANTITE_ORE, 30),
-            (items.MITHRIL_ORE, 26), (items.IRON_ORE, 6)]
+        return [(items.IRON_ORE, 22), (items.SILVER_ORE, 28), (items.GOLD_ORE, 22),
+                (items.PLATINUM_ORE, 8), (items.ADAMANTITE_ORE, 14), (items.TIN_ORE, 6)]
+    return [(items.SILVER_ORE, 12), (items.GOLD_ORE, 20), (items.PLATINUM_ORE, 14),
+            (items.ADAMANTITE_ORE, 26), (items.MITHRIL_ORE, 22), (items.IRON_ORE, 6)]
 
 
 def ore_for_depth(depth: int, rng) -> object:
     return _weighted(_ore_band(depth), rng)
 
 
+# Flat table — used for NPC gift generation, where depth is irrelevant.
 GEMS = [(items.AMETHYST, 30), (items.TOPAZ, 26), (items.EMERALD, 20),
         (items.RUBY, 14), (items.SAPPHIRE, 8), (items.DIAMOND, 4)]
+
+
+def _gem_band(depth: int):
+    """Gems by depth, mirroring _ore_band: commons shallow, the prized stones
+    deep. The rough gem you chip out gets richer the further down you mine."""
+    if depth <= 1:
+        return [(items.AMETHYST, 50), (items.TOPAZ, 34), (items.EMERALD, 16)]
+    if depth <= 3:
+        return [(items.AMETHYST, 26), (items.TOPAZ, 30), (items.EMERALD, 26),
+                (items.RUBY, 14), (items.SAPPHIRE, 4)]
+    if depth <= 5:
+        return [(items.TOPAZ, 16), (items.EMERALD, 26), (items.RUBY, 28),
+                (items.SAPPHIRE, 22), (items.DIAMOND, 8)]
+    return [(items.EMERALD, 12), (items.RUBY, 24), (items.SAPPHIRE, 34),
+            (items.DIAMOND, 30)]
+
+
+def gem_for_depth(depth: int, rng) -> object:
+    """A rough gem scaled to depth, with the same 'pinch of salt' as ore: usually
+    a stone from the depth's band, but now and then a surprise from a neighbouring
+    band (a lucky deep-shallow diamond, or a humble amethyst deep down)."""
+    if rng.random() < 0.12:
+        depth = max(1, depth + rng.choice((-2, -1, 1, 2)))
+    return _weighted(_gem_band(depth), rng)
+
+
+# What a rough gem cuts into at a gemcutting station.
+CUT_GEM = {
+    items.AMETHYST: items.CUT_AMETHYST, items.TOPAZ: items.CUT_TOPAZ,
+    items.EMERALD: items.CUT_EMERALD, items.RUBY: items.CUT_RUBY,
+    items.SAPPHIRE: items.CUT_SAPPHIRE, items.DIAMOND: items.CUT_DIAMOND,
+}
+ROUGH_GEMS = list(CUT_GEM.keys())
 
 
 def random_gem(rng) -> object:
@@ -1683,7 +1922,7 @@ def monster_drops(name: str, rng, level: int = 1) -> list:
             if level >= 4 and rng.random() < 0.07 * (level - 3):
                 out.append(item)                       # a hefty specimen yields extra
     if level >= 3 and rng.random() < 0.06 * (level - 2):
-        out.append(random_gem(rng) if rng.random() < 0.3
+        out.append(gem_for_depth(level, rng) if rng.random() < 0.3
                    else ore_for_depth(level, rng))     # a trophy from a tough kill
     return out
 
@@ -1696,7 +1935,7 @@ def chest_loot(depth: int, rng) -> tuple[int, list]:
     items_out.append(ore_for_depth(depth, rng))
     roll = rng.random()
     if roll < 0.35:                       # a gem
-        items_out.append(random_gem(rng))
+        items_out.append(gem_for_depth(depth, rng))
     elif roll < 0.6:                      # a couple of bombs
         items_out.append(items.BOMB)
     if rng.random() < 0.4:                # a cave snack
@@ -1706,16 +1945,40 @@ def chest_loot(depth: int, rng) -> tuple[int, list]:
     return gold, items_out
 
 
-# Furnace recipes: (bar produced, {ore/fuel: qty}). Alloys need two ores.
+# --- fuels & smelting heat ---------------------------------------------------
+# Every fuel has a heat rating. A metal needs a minimum heat to smelt at all, and
+# hotter fuel smelts faster (excess heat above the minimum shortens the burn).
+FUELS = {
+    items.WOOD:     1,   # scraps by; only the softest metals
+    items.CHARCOAL: 2,   # kiln-charred wood; a reliable mid fuel
+    items.COAL:     3,   # mined; hot enough for the precious & hard metals
+    items.COKE:     4,   # kiln-baked coal; the hottest — smelts anything, fast
+}
+# Ordered hottest-first, so the loader can offer the best fuel a player carries.
+FUELS_BY_HEAT = sorted(FUELS, key=lambda f: -FUELS[f])
+
+
+def smelt_time(min_heat: int, fuel_heat: int) -> int:
+    """Minutes to smelt: harder metals take longer, hotter fuel is faster.
+    (Only called when fuel_heat >= min_heat, so speed >= 1.)"""
+    base = 40 + 25 * min_heat
+    speed = fuel_heat / min_heat
+    return max(20, round(base / speed))
+
+
+# Furnace recipes: (bar produced, {ore: qty}, min_heat, fuel_qty). Alloys need
+# two ores; steel carburises iron, so it burns an extra unit of fuel. Fuel is no
+# longer a recipe ingredient — the loader picks a carried fuel of sufficient heat.
 FURNACE_RECIPES = [
-    (items.BRONZE_BAR,     {items.COPPER_ORE: 1, items.TIN_ORE: 1, items.COAL: 1}),
-    (items.STEEL_BAR,      {items.IRON_ORE: 1, items.COAL: 2}),
-    (items.COPPER_BAR,     {items.COPPER_ORE: 1, items.COAL: 1}),
-    (items.IRON_BAR,       {items.IRON_ORE: 1, items.COAL: 1}),
-    (items.SILVER_BAR,     {items.SILVER_ORE: 1, items.COAL: 1}),
-    (items.GOLD_BAR,       {items.GOLD_ORE: 1, items.COAL: 1}),
-    (items.ADAMANTIUM_BAR, {items.ADAMANTITE_ORE: 1, items.COAL: 1}),
-    (items.MITHRIL_BAR,    {items.MITHRIL_ORE: 1, items.COAL: 1}),
+    (items.BRONZE_BAR,     {items.COPPER_ORE: 1, items.TIN_ORE: 1}, 1, 1),
+    (items.COPPER_BAR,     {items.COPPER_ORE: 1},                   1, 1),
+    (items.IRON_BAR,       {items.IRON_ORE: 1},                     2, 1),
+    (items.STEEL_BAR,      {items.IRON_ORE: 1},                     2, 2),
+    (items.SILVER_BAR,     {items.SILVER_ORE: 1},                   2, 1),
+    (items.GOLD_BAR,       {items.GOLD_ORE: 1},                     2, 1),
+    (items.PLATINUM_BAR,   {items.PLATINUM_ORE: 1},                 3, 1),
+    (items.ADAMANTIUM_BAR, {items.ADAMANTITE_ORE: 1},               3, 1),
+    (items.MITHRIL_BAR,    {items.MITHRIL_ORE: 1},                  4, 1),
 ]
 
 
@@ -1752,6 +2015,12 @@ QUESTS: list[Quest] = [
           lambda s: s.stats.get("deepest_depth", 0) >= 2),
     Quest("hunter", "Monster Hunter", "Defeat 5 monsters.", 200,
           lambda s: s.stats.get("monsters_slain", 0) >= 5),
+    Quest("smith", "The Forge", "Smelt a bar or forge a piece at the anvil.", 150,
+          lambda s: s.player.skills.get("Smithing", 0) > 0),
+    Quest("lapidary", "Lapidary", "Cut a gem at a gemcutting station.", 150,
+          lambda s: s.player.skills.get("Gemcutting", 0) > 0),
+    Quest("jeweller", "A Fine Setting", "Craft a ring or amulet, or embed a gem.", 200,
+          lambda s: s.player.skills.get("Jewelcrafting", 0) > 0),
     Quest("prosper", "Prosperity", "Earn 2000g from the shipping bin.", 500,
           lambda s: s.stats.get("gold_earned", 0) >= 2000),
 ]

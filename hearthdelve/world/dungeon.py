@@ -88,7 +88,9 @@ def generate(seed: int, kind: str, depth: int) -> GameMap:
         if rng.random() < 0.10:
             tiles[x, y] = tile.ROCK
 
-    ore_veins = (5 if kind == "mine" else 2)
+    # Deeper floors run richer, but loosely — a little random drift, not a fixed
+    # count per depth.
+    ore_veins = (5 if kind == "mine" else 2) + rng.randint(0, 1 + depth // 2)
     max_len = (5 if kind == "mine" else 3)
     for _ in range(ore_veins):
         cands = [p for p in walls if tiles[p] == tile.DUNGEON_WALL]

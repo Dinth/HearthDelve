@@ -80,34 +80,38 @@ def _worn(state: GameState):
 
 
 def player_dv(state: GameState) -> int:
-    from . import skills
+    from . import skills, jewelry
     prof = held_profile(state)
     wdv, _ = _worn(state)
     lvl = skills.mastery_level(state, prof.category)
     # Combat lends only half its level to Dodge (it also feeds to-hit & crit);
     # letting it add its full level here made a trained player near-unhittable.
     return (BASE_DV + skills.skill_level(state, "Combat") // 2   # Dodge
-            + prof.dv + wdv + skills.mastery_parry(lvl))
+            + prof.dv + wdv + skills.mastery_parry(lvl)
+            + round(jewelry.combat_bonus(state)["dv"]))
 
 
 def player_pv(state: GameState) -> int:
-    return _worn(state)[1]
+    from . import jewelry
+    return _worn(state)[1] + round(jewelry.combat_bonus(state)["pv"])
 
 
 def player_to_hit(state: GameState) -> int:
-    from . import skills
+    from . import skills, jewelry
     prof = held_profile(state)
     lvl = skills.mastery_level(state, prof.category)
     bonus = prof.to_hit + skills.skill_level(state, "Combat") // 2 + skills.mastery_to_hit(lvl)
+    bonus += round(jewelry.combat_bonus(state)["to_hit"])
     if skills.active_buff(state) == "hearty":
         bonus += 2
     return bonus
 
 
 def player_crit(state: GameState) -> float:
-    from . import skills
+    from . import skills, jewelry
     lvl = skills.mastery_level(state, held_profile(state).category)
-    return 0.03 + skills.skill_level(state, "Combat") * 0.01 + skills.mastery_crit(lvl)
+    return (0.03 + skills.skill_level(state, "Combat") * 0.01 + skills.mastery_crit(lvl)
+            + jewelry.combat_bonus(state)["crit"])
 
 
 def _resolve(to_hit: int, dmg_range, dmg_bonus: int, crit_chance: float,
@@ -131,11 +135,12 @@ def _resolve(to_hit: int, dmg_range, dmg_bonus: int, crit_chance: float,
 
 # --- player attacks ----------------------------------------------------------
 def player_attack(state: GameState, m) -> None:
-    from . import skills
+    from . import skills, jewelry
     p = state.player
     prof = held_profile(state)
     p.energy = max(0, p.energy - C.ATTACK_COST[0])
     dmg_bonus = skills.mastery_dmg(skills.mastery_level(state, prof.category))
+    dmg_bonus += round(jewelry.combat_bonus(state)["dmg"])
     res = _resolve(player_to_hit(state), prof.dmg, dmg_bonus, player_crit(state), m.dv, m.pv, min_dmg=1)
     wild = getattr(m, "kind", "monster") == "wildlife"
 

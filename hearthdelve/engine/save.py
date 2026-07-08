@@ -26,7 +26,7 @@ from ..game.state import GameState, MessageLog
 
 # Bump whenever the on-disk format changes so an older/newer binary refuses a
 # save it can't read instead of crashing partway through a load.
-SAVE_VERSION = 7
+SAVE_VERSION = 8
 SAVE_PATH = os.path.join(os.path.expanduser("~"), ".hearthdelve_save.json")
 
 # Housing the carpenter/player raises (not produced by worldgen), so it must be
@@ -80,10 +80,12 @@ def save(state: GameState, path: str = SAVE_PATH) -> None:
             "hotbar": [it.name for it in p.hotbar],
             "weapon": p.weapon.name if p.weapon else None,
             "equipment": {slot: (it.name if it else None) for slot, it in p.equipment.items()},
+            "equip_quality": dict(p.equip_quality),
             "mastery": dict(p.mastery),
             "inventory": [[it.name, q, ql] for it, q, ql in p.inventory.slots],
             "tool_tier": {it.name: t for it, t in p.tool_tier.items()},
             "tool_affix": {it.name: a for it, a in p.tool_affix.items()},
+            "tool_gem": {it.name: list(g) for it, g in p.tool_gem.items()},
             "active_seed": p.active_seed.name if p.active_seed else None,
             "skills": dict(p.skills),
         },
@@ -240,11 +242,14 @@ def load(path: str = SAVE_PATH) -> GameState:
     for slot, nm in pd.get("equipment", {}).items():
         if slot in player.equipment:
             player.equipment[slot] = items.by_name(nm) if nm else None
+    player.equip_quality = {s: q for s, q in pd.get("equip_quality", {}).items()
+                            if s in player.equipment}
     player.mastery = dict(pd.get("mastery", {}))
     player.inventory = Inventory(slots=[[items.by_name(rec[0]), rec[1], rec[2] if len(rec) > 2 else 0]
                                         for rec in pd["inventory"] if items.by_name(rec[0])])
     player.tool_tier = {items.by_name(n): t for n, t in pd["tool_tier"].items() if items.by_name(n)}
     player.tool_affix = {items.by_name(n): a for n, a in pd.get("tool_affix", {}).items() if items.by_name(n)}
+    player.tool_gem = {items.by_name(n): tuple(g) for n, g in pd.get("tool_gem", {}).items() if items.by_name(n)}
     player.active_seed = items.by_name(pd.get("active_seed") or "") or items.PARSNIP_SEEDS
     player.skills = dict(pd.get("skills", {}))
 

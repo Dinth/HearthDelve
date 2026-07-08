@@ -9,7 +9,8 @@ import random
 
 from .state import GameState
 
-SKILLS = ("Farming", "Foraging", "Mining", "Fishing", "Combat", "Cooking")
+SKILLS = ("Farming", "Foraging", "Mining", "Fishing", "Combat", "Cooking",
+          "Smithing", "Jewelcrafting", "Gemcutting")
 XP_PER_LEVEL = 120
 MAX_LEVEL = 10
 
@@ -136,17 +137,33 @@ def fishing_catch_bonus(state: GameState) -> float:
     return skill_level(state, "Fishing") * 0.02         # up to +20% catch
 
 def extra_yield_chance(state: GameState, skill: str) -> float:
+    from . import jewelry
     chance = skill_level(state, skill) * 0.05           # up to +50% double drops
     b = active_buff(state)
     if (b == "tiller" and skill == "Farming") or (b == "forager" and skill == "Foraging"):
         chance += 0.30
+    chance += jewelry.cozy_bonus(state, "yield")        # an emerald ring/amulet enriches the harvest
     return chance
 
 
 # --- quality (0-5 stars) -----------------------------------------------------
 STAR = "★"
-_QUALITY_KINDS = ("crop", "fish", "artisan", "food", "animal")
+_QUALITY_KINDS = ("crop", "fish", "artisan", "food", "animal", "gem", "jewelry")
 _QUALITY_NAMES = ("Honey",)               # tiered items that aren't one of the kinds
+
+
+# --- crafting-skill bonuses --------------------------------------------------
+def socket_capacity(state: GameState) -> int:
+    """How many gems a piece of gear can hold — one, plus a socket earned at
+    Gemcutting 5 and again at 10."""
+    lvl = skill_level(state, "Gemcutting")
+    return 1 + (1 if lvl >= 5 else 0) + (1 if lvl >= 10 else 0)
+
+
+def smith_speed_mult(state: GameState) -> float:
+    """Forge/smelt time multiplier — a seasoned smith works a touch faster (down
+    to ~0.7× at Smithing 10)."""
+    return 1.0 - 0.03 * skill_level(state, "Smithing")
 
 
 def has_quality(item) -> bool:

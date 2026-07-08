@@ -184,15 +184,30 @@ def interact_machine(state: GameState, x: int, y: int) -> bool:
         state.log.add("The sprinkler waters the soil around it each morning.", C.DIM)
         return True
 
+    if m.kind == "jeweller":
+        # The bench works instantly (like a workbench): always offer its choices.
+        opts = machine_load_options(state, mdef)
+        if not opts:
+            state.log.add(_needs_hint(mdef), C.DIM)
+            return True
+        return {"load": (x, y), "options": opts, "name": mdef.name, "jeweller": True}
+
     if status == "done":
         from . import skills
-        q = m.out_quality if skills.has_quality(m.loaded_output) else 0
-        state.player.inventory.add(m.loaded_output, 1, quality=q)
+        out = m.loaded_output
+        q = m.out_quality if skills.has_quality(out) else 0
+        state.player.inventory.add(out, 1, quality=q)
         star = (" " + skills.stars(q)) if q else ""
-        if m.loaded_output.kind == "artisan":
+        if out.kind in ("weapon", "armor"):
+            skills.gain(state, "Smithing", 12)       # forging hones the smith
+        elif out.kind == "gem":
+            skills.gain(state, "Gemcutting", 14)     # cutting hones the cutter
+        elif m.kind in ("furnace", "kiln"):
+            skills.gain(state, "Smithing", 8)        # smelting & fuel-making, too
+        elif out.kind == "artisan":
             state.bump("artisan_made")
             skills.gain(state, "Cooking", 8)         # processing hones the craft
-        state.log.add(f"You collect {m.loaded_output.name}{star} from the {mdef.name.lower()}.", (180, 230, 160))
+        state.log.add(f"You collect {out.name}{star} from the {mdef.name.lower()}.", (180, 230, 160))
         m.loaded_output = None
         m.ready_at = 0
         m.out_quality = 0
@@ -212,7 +227,10 @@ def interact_machine(state: GameState, x: int, y: int) -> bool:
 
 def _needs_hint(mdef) -> str:
     return {
-        "ore":   "The furnace needs ore and coal.",
+        "ore":   "The furnace needs ore and a fuel hot enough to smelt it.",
+        "fuel":  "The kiln chars wood into charcoal, or bakes coal into coke.",
+        "gem":   "The gemcutting station needs a rough gem or a geode.",
+        "jewelcraft": "The jeweller's bench needs a metal bar + a cut gem, or gear + a cut gem to embed.",
         "wood":  "The sawmill needs at least 2 wood.",
         "oil":   "The press needs at least 2 sunflowers.",
         "dairy": "The churn needs milk.",
@@ -238,9 +256,33 @@ def machine_load_options(state: GameState, mdef) -> list:
     a = mdef.accepts
     opts = []
     if a == "ore":
-        for bar, inputs in content.FURNACE_RECIPES:
-            if all(inv.count(it) >= q for it, q in inputs.items()):
-                opts.append({"inputs": list(inputs.items()), "output": bar, "quality_from": None})
+        # Smelt each metal whose ore(s) you hold, once per carried fuel hot enough
+        # for it — hotter fuel smelts faster (see content.smelt_time).
+        for bar, ores, min_heat, fuel_qty in content.FURNACE_RECIPES:
+            if not all(inv.count(it) >= q for it, q in ores.items()):
+                continue
+            for fuel in content.FUELS_BY_HEAT:
+                heat = content.FUELS[fuel]
+                if heat < min_heat or inv.count(fuel) < fuel_qty:
+                    continue
+                mins = content.smelt_time(min_heat, heat)
+                opts.append({"inputs": list(ores.items()) + [(fuel, fuel_qty)], "output": bar,
+                             "quality_from": None, "minutes": mins,
+                             "label": f"{bar.name}  (via {fuel.name}, {_fmt_remaining(mins)})"})
+    elif a == "fuel":
+        if inv.count(items.WOOD) >= 2:
+            opts.append({"inputs": [(items.WOOD, 2)], "output": items.CHARCOAL, "quality_from": None})
+        if inv.count(items.COAL) >= 1:
+            opts.append({"inputs": [(items.COAL, 1)], "output": items.COKE, "quality_from": None})
+    elif a == "gem":
+        for rough in content.ROUGH_GEMS:
+            if inv.count(rough) >= 1:
+                opts.append({"inputs": [(rough, 1)], "output": content.CUT_GEM[rough], "quality_from": None})
+        if inv.count(items.GEODE) >= 1:
+            opts.append({"inputs": [(items.GEODE, 1)], "output": items.GEODE, "quality_from": None,
+                         "geode": True, "label": "Crack a Geode → a cut gem"})
+    elif a == "jewelcraft":
+        return _jeweller_options(state)
     elif a == "wood":
         if inv.count(items.WOOD) >= 2:
             opts.append({"inputs": [(items.WOOD, 2)], "output": mdef.output, "quality_from": None})
@@ -284,6 +326,7 @@ def machine_load_options(state: GameState, mdef) -> list:
 
 def load_machine_choice(state: GameState, m: Machine, mdef, opt) -> None:
     """Load a machine with the option the player picked (see the load menu)."""
+    import random
     from . import skills
     inv = state.player.inventory
     in_quality = 0.0
@@ -296,10 +339,118 @@ def load_machine_choice(state: GameState, m: Machine, mdef, opt) -> None:
             continue                                  # already taken above
         inv.remove(it, q)
     output = opt["output"]
+    if opt.get("geode"):                              # a cracked geode reveals (and cuts) a gem
+        output = content.CUT_GEM[content.random_gem(random)]
+    elif mdef.kind == "anvil":                        # a skilled smith may forge in a bonus affix
+        lvl = skills.skill_level(state, "Smithing")
+        kind = "weapon" if output.kind == "weapon" else "armor"
+        pfx, sfx = content.roll_craft_affix(lvl, random, kind)
+        if pfx or sfx:
+            output = content.make_gear(content._GEAR_BASE[output], output.material, pfx, sfx,
+                                       gems=output.gems)
     m.loaded_output = output
-    m.ready_at = state.abs_minutes + mdef.minutes
-    m.out_quality = skills.process_quality(in_quality, state, "Cooking") if skills.has_quality(output) else 0
-    state.log.add(f"You load the {mdef.name.lower()} ({output.name}). Ready in {_fmt_remaining(mdef.minutes)}.")
+    minutes = round(opt.get("minutes", mdef.minutes) * (skills.smith_speed_mult(state)
+                    if mdef.kind in ("furnace", "anvil", "kiln") else 1.0))
+    m.ready_at = state.abs_minutes + max(1, minutes)
+    # Cut gems take their quality from the cutter's Gemcutting; other processed
+    # goods inherit the input's quality nudged by the cook's skill.
+    if skills.has_quality(output):
+        m.out_quality = (skills.roll_quality(state, "Gemcutting") if output.kind == "gem"
+                         else skills.process_quality(in_quality, state, "Cooking"))
+    else:
+        m.out_quality = 0
+    state.log.add(f"You load the {mdef.name.lower()} ({output.name}). Ready in {_fmt_remaining(minutes)}.")
+
+
+def _carried_cut_gems(inv) -> list:
+    """Distinct cut gems the player carries (the inputs for jewellery/embedding)."""
+    out, seen = [], set()
+    for it, _q, _ql in inv.slots:
+        if it.kind == "gem" and it not in seen:
+            seen.add(it)
+            out.append(it)
+    return out
+
+
+def _jeweller_options(state: GameState) -> list:
+    """Everything the Jeweller's Bench can do right now: forge a ring/amulet, or
+    set a cut gem into a carried weapon/armour piece or one of your tools. Each
+    resolves immediately (see jeweller_choice)."""
+    from . import skills
+    inv = state.player.inventory
+    cap = skills.socket_capacity(state)
+    cuts = _carried_cut_gems(inv)
+    opts = []
+    # 1) forge jewellery from a metal bar + a cut gem
+    for metal in content.JEWELRY_METALS:
+        bar = content.MATERIALS[metal].bar
+        if bar is None or inv.count(bar) < 1:
+            continue
+        for cut in cuts:
+            gemkey = content.gem_key(cut)
+            for base in ("Ring", "Amulet"):
+                out = content.make_jewel(base, metal, gemkey)
+                opts.append({"kind": "jewel", "inputs": [(bar, 1), (cut, 1)],
+                             "output": out, "quality_from": cut})
+    # 2) embed a gem into a carried weapon/armour piece (a free socket, right gem)
+    for it, _q, _ql in inv.slots:
+        domain = "weapon" if it.kind == "weapon" else ("armor" if it.kind == "armor" else "")
+        if not domain or len(getattr(it, "gems", ())) >= cap:
+            continue
+        for cut in cuts:
+            gemkey = content.gem_key(cut)
+            if domain in content.GEM_DOMAIN.get(gemkey, ()):
+                out = content.embed_gem(it, gemkey)
+                if out is not None:
+                    opts.append({"kind": "embed_gear", "inputs": [(it, 1), (cut, 1)], "output": out,
+                                 "label": f"Set {content.GEM_TITLE[gemkey]} in {it.name}"})
+    # 3) embed a gem into one of your tools (stored per-tool, not a new item)
+    p = state.player
+    for tool in p.tool_tier:
+        if len(p.tool_gem.get(tool, ())) >= cap:
+            continue
+        for cut in cuts:
+            gemkey = content.gem_key(cut)
+            if "tool" in content.GEM_DOMAIN.get(gemkey, ()):
+                opts.append({"kind": "embed_tool", "inputs": [(cut, 1)], "output": tool,
+                             "tool": tool, "gemkey": gemkey,
+                             "label": f"Set {content.GEM_TITLE[gemkey]} in {p.display_name(tool)}"})
+    return opts
+
+
+def jeweller_choice(state: GameState, opt) -> None:
+    """Resolve a Jeweller's Bench choice immediately (like bench crafting)."""
+    from . import skills, turns
+    inv = state.player.inventory
+    if not all(inv.count(it) >= q for it, q in opt["inputs"]):
+        return
+    kind = opt["kind"]
+    if kind == "jewel":
+        qfrom = opt["quality_from"]
+        inq = inv.pop_quality(qfrom, 1)               # the cut gem's quality carries through
+        for it, q in opt["inputs"]:
+            if it is not qfrom:
+                inv.remove(it, q)
+        outq = skills.process_quality(inq, state, "Jewelcrafting")
+        inv.add(opt["output"], 1, quality=outq)
+        skills.gain(state, "Jewelcrafting", 16)
+        star = (" " + skills.stars(outq)) if outq else ""
+        state.log.add(f"You craft {opt['output'].name}{star}.", (230, 210, 140))
+    elif kind == "embed_gear":
+        for it, q in opt["inputs"]:
+            inv.remove(it, q)
+        inv.add(opt["output"], 1)
+        skills.gain(state, "Jewelcrafting", 12)
+        state.log.add(f"You set the gem — {opt['output'].name}.", (230, 210, 140))
+    elif kind == "embed_tool":
+        inv.remove(opt["inputs"][0][0], 1)
+        tool = opt["tool"]
+        state.player.tool_gem[tool] = tuple(state.player.tool_gem.get(tool, ())) + (opt["gemkey"],)
+        skills.gain(state, "Jewelcrafting", 12)
+        state.log.add(f"You set the {opt['gemkey']} into your {state.player.display_name(tool)}.",
+                      (230, 210, 140))
+    state.player.energy = max(0, state.player.energy - C.CRAFT_COST[0])
+    turns.advance_time(state, C.CRAFT_COST[1])
 
 
 def _flowers_near(state: GameState, x: int, y: int, r: int = 10) -> int:

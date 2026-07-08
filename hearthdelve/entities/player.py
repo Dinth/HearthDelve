@@ -16,7 +16,8 @@ def _starter_hotbar() -> list[Item]:
 
 
 # ADOM-style worn/ranged slots (melee weapon is whatever you hold, above).
-EQUIP_SLOTS = ("head", "body", "cloak", "hands", "waist", "legs", "feet", "shield", "ranged", "ammo")
+EQUIP_SLOTS = ("head", "body", "cloak", "hands", "waist", "legs", "feet", "shield",
+               "neck", "ring1", "ring2", "ranged", "ammo")
 
 
 def _starter_equipment() -> dict:
@@ -56,11 +57,13 @@ class Player:
     hotbar: list[Item] = field(default_factory=_starter_hotbar)
     active_slot: int = 0
     weapon: Item | None = field(default_factory=lambda: items.SWORD)   # the held melee weapon in the hotbar
-    equipment: dict = field(default_factory=_starter_equipment)        # worn armour + ranged/ammo slots
+    equipment: dict = field(default_factory=_starter_equipment)        # worn armour + jewellery + ranged/ammo slots
+    equip_quality: dict = field(default_factory=dict)                  # slot -> star quality of the worn piece (jewellery)
     mastery: dict = field(default_factory=dict)                        # weapon category -> mastery xp
     inventory: Inventory = field(default_factory=_starter_inventory)
     tool_tier: dict = field(default_factory=_starter_tiers)
     tool_affix: dict = field(default_factory=dict)   # tool -> themed affix name ("of Plentiful Harvest")
+    tool_gem: dict = field(default_factory=dict)     # tool -> tuple of embedded gem keys ("emerald", ...)
     active_seed: Item = field(default_factory=lambda: items.PARSNIP_SEEDS)
     skills: dict = field(default_factory=dict)   # skill name -> xp
     level: int = 1                               # general character level

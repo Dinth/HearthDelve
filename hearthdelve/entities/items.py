@@ -30,6 +30,10 @@ class Item:
     material: str = ""
     prefix: str = ""
     suffix: str = ""
+    # Embedded gems (socketed into weapons/armour, or the stone set in a ring).
+    # A tuple of gem *material names* (e.g. ("ruby",)); part of the item's
+    # identity so a gem-set piece is a distinct memoized type with its own stats.
+    gems: tuple = ()
 
 
 # --- Tools (hotbar) ----------------------------------------------------------
@@ -138,7 +142,9 @@ CUT_GRASS   = Item("Cut Grass",   "\"","material", "Freshly scythed grass — dr
 STRAW       = Item("Straw",       "~", "material", "Dried grass; winter feed for your animals.", value=5)
 STONE       = Item("Stone",       "o", "material", "Broken from rock.",         value=4)
 FENCE       = Item("Fence",       "│", "material", "A timber fence panel; set it down (build menu) to bound and claim wild land.", value=6)
-COAL        = Item("Coal",        "♦", "material", "Fuel for the furnace.",     value=12)
+COAL        = Item("Coal",        "♦", "material", "A hot furnace fuel.",       value=12)
+CHARCOAL    = Item("Charcoal",    "♦", "material", "Wood charred in a kiln; a modest, self-sufficient fuel.", value=10)
+COKE        = Item("Coke",        "♦", "material", "Coal baked in a kiln; the hottest fuel — smelts the deepest metals fast.", value=28)
 # Dungeon reagents: foraged fungus and creature drops (cook/sell/gift).
 CAVE_MUSHROOM = Item("Cave Mushroom", "τ", "material", "An earthy cave fungus — good in a stew.", value=30)
 SLIME_GEL     = Item("Slime Gel",     "*", "material", "Sticky residue from a cave slime.",       value=15)
@@ -159,6 +165,7 @@ TIN_ORE        = Item("Tin Ore",        "*", "material", "Alloys with copper.", 
 IRON_ORE       = Item("Iron Ore",       "*", "material", "Sturdy mid-depth ore.", value=25)
 SILVER_ORE     = Item("Silver Ore",     "*", "material", "A precious metal ore.", value=40)
 GOLD_ORE       = Item("Gold Ore",       "*", "material", "A rich vein of gold.",  value=60)
+PLATINUM_ORE   = Item("Platinum Ore",   "*", "material", "A lustrous precious-metal ore.", value=120)
 ADAMANTITE_ORE = Item("Adamantite Ore", "*", "material", "Deep, hard ore.",       value=90)
 MITHRIL_ORE    = Item("Mithril Ore",    "*", "material", "The rarest deep ore.",  value=150)
 # bars (smelted; alloys need two ores)
@@ -168,6 +175,7 @@ IRON_BAR       = Item("Iron Bar",       "‡", "material", "Smelted iron.",     
 STEEL_BAR      = Item("Steel Bar",      "‡", "material", "Iron forged with coal.", value=180)
 SILVER_BAR     = Item("Silver Bar",     "‡", "material", "Smelted silver.",       value=220)
 GOLD_BAR       = Item("Gold Bar",       "‡", "material", "Smelted gold; valuable.", value=320)
+PLATINUM_BAR   = Item("Platinum Bar",   "‡", "material", "Smelted platinum; a prized precious metal.", value=520)
 ADAMANTIUM_BAR = Item("Adamantium Bar", "‡", "material", "A near-unbreakable bar.", value=400)
 MITHRIL_BAR    = Item("Mithril Bar",    "‡", "material", "The finest bar of all.", value=600)
 # gems (mined from gem veins)
@@ -177,6 +185,17 @@ EMERALD     = Item("Emerald",     "◊", "material", "A green gemstone.",  value
 RUBY        = Item("Ruby",        "◊", "material", "A red gemstone.",    value=170)
 SAPPHIRE    = Item("Sapphire",    "◊", "material", "A blue gemstone.",   value=210)
 DIAMOND     = Item("Diamond",     "◊", "material", "The most prized gem.", value=320)
+# Cut gems (shaped at a gemcutting station; carry 0-5 star quality). The polished
+# stones set into jewellery or embedded into gear — worth far more than the rough.
+CUT_AMETHYST = Item("Cut Amethyst", "♦", "gem", "A faceted violet gem, ready to set.", value=200)
+CUT_TOPAZ    = Item("Cut Topaz",    "♦", "gem", "A faceted golden gem, ready to set.", value=240)
+CUT_EMERALD  = Item("Cut Emerald",  "♦", "gem", "A faceted green gem, ready to set.",  value=300)
+CUT_RUBY     = Item("Cut Ruby",     "♦", "gem", "A faceted red gem, ready to set.",    value=370)
+CUT_SAPPHIRE = Item("Cut Sapphire", "♦", "gem", "A faceted blue gem, ready to set.",   value=450)
+CUT_DIAMOND  = Item("Cut Diamond",  "♦", "gem", "A brilliant-cut diamond, ready to set.", value=700)
+# A rough nodule pulled from the rock — crack it open at a gemcutting station for a
+# gem within.
+GEODE       = Item("Geode",       "◓", "material", "An unopened nodule; crack it at a gemcutting station for the gem inside.", value=45)
 
 # --- Artisan goods (made in machines — the value ladder) --------------------
 # Generic artisan goods double as the "family" anchors for gifts & tastes; the
