@@ -29,6 +29,11 @@ from ..game.state import GameState, MessageLog
 SAVE_VERSION = 8
 SAVE_PATH = os.path.join(os.path.expanduser("~"), ".hearthdelve_save.json")
 
+
+class IncompatibleSaveError(Exception):
+    """The save file's format version doesn't match this build — distinct from a
+    truly corrupt/unreadable file so the caller can explain it clearly."""
+
 # Housing the carpenter/player raises (not produced by worldgen), so it must be
 # persisted and re-registered on load — otherwise look-mode forgets the barn.
 _PLAYER_BUILT_KINDS = ("coop_small", "coop_big", "barn", "greenhouse", "windmill", "pen")
@@ -137,8 +142,10 @@ def save(state: GameState, path: str = SAVE_PATH) -> None:
 def load(path: str = SAVE_PATH) -> GameState:
     with open(path) as f:
         data = json.load(f)
-    if data.get("version") != SAVE_VERSION:
-        raise ValueError("incompatible save version")
+    ver = data.get("version")
+    if ver != SAVE_VERSION:
+        raise IncompatibleSaveError(
+            f"save is format version {ver}, but this build reads version {SAVE_VERSION}")
 
     world = worldgen.generate(data["seed"])           # rebuild base world
 
@@ -236,8 +243,10 @@ def load(path: str = SAVE_PATH) -> GameState:
     player.karma = pd.get("karma", 0)
     player.buff = pd.get("buff", "")
     player.buff_until = pd.get("buff_until", 0)
-    player.active_slot = pd["active_slot"]
-    player.hotbar = [items.by_name(n) for n in pd["hotbar"] if items.by_name(n)]
+    player.hotbar = [it for it in (items.by_name(n) for n in pd["hotbar"]) if it]
+    # Dropping unresolvable hotbar entries can shrink the bar, so clamp the saved
+    # cursor rather than trusting an index that may now point past the end.
+    player.active_slot = min(max(0, pd.get("active_slot", 0)), max(0, len(player.hotbar) - 1))
     player.weapon = items.by_name(pd["weapon"]) if pd["weapon"] else None
     for slot, nm in pd.get("equipment", {}).items():
         if slot in player.equipment:

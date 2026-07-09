@@ -1012,9 +1012,20 @@ def load_or_new() -> GameState:
             state.log.add("Welcome back to Hollowmere Vale.", (236, 226, 180))
             state.log.add(f"{state.date_str()}, {state.weather.lower()}. (auto-saves each morning)", C.DIM)
             return state
-        except Exception as e:  # noqa: BLE001 - corrupt/old save -> fresh start
+        except save.IncompatibleSaveError:
+            # A version mismatch shouldn't look like a mysterious fresh farm: keep
+            # the old save aside and tell the player, in-game, why they're starting over.
+            bak = save.backup()
+            state = new_game()
+            state.log.add("Your saved game is from a different version of Hearthdelve and "
+                          "can't be opened by this build.", (240, 180, 120))
+            state.log.add((f"The old save is kept safe at {bak}." if bak
+                           else "The old save was left untouched.")
+                          + " A fresh vale begins.", C.DIM)
+            return state
+        except Exception as e:  # noqa: BLE001 - corrupt save -> fresh start
             # Never let the morning autosave silently clobber a save we couldn't
-            # read (e.g. a version mismatch): set the old one aside first.
+            # read: set the old one aside first.
             bak = save.backup()
             where = f" (kept a copy at {bak})" if bak else ""
             print(f"Could not load save ({e}); starting a new game{where}.")
@@ -1472,22 +1483,32 @@ def main() -> None:
 
                 elif mode == "loadmachine":
                     opts = load_ctx["options"] if load_ctx else []
-                    if cmd in ("cancel", "grab", "quit") or not opts:
+                    rows, is_group = crafting.load_rows(load_ctx) if opts else ([], False)
+                    if cmd in ("grab", "quit") or not opts:
                         mode, load_ctx = "play", None
-                    elif cmd == "move" and action[2]:
-                        load_ctx["sel"] = (load_ctx["sel"] + action[2]) % len(opts)
-                    elif cmd == "confirm":
-                        opt = opts[min(load_ctx["sel"], len(opts) - 1)]
-                        if load_ctx.get("craft"):        # a bench chooser (metal-tipped arrows)
-                            crafting.craft_choice(state, opt)
-                        elif load_ctx.get("jeweller"):   # jeweller's bench (instant: make/embed)
-                            crafting.jeweller_choice(state, opt)
+                    elif cmd == "cancel":
+                        # In a group: step back to the group menu; at the top: close.
+                        if load_ctx.get("group") is not None:
+                            load_ctx["group"], load_ctx["sel"] = None, 0
                         else:
-                            m = state.world.machines.get(load_ctx["pos"])
-                            if m is not None:
-                                crafting.load_machine_choice(state, m, crafting.MACHINES[m.kind], opt)
-                        mode, load_ctx = "play", None
-                        quests.check(state)
+                            mode, load_ctx = "play", None
+                    elif cmd == "move" and action[2] and rows:
+                        load_ctx["sel"] = (load_ctx["sel"] + action[2]) % len(rows)
+                    elif cmd == "confirm" and rows:
+                        pick = rows[min(load_ctx["sel"], len(rows) - 1)]
+                        if is_group:                     # descend into the chosen group
+                            load_ctx["group"], load_ctx["sel"] = pick, 0
+                        else:
+                            if load_ctx.get("craft"):    # a bench chooser (metal-tipped arrows)
+                                crafting.craft_choice(state, pick)
+                            elif load_ctx.get("jeweller"):   # jeweller's bench (instant: make/embed)
+                                crafting.jeweller_choice(state, pick)
+                            else:
+                                m = state.world.machines.get(load_ctx["pos"])
+                                if m is not None:
+                                    crafting.load_machine_choice(state, m, crafting.MACHINES[m.kind], pick)
+                            mode, load_ctx = "play", None
+                            quests.check(state)
 
                 elif mode == "help":
                     if cmd in ("help", "cancel", "quit"):
@@ -1586,6 +1607,9 @@ def main() -> None:
                         mode = "play"
                     elif cmd == "move" and action[2] and sellable:
                         ship_sel = (ship_sel + action[2]) % len(sellable)
+                    elif cmd == "use" and sellable:       # Space: empty the whole pack in
+                        crafting.ship_all(state)
+                        ship_sel = 0
                     elif cmd == "confirm" and sellable:
                         ship_sel = min(ship_sel, len(sellable) - 1)
                         entry = sellable[ship_sel]

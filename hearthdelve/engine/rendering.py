@@ -1072,36 +1072,63 @@ def render_eat(con: tcod.console.Console, state: GameState, sel: int) -> None:
 
 
 def render_load_machine(con: tcod.console.Console, state: GameState, ctx) -> None:
-    """Choose-what-to-make menu for an empty machine (jam vs pickles, which bar…)."""
+    """Choose-what-to-make menu for an empty machine (jam vs pickles, which bar…).
+
+    A chooser whose options carry a ``group`` is shown two-step: first the group
+    names, then that group's options — so a hundred metal×base forge rows collapse
+    to a short list you pick your way into, rather than one endless scroll."""
     if not ctx:
         return
-    opts, sel, name = ctx["options"], ctx["sel"], ctx["name"]
-    w, h = 66, min(C.SCREEN_H - 4, max(8, len(opts) + 6))
+    from ..game import crafting
+    rows, is_group = crafting.load_rows(ctx)
+    sel, name = ctx["sel"], ctx["name"]
+    w, h = 66, min(C.SCREEN_H - 4, max(8, len(rows) + 6))
     body = h - 4
-    x, y = _modal(con, w, h, f"Load {name}  (choose what to make)")
-    sel = max(0, min(sel, len(opts) - 1)) if opts else 0
-    start, end = _window(sel, len(opts), body)
+    group = ctx.get("group")
+    title = (f"Load {name} — {group}" if group else f"Load {name}  (choose what to make)")
+    x, y = _modal(con, w, h, title)
+    sel = max(0, min(sel, len(rows) - 1)) if rows else 0
+    start, end = _window(sel, len(rows), body)
     from_col = x + 30            # inputs column — clear of the (wider) label column
     price_col = x + w - 9
-    for row, opt in enumerate(opts[start:end]):
-        i = start + row
-        bg = (54, 50, 36) if i == sel else (20, 22, 32)
-        if i == sel:
-            con.draw_rect(x + 1, y + 2 + row, w - 2, 1, ch=ord(" "), bg=bg)
-        out = opt["output"]
-        ins = ", ".join(f"{q} {it.name}" for it, q in opt["inputs"])
-        oq = opt.get("out_qty", 1)
-        label = opt.get("label") or (f"{oq}x {out.name}" if oq > 1 else out.name)
-        con.print(x + 2, y + 2 + row, ("▸ " if i == sel else "  ") + label[:from_col - x - 3],
-                  fg=C.WHITE, bg=bg)
-        con.print(from_col, y + 2 + row, f"from {ins}"[:price_col - from_col - 1],
-                  fg=(160, 180, 205), bg=bg)
-        con.print(price_col, y + 2 + row, f"{out.value}g", fg=C.GOLD_COLOR, bg=bg)
+
+    if is_group:
+        counts = {}
+        for o in ctx["options"]:
+            counts[o["group"]] = counts.get(o["group"], 0) + 1
+        for row, gname in enumerate(rows[start:end]):
+            i = start + row
+            bg = (54, 50, 36) if i == sel else (20, 22, 32)
+            if i == sel:
+                con.draw_rect(x + 1, y + 2 + row, w - 2, 1, ch=ord(" "), bg=bg)
+            con.print(x + 2, y + 2 + row, ("▸ " if i == sel else "  ") + gname[:from_col - x - 3],
+                      fg=C.WHITE, bg=bg)
+            n = counts[gname]
+            con.print(from_col, y + 2 + row, f"{n} option{'s' if n != 1 else ''} →",
+                      fg=(160, 180, 205), bg=bg)
+        footer = "↑↓ select   Enter open   Esc cancel"
+    else:
+        for row, opt in enumerate(rows[start:end]):
+            i = start + row
+            bg = (54, 50, 36) if i == sel else (20, 22, 32)
+            if i == sel:
+                con.draw_rect(x + 1, y + 2 + row, w - 2, 1, ch=ord(" "), bg=bg)
+            out = opt["output"]
+            ins = ", ".join(f"{q} {it.name}" for it, q in opt["inputs"])
+            oq = opt.get("out_qty", 1)
+            label = opt.get("label") or (f"{oq}x {out.name}" if oq > 1 else out.name)
+            con.print(x + 2, y + 2 + row, ("▸ " if i == sel else "  ") + label[:from_col - x - 3],
+                      fg=C.WHITE, bg=bg)
+            con.print(from_col, y + 2 + row, f"from {ins}"[:price_col - from_col - 1],
+                      fg=(160, 180, 205), bg=bg)
+            con.print(price_col, y + 2 + row, f"{out.value}g", fg=C.GOLD_COLOR, bg=bg)
+        footer = ("↑↓ select   Enter load   Esc back" if group
+                  else "↑↓ select   Enter load   Esc cancel")
     if start > 0:
         con.print(x + w - 4, y + 2, "▲", fg=_HDR)
-    if end < len(opts):
+    if end < len(rows):
         con.print(x + w - 4, y + h - 3, "▼", fg=_HDR)
-    con.print(x + 2, y + h - 2, "↑↓ select   Enter load   Esc cancel", fg=C.DIM)
+    con.print(x + 2, y + h - 2, footer, fg=C.DIM)
 
 
 def render_cheats(con: tcod.console.Console, state: GameState, sel: int, locations) -> None:
@@ -1412,8 +1439,19 @@ def build_codex_pages(state: GameState):
     return pages
 
 
+_codex_cache: list | None = None
+_codex_sig: tuple | None = None
+
+
 def render_codex(con: tcod.console.Console, state: GameState, page: int, scroll: int) -> None:
-    pages = build_codex_pages(state)
+    # The pages are almost entirely static content; only the Villagers page moves
+    # (friendship hearts). Rebuild solely when that signature changes, rather than
+    # re-walking every crop/tool/recipe/machine on every frame the help is open.
+    global _codex_cache, _codex_sig
+    sig = tuple((n.name, n.friendship) for n in state.world.npcs)
+    if _codex_cache is None or sig != _codex_sig:
+        _codex_cache, _codex_sig = build_codex_pages(state), sig
+    pages = _codex_cache
     page %= len(pages)
     title, rows = pages[page]
 
@@ -1701,7 +1739,7 @@ def render_ship(con: tcod.console.Console, state: GameState, sel: int) -> None:
         con.print(x + w - 12, y + 2 + i, f"{crafting.slot_value(it, ql)}g ea", fg=C.GOLD_COLOR, bg=bg)
 
     con.print(x + 2, y + h - 3, f"In bin (sells tonight): {pending}g", fg=C.GOLD_COLOR)
-    con.print(x + 2, y + h - 2, "↑↓ select   Enter ship stack   Esc close", fg=C.DIM)
+    con.print(x + 2, y + h - 2, "↑↓ select · Enter stack · Space all · Esc close", fg=C.DIM)
 
 
 def render_journal(con: tcod.console.Console, state: GameState) -> None:

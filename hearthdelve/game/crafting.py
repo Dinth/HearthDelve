@@ -259,6 +259,32 @@ def _preserve_of(it):
     return content.VEG_PICKLE.get(it, items.PICKLES)
 
 
+def load_groups(opts: list) -> list:
+    """Distinct group names among options, in first-seen order. Empty when the
+    chooser is a plain flat list (no option carries a ``group``)."""
+    seen, out = set(), []
+    for o in opts:
+        g = o.get("group")
+        if g and g not in seen:
+            seen.add(g)
+            out.append(g)
+    return out
+
+
+def load_rows(ctx: dict):
+    """The rows the load-machine chooser is currently showing, as
+    ``(rows, is_group_level)``. A grouped chooser shows its group names first
+    (``is_group_level`` True); once a group is chosen it shows that group's
+    options. An ungrouped chooser is always its flat option list."""
+    opts = ctx["options"]
+    groups = load_groups(opts)
+    if groups and ctx.get("group") is None:
+        return groups, True
+    if groups:
+        return [o for o in opts if o.get("group") == ctx["group"]], False
+    return opts, False
+
+
 def machine_load_options(state: GameState, mdef) -> list:
     """Everything the player could load into an empty machine right now — one
     entry per distinct input. Each is {inputs, output, quality_from}."""
@@ -277,8 +303,8 @@ def machine_load_options(state: GameState, mdef) -> list:
                     continue
                 mins = content.smelt_time(min_heat, heat)
                 opts.append({"inputs": list(ores.items()) + [(fuel, fuel_qty)], "output": bar,
-                             "quality_from": None, "minutes": mins,
-                             "label": f"{bar.name}  (via {fuel.name}, {_fmt_remaining(mins)})"})
+                             "quality_from": None, "minutes": mins, "group": bar.name,
+                             "label": f"via {fuel.name}  ({_fmt_remaining(mins)})"})
     elif a == "fuel":
         if inv.count(items.WOOD) >= 2:
             opts.append({"inputs": [(items.WOOD, 2)], "output": items.CHARCOAL, "quality_from": None})
@@ -347,8 +373,10 @@ def machine_load_options(state: GameState, mdef) -> list:
             for base in forgeable:
                 cost = content.forge_cost(base)
                 if bar is not None and inv.count(bar) >= cost:
+                    # Grouped by what you're forging: pick the piece, then the metal.
                     opts.append({"inputs": [(bar, cost)], "output": content.make_gear(base, metal),
-                                 "quality_from": None})
+                                 "quality_from": None, "group": base,
+                                 "label": f"{metal.capitalize()}  ({cost} {bar.name})"})
     elif a == "crop":
         seen = set()
         for it, _q, _ql in inv.slots:
@@ -429,8 +457,12 @@ def _jeweller_options(state: GameState) -> list:
             gemkey = content.gem_key(cut)
             for base in ("Ring", "Amulet"):
                 out = content.make_jewel(base, metal, gemkey)
+                # Grouped by gem (which decides the jewel's effect): pick the gem,
+                # then the metal + band that scales it.
                 opts.append({"kind": "jewel", "inputs": [(bar, 1), (cut, 1)],
-                             "output": out, "quality_from": cut})
+                             "output": out, "quality_from": cut,
+                             "group": f"{content.GEM_TITLE[gemkey]} jewellery",
+                             "label": f"{metal.capitalize()} {base}"})
     # 2) embed a gem into a carried weapon/armour piece (a free socket, right gem)
     for it, _q, _ql in inv.slots:
         domain = "weapon" if it.kind == "weapon" else ("armor" if it.kind == "armor" else "")
@@ -442,6 +474,7 @@ def _jeweller_options(state: GameState) -> list:
                 out = content.embed_gem(it, gemkey)
                 if out is not None:
                     opts.append({"kind": "embed_gear", "inputs": [(it, 1), (cut, 1)], "output": out,
+                                 "group": "Set a gem in gear",
                                  "label": f"Set {content.GEM_TITLE[gemkey]} in {it.name}"})
     # 3) embed a gem into one of your tools (stored per-tool, not a new item)
     p = state.player
@@ -452,7 +485,7 @@ def _jeweller_options(state: GameState) -> list:
             gemkey = content.gem_key(cut)
             if "tool" in content.GEM_DOMAIN.get(gemkey, ()):
                 opts.append({"kind": "embed_tool", "inputs": [(cut, 1)], "output": tool,
-                             "tool": tool, "gemkey": gemkey,
+                             "tool": tool, "gemkey": gemkey, "group": "Set a gem in a tool",
                              "label": f"Set {content.GEM_TITLE[gemkey]} in your {tool.name}"})
     return opts
 
@@ -581,6 +614,21 @@ def ship_item(state: GameState, item, quality: int = 0) -> None:
     from . import skills
     star = (" " + skills.stars(quality)) if quality else ""
     state.log.add(f"You drop {qty} {item.name}{star} in the bin.", C.DIM)
+
+
+def ship_all(state: GameState) -> int:
+    """Drop every sellable stack into the bin at once. Returns the number of
+    distinct stacks moved (0 if there was nothing to ship)."""
+    stacks = sellable_items(state)
+    if not stacks:
+        return 0
+    units = 0
+    for it, q, ql in stacks:
+        state.player.inventory.remove(it, q, quality=ql)
+        state.ship_bin.add(it, q, quality=ql)
+        units += q
+    state.log.add(f"You empty {units} goods across {len(stacks)} stacks into the bin.", C.DIM)
+    return len(stacks)
 
 
 def sell_shipment(state: GameState) -> None:
