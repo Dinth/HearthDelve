@@ -47,6 +47,8 @@ class Species:
     grown_name: str            # "hen" / "cow"
     buy_item: object           # the livestock Item you settle in
     names: tuple
+    produce_chance: float = 1.0   # daily chance a fed adult leaves produce
+                                  # (a pig doesn't root up a truffle every day)
 
 
 SPECIES = {
@@ -54,18 +56,33 @@ SPECIES = {
                        items.EGG, 3, 5, 2, "chick", "hen", items.CHICK,
                        ("Hazel", "Pip", "Clucky", "Nugget", "Marigold", "Feathers",
                         "Dot", "Poppy", "Henrietta", "Sunny")),
+    "duck":    Species("duck", "b", (200, 216, 224), (188, 204, 214),
+                       items.DUCK_EGG, 4, 5, 2, "duckling", "duck", items.DUCKLING,
+                       ("Puddle", "Waddles", "Bill", "Drizzle", "Reed", "Splash",
+                        "Mallory", "Quill", "Dabble", "Pond")),
     "cow":     Species("cow", "q", (216, 190, 152), (202, 180, 152),
                        items.MILK, 5, 7, 1, "calf", "cow", items.CALF,
                        ("Buttercup", "Clover", "Daisy", "Bess", "Maisie", "Bramble",
                         "Willow", "Rosie", "Primrose", "Moo")),
+    "goat":    Species("goat", "g", (206, 198, 178), (196, 190, 174),
+                       items.GOAT_MILK, 4, 7, 2, "kid", "goat", items.GOAT_KID,
+                       ("Bramble", "Nettle", "Capers", "Juniper", "Gruff", "Heather",
+                        "Thistle", "Nibbles", "Sage", "Whin")),
     "sheep":   Species("sheep", "y", (232, 230, 216), (216, 214, 200),
                        items.WOOL, 5, 6, 1, "lamb", "sheep", items.LAMB,
                        ("Woolly", "Snowy", "Cloud", "Nimbus", "Fluff", "Barley",
                         "Comet", "Pebble", "Tuft", "Dolly")),
+    "pig":     Species("pig", "P", (222, 176, 168), (230, 194, 186),
+                       items.TRUFFLE, 6, 6, 1, "piglet", "pig", items.PIGLET,
+                       ("Rooter", "Bacon", "Duchess", "Snout", "Mudge", "Portia",
+                        "Rumble", "Sausage", "Petal", "Boris"),
+                       produce_chance=0.55),
 }
 
-_HOUSE_SPECIES = {"coop_small": "chicken", "coop_big": "chicken",
-                  "barn": "cow", "pen": "sheep"}
+# Which species each building shelters. A barn is the big-beast house; the
+# little coops take fowl; goats will bed down in a barn or a pen alike.
+_HOUSE_SPECIES = {"coop_small": ("chicken", "duck"), "coop_big": ("chicken", "duck"),
+                  "barn": ("cow", "goat", "pig"), "pen": ("sheep", "goat")}
 
 
 # --- helpers ----------------------------------------------------------------
@@ -132,22 +149,23 @@ def interact_building(state: GameState, m: Machine, x: int, y: int) -> bool:
         return True
 
     mdef = MACHINES[m.kind]
-    species_key = _HOUSE_SPECIES[m.kind]
-    spec = SPECIES[species_key]
+    allowed = _HOUSE_SPECIES[m.kind]
     flock = _flock(state, (x, y))
     p = state.player
 
-    has_young = p.inventory.count(spec.buy_item) > 0
+    # whichever housable young the player carries settles in first
+    spec = next((SPECIES[k] for k in allowed
+                 if p.inventory.count(SPECIES[k].buy_item) > 0), None)
     straw = p.inventory.count(items.STRAW)
 
-    if has_young and len(flock) < mdef.capacity:
+    if spec is not None and len(flock) < mdef.capacity:
         spot = _free_tile_near(state, x, y)
         if spot is None:
             state.log.add("There's no room beside it for the little one.", C_DIM)
             return True
         p.inventory.remove(spec.buy_item, 1)
         nm = _name_for(state, spec)
-        state.world.animals.append(Animal(kind=species_key, name=nm, glyph=spec.glyph,
+        state.world.animals.append(Animal(kind=spec.kind, name=nm, glyph=spec.glyph,
                                           color=spec.color, x=spot[0], y=spot[1], home=(x, y)))
         state.bump("animals_raised")
         state.log.add(f"You settle {nm} the {spec.young_name} into the {mdef.name.lower()}.",
@@ -163,14 +181,15 @@ def interact_building(state: GameState, m: Machine, x: int, y: int) -> bool:
                       f"({m.feed} in store).", (200, 220, 160))
         return True
 
-    if has_young:                      # carrying a young one, but the coop was full
+    if spec is not None:               # carrying a young one, but the building was full
         state.log.add(f"The {mdef.name.lower()} is full ({mdef.capacity}).", C_DIM)
         return True
 
     # nothing in hand — report the flock and the trough
     grown = sum(1 for a in flock if _is_adult(a))
+    young_names = " or ".join(SPECIES[k].young_name for k in allowed)
     state.log.add(f"{mdef.name}: {len(flock)}/{mdef.capacity} ({grown} grown), "
-                  f"{m.feed} straw in the trough. Bring a {spec.young_name} to add one.",
+                  f"{m.feed} straw in the trough. Bring a {young_names} to add one.",
                   (200, 200, 210))
     return True
 
@@ -193,7 +212,9 @@ def interact_animal(state: GameState, a: Animal) -> None:
         state.bump("produce_collected")
         star = (" " + skills.stars(q)) if q else ""
         verb = {"chicken": "an egg", "cow": "a pail of milk",
-                "sheep": "a fleece of wool"}.get(a.kind, "some produce")
+                "sheep": "a fleece of wool", "duck": "a rich duck egg",
+                "goat": "a pail of goat's milk",
+                "pig": "a truffle (rooted up with pride)"}.get(a.kind, "some produce")
         state.log.add(f"You collect {verb}{star} from {a.name}.", (232, 220, 150))
         return
 
@@ -263,16 +284,58 @@ def new_day(state: GameState) -> None:
             a.happiness = max(10, a.happiness - HUNGER_DRIFT)
             hungry += 1
         if _is_adult(a):
-            # A fed adult leaves produce; a hungry one gives nothing — but don't
-            # wipe an egg/milk you simply hadn't collected yet.
-            a.produce_ready = a.produce_ready or fed
+            # A fed adult leaves produce (some, like truffle-pigs, only on a
+            # good day); a hungry one gives nothing — but don't wipe an
+            # egg/milk you simply hadn't collected yet.
+            spec = SPECIES[a.kind]
+            lucky = fed and random.random() < spec.produce_chance
+            a.produce_ready = a.produce_ready or lucky
             if not was_adult:              # just grew up — announce it even on a hungry morning
-                spec = SPECIES[a.kind]
                 state.log.add(f"{a.name} the {spec.young_name} has grown into a {spec.grown_name}.",
                               (200, 220, 160))
     if hungry:
         state.log.add(f"{hungry} of your animals went hungry — fork straw into the trough (g)!",
                       (228, 150, 110))
+    _spring_births(state)
+
+
+def _spring_births(state: GameState) -> None:
+    """New life on the farm: where two grown, well-kept animals of a kind share
+    a roof with room to spare, a newborn may arrive — no schedule, just a small
+    chance each morning. Bought young stock is only ever the bootstrap; a
+    tended farm sustains its own lines."""
+    surf = state.surface
+    for home, m in list(surf.machines.items()):
+        allowed = _HOUSE_SPECIES.get(m.kind)
+        if not allowed:
+            continue
+        cap = MACHINES[m.kind].capacity
+        flock = _flock(state, home)
+        if len(flock) >= cap:
+            continue
+        for kind in allowed:
+            adults = [a for a in flock if a.kind == kind and _is_adult(a)]
+            if len(adults) < 2:
+                continue
+            avg_happy = sum(a.happiness for a in adults) / len(adults)
+            if avg_happy < 70 or random.random() > 0.08:
+                continue
+            spot = _free_tile_near(state, home[0], home[1])
+            if spot is None:
+                continue
+            spec = SPECIES[kind]
+            nm = _name_for(state, spec)
+            surf.animals.append(Animal(kind=kind, name=nm, glyph=spec.glyph,
+                                       color=spec.color, x=spot[0], y=spot[1],
+                                       home=home, happiness=70))
+            state.bump("animals_raised")
+            state.bump("animals_born")
+            state.log.add(f"A newborn {spec.young_name} arrives in the "
+                          f"{MACHINES[m.kind].name.lower()} — welcome, {nm}!",
+                          (232, 200, 120))
+            from . import quests
+            quests.check(state)
+            break                              # one birth per building per morning
 
 
 def _finish_construction(state: GameState) -> None:

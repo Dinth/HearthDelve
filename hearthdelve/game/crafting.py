@@ -358,6 +358,9 @@ def machine_load_options(state: GameState, mdef) -> list:
                          "quality_from": items.MILK, "minutes": 600})   # cultures faster than cheese ages
             opts.append({"inputs": [(items.MILK, 1)], "output": items.BUTTER,
                          "quality_from": items.MILK, "minutes": 400})   # churns quickest of the three
+        if inv.count(items.GOAT_MILK) >= 1:
+            opts.append({"inputs": [(items.GOAT_MILK, 1)], "output": items.GOAT_CHEESE,
+                         "quality_from": items.GOAT_MILK})
     elif a == "smoke":
         for src, out in content.SMOKE_RECIPES:
             if inv.count(src) >= 1:
@@ -431,6 +434,9 @@ def machine_load_options(state: GameState, mdef) -> list:
         if inv.count(items.CHEESE) >= 1:
             opts.append({"inputs": [(items.CHEESE, 1)], "output": items.AGED_CHEESE,
                          "quality_from": items.CHEESE})
+        if inv.count(items.GOAT_CHEESE) >= 1:
+            opts.append({"inputs": [(items.GOAT_CHEESE, 1)], "output": items.AGED_GOAT_CHEESE,
+                         "quality_from": items.GOAT_CHEESE})
     return opts
 
 

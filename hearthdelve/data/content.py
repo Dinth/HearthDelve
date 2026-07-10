@@ -1300,6 +1300,8 @@ RECIPES: list[Recipe] = [
            output=items.BAKED_PIKE, desc="A whole pike baked in butter."),
     Recipe("Cave Chowder", "cook", ((items.BLINDFISH, 1), (items.CAVE_MUSHROOM, 1), (items.MILK, 1)),
            output=items.CAVE_CHOWDER, desc="A pale chowder from the dark below."),
+    Recipe("Truffle Pasta", "cook", ((items.NOODLES, 1), (items.TRUFFLE, 1), (items.BUTTER, 1)),
+           output=items.TRUFFLE_PASTA, desc="Buttered noodles under shaved black truffle."),
 ]
 
 
@@ -1526,7 +1528,8 @@ def village_npcs() -> dict[str, list[NPC]]:
                                   "One night I just stopped. Best thing I ever did."),
                               (6, "A traveller hears everything, eventually — and forgets\n"
                                   "most of it on purpose. Your secrets are safe here.")),
-                loves=(items.WINE, items.GRAPE_WINE, items.JELLIED_EEL, items.MEAT_PIE),
+                loves=(items.WINE, items.GRAPE_WINE, items.JELLIED_EEL, items.MEAT_PIE,
+                       items.TRUFFLE, items.TRUFFLE_PASTA),
                 likes=(items.JAM, items.PICKLES), dislikes=(items.STONE,),
                 gifts=(items.WINE, items.MEAD, items.JAM, items.PICKLES),
                 bio="Keeps the Mossford inn; a settled wanderer, full of stories."),
@@ -1820,7 +1823,8 @@ def village_npcs() -> dict[str, list[NPC]]:
                                   "Between us, I think we could physic the whole Vale.")),
                 loves=(items.CAVE_MUSHROOM, items.CHANTERELLE, items.HONEY,
                        items.MUSHROOM_STEW, items.BAT_WING),
-                likes=(items.BOLETE, items.PARASOL_MUSHROOM, items.FIBER, items.SLIME_GEL),
+                likes=(items.BOLETE, items.PARASOL_MUSHROOM, items.FIBER, items.SLIME_GEL,
+                       items.TRUFFLE),
                 dislikes=(items.COAL, items.STONE),
                 gifts=(items.ASTER_SEEDS, items.STRAWBERRY_SEEDS, items.CAVE_MUSHROOM),
                 bio="Fenwick's herbalist; reads the marsh like a book of remedies."),
@@ -1979,6 +1983,7 @@ GENERAL_STOCK: list[tuple[Item, int]] = [
     (items.TULIP_SEEDS, 40), (items.SUNFLOWER_SEEDS, 50), (items.ASTER_SEEDS, 50),
     (items.SNOW_TURNIP_SEEDS, 40), (items.WINTERBERRY_SEEDS, 90),
     (items.CHICK, 120), (items.CALF, 400), (items.LAMB, 260),
+    (items.DUCKLING, 160), (items.GOAT_KID, 320), (items.PIGLET, 800),
     # a little soft-goods rack: hats, cloaks & robes (cloth, no forging needed)
     (make_gear("Hat", "straw"), 20), (make_gear("Hat", "wool"), 45),
     (make_gear("Cloak", "wool"), 70), (make_gear("Cloak", "linen"), 110),
@@ -2332,6 +2337,8 @@ QUESTS: list[Quest] = [
           lambda s: s.player.skills.get("Jewelcrafting", 0) > 0),
     Quest("favour", "A Neighbourly Hand", "Fill 3 favours from a village notice board.", 200,
           lambda s: s.stats.get("requests_filled", 0) >= 3),
+    Quest("new_life", "New Life", "A newborn animal arrives on your farm.", 200,
+          lambda s: s.stats.get("animals_born", 0) >= 1),
     Quest("cookbook", "Well Fed, Well Read", "Learn 20 cooking recipes.", 250,
           lambda s: len(getattr(s, "known_recipes", ())) >= 20),
     Quest("prosper", "Prosperity", "Earn 2000g from the shipping bin.", 500,

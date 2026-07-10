@@ -80,7 +80,7 @@ def _request_pool(state: GameState, role: str) -> list:
                  it.CAVE_MUSHROOM, it.GLOWCAP]
     parts = [it.SLIME_GEL, it.BAT_WING, it.LURKER_SCALE, it.WRAITH_ESSENCE]
     pools = {
-        "innkeeper":  _known_dishes(state) + drinks + _fish_pool(state),
+        "innkeeper":  _known_dishes(state) + drinks + _fish_pool(state) + [it.TRUFFLE],
         # Nothing Bron himself sells (fuels, bars): a favour must never be
         # fillable at a profit straight off his own shelf.
         "blacksmith": [it.COPPER_ORE, it.IRON_ORE, it.TIN_ORE],
@@ -88,7 +88,7 @@ def _request_pool(state: GameState, role: str) -> list:
         "forester":   [it.WOOD, it.TIMBER_PLANK] + mushrooms,
         "forager":    mushrooms + parts + [it.HONEY, it.ASTER] + crops,
         "priest":     [it.ASTER, it.TULIP, it.HONEY] + preserves + parts,
-        "farmer":     crops + [it.EGG, it.MILK],
+        "farmer":     crops + [it.EGG, it.MILK, it.DUCK_EGG, it.GOAT_MILK],
         "fisher":     _fish_pool(state),
         "child":      [d for d in _known_dishes(state)
                        if d.name in ("Cookies", "Candied Fruit", "Frozen Yogurt",
