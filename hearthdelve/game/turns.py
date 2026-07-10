@@ -35,7 +35,24 @@ def _step_actors(state: GameState) -> None:
 
 
 def advance_time(state: GameState, seconds: int) -> None:
+    before = state.abs_minutes
     state.clock += seconds
+    _announce_finished_machines(state, before, state.abs_minutes)
     steps = max(1, min(round(seconds / C.MOVE_SECONDS), _MAX_STEPS))
     for _ in range(steps):
         _step_actors(state)
+
+
+def _announce_finished_machines(state: GameState, before: int, now: int) -> None:
+    """A one-line heads-up the moment a machine's timer crosses done — so the
+    player isn't left polling every furnace and keg by hand."""
+    surf = state.surface
+    if surf is None or now <= before:
+        return
+    from ..data.content import MACHINES
+    for m in surf.machines.values():
+        if m.loaded_output is not None and before < m.ready_at <= now:
+            mdef = MACHINES.get(m.kind)
+            if mdef is not None:
+                state.log.add(f"The {mdef.name.lower()} has finished — "
+                              f"{m.loaded_output.name} is ready.", (200, 220, 160))

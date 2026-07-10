@@ -101,6 +101,9 @@ def save(state: GameState, path: str = SAVE_PATH) -> None:
         "tax_owed": state.tax_owed,
         "last_tax_day": state.last_tax_day,
         "quests_done": list(state.quests_done),
+        "known_recipes": sorted(state.known_recipes),
+        "requests": [dict(r) for r in state.requests],
+        "demand": dict(state.demand),
         "mail": [{"sender": m["sender"], "body": m["body"],
                   "items": [[(it.name if hasattr(it, "name") else it), q, ql]
                             for it, q, ql in m.get("items", [])],
@@ -150,7 +153,14 @@ def load(path: str = SAVE_PATH) -> GameState:
     world = worldgen.generate(data["seed"])           # rebuild base world
 
     w, h = data["tiles_shape"]
+    # Villages gained notice boards after some saves were written; remember where
+    # the regenerated world put them so an older grid can be stamped below.
+    from ..world import tile as _tile
+    _boards = np.argwhere(world.tiles == _tile.NOTICE_BOARD)
     world.tiles = np.frombuffer(base64.b64decode(data["tiles"]), dtype=np.uint8).reshape(w, h).copy()
+    for bx, by in _boards:
+        if world.tiles[bx, by] == _tile.COBBLE:   # untouched square corner -> board
+            world.tiles[bx, by] = _tile.NOTICE_BOARD
 
     world.crops = {}
     for key, (cname, days, watered, dead) in data["crops"].items():
@@ -271,6 +281,12 @@ def load(path: str = SAVE_PATH) -> GameState:
                                       for rec in data["ship_bin"] if items.by_name(rec[0])])
     state.stats = dict(data.get("stats", {}))
     state.quests_done = set(data.get("quests_done", []))
+    kr = data.get("known_recipes")
+    # A save from before recipe discovery knew every recipe — keep it that way.
+    state.known_recipes = (set(kr) if kr is not None else
+                           {r.name for r in content.RECIPES if r.kind == "cook"})
+    state.requests = [dict(r) for r in data.get("requests", [])]
+    state.demand = dict(data.get("demand") or {})
     state.mail = data.get("mail", [])
     state.pending_build = data.get("pending_build", "")
     state.claims = {tuple(map(int, k.split(","))) for k in data.get("claims", [])}

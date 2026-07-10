@@ -138,7 +138,8 @@ def player_attack(state: GameState, m) -> None:
     from . import skills, jewelry
     p = state.player
     prof = held_profile(state)
-    p.energy = max(0, p.energy - C.ATTACK_COST[0])
+    # deep-floor fatigue: fighting in the airless dark costs more the further down
+    p.energy = max(0, p.energy - C.ATTACK_COST[0] - state.world.depth // 3)
     dmg_bonus = skills.mastery_dmg(skills.mastery_level(state, prof.category))
     dmg_bonus += round(jewelry.combat_bonus(state)["dmg"])
     res = _resolve(player_to_hit(state), prof.dmg, dmg_bonus, player_crit(state), m.dv, m.pv, min_dmg=1)
@@ -457,7 +458,7 @@ def fire_ranged_at(state: GameState, tx: int, ty: int) -> bool:
     ammo = chosen_ammo(state, stat)
     astat = content.ammo_stat(ammo)
     p.inventory.remove(ammo, 1)
-    p.energy = max(0, p.energy - C.ATTACK_COST[0])
+    p.energy = max(0, p.energy - C.ATTACK_COST[0] - state.world.depth // 3)
 
     # Resolve the shot against the world as it stands *now* — like a melee blow —
     # and only then let the world take its turn. (Advancing time first let erratic

@@ -35,8 +35,18 @@ def _fmt_remaining(minutes: int) -> str:
 
 
 # --- crafting ---------------------------------------------------------------
+def visible_recipes(state: GameState) -> list:
+    """The recipes the craft menu shows: everything buildable/craftable, plus
+    only the cook recipes the player has actually learned (see game.requests)."""
+    return [r for r in content.RECIPES
+            if r.kind != "cook" or r.name in state.known_recipes]
+
+
 def craft(state: GameState, recipe: Recipe) -> bool:
     """Execute a recipe. Returns True if it happened."""
+    if recipe.kind == "cook" and recipe.name not in state.known_recipes:
+        state.log.add("You don't know that recipe yet.", C.DIM)
+        return False
     if not has_inputs(state, recipe):
         state.log.add(f"You need: {inputs_str(recipe)}.", C.DIM)
         return False
@@ -58,6 +68,8 @@ def craft(state: GameState, recipe: Recipe) -> bool:
         state.bump("dishes_cooked")
         star = (" " + skills.stars(dish_q)) if dish_q else ""
         state.log.add(f"You cook {recipe.name}{star}.", (180, 230, 160))
+        from . import requests
+        requests.check_level_recipes(state)   # practice may spark a new recipe
     elif recipe.kind == "item":
         state.player.inventory.add(recipe.output, recipe.out_qty)
         state.log.add(f"You craft {recipe.out_qty}x {recipe.output.name}.")
@@ -205,7 +217,7 @@ def interact_machine(state: GameState, x: int, y: int) -> bool:
         elif out.kind in ("weapon", "armor"):
             skills.gain(state, "Smithing", 12)       # forging hones the smith
         elif out.kind == "gem":
-            skills.gain(state, "Gemcutting", 14)     # cutting hones the cutter
+            skills.gain(state, "Gemcutting", 32)     # gems are scarce — each cut teaches much
         elif m.kind in ("furnace", "kiln"):
             skills.gain(state, "Smithing", 8)        # smelting & fuel-making, too
         elif m.kind in ("quern", "windmill"):
@@ -505,20 +517,20 @@ def jeweller_choice(state: GameState, opt) -> None:
                 inv.remove(it, q)
         outq = skills.process_quality(inq, state, "Jewelcrafting")
         inv.add(opt["output"], 1, quality=outq)
-        skills.gain(state, "Jewelcrafting", 16)
+        skills.gain(state, "Jewelcrafting", 36)
         star = (" " + skills.stars(outq)) if outq else ""
         state.log.add(f"You craft {opt['output'].name}{star}.", (230, 210, 140))
     elif kind == "embed_gear":
         for it, q in opt["inputs"]:
             inv.remove(it, q)
         inv.add(opt["output"], 1)
-        skills.gain(state, "Jewelcrafting", 12)
+        skills.gain(state, "Jewelcrafting", 26)
         state.log.add(f"You set the gem — {opt['output'].name}.", (230, 210, 140))
     elif kind == "embed_tool":
         inv.remove(opt["inputs"][0][0], 1)
         tool = opt["tool"]
         state.player.tool_gem[tool] = tuple(state.player.tool_gem.get(tool, ())) + (opt["gemkey"],)
-        skills.gain(state, "Jewelcrafting", 12)
+        skills.gain(state, "Jewelcrafting", 26)
         state.log.add(f"You set the {opt['gemkey']} into your {state.player.display_name(tool)}.",
                       (230, 210, 140))
     state.player.energy = max(0, state.player.energy - C.CRAFT_COST[0])
@@ -631,9 +643,17 @@ def ship_all(state: GameState) -> int:
     return len(stacks)
 
 
+def bin_value(state: GameState, item, quality: int) -> int:
+    """What one unit fetches at the bin right now: quality-scaled, and marked up
+    while the market craves this kind of goods (see requests.demand_mult)."""
+    from . import requests
+    return round(slot_value(item, quality) * requests.demand_mult(state, item))
+
+
 def sell_shipment(state: GameState) -> None:
-    """Convert everything in the shipping bin to gold overnight (quality-scaled)."""
-    total = sum(slot_value(it, ql) * qty for it, qty, ql in state.ship_bin.slots)
+    """Convert everything in the shipping bin to gold overnight (quality-scaled,
+    at the market's current prices)."""
+    total = sum(bin_value(state, it, ql) * qty for it, qty, ql in state.ship_bin.slots)
     if total > 0:
         state.player.gold += total
         state.bump("gold_earned", total)

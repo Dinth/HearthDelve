@@ -35,6 +35,7 @@ def new_game(seed: int = 1337) -> GameState:
     state.log.add("Chop/mine for materials, c to craft & build, b at the bin to sell.", C.DIM)
     state.log.add("Space uses the active tool. ? for help, l to look, g to gather.", C.DIM)
     state.log.add("Visit Mossford (SE) & Cinderhope (SW): Shift+C to talk/shop, f to gift.", C.DIM)
+    state.log.add("Villagers pin favours to the ‡ notice board on each square — g to read.", C.DIM)
     return state
 
 
@@ -294,7 +295,7 @@ def use_tool(state: GameState) -> None:
             return None
         if farming.water_crop(state, tx, ty):
             tier = p.tool_tier.get(items.WATERING_CAN, 0)
-            p.energy = max(0, p.energy - max(1, C.WATER_COST[0] - tier))
+            p.energy = max(0, p.energy - max(1, round(C.WATER_COST[0] * (1 - 0.12 * tier))))
             turns.advance_time(state, C.WATER_COST[1])
             return None
 
@@ -303,6 +304,21 @@ def use_tool(state: GameState) -> None:
     if not success:
         state.log.add(msg, C.DIM)
         return None
+
+    # The deep rock outgrows a cheap pickaxe — but it never refuses you.
+    # Under-tooled mining is slow, sweaty and wasteful (see _gather_drop), so
+    # a stubborn delver can always chip at the deeps; the smithy just makes
+    # the same rock cheap. Progression as efficiency, not permission.
+    underpick = 0
+    if (item is items.PICKAXE and state.world.is_dungeon
+            and target.name in ("ore_vein", "gem_vein")):
+        need = _pick_tier_for_depth(state.world.depth)
+        have = p.tool_tier.get(items.PICKAXE, 0)
+        underpick = max(0, need - have)
+        if underpick:
+            state.log.add(f"Your {C.TOOL_TIERS[have].lower()} pickaxe barely bites this "
+                          f"rock — slow, wasteful work. ({C.TOOL_TIERS[need]} would serve.)",
+                          C.DIM)
 
     # Whose land is this? Tilling/working another's land is refused; felling
     # their tree or clearing their brush is vandalism — allowed once confirmed,
@@ -331,7 +347,10 @@ def use_tool(state: GameState) -> None:
         from .game import jewelry
         stat = content.TOOL_STATS.get(item)
         tier = p.tool_tier.get(item, 0)          # 0 Wooden … 5 Mithril
-        stamina = max(1, stat.stamina - tier) if stat else 1
+        # Each tier eases the work by 12% — a Mithril tool costs 40% of the
+        # wooden one's sweat, but never nothing: the tool ladder stretches the
+        # day's stamina budget rather than deleting it.
+        stamina = max(1, round(stat.stamina * (1 - 0.12 * tier))) if stat else 1
         if item in p.tool_affix:                 # an imbued tool works with less effort
             stamina = max(1, stamina - 1)
         # An amethyst — set in this tool or worn as jewellery — eases the effort.
@@ -344,6 +363,16 @@ def use_tool(state: GameState) -> None:
         # so this is what makes the tool ladder worth the metal.
         base_secs = stat.seconds if stat else C.USE_SECONDS
         seconds = max(1, round(base_secs * (1 - 0.10 * tier)))
+    # Fighting rock above your pick's band: half again the time and sweat per
+    # band you're short — punishing, never impossible.
+    if underpick:
+        stamina = round(stamina * (1 + 0.5 * underpick))
+        seconds = round(seconds * (1 + 0.5 * underpick))
+    # The dark weighs on you: every floor down, work drains a little more —
+    # so how deep a delve can run is bounded by stamina, and by the tools and
+    # meals that spare it.
+    if state.world.is_dungeon:
+        stamina += state.world.depth // 3
     if new_tile is not None and state.world.is_dungeon and new_tile == tile.GRASS:
         new_tile = tile.DUNGEON_FLOOR         # mined rock/ore leaves dungeon floor
 
@@ -372,6 +401,21 @@ def use_tool(state: GameState) -> None:
     return None
 
 
+def _pick_tier_for_depth(depth: int) -> int:
+    """Minimum pickaxe tier to break veins at a depth — aligned with the ore
+    bands (see content._ore_band): the band you can drop into is roughly the
+    band your current pick was forged from."""
+    if depth <= 1:
+        return 0        # Wooden — copper & tin country
+    if depth <= 3:
+        return 1        # Bronze — the iron/silver band
+    if depth <= 5:
+        return 2        # Iron — gold & platinum
+    if depth <= 7:
+        return 3        # Steel — adamantite runs
+    return 4            # Adamantium — the mithril deeps
+
+
 def _gather_drop(state: GameState, item, target) -> None:
     """Chopping and mining yield raw materials, XP, and progress."""
     from .game import skills
@@ -391,12 +435,27 @@ def _gather_drop(state: GameState, item, target) -> None:
             inv.add(items.FIBER, 1)
             state.log.add("  (+1 Fiber)", C.DIM)
         return
+    # An under-tiered pick mangles what it breaks: per band it falls short, a
+    # rising chance the vein's riches come away as worthless rubble. The deeps
+    # stay open to a stubborn wooden pick — they just pay it poorly.
+    def _mangled() -> bool:
+        if not state.world.is_dungeon or item is not items.PICKAXE:
+            return False
+        short = _pick_tier_for_depth(state.world.depth) - state.player.tool_tier.get(items.PICKAXE, 0)
+        return short > 0 and random.random() < min(0.85, 0.3 * short)
+
     if item is items.AXE and target.kind == "tree":
         inv.add(items.WOOD, 2)
         state.bump("trees_chopped")
         skills.gain(state, "Foraging", 8)
         state.log.add("  (+2 Wood)", C.DIM)
     elif item is items.PICKAXE and target.name == "gem_vein":
+        if _mangled():
+            inv.add(items.STONE, 2)
+            state.bump("ore_mined")
+            skills.gain(state, "Mining", 4)
+            state.log.add("  Your pick shatters the seam — just rubble. (+2 Stone)", C.DIM)
+            return
         from .data import content
         gem = content.gem_for_depth(state.world.depth, random)   # deeper veins, finer gems
         inv.add(gem, 1)
@@ -405,6 +464,13 @@ def _gather_drop(state: GameState, item, target) -> None:
         if random.random() < 0.3:
             inv.add(items.STONE, 1)
         state.log.add(f"  (+1 {gem.name})", C.DIM)
+    elif item is items.PICKAXE and target.name == "ore_vein" and _mangled():
+        inv.add(items.STONE, 2)
+        if random.random() < 0.45:
+            inv.add(items.COAL, 1)
+        state.bump("ore_mined")
+        skills.gain(state, "Mining", 4)
+        state.log.add("  Your pick mangles the vein — mostly rubble. (+2 Stone)", C.DIM)
     elif item is items.PICKAXE and target.name == "ore_vein":
         # An ore vein mostly gives stone, often coal, sometimes ore — and now and
         # then a geode to crack open later (a little likelier the deeper you dig).
@@ -698,9 +764,17 @@ def _rob_hive(state: GameState, x: int, y: int) -> None:
 
 
 def _at_postbox(state: GameState) -> bool:
+    return _facing_tile_kind(state, "postbox")
+
+
+def _at_board(state: GameState) -> bool:
+    return _facing_tile_kind(state, "board")
+
+
+def _facing_tile_kind(state: GameState, kind: str) -> bool:
     p = state.player
     for gx, gy in ((p.x + p.facing[0], p.y + p.facing[1]), (p.x, p.y)):
-        if state.world.in_bounds(gx, gy) and state.world.tile_at(gx, gy).kind == "postbox":
+        if state.world.in_bounds(gx, gy) and state.world.tile_at(gx, gy).kind == kind:
             return True
     return False
 
@@ -1059,6 +1133,9 @@ def main() -> None:
     konami: list = []        # rolling buffer of recent keys
     eat_sel = 0              # cursor in the eat menu
     mail_sel = 0             # cursor in the post box
+    req_sel = 0              # cursor on the village notice board
+    journal_tab = 0          # journal page: goals | favours | market | homestead
+    rel_scroll = 0           # scroll offset in the relationships screen
     target_ctx = None        # active aiming context (throw / site a building)
     load_ctx = None          # active machine "choose input" menu
     msg_scroll = 0           # scrollback offset in the message-log view
@@ -1167,9 +1244,9 @@ def main() -> None:
             elif mode == "gift":
                 rendering.render_gift(console, state, npc, gift_sel)
             elif mode == "journal":
-                rendering.render_journal(console, state)
+                rendering.render_journal(console, state, journal_tab)
             elif mode == "relations":
-                rendering.render_relationships(console, state)
+                rendering.render_relationships(console, state, rel_scroll)
             elif mode == "character":
                 rendering.render_character(console, state)
             elif mode == "quitmenu":
@@ -1180,6 +1257,8 @@ def main() -> None:
                 rendering.render_eat(console, state, eat_sel)
             elif mode == "mail":
                 rendering.render_mail(console, state, mail_sel)
+            elif mode == "requests":
+                rendering.render_requests(console, state, req_sel)
             elif mode == "target":
                 rendering.render_target(console, state, target_ctx)
             elif mode == "loadmachine":
@@ -1336,6 +1415,12 @@ def main() -> None:
                                 mode, mail_sel = "mail", 0
                             else:
                                 state.log.add("Your post box is empty.", C.DIM)
+                        elif _at_board(state):
+                            if state.requests:
+                                mode, req_sel = "requests", 0
+                            else:
+                                state.log.add("The notice board is bare today — "
+                                              "favours come and go.", C.DIM)
                         else:
                             req = do_grab(state)
                             if isinstance(req, dict) and "load" in req:
@@ -1401,9 +1486,9 @@ def main() -> None:
                         else:
                             state.log.add("Stand by the shipping bin to sell goods.", C.DIM)
                     elif cmd == "journal":
-                        mode = "journal"
+                        mode, journal_tab = "journal", 0
                     elif cmd == "relations":
-                        mode = "relations"
+                        mode, rel_scroll = "relations", 0
                     elif cmd == "character":
                         mode = "character"
                     elif cmd == "talk":
@@ -1531,10 +1616,12 @@ def main() -> None:
                     elif cmd == "move" and action[2] and slots:
                         inv_sel = (inv_sel + action[2]) % len(slots)
                     elif cmd == "drop" and slots:
+                        # Shift+D drops the whole stack (as the help page says).
                         inv_sel = min(inv_sel, len(slots) - 1)
-                        it, _q, ql = slots[inv_sel]
-                        state.player.inventory.remove(it, 1, quality=ql)
-                        state.log.add(f"You toss out a {it.name.lower()}.", C.DIM)
+                        it, q, ql = slots[inv_sel]
+                        state.player.inventory.remove(it, q, quality=ql)
+                        state.log.add(f"You toss out {q} {it.name.lower()}." if q > 1
+                                      else f"You toss out a {it.name.lower()}.", C.DIM)
                         if inv_sel >= len(state.player.inventory.slots):
                             inv_sel = max(0, len(state.player.inventory.slots) - 1)
 
@@ -1555,12 +1642,13 @@ def main() -> None:
                     # above (see the equipment-mode letter handler).
 
                 elif mode == "craft":
+                    shown = crafting.visible_recipes(state)
                     if cmd in ("cancel", "craft", "quit"):
                         mode = "play"
-                    elif cmd == "move" and action[2]:
-                        craft_sel = (craft_sel + action[2]) % len(crafting.content.RECIPES)
-                    elif cmd == "confirm":
-                        r = crafting.content.RECIPES[min(craft_sel, len(crafting.content.RECIPES) - 1)]
+                    elif cmd == "move" and action[2] and shown:
+                        craft_sel = (craft_sel + action[2]) % len(shown)
+                    elif cmd == "confirm" and shown:
+                        r = shown[min(craft_sel, len(shown) - 1)]
                         if r.kind == "choose":
                             opts = crafting.arrow_choice_options(state)
                             if opts:
@@ -1585,6 +1673,19 @@ def main() -> None:
                             collect_letter(state, state.mail.pop(mail_sel))
                         mail_sel = 0
                         if not state.mail:
+                            mode = "play"
+
+                elif mode == "requests":
+                    from .game import requests as gamereq
+                    if cmd in ("cancel", "grab", "quit") or not state.requests:
+                        mode = "play"
+                    elif cmd == "move" and action[2]:
+                        req_sel = (req_sel + action[2]) % len(state.requests)
+                    elif cmd == "confirm":
+                        req_sel = min(req_sel, len(state.requests) - 1)
+                        gamereq.deliver(state, state.requests[req_sel])
+                        req_sel = 0
+                        if not state.requests:
                             mode = "play"
 
                 elif mode == "eat":
@@ -1616,9 +1717,11 @@ def main() -> None:
                         crafting.ship_item(state, entry[0], entry[2])
 
                 elif mode == "dialogue":
+                    # Only a deliberate key closes the panel — a reflexive
+                    # arrow-press shouldn't swallow a line of dialogue.
                     if cmd == "gift":
                         mode, gift_sel = "gift", 0
-                    else:
+                    elif cmd in ("cancel", "confirm", "talk", "quit", "use"):
                         mode = "play"
 
                 elif mode == "shop":
@@ -1631,7 +1734,7 @@ def main() -> None:
                         village.purchase(state, entries[min(shop_sel, len(entries) - 1)])
 
                 elif mode == "gift":
-                    gifts = village.giftable_items(state)
+                    gifts = village.giftable_items(state, npc)
                     if cmd in ("cancel", "gift", "quit"):
                         mode = "play"
                     elif cmd == "move" and action[2] and gifts:
@@ -1644,10 +1747,14 @@ def main() -> None:
                 elif mode == "journal":
                     if cmd in ("cancel", "journal", "quit"):
                         mode = "play"
+                    elif cmd == "move" and action[1]:
+                        journal_tab = (journal_tab + action[1]) % 4
 
                 elif mode == "relations":
                     if cmd in ("cancel", "relations", "quit"):
                         mode = "play"
+                    elif cmd == "move" and action[2]:
+                        rel_scroll = max(0, rel_scroll + action[2])
 
                 elif mode == "character":
                     if cmd in ("cancel", "character", "quit"):

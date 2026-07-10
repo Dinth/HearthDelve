@@ -940,6 +940,12 @@ def _lay_square(gm: GameMap, vx: int, vy: int, R: int, rng) -> list:
         x, y = vx + dx, vy + dy
         if gm.in_bounds(x, y) and gm.tiles[x, y] == tile.COBBLE:
             gm.tiles[x, y] = tid
+    # The village notice board — first spare corner of the square that took cobble.
+    for dx, dy in ((1, -2), (-1, 2), (3, 1), (-3, -1)):
+        x, y = vx + dx, vy + dy
+        if gm.in_bounds(x, y) and gm.tiles[x, y] == tile.COBBLE:
+            gm.tiles[x, y] = tile.NOTICE_BOARD
+            break
     for dx, dy in ((-3, -2), (3, -2), (-3, 2), (3, 2)):
         x, y = vx + dx, vy + dy
         if gm.in_bounds(x, y) and gm.tiles[x, y] in (tile.COBBLE, tile.GRASS):

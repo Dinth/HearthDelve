@@ -138,7 +138,27 @@ def talk(state: GameState, npc: NPC) -> str:
         reward = _heart_reward(state, npc)   # gifts from a good friend
         if reward:
             return reward
+        taught = _teach_recipe(state, npc)   # a friend shares their favourite dish
+        if taught:
+            return taught
     return npc.speak()
+
+
+def _teach_recipe(state: GameState, npc: NPC):
+    """Once you're proper friends (3 hearts), a villager shares the recipe for
+    their own favourite dish — the loved-dish list doubles as a cookbook."""
+    if npc.hearts < 3:
+        return None
+    from . import requests
+    for it in npc.loves:
+        if it.kind != "food":
+            continue
+        r = content.recipe_for_dish(it)
+        if r is not None and r.name not in state.known_recipes:
+            requests.learn_recipe(state, r.name, teacher=npc.name)
+            return (f"{npc.name} leans in, conspiratorial: \"Between friends —\n"
+                    f"here's how I make {it.name.lower()}. Don't go telling.\"")
+    return None
 
 
 def _festival_treat(state: GameState, npc: NPC):
@@ -172,8 +192,13 @@ def _heart_reward(state: GameState, npc: NPC):
     if not npc.gifts:
         return None
 
-    # The forester passes on a bee queen (or a sapling) now and then, once close.
+    # The forester passes on a bee queen (or a sapling) now and then, once close
+    # — but the wood shares at its own pace, not every morning you drop by.
     if npc.role == "forester" and npc.hearts >= 6 and random.random() < 0.30:
+        key = f"forestgift_day_{npc.name}"
+        if state.day - state.stats.get(key, -99) < 7:
+            return None
+        state.stats[key] = state.day
         gift = random.choice(npc.gifts)
         p.inventory.add(gift, 1)
         state.log.add(f"{npc.name} gives you a {gift.name.lower()}.", (200, 220, 160))
@@ -234,10 +259,24 @@ def anger_owner(state: GameState, owner: str, amount: int) -> None:
             n.friendship = max(0, n.friendship + karma.scale(state.player.karma, -share))
 
 
-def giftable_items(state: GameState):
-    """Inventory items that can be given (anything but tools/weapon/livestock)."""
-    return [(it, q, ql) for it, q, ql in state.player.inventory.slots
-            if it.kind in ("crop", "artisan", "material", "food", "fish", "animal")]
+def giftable_items(state: GameState, npc: NPC | None = None):
+    """Inventory items that can be given (anything but tools/weapon/livestock).
+    Given an NPC, their loved things float to the top, then liked, then the rest
+    — so the right gift is a keypress away, not a scroll through the pack."""
+    out = [(it, q, ql) for it, q, ql in state.player.inventory.slots
+           if it.kind in ("crop", "artisan", "material", "food", "fish", "animal")]
+    if npc is not None:
+        def taste(e):
+            it = e[0]
+            if npc._matches(it, npc.loves):
+                return 0
+            if npc._matches(it, npc.likes):
+                return 1
+            if npc._matches(it, npc.dislikes):
+                return 3
+            return 2
+        out.sort(key=taste)
+    return out
 
 
 # The innkeeper buys the farm's artisan goods (wine, mead, jam, pickles, cheese…)
@@ -276,7 +315,10 @@ def shop_entries(shop: str, state: GameState | None = None):
     if shop == "tavern":
         meals = [("meal", label, price, stam, hp)
                  for (label, price, stam, hp) in content.TAVERN_MENU]
-        return meals + (_inn_purchases(state) if state is not None else [])
+        # The house recipes: an innkeeper will part with one, for a price.
+        cards = [("recipe", name, price) for name, price in content.TAVERN_RECIPES
+                 if state is not None and name not in state.known_recipes]
+        return meals + cards + (_inn_purchases(state) if state is not None else [])
     if shop == "carpenter":
         jobs = [("commission", label, kind, gold, mats)
                 for (label, kind, gold, mats) in content.CARPENTER_JOBS]
@@ -320,6 +362,17 @@ def purchase(state: GameState, entry) -> None:
         turns.advance_time(state, _C.USE_SECONDS)
         gains = f"+{stam} stamina" + (f", +{hp} HP" if hp else "")
         state.log.add(f"You tuck into {label.lower()}. ({gains})", (180, 230, 160))
+    elif entry[0] == "recipe":
+        _, name, price = entry
+        p = state.player
+        if name in state.known_recipes:
+            return
+        if p.gold < price:
+            state.log.add("You can't afford that.", C.DIM)
+            return
+        p.gold -= price
+        from . import requests
+        requests.learn_recipe(state, name, teacher="The innkeeper")
     elif entry[0] == "sellto":
         _, item, price, q = entry
         p = state.player

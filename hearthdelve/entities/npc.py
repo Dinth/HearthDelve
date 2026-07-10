@@ -73,6 +73,10 @@ class NPC:
     def gift_reaction(self, item: Item) -> tuple[int, str]:
         """Return (friendship_points, reaction line) for being given item."""
         if self._matches(item, self.loves):
+            # A loved but everyday trifle (a stick of wood, a lump of coal)
+            # pleases without melting hearts — no farming friendship for 5g.
+            if item.value < 20:
+                return 50, f"{self.name}: Ah, you remembered! Thank you."
             return 80, f"{self.name}: This is wonderful — I love it!"
         if self._matches(item, self.likes):
             return 45, f"{self.name}: Oh, thank you! How thoughtful."

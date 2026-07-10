@@ -157,7 +157,7 @@ def harvest(state: GameState, x: int, y: int) -> bool:
     q = skills.roll_quality(state, "Farming")
     state.player.inventory.add(crop.produce, 1, quality=q)
     state.bump("crops_harvested")
-    skills.gain(state, "Farming", 15)
+    skills.gain(state, "Farming", 8)     # ~150 harvests to master, not one weekend
     if random.random() < skills.extra_yield_chance(state, "Farming"):
         state.player.inventory.add(crop.produce, 1, quality=q)
         state.log.add("  Your farming skill yields an extra one!", C.DIM)
@@ -295,6 +295,10 @@ def new_day(state: GameState, rested: bool = True) -> None:
 
     _deliver_mail(state)
 
+    # New favours drift onto the notice boards; the market's craving shifts.
+    from . import requests
+    requests.new_day(state)
+
     # The crown's weekly land tax on claimed wilderness (karma-only if unpaid).
     from . import land
     land.weekly_tax(state)
@@ -414,11 +418,14 @@ def _deliver_mail(state: GameState) -> None:
         })
         arrived += 1
 
-    # A friend occasionally sends a little something (from their own gift pool).
+    # A friend occasionally sends a little something. Posted keepsakes are
+    # modest — the treasures in a friend's pool stay for heart milestones, so
+    # the post never becomes a passive diamond faucet.
     friends = [n for n in npcs if n.hearts >= 4 and n.gifts]
     if friends and random.random() < 0.18:
         n = random.choice(friends)
-        gift = random.choice(n.gifts)
+        trinkets = [g for g in n.gifts if g.value <= 150] or [min(n.gifts, key=lambda g: g.value)]
+        gift = random.choice(trinkets)
         state.mail.append({
             "sender": n.name,
             "body": ("Was thinking of you, and thought you might like this.\n"
@@ -529,12 +536,13 @@ def sleep(state: GameState) -> None:
 def collapse(state: GameState, reason: str) -> None:
     state.log.add(reason, (220, 140, 120))
     p = state.player
-    gold_lost = p.gold // 10
+    # The deeper you fall, the rougher the rescue — depth scales the toll.
+    gold_lost = min(p.gold, p.gold // 10 + state.depth * 15)
     p.gold -= gold_lost
     dropped = 0
     if state.depth > 0:                     # drop the loose loot carried in the dark
         for it, q, ql in list(p.inventory.slots):
-            if it.kind in ("crop", "material", "artisan", "food", "fish", "animal"):
+            if it.kind in ("crop", "material", "artisan", "food", "fish", "animal", "gem"):
                 p.inventory.remove(it, q, quality=ql)
                 dropped += q
         from . import delve

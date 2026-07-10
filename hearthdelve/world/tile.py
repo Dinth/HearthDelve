@@ -179,4 +179,9 @@ GLOWCAP       = _add(TileType("glowcap",        "î", (150, 236, 222), (26, 44, 
 # outbuilding it becomes is finished (a day or two later).
 SCAFFOLD      = _add(TileType("scaffold",       "▦", (176, 148, 104), (44, 38, 30), walkable=False, kind="scaffold"))
 
+# --- Village notice board ------------------------------------------------------
+# One on each village square: villagers pin favours to it (g to read the board).
+# NB: appended last on purpose — tile ids are positional and live in saved maps.
+NOTICE_BOARD  = _add(TileType("notice_board",   "‡", (214, 178, 110), (40, 34, 26), walkable=False, kind="board"))
+
 TILE_COUNT = len(TILES)

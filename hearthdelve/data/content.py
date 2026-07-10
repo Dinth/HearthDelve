@@ -956,8 +956,8 @@ def is_fruit(produce: Item) -> bool:
 # hand-author "Strawberry Jam", "Raspberry Jam", ... we generate one variant per
 # source; each carries its `source` and a shared `family` so gift tastes match
 # "any jam". Grape wine keeps its hand-tuned premium item.
-JAM_MULT, WINE_MULT, PICKLE_MULT = 1.6, 2.2, 1.5
-GRAPE_WINE_MULT = 3.75          # grape is *the* wine fruit — its vintage tops every other
+JAM_MULT, WINE_MULT, PICKLE_MULT = 1.6, 1.8, 1.5
+GRAPE_WINE_MULT = 2.5           # grape is *the* wine fruit — its vintage tops every other
 
 _FRUIT_ITEMS = [c.produce for c in CROPS if c.category == "fruit"] + \
     [items.RASPBERRY, items.GOOSEBERRY, items.CURRANT,
@@ -1262,7 +1262,45 @@ RECIPES: list[Recipe] = [
            output=items.BACON_AND_EGGS, desc="Crispy bacon with fried eggs."),
     Recipe("Sausage Roll", "cook", ((items.SAUSAGES, 1), (items.FLOUR, 1)),
            output=items.SAUSAGE_ROLL, desc="A sausage baked in flaky pastry."),
+    Recipe("Grilled Sardines", "cook", ((items.SARDINE, 2), (items.SEA_SALT, 1)),
+           output=items.GRILLED_SARDINES, desc="A row of small fish, charred and salted."),
+    Recipe("Baked Pike", "cook", ((items.PIKE, 1), (items.BUTTER, 1)),
+           output=items.BAKED_PIKE, desc="A whole pike baked in butter."),
+    Recipe("Cave Chowder", "cook", ((items.BLINDFISH, 1), (items.CAVE_MUSHROOM, 1), (items.MILK, 1)),
+           output=items.CAVE_CHOWDER, desc="A pale chowder from the dark below."),
 ]
+
+
+# --- Recipe discovery ----------------------------------------------------------
+# Cooking is learned, not known: a new cook starts with the plain fare below and
+# picks the rest up around the Vale — a villager shares the recipe for their own
+# favourite dish once you're friends (3 hearts), the taverns sell a few house
+# recipes, some come with practice (Cooking level), and a fulfilled request-board
+# favour sometimes has one folded in with the payment.
+STARTER_RECIPES: tuple[str, ...] = (
+    "Parsnip Soup", "Roasted Veg", "Fish Stew", "Grilled Fish",
+    "Fried Egg", "Omelette", "Bread", "Noodles",
+)
+
+# House recipes an innkeeper will sell you over the bar: (recipe name, price).
+# Priced as a shortcut, not a tax — friendship teaches for free, so a card must
+# pay itself back within a handful of cooked plates.
+TAVERN_RECIPES: tuple[tuple[str, int], ...] = (
+    ("Cheese Omelette", 150), ("Creamy Soup", 110), ("Fried Rice", 130), ("Pasta", 190),
+)
+
+# Recipes that come with practice at the stove: Cooking level -> recipe name.
+COOKING_LEVEL_RECIPES: dict[int, str] = {
+    2: "Mayonnaise", 3: "Ketchup", 4: "Coleslaw", 6: "Glowcap Broth", 8: "Yogurt Pie",
+}
+
+
+def recipe_for_dish(dish: Item) -> Recipe | None:
+    """The cook recipe that produces a dish (None for non-cooked items)."""
+    for r in RECIPES:
+        if r.kind == "cook" and r.output is dish:
+            return r
+    return None
 
 
 # --- Fishing -----------------------------------------------------------------
@@ -1442,7 +1480,7 @@ def village_npcs() -> dict[str, list[NPC]]:
                                   "Three generations of Mossford's news, all under one roof."),
                               (6, "My Edwin went down the Cinderhope shafts and never\n"
                                   "came up. I keep a lamp in the window still. ...Tea?")),
-                loves=(items.JAM, items.PICKLES, items.WINE),
+                loves=(items.JAM, items.PICKLES, items.WINE, items.BERRY_PIE),
                 likes=(items.PARSNIP, items.POTATO, items.CAULIFLOWER, items.STRAWBERRY),
                 dislikes=(items.WOOD, items.STONE, items.COAL),
                 gifts=(items.CAULIFLOWER_SEEDS, items.PUMPKIN_SEEDS, items.TULIP_SEEDS, items.JAM),
@@ -1456,7 +1494,7 @@ def village_npcs() -> dict[str, list[NPC]]:
                                   "One night I just stopped. Best thing I ever did."),
                               (6, "A traveller hears everything, eventually — and forgets\n"
                                   "most of it on purpose. Your secrets are safe here.")),
-                loves=(items.WINE, items.GRAPE_WINE, items.JELLIED_EEL),
+                loves=(items.WINE, items.GRAPE_WINE, items.JELLIED_EEL, items.MEAT_PIE),
                 likes=(items.JAM, items.PICKLES), dislikes=(items.STONE,),
                 gifts=(items.WINE, items.MEAD, items.JAM, items.PICKLES),
                 bio="Keeps the Mossford inn; a settled wanderer, full of stories."),
@@ -1469,7 +1507,7 @@ def village_npcs() -> dict[str, list[NPC]]:
                                   "The quiet of this place gave it somewhere to rest."),
                               (6, "I tend the graves as well as the shrine, you know.\n"
                                   "Someone should remember the names. I'm glad of you.")),
-                loves=(items.WINE, items.JAM, items.DIAMOND),
+                loves=(items.WINE, items.JAM, items.DIAMOND, items.ASTER, items.CANDIED_FRUIT),
                 likes=(items.STRAWBERRY, items.BLUEBERRY), dislikes=(items.COAL,),
                 gifts=(items.AMETHYST, items.TOPAZ, items.JAM),
                 bio="Tends the shrine and churchyard of Mossford; serene and watchful."),
@@ -1482,7 +1520,7 @@ def village_npcs() -> dict[str, list[NPC]]:
                                   "his plough. I'll not let them go to weeds."),
                               (6, "Some days I talk to him out there, between the furrows.\n"
                                   "Daft, maybe. But the crops don't seem to mind.")),
-                loves=(items.PARSNIP, items.CAULIFLOWER, items.PUMPKIN),
+                loves=(items.PARSNIP, items.CAULIFLOWER, items.PUMPKIN, items.PUMPKIN_PIE),
                 likes=(items.POTATO, items.TOMATO), dislikes=(items.STONE,),
                 gifts=(items.POTATO_SEEDS, items.CAULIFLOWER_SEEDS, items.PUMPKIN_SEEDS),
                 bio="Works the farmhouse fields at the edge of Mossford; salt of the earth."),
@@ -1495,7 +1533,8 @@ def village_npcs() -> dict[str, list[NPC]]:
                                   "mead-hall. One day — when the right beams find me."),
                               (6, "Don't laugh — I write a little verse for each tree\n"
                                   "I fell. Seems only fair to say them a few words.")),
-                loves=(items.WOOD, items.TIMBER_PLANK), likes=(items.STONE,), dislikes=(items.JAM,),
+                loves=(items.WOOD, items.TIMBER_PLANK, items.BACON_AND_EGGS),
+                likes=(items.STONE,), dislikes=(items.JAM,),
                 gifts=(items.TIMBER_PLANK, items.WOOD),
                 bio="Mossford's carpenter; gruff, proud of his craft, secretly tender."),
             NPC("Wrenna", "W", (170, 200, 150), shop=None, role="forager",
@@ -1507,7 +1546,7 @@ def village_npcs() -> dict[str, list[NPC]]:
                                   "She taught me the names of things. All of them."),
                               (6, "She's gone now, the old woman. But gathering in the\n"
                                   "fog-grass, I still feel her at my shoulder. Kindly.")),
-                loves=(items.RASPBERRY, items.GOOSEBERRY, items.CURRANT),
+                loves=(items.RASPBERRY, items.GOOSEBERRY, items.CURRANT, items.FRUIT_PARFAIT),
                 likes=(items.FIBER, items.CAULIFLOWER), dislikes=(items.STONE,),
                 gifts=(items.STRAWBERRY_SEEDS, items.BLUEBERRY_SEEDS, items.ASTER_SEEDS, items.RASPBERRY),
                 bio="Mossford's herbalist; dreamy, wise in green things."),
@@ -1520,7 +1559,7 @@ def village_npcs() -> dict[str, list[NPC]]:
                                   "She said she'd write. ...She hasn't yet."),
                               (6, "You're my best grown-up friend, you know.\n"
                                   "Don't tell Tam. Actually, do — he'll be SO jealous.")),
-                loves=(items.STRAWBERRY, items.JAM),
+                loves=(items.STRAWBERRY, items.JAM, items.COOKIES),
                 likes=(items.RASPBERRY, items.BLUEBERRY, items.TULIP), dislikes=(items.WOOD,),
                 gifts=(items.TULIP, items.STRAWBERRY, items.RASPBERRY),
                 bio="A Mossford child, forever underfoot around the square."),
@@ -1533,7 +1572,7 @@ def village_npcs() -> dict[str, list[NPC]]:
                                   "are you s'posed to find things out?"),
                               (6, "When you're away I tell everyone I'm YOUR helper.\n"
                                   "...That's alright, isn't it?")),
-                loves=(items.BLUEBERRY, items.JAM),
+                loves=(items.BLUEBERRY, items.JAM, items.PANCAKES),
                 likes=(items.TULIP, items.STRAWBERRY), dislikes=(items.COAL,),
                 gifts=(items.TULIP, items.BLUEBERRY, items.ASTER_SEEDS),
                 bio="A Mossford child; Pip's rival and inseparable friend."),
@@ -1548,7 +1587,7 @@ def village_npcs() -> dict[str, list[NPC]]:
                                   "Almost gave it up. The anvil wouldn't let me."),
                               (6, "A bit of me goes into every tool I make.\n"
                                   "So mind you use mine well, friend. That's an order.")),
-                loves=(items.COPPER_BAR, items.COAL),
+                loves=(items.COPPER_BAR, items.COAL, items.SAUSAGE_ROLL),
                 likes=(items.COPPER_ORE, items.STONE), dislikes=(items.WINE,),
                 gifts=(items.IRON_BAR, items.COPPER_BAR, items.COAL),
                 bio="The Cinderhope blacksmith; loud, big-hearted, married to his forge."),
@@ -1561,7 +1600,7 @@ def village_npcs() -> dict[str, list[NPC]]:
                                   "Nursery, schoolroom, confessional — all my taproom."),
                               (6, "My own two went off to the cities years back.\n"
                                   "So I keep the lamp lit for everyone else's. Suits me.")),
-                loves=(items.GRAPE_WINE, items.WINE, items.JELLIED_EEL),
+                loves=(items.GRAPE_WINE, items.WINE, items.JELLIED_EEL, items.PIZZA),
                 likes=(items.JAM, items.PICKLES), dislikes=(items.STONE,),
                 gifts=(items.MEAD, items.GRAPE_WINE, items.PICKLES),
                 bio="Runs the Cinderhope taproom; matron to the whole outpost."),
@@ -1574,7 +1613,7 @@ def village_npcs() -> dict[str, list[NPC]]:
                                   "Forty years I've spent learning who they were."),
                               (6, "Between us — there's a vault beneath the chapel floor.\n"
                                   "Some doors are best left shut. I trust you agree.")),
-                loves=(items.WINE, items.SAPPHIRE, items.JAM),
+                loves=(items.WINE, items.SAPPHIRE, items.JAM, items.CUSTARD, items.WRAITH_ESSENCE),
                 likes=(items.APPLE, items.CHERRY), dislikes=(items.COAL,),
                 gifts=(items.SAPPHIRE, items.EMERALD, items.WINE),
                 bio="Keeps the old chapel of Cinderhope; wry, and guards its secrets."),
@@ -1587,7 +1626,7 @@ def village_npcs() -> dict[str, list[NPC]]:
                                   "snag like the back of my own wrinkled hand."),
                               (6, "Lost a friend to the spring flood, long ago.\n"
                                   "I fish the quiet pools he loved. Feels like company.")),
-                loves=(items.WINE, items.GRAPE_WINE),
+                loves=(items.WINE, items.GRAPE_WINE, items.FISH_PIE),
                 likes=(items.RASPBERRY,), dislikes=(items.STONE,),
                 gifts=(items.TROUT, items.SALMON, items.GRAPE_WINE),
                 bio="An old fisher; quiet and patient, usually by the water."),
@@ -1600,7 +1639,7 @@ def village_npcs() -> dict[str, list[NPC]]:
                                   "Never found it. I reckon it's still down there."),
                               (6, "Strike that seam and I'll not hoard it — half to Mabel,\n"
                                   "half to whoever's kind to an old digger. You, maybe.")),
-                loves=(items.COPPER_BAR, items.IRON_BAR, items.COAL),
+                loves=(items.COPPER_BAR, items.IRON_BAR, items.COAL, items.POTATO_SALAD),
                 likes=(items.STONE, items.COPPER_ORE), dislikes=(items.JAM,),
                 gifts=(items.COPPER_ORE, items.IRON_ORE, items.RUBY),
                 bio="A weathered miner; chases his father's silver dream."),
@@ -1613,7 +1652,7 @@ def village_npcs() -> dict[str, list[NPC]]:
                                   "So I weave the waves into my patterns instead."),
                               (6, "This one's for you, if you'll have it — don't argue.\n"
                                   "A friend should have something made with them in mind.")),
-                loves=(items.FIBER, items.WINE),
+                loves=(items.FIBER, items.WINE, items.SHORTBREAD),
                 likes=(items.WOOD, items.CURRANT), dislikes=(items.STONE,),
                 gifts=(items.FIBER, items.TULIP, items.ASTER_SEEDS),
                 bio="The Cinderhope weaver; meticulous, and homesick for the sea."),
@@ -1626,7 +1665,7 @@ def village_npcs() -> dict[str, list[NPC]]:
                                   "Quiet. Out of the way. No questions."),
                               (6, "There was a deal, out east, that went poorly.\n"
                                   "Let's leave it there. Good of you to trust me anyway.")),
-                loves=(items.GRAPE_WINE, items.WINE),
+                loves=(items.GRAPE_WINE, items.WINE, items.CAKE, items.LURKER_SCALE),
                 likes=(items.JAM, items.PICKLES), dislikes=(items.FIBER,),
                 gifts=(items.DIAMOND, items.GOLD_BAR, items.GRAPE_WINE),
                 bio="A travelling trader lodging in Cinderhope; charming, evasive."),
@@ -1639,7 +1678,7 @@ def village_npcs() -> dict[str, list[NPC]]:
                                   "But Mabel makes the good soup, so it's alright."),
                               (6, "Here — you can have my second-best sparkly rock.\n"
                                   "Not the best one. But nearly!")),
-                loves=(items.CURRANT, items.JAM),
+                loves=(items.CURRANT, items.JAM, items.FROZEN_YOGURT),
                 likes=(items.TULIP, items.AMETHYST), dislikes=(items.STONE,),
                 gifts=(items.TULIP, items.CURRANT, items.AMETHYST),
                 bio="A Cinderhope child; a magpie for shiny stones."),
@@ -1654,7 +1693,7 @@ def village_npcs() -> dict[str, list[NPC]]:
                                   "I grew up counting ships home. Still do, some nights."),
                               (6, "Every soul who walks through that door, I want them\n"
                                   "leaving a little warmer than they came. You do.")),
-                loves=(items.JELLIED_EEL, items.WINE, items.GRAPE_WINE),
+                loves=(items.JELLIED_EEL, items.WINE, items.GRAPE_WINE, items.BAKED_PIKE),
                 likes=(items.JAM, items.PICKLES), dislikes=(items.STONE,),
                 gifts=(items.MEAD, items.JELLIED_EEL, items.WINE),
                 bio="Keeps the dockside inn at Saltmere; a lighthouse-keeper's daughter."),
@@ -1667,7 +1706,7 @@ def village_npcs() -> dict[str, list[NPC]]:
                                   "Folk laugh — till the day the signs save their nets."),
                               (6, "I'll teach you to read the water, if you like.\n"
                                   "Not many I'd bother with. You listen — that's why.")),
-                loves=(items.GRAPE_WINE, items.WINE),
+                loves=(items.GRAPE_WINE, items.WINE, items.GRILLED_SARDINES),
                 likes=(items.PICKLES, items.JELLIED_EEL), dislikes=(items.STONE,),
                 gifts=(items.SALMON, items.TROUT, items.GRAPE_WINE),
                 bio="A Saltmere fisher; stoic and tide-wise."),
@@ -1680,7 +1719,7 @@ def village_npcs() -> dict[str, list[NPC]]:
                                   "A quarrel here, a sulk there — somebody's got to."),
                               (6, "You've a knack for turning up when a body needs a hand.\n"
                                   "Takes one to know one, I'd say.")),
-                loves=(items.JAM, items.STRAWBERRY),
+                loves=(items.JAM, items.STRAWBERRY, items.TUNA_SANDWICH),
                 likes=(items.BLUEBERRY, items.CURRANT), dislikes=(items.COAL,),
                 gifts=(items.TROUT, items.JAM, items.STRAWBERRY),
                 bio="A Saltmere fisher and net-mender; cheerful peacemaker of the shore."),
@@ -1693,7 +1732,7 @@ def village_npcs() -> dict[str, list[NPC]]:
                                   "Clung to a spar all night. The sea gave me back."),
                               (6, "Respect the sea — never love her, never trust her.\n"
                                   "Do the same and you'll grow as old and ugly as me.")),
-                loves=(items.WINE, items.GRAPE_WINE),
+                loves=(items.WINE, items.GRAPE_WINE, items.FRIED_FISH),
                 likes=(items.CHERRY, items.APPLE), dislikes=(items.WOOD,),
                 gifts=(items.SALMON, items.WINE),
                 bio="Saltmere's oldest fisher and harbour-master; a grizzled sage."),
@@ -1706,7 +1745,7 @@ def village_npcs() -> dict[str, list[NPC]]:
                                   "the first Saltmere folk tied. That's worth something."),
                               (6, "Come by when your gear frays — no charge, for you.\n"
                                   "Can't have a friend put to sea on bad rope.")),
-                loves=(items.FIBER, items.WINE),
+                loves=(items.FIBER, items.WINE, items.EGG_SANDWICH),
                 likes=(items.WOOD, items.CURRANT), dislikes=(items.STONE,),
                 gifts=(items.FIBER, items.WOOD),
                 bio="Saltmere's rope- and net-maker; sharp-tongued and kind."),
@@ -1719,7 +1758,7 @@ def village_npcs() -> dict[str, list[NPC]]:
                                   "Da was, at the end. So I decided not to be."),
                               (6, "I saved you the best shell off the whole beach.\n"
                                   "Listen — you can hear the sea in it!")),
-                loves=(items.STRAWBERRY, items.JAM),
+                loves=(items.STRAWBERRY, items.JAM, items.COOKIES),
                 likes=(items.TULIP, items.BLUEBERRY), dislikes=(items.STONE,),
                 gifts=(items.MINNOW, items.TULIP, items.STRAWBERRY),
                 bio="A Saltmere child; a would-be sailor, brave as he can manage."),
@@ -1734,7 +1773,7 @@ def village_npcs() -> dict[str, list[NPC]]:
                                   "seen the mist come off it gold at dawn. I have. Daily."),
                               (6, "My inn's the only warm light for a league of marsh.\n"
                                   "Some nights that feels like a duty. Most, a gift.")),
-                loves=(items.HONEY, items.MEAD, items.JELLIED_EEL),
+                loves=(items.HONEY, items.MEAD, items.JELLIED_EEL, items.GLAZED_VEG),
                 likes=(items.JAM, items.PICKLES, items.WINE), dislikes=(items.STONE,),
                 gifts=(items.MEAD, items.HONEY, items.JAM),
                 bio="Keeps the stilt-house inn at Fenwick; steady warmth in a cold fen."),
@@ -1747,8 +1786,9 @@ def village_npcs() -> dict[str, list[NPC]]:
                                   "The fen taught me more in a season than the guild in ten years."),
                               (6, "Bring me the strange ones you find out in the wet.\n"
                                   "Between us, I think we could physic the whole Vale.")),
-                loves=(items.CAVE_MUSHROOM, items.CHANTERELLE, items.HONEY),
-                likes=(items.BOLETE, items.PARASOL_MUSHROOM, items.FIBER),
+                loves=(items.CAVE_MUSHROOM, items.CHANTERELLE, items.HONEY,
+                       items.MUSHROOM_STEW, items.BAT_WING),
+                likes=(items.BOLETE, items.PARASOL_MUSHROOM, items.FIBER, items.SLIME_GEL),
                 dislikes=(items.COAL, items.STONE),
                 gifts=(items.ASTER_SEEDS, items.STRAWBERRY_SEEDS, items.CAVE_MUSHROOM),
                 bio="Fenwick's herbalist; reads the marsh like a book of remedies."),
@@ -1761,7 +1801,7 @@ def village_npcs() -> dict[str, list[NPC]]:
                                   "I still set them. What else is there? The eels don't mourn."),
                               (6, "First good eel of the season, I'll smoke it for you.\n"
                                   "Don't argue — it's how we say a thing here that words won't.")),
-                loves=(items.JELLIED_EEL, items.EEL, items.MEAD),
+                loves=(items.JELLIED_EEL, items.EEL, items.MEAD, items.CAVE_CHOWDER),
                 likes=(items.MINNOW, items.FIBER), dislikes=(items.COAL,),
                 gifts=(items.EEL, items.MINNOW, items.FIBER),
                 bio="Fenwick's eel-catcher; quiet, weathered, wed to the water."),
@@ -1774,7 +1814,7 @@ def village_npcs() -> dict[str, list[NPC]]:
                                   "the lot, brown as tea and older than the kingdom. Put it back."),
                               (6, "I'll cut and dry you a winter's worth, friend, and gladly.\n"
                                   "A cold hearth's the loneliest thing I know.")),
-                loves=(items.MEAD, items.PICKLES, items.COAL),
+                loves=(items.MEAD, items.PICKLES, items.COAL, items.SAUTEED_MUSH),
                 likes=(items.WOOD, items.JAM), dislikes=(items.RUBY, items.DIAMOND)),
             NPC("Willa", "w", (196, 184, 168), shop=None, role="trader",
                 blurbs=("I take the fen's goods up the causeway to the towns —\n"
@@ -1785,7 +1825,7 @@ def village_npcs() -> dict[str, list[NPC]]:
                                   "Fenwick would wither without a trader mad enough to walk it."),
                               (6, "Whatever you can't shift elsewhere, bring to me.\n"
                                   "A friend's goods always find room on my cart.")),
-                loves=(items.AMETHYST, items.TOPAZ, items.WINE),
+                loves=(items.AMETHYST, items.TOPAZ, items.WINE, items.TUNA_SALAD),
                 likes=(items.JAM, items.PICKLES, items.HONEY), dislikes=(),
                 gifts=(items.MEAD, items.PICKLES),
                 bio="Fenwick's trader; the causeway's lifeline, and knows everyone's business."),
@@ -1798,7 +1838,7 @@ def village_npcs() -> dict[str, list[NPC]]:
                                   "But I've seen it wave. I waved back, to be polite."),
                               (6, "When you go off to the deep marsh — take me? I know\n"
                                   "the safe tufts. I'd keep you from the sucking mud. Promise.")),
-                loves=(items.HONEY, items.JAM),
+                loves=(items.HONEY, items.JAM, items.PANCAKES),
                 likes=(items.MINNOW, items.STRAWBERRY), dislikes=(items.STONE,),
                 gifts=(items.MINNOW, items.HONEY),
                 bio="A Fenwick child; fearless of the bog, forever muddy to the ears."),
@@ -1819,7 +1859,7 @@ def camp_npcs() -> list[NPC]:
                               "wife who left. Traded the lot for a tent and the smell of sap. Fair swap."),
                           (6, "You've camped at our fire enough now, friend. That makes you\n"
                               "one of Burl's own. Anyone gives you grief in this wood, you tell me.")),
-            loves=(items.TIMBER_PLANK, items.WOOD, items.MEAD),
+            loves=(items.TIMBER_PLANK, items.WOOD, items.MEAD, items.MEAT_PIE),
             likes=(items.COAL, items.PICKLES), dislikes=(items.RUBY, items.DIAMOND),
             gifts=(items.TIMBER_PLANK, items.WOOD, items.COAL),
             bio="Boss of the woodcutters' camp; broad as an oak, twice as stubborn."),
@@ -1832,7 +1872,7 @@ def camp_npcs() -> list[NPC]:
                               "had a tree come down wrong on my mark. Never will."),
                           (6, "Cut you a stave of good ash, I did — seasoned two years.\n"
                               "A tool's only as honest as the wood inside it. Use it well.")),
-            loves=(items.TIMBER_PLANK, items.CHANTERELLE, items.MEAD),
+            loves=(items.TIMBER_PLANK, items.CHANTERELLE, items.MEAD, items.CHANTERELLE_SAUTE),
             likes=(items.WOOD, items.BOLETE, items.RASPBERRY), dislikes=(items.STONE,),
             gifts=(items.TIMBER_PLANK, items.WOOD),
             bio="The camp's finest axe; calm, exact, half in love with the trees she fells."),
@@ -1845,7 +1885,7 @@ def camp_npcs() -> list[NPC]:
                               "not one of them looking at you. Out here, folk see you."),
                           (6, "Share our stew tonight, eh? Rowan sings after the second cup.\n"
                               "It's terrible. You have to hear it. That's what a fire's for.")),
-            loves=(items.MEAD, items.JELLIED_EEL, items.PICKLES),
+            loves=(items.MEAD, items.JELLIED_EEL, items.PICKLES, items.BOLETE_BROTH),
             likes=(items.HONEY, items.CAVE_MUSHROOM), dislikes=(items.STONE,),
             gifts=(items.WOOD, items.COAL),
             bio="The camp's hunter and cook; gruff, watchful, keeper of the fire."),
@@ -1858,7 +1898,7 @@ def camp_npcs() -> list[NPC]:
                               "Best thing I ever did. Don't tell my mother I said so."),
                           (6, "You come and go from the whole Vale — the towns, the sea,\n"
                               "the deeps. Tell me about it, by the fire? I want to see it all.")),
-            loves=(items.RASPBERRY, items.HONEY, items.CHANTERELLE),
+            loves=(items.RASPBERRY, items.HONEY, items.CHANTERELLE, items.BERRY_PIE),
             likes=(items.BOLETE, items.WOOD, items.FIBER), dislikes=(items.COAL,),
             gifts=(items.RASPBERRY, items.FIBER),
             bio="The camp's apprentice; green, eager, and quietly dreaming bigger."),
@@ -1883,7 +1923,7 @@ def solo_npcs() -> list[NPC]:
                               "it knows your step now — and it lets you through!"),
                           (6, "Deep in my heart there's a hum and a humming —\n"
                               "the bees know a friend, and they know when he's coming!")),
-            loves=(items.WOOD, items.TIMBER_PLANK, items.CHANTERELLE),
+            loves=(items.WOOD, items.TIMBER_PLANK, items.CHANTERELLE, items.MUSHROOM_STEW),
             likes=(items.BOLETE, items.FIBER, items.RASPBERRY),
             dislikes=(items.STONE, items.COAL),
             gifts=(items.BEE_QUEEN, items.CHERRY_SAPLING, items.APPLE_SAPLING,
@@ -2189,6 +2229,10 @@ QUESTS: list[Quest] = [
           lambda s: s.player.skills.get("Gemcutting", 0) > 0),
     Quest("jeweller", "A Fine Setting", "Craft a ring or amulet, or embed a gem.", 200,
           lambda s: s.player.skills.get("Jewelcrafting", 0) > 0),
+    Quest("favour", "A Neighbourly Hand", "Fill 3 favours from a village notice board.", 200,
+          lambda s: s.stats.get("requests_filled", 0) >= 3),
+    Quest("cookbook", "Well Fed, Well Read", "Learn 20 cooking recipes.", 250,
+          lambda s: len(getattr(s, "known_recipes", ())) >= 20),
     Quest("prosper", "Prosperity", "Earn 2000g from the shipping bin.", 500,
           lambda s: s.stats.get("gold_earned", 0) >= 2000),
 ]

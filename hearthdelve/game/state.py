@@ -24,6 +24,11 @@ class MessageLog:
         return self.messages[-n:]
 
 
+def _starter_recipes() -> set:
+    from ..data import content
+    return set(content.STARTER_RECIPES)
+
+
 @dataclass
 class GameState:
     world: GameMap
@@ -52,6 +57,13 @@ class GameState:
     quests_done: set = field(default_factory=set)      # completed goal ids
     cheats: dict = field(default_factory=dict)         # Konami menu toggles (transient)
     mail: list = field(default_factory=list)           # letters in the post box: {sender, body, items}
+    # cook recipes the player has learned (recipe names): plain fare to start,
+    # the rest gathered around the Vale (friends, taverns, practice, favours)
+    known_recipes: set = field(default_factory=_starter_recipes)
+    # open request-board favours: [{npc, item, qty, gold, expires, flavor}]
+    requests: list = field(default_factory=list)
+    # the market's current craving: {"kind", "mult", "until"} — {} in a lull
+    demand: dict = field(default_factory=dict)
     pending_build: str = ""        # outbuilding ordered from the carpenter, awaiting placement
 
     # land: wilderness tiles the player has claimed (fenced/farmed/built on), and
