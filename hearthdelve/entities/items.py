@@ -174,7 +174,15 @@ CAVE_MUSHROOM = Item("Cave Mushroom", "τ", "material", "An earthy cave fungus �
 SLIME_GEL     = Item("Slime Gel",     "*", "material", "Sticky residue from a cave slime.",       value=15)
 BAT_WING      = Item("Bat Wing",      "~", "material", "A leathery wing from a cave bat.",         value=20)
 BOAR_HIDE     = Item("Boar Hide",     "u", "material", "Tough hide from a wild boar.",             value=40)
-MEAT          = Item("Meat",          "▬", "material", "Game meat from a wild boar; good in a pie.", value=55)
+# Meat is TYPED — the cut carries its animal the way a jam carries its fruit
+# (family "meat" lets recipes ask for "any meat" and old generic Meat still fit).
+MEAT          = Item("Meat",          "▬", "material", "Game meat; good in a pie.", value=55, family="meat")
+PORK          = Item("Pork",          "▬", "material", "A fine cut of pork.",       value=85, family="meat")
+BEEF          = Item("Beef",          "▬", "material", "A marbled cut of beef.",    value=100, family="meat")
+CHICKEN_MEAT  = Item("Chicken Meat",  "▬", "material", "A plump dressed chicken.",  value=45, family="meat")
+DUCK_MEAT     = Item("Duck Meat",     "▬", "material", "A rich, dark duck breast.", value=60, family="meat")
+MUTTON        = Item("Mutton",        "▬", "material", "A hearty cut of mutton.",   value=70, family="meat")
+GOAT_MEAT     = Item("Goat Meat",     "▬", "material", "A lean cut of goat.",       value=65, family="meat")
 SPIDER_SILK   = Item("Spider Silk",   "~", "material", "Strong, fine silk from a cave spider.",    value=35)
 LURKER_SCALE  = Item("Lurker Scale",  "u", "material", "A thick armoured scale from a deep lurker.", value=55)
 WRAITH_ESSENCE= Item("Wraith Essence","*", "material", "Cold, half-real essence bled from a wraith.", value=75)
@@ -299,9 +307,9 @@ WOOLEN_CLOTH = Item("Woolen Cloth", "≡", "artisan", "A bolt of warm woven wool
 COTTON_CLOTH = Item("Cotton Cloth", "≡", "artisan", "A bolt of soft cotton cloth.", value=160)
 LINEN_CLOTH  = Item("Linen Cloth",  "≡", "artisan", "A bolt of crisp woven linen.", value=210)
 SILK_CLOTH   = Item("Silk Cloth",   "≡", "artisan", "A bolt of lustrous woven silk.", value=320)
-JERKY       = Item("Jerky",       "▬", "artisan", "Smoke-cured strips of meat; keeps for ages.", value=150, energy=45)
-SAUSAGES    = Item("Sausages",    "▬", "artisan", "Plump smoked sausages.", value=170, energy=55)
-BACON       = Item("Bacon",       "▬", "artisan", "Streaky smoked bacon.", value=180, energy=50)
+JERKY       = Item("Jerky",       "▬", "artisan", "Smoke-cured strips of meat; keeps for ages.", value=150, energy=45, family="jerky")
+SAUSAGES    = Item("Sausages",    "▬", "artisan", "Plump smoked sausages.", value=170, energy=55, family="sausages")
+BACON       = Item("Bacon",       "▬", "artisan", "Streaky smoked bacon — pork, always pork.", value=180, energy=50, family="bacon", source=PORK)
 SMOKED_FISH = Item("Smoked Fish", "»", "artisan", "Fish slow-smoked to a delicacy.", value=200, energy=50)
 
 # --- Beekeeping -------------------------------------------------------------

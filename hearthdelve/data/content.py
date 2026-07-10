@@ -1072,6 +1072,9 @@ MACHINES: dict[str, MachineDef] = {
                                    "a touch finer than the pan."),
     "cellar":     MachineDef("cellar", "Cellar", "Θ", (168, 152, 170), 4320, "age",
                              None, "Ages wine, mead and cheese over days into something finer."),
+    "butcher":    MachineDef("butcher", "Butcher's Block", "Ъ", (196, 140, 130), 0, "butcher",
+                             None, "Renders a grown animal into its cuts — a somber trade "
+                                   "of a friend for a full larder."),
 }
 
 # Farmhouse fittings Tomas installs for a price — sited automatically (the oven
@@ -1106,10 +1109,48 @@ CLOTH_MATERIAL = {
 }
 
 
+# A recipe input that means "any carried item of this family" — so a Meat Pie
+# takes whatever cut the larder holds, and the dish never cares which. Resolved
+# to a concrete item at craft time (see crafting.resolve_inputs); duck-types an
+# Item just enough (.name/.value/.family) for the menus.
+@dataclass(frozen=True)
+class AnyOf:
+    family: str
+    name: str            # display, e.g. "any meat"
+    value: int = 0
+
+
+ANY_MEAT = AnyOf("meat", "any meat")
+ANY_SAUSAGES = AnyOf("sausages", "any sausages")
+
+# The typed cuts, and what a grown animal renders into at the butcher's block:
+# (meat item, how many cuts). The big beasts feed a family; a hen feeds a pan.
+MEATS = (items.PORK, items.BEEF, items.CHICKEN_MEAT, items.DUCK_MEAT,
+         items.MUTTON, items.GOAT_MEAT)
+MEAT_CUT = {"pig": (items.PORK, 3), "cow": (items.BEEF, 4),
+            "chicken": (items.CHICKEN_MEAT, 1), "duck": (items.DUCK_MEAT, 1),
+            "sheep": (items.MUTTON, 2), "goat": (items.GOAT_MEAT, 2)}
+
+# Smoked goods carry their meat the way a jam carries its fruit: one jerky and
+# one sausage per cut, family-matched so "loves Jerky" covers the lot.
+JERKY_MULT, SAUSAGE_MULT = 1.8, 2.0
+MEAT_JERKY = {m: items.register(items.Item(
+    f"{m.name} Jerky", "▬", "artisan", f"Smoke-cured strips of {m.name.lower()}.",
+    value=round(m.value * JERKY_MULT), energy=45, family="jerky", source=m))
+    for m in MEATS}
+MEAT_SAUSAGES = {m: items.register(items.Item(
+    f"{m.name} Sausages", "▬", "artisan", f"Plump smoked {m.name.lower()} sausages.",
+    value=round(m.value * SAUSAGE_MULT), energy=55, family="sausages", source=m))
+    for m in MEATS}
+
 # What a smoker cures inputs into (a slow, premium transformation). A list, not
 # a map, so one input (meat) can offer several products (jerky/sausages/bacon).
+# Generic legacy Meat keeps its old products, so nothing in an old pack sours.
 SMOKE_RECIPES = [
-    (items.MEAT, items.JERKY), (items.MEAT, items.SAUSAGES), (items.MEAT, items.BACON),
+    (items.MEAT, items.JERKY), (items.MEAT, items.SAUSAGES),
+    (items.PORK, items.BACON),
+] + [(m, MEAT_JERKY[m]) for m in MEATS] \
+  + [(m, MEAT_SAUSAGES[m]) for m in MEATS] + [
     (items.SALMON, items.SMOKED_FISH), (items.TROUT, items.SMOKED_FISH),
     (items.TUNA, items.SMOKED_FISH), (items.MACKEREL, items.SMOKED_FISH),
     (items.SEA_BASS, items.SMOKED_FISH),
@@ -1187,6 +1228,8 @@ RECIPES: list[Recipe] = [
            desc="A hand-mill for grain, cane & salt — slow and a touch coarse (a windmill does better)."),
     Recipe("Smoker", "build", ((items.STONE, 6), (items.WOOD, 8)), machine="smoker",
            desc="Slow-smoke meat into jerky, or fish into a smoked delicacy."),
+    Recipe("Butcher's Block", "build", ((items.TIMBER_PLANK, 8), (items.IRON_BAR, 2), (items.STONE, 4)),
+           machine="butcher", desc="Render a grown animal into cuts of meat for the larder."),
     Recipe("Spinning Wheel", "build", ((items.TIMBER_PLANK, 4), (items.WOOD, 4)), machine="spinner",
            desc="Spins wool, cotton, flax & spider silk into yarn and thread."),
     Recipe("Loom", "build", ((items.TIMBER_PLANK, 6), (items.WOOD, 6)), machine="loom",
@@ -1252,8 +1295,8 @@ RECIPES: list[Recipe] = [
            output=items.CAKE, desc="A rich, sweet celebration cake."),
     Recipe("Fried Rice", "cook", ((items.RICE_FLOUR, 1), (items.EGG, 1), (items.SEA_SALT, 1)),
            output=items.FRIED_RICE, desc="Rice fried with egg and a pinch of salt."),
-    Recipe("Meat Pie", "cook", ((items.FLOUR, 1), (items.MEAT, 1), (items.POTATO, 1)),
-           output=items.MEAT_PIE, desc="A hearty pie of game meat and potato."),
+    Recipe("Meat Pie", "cook", ((items.FLOUR, 1), (ANY_MEAT, 1), (items.POTATO, 1)),
+           output=items.MEAT_PIE, desc="A hearty pie of meat and potato — any cut will do."),
     Recipe("Pumpkin Pie", "cook", ((items.FLOUR, 1), (items.SUGAR, 1), (items.PUMPKIN, 1)),
            output=items.PUMPKIN_PIE, desc="Spiced pumpkin in a golden crust."),
     Recipe("Fish Pie", "cook", ((items.FLOUR, 1), (items.PERCH, 1), (items.POTATO, 1)),
@@ -1292,7 +1335,7 @@ RECIPES: list[Recipe] = [
            output=items.PASTA, desc="Noodles in a rich tomato sauce with cheese."),
     Recipe("Bacon & Eggs", "cook", ((items.BACON, 1), (items.EGG, 2)),
            output=items.BACON_AND_EGGS, desc="Crispy bacon with fried eggs."),
-    Recipe("Sausage Roll", "cook", ((items.SAUSAGES, 1), (items.FLOUR, 1)),
+    Recipe("Sausage Roll", "cook", ((ANY_SAUSAGES, 1), (items.FLOUR, 1)),
            output=items.SAUSAGE_ROLL, desc="A sausage baked in flaky pastry."),
     Recipe("Grilled Sardines", "cook", ((items.SARDINE, 2), (items.SEA_SALT, 1)),
            output=items.GRILLED_SARDINES, desc="A row of small fish, charred and salted."),
@@ -1921,7 +1964,8 @@ def camp_npcs() -> list[NPC]:
                               "not one of them looking at you. Out here, folk see you."),
                           (6, "Share our stew tonight, eh? Rowan sings after the second cup.\n"
                               "It's terrible. You have to hear it. That's what a fire's for.")),
-            loves=(items.MEAD, items.JELLIED_EEL, items.PICKLES, items.BOLETE_BROTH),
+            loves=(items.MEAD, items.JELLIED_EEL, items.PICKLES, items.BOLETE_BROTH,
+                   items.JERKY),                       # family-matched: any jerky pleases the hunter
             likes=(items.HONEY, items.CAVE_MUSHROOM), dislikes=(items.STONE,),
             gifts=(items.WOOD, items.COAL),
             bio="The camp's hunter and cook; gruff, watchful, keeper of the fire."),
@@ -2214,7 +2258,7 @@ def random_gem(rng) -> object:
 MONSTER_DROPS: dict[str, list] = {
     "Cave Slime":   [(items.SLIME_GEL, 0.7)],
     "Bat":          [(items.BAT_WING, 0.6)],
-    "Boar":         [(items.BOAR_HIDE, 0.5), (items.MEAT, 0.7)],
+    "Boar":         [(items.BOAR_HIDE, 0.5), (items.PORK, 0.7)],
     "Cave Spider":  [(items.SPIDER_SILK, 0.6)],
     "Deep Lurker":  [(items.LURKER_SCALE, 0.6)],
     "Wraith":       [(items.WRAITH_ESSENCE, 0.5)],

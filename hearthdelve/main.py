@@ -1446,7 +1446,8 @@ def main() -> None:
                             if isinstance(req, dict) and "load" in req:
                                 load_ctx = {"pos": req["load"], "options": req["options"],
                                             "name": req["name"], "sel": 0,
-                                            "jeweller": req.get("jeweller", False)}
+                                            "jeweller": req.get("jeweller", False),
+                                            "butcher": req.get("butcher", False)}
                                 mode = "loadmachine"
                             else:
                                 check_faint(state)
@@ -1608,6 +1609,8 @@ def main() -> None:
                                 crafting.craft_choice(state, pick)
                             elif load_ctx.get("jeweller"):   # jeweller's bench (instant: make/embed)
                                 crafting.jeweller_choice(state, pick)
+                            elif load_ctx.get("butcher"):    # the block (instant: an animal for its cuts)
+                                crafting.butcher_choice(state, pick)
                             else:
                                 m = state.world.machines.get(load_ctx["pos"])
                                 if m is not None:

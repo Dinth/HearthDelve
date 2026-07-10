@@ -16,9 +16,34 @@ from .state import GameState
 
 
 # --- helpers ----------------------------------------------------------------
+def _resolve_any(inv, it, qty):
+    """A concrete carried item satisfying a family input (cheapest cut first),
+    the item itself when it's already concrete, or None when nothing fits."""
+    if not isinstance(it, content.AnyOf):
+        return it
+    cands = sorted({e[0] for e in inv.slots
+                    if e[0].family == it.family and inv.count(e[0]) >= qty},
+                   key=lambda i: i.value)
+    return cands[0] if cands else None
+
+
+def resolve_inputs(inv, inputs):
+    """Recipe inputs with every AnyOf pinned to a real carried item — so the
+    rest of crafting (counts, quality, removal) never sees a family wildcard.
+    None when some input can't be satisfied."""
+    out = []
+    for it, qty in inputs:
+        r = _resolve_any(inv, it, qty)
+        if r is None:
+            return None
+        out.append((r, qty))
+    return out
+
+
 def has_inputs(state: GameState, recipe: Recipe) -> bool:
     inv = state.player.inventory
-    return all(inv.count(it) >= qty for it, qty in recipe.inputs)
+    resolved = resolve_inputs(inv, recipe.inputs)
+    return resolved is not None and all(inv.count(it) >= qty for it, qty in resolved)
 
 
 def inputs_str(recipe: Recipe) -> str:
@@ -50,18 +75,20 @@ def craft(state: GameState, recipe: Recipe) -> bool:
     if not has_inputs(state, recipe):
         state.log.add(f"You need: {inputs_str(recipe)}.", C.DIM)
         return False
+    # Pin any family inputs ("any meat") to real carried items before spending.
+    inputs = resolve_inputs(state.player.inventory, recipe.inputs)
 
     from . import skills
     if recipe.kind == "build":
         if not _place_machine(state, recipe.machine):
             return False
-        for it, qty in recipe.inputs:
+        for it, qty in inputs:
             state.player.inventory.remove(it, qty)
     elif recipe.kind == "cook":
         # Cooking makes a carryable DISH whose quality inherits the average
         # ingredient quality, adjusted by the cook's skill. Eat it later.
         inv = state.player.inventory
-        qs = [inv.pop_quality(it, qty) for it, qty in recipe.inputs]
+        qs = [inv.pop_quality(it, qty) for it, qty in inputs]
         dish_q = skills.process_quality(sum(qs) / len(qs) if qs else 0, state, "Cooking")
         inv.add(recipe.output, recipe.out_qty, quality=dish_q)
         skills.gain(state, "Cooking", 14)
@@ -73,7 +100,7 @@ def craft(state: GameState, recipe: Recipe) -> bool:
     elif recipe.kind == "item":
         state.player.inventory.add(recipe.output, recipe.out_qty)
         state.log.add(f"You craft {recipe.out_qty}x {recipe.output.name}.")
-        for it, qty in recipe.inputs:
+        for it, qty in inputs:
             state.player.inventory.remove(it, qty)
     else:
         return False        # "choose" recipes are resolved via a chooser (see below)
@@ -204,6 +231,14 @@ def interact_machine(state: GameState, x: int, y: int) -> bool:
             return True
         return {"load": (x, y), "options": opts, "name": mdef.name, "jeweller": True}
 
+    if m.kind == "butcher":
+        # The block also resolves at once — it takes an animal, not an item.
+        opts = _butcher_options(state)
+        if not opts:
+            state.log.add(_needs_hint(mdef), C.DIM)
+            return True
+        return {"load": (x, y), "options": opts, "name": mdef.name, "butcher": True}
+
     if status == "done":
         from . import skills
         out = m.loaded_output
@@ -267,6 +302,7 @@ def _needs_hint(mdef) -> str:
         "bake":  "The oven bakes double batches of baked recipes you know — "
                  "you need twice the ingredients.",
         "age":   "The cellar ages wine, mead or cheese — bring a bottle or a wheel.",
+        "butcher": "The block waits for a grown animal — you have none ready.",
     }.get(mdef.accepts, f"The {mdef.name.lower()} has nothing to work with.")
 
 
@@ -419,9 +455,9 @@ def machine_load_options(state: GameState, mdef) -> list:
                 continue
             if r.name not in state.known_recipes:
                 continue
-            doubled = [(it, q * 2) for it, q in r.inputs]
-            if all(inv.count(it) >= q for it, q in doubled):
-                qf = max(r.inputs, key=lambda e: e[0].value)[0]
+            doubled = resolve_inputs(inv, [(it, q * 2) for it, q in r.inputs])
+            if doubled is not None and all(inv.count(it) >= q for it, q in doubled):
+                qf = max(doubled, key=lambda e: e[0].value)[0]
                 opts.append({"inputs": doubled, "output": r.output, "out_qty": 2,
                              "quality_from": qf, "quality_bonus": 1, "label": r.name})
     elif a == "age":
@@ -481,6 +517,48 @@ def load_machine_choice(state: GameState, m: Machine, mdef, opt) -> None:
     else:
         m.out_quality = 0
     state.log.add(f"You load the {mdef.name.lower()} ({output.name}). Ready in {_fmt_remaining(minutes)}.")
+
+
+def _butcher_options(state: GameState) -> list:
+    """One entry per grown animal on the farm — its cuts, by its kind. Meat is
+    typed (pork from the pig, beef from the cow), and a well-kept beast renders
+    finer cuts, so the block is a real trade: a friend for a full larder."""
+    from .husbandry import SPECIES, _is_adult
+    opts = []
+    for a in state.surface.animals:
+        cut = content.MEAT_CUT.get(a.kind)
+        if cut is None or not _is_adult(a):
+            continue
+        meat, qty = cut
+        spec = SPECIES[a.kind]
+        opts.append({"kind": "butcher", "animal": a, "inputs": [],
+                     "output": meat, "out_qty": qty,
+                     "label": f"{a.name} the {spec.grown_name} — {qty} {meat.name}"})
+    return opts
+
+
+def butcher_choice(state: GameState, opt) -> None:
+    """Resolve a butchering at once. The animal is gone; its cuts (starred by
+    how well it was kept) go to the pack — plus the fleece, for a sheep."""
+    from . import skills, turns
+    from .husbandry import SPECIES, _produce_quality
+    a = opt["animal"]
+    if a not in state.surface.animals:
+        return
+    state.surface.animals.remove(a)
+    q = _produce_quality(state, a)
+    state.player.inventory.add(opt["output"], opt["out_qty"], quality=q)
+    got = [f"{opt['out_qty']} {opt['output'].name}"]
+    if a.kind == "sheep":
+        state.player.inventory.add(items.WOOL, 1, quality=q)
+        got.append("1 Wool")
+    state.bump("animals_butchered")
+    skills.gain(state, "Farming", 6)
+    star = (" " + skills.stars(q)) if q else ""
+    state.log.add(f"You lead {a.name} to the block. (+{', +'.join(got)}{star}) "
+                  "The farm is a little quieter tonight.", (216, 170, 150))
+    state.player.energy = max(0, state.player.energy - C.CRAFT_COST[0])
+    turns.advance_time(state, C.CRAFT_COST[1])
 
 
 def _carried_cut_gems(inv) -> list:
