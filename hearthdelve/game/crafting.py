@@ -208,7 +208,8 @@ def interact_machine(state: GameState, x: int, y: int) -> bool:
         from . import skills
         out = m.loaded_output
         q = m.out_quality if skills.has_quality(out) else 0
-        state.player.inventory.add(out, 1, quality=q)
+        qty = max(1, m.out_qty)
+        state.player.inventory.add(out, qty, quality=q)
         star = (" " + skills.stars(q)) if q else ""
         if m.kind in ("spinner", "loom"):
             skills.gain(state, "Farming", 7)         # spinning & weaving; cloth garments too
@@ -222,13 +223,18 @@ def interact_machine(state: GameState, x: int, y: int) -> bool:
             skills.gain(state, "Smithing", 8)        # smelting & fuel-making, too
         elif m.kind in ("quern", "windmill"):
             skills.gain(state, "Cooking", 6)         # milling is kitchen work
+        elif m.kind == "oven":
+            skills.gain(state, "Cooking", 10)        # a batch bake is real kitchen work
+            state.bump("dishes_cooked", qty)
         elif out.kind == "artisan":
             state.bump("artisan_made")
             skills.gain(state, "Cooking", 8)         # processing hones the craft
-        state.log.add(f"You collect {out.name}{star} from the {mdef.name.lower()}.", (180, 230, 160))
+        got = f"{qty}x {out.name}" if qty > 1 else out.name
+        state.log.add(f"You collect {got}{star} from the {mdef.name.lower()}.", (180, 230, 160))
         m.loaded_output = None
         m.ready_at = 0
         m.out_quality = 0
+        m.out_qty = 1
         return True
 
     if status == "working":
@@ -258,6 +264,9 @@ def _needs_hint(mdef) -> str:
         "dairy": "The churn needs milk.",
         "fruit": "The keg ferments fruit into wine, or honey into mead.",
         "crop":  "The jar needs a crop or an eel to preserve.",
+        "bake":  "The oven bakes double batches of baked recipes you know — "
+                 "you need twice the ingredients.",
+        "age":   "The cellar ages wine, mead or cheese — bring a bottle or a wheel.",
     }.get(mdef.accepts, f"The {mdef.name.lower()} has nothing to work with.")
 
 
@@ -398,6 +407,30 @@ def machine_load_options(state: GameState, mdef) -> list:
                     or it is items.EEL:
                 seen.add(it)
                 opts.append({"inputs": [(it, 1)], "output": _preserve_of(it), "quality_from": it})
+    elif a == "bake":
+        # A double batch of any BAKED recipe the player knows: twice the
+        # ingredients in, two out, and a touch finer than the pan (+1 star).
+        # Hand-cooking is untouched — the oven is bigger, never the only way.
+        for r in content.RECIPES:
+            if r.kind != "cook" or r.name not in content.BAKED_GOODS:
+                continue
+            if r.name not in state.known_recipes:
+                continue
+            doubled = [(it, q * 2) for it, q in r.inputs]
+            if all(inv.count(it) >= q for it, q in doubled):
+                qf = max(r.inputs, key=lambda e: e[0].value)[0]
+                opts.append({"inputs": doubled, "output": r.output, "out_qty": 2,
+                             "quality_from": qf, "quality_bonus": 1, "label": r.name})
+    elif a == "age":
+        for src, out in content.AGED_DRINK.items():
+            if inv.count(src) >= 1:
+                opts.append({"inputs": [(src, 1)], "output": out, "quality_from": src})
+        if inv.count(items.MEAD) >= 1:
+            opts.append({"inputs": [(items.MEAD, 1)], "output": items.AGED_MEAD,
+                         "quality_from": items.MEAD})
+        if inv.count(items.CHEESE) >= 1:
+            opts.append({"inputs": [(items.CHEESE, 1)], "output": items.AGED_CHEESE,
+                         "quality_from": items.CHEESE})
     return opts
 
 
@@ -426,6 +459,7 @@ def load_machine_choice(state: GameState, m: Machine, mdef, opt) -> None:
             output = content.make_gear(content._GEAR_BASE[output], output.material, pfx, sfx,
                                        gems=output.gems)
     m.loaded_output = output
+    m.out_qty = opt.get("out_qty", 1)
     minutes = round(opt.get("minutes", mdef.minutes) * (skills.smith_speed_mult(state)
                     if mdef.kind in ("furnace", "anvil", "kiln") else 1.0))
     m.ready_at = state.abs_minutes + max(1, minutes)
@@ -436,6 +470,8 @@ def load_machine_choice(state: GameState, m: Machine, mdef, opt) -> None:
                          else skills.process_quality(in_quality, state, "Cooking"))
         if mdef.kind == "quern":                       # the hand-mill grinds a touch coarse
             m.out_quality = max(0, m.out_quality - 1)
+        # the oven bakes a touch finer than the pan
+        m.out_quality = min(5, m.out_quality + opt.get("quality_bonus", 0))
     else:
         m.out_quality = 0
     state.log.add(f"You load the {mdef.name.lower()} ({output.name}). Ready in {_fmt_remaining(minutes)}.")

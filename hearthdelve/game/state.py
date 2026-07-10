@@ -29,6 +29,11 @@ def _starter_recipes() -> set:
     return set(content.STARTER_RECIPES)
 
 
+def _fresh_projects() -> list:
+    from . import projects
+    return projects.fresh()
+
+
 @dataclass
 class GameState:
     world: GameMap
@@ -64,6 +69,9 @@ class GameState:
     requests: list = field(default_factory=list)
     # the market's current craving: {"kind", "mult", "until"} — {} in a lull
     demand: dict = field(default_factory=dict)
+    # community restoration projects, one record per content.PROJECTS entry:
+    # {id, village, state: open|building|done, gold_paid, mats: {name: qty}, site, ready_at}
+    projects: list = field(default_factory=_fresh_projects)
     pending_build: str = ""        # outbuilding ordered from the carpenter, awaiting placement
 
     # land: wilderness tiles the player has claimed (fenced/farmed/built on), and

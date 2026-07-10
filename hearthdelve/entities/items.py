@@ -318,6 +318,7 @@ WOOL        = Item("Wool",        "%", "material", "A fleece of raw wool, ready 
 EGG         = Item("Egg",         "○", "animal",   "A fresh-laid egg.",           value=35, energy=6)
 MILK        = Item("Milk",        "◓", "animal",   "A pail of fresh milk.",       value=55, energy=10)
 CHEESE      = Item("Cheese",      "◍", "artisan",  "A wheel of farmhouse cheese.", value=140, energy=32)
+AGED_CHEESE = Item("Aged Cheese", "◍", "artisan",  "A cellar-aged wheel; sharp and crumbling.", value=210, energy=36)
 YOGURT      = Item("Yogurt",      "◓", "artisan",  "Creamy cultured yogurt, churned from fresh milk.", value=90, energy=30)
 
 # --- Fish (caught with the rod at water; most are seasonal) -----------------
@@ -338,11 +339,15 @@ SARDINE     = Item("Sardine",     "»", "fish", "A little silver shoaling sea fi
 MACKEREL    = Item("Mackerel",    "»", "fish", "A striped, oily sea fish.",       value=55)
 SEA_BASS    = Item("Sea Bass",    "»", "fish", "A prized coastal sea bass.",      value=110)
 TUNA        = Item("Tuna",        "»", "fish", "A big, prized deep-sea tuna.",    value=200)
+MOONFISH    = Item("Moonfish",    "»", "fish", "A pale deep-sea fish that rises only to the lighthouse beam.", value=420)
 # underground (dungeon lakes)
 CAVE_BASS   = Item("Cave Bass",   "»", "fish", "Pale bass from lightless pools.", value=60)
 EEL         = Item("Eel",         "»", "fish", "A slippery cave eel.",           value=70)
 BLINDFISH   = Item("Blindfish",   "»", "fish", "Eyeless and ghostly.",           value=45)
 GLOWFISH    = Item("Glowfish",    "»", "fish", "Faintly luminescent; prized.",   value=180)
+
+# A fair-day prize: proof, in ribbon form, that your parsnip beat everyone's.
+FAIR_RIBBON = Item("Fair Ribbon", "⚑", "material", "A prize ribbon from the produce contest — worth more in pride than gold.", value=250)
 
 # --- Ranged weapons & ammo ---------------------------------------------------
 # Equip a launcher in the ranged slot and its ammo in the ammo slot, then aim

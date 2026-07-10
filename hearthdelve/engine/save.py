@@ -104,6 +104,7 @@ def save(state: GameState, path: str = SAVE_PATH) -> None:
         "known_recipes": sorted(state.known_recipes),
         "requests": [dict(r) for r in state.requests],
         "demand": dict(state.demand),
+        "projects": [dict(p) for p in state.projects],
         "mail": [{"sender": m["sender"], "body": m["body"],
                   "items": [[(it.name if hasattr(it, "name") else it), q, ql]
                             for it, q, ql in m.get("items", [])],
@@ -118,7 +119,8 @@ def save(state: GameState, path: str = SAVE_PATH) -> None:
         "berry_regrow": {f"{x},{y}": [bt, ready]
                          for (x, y), (bt, ready) in surf.berry_regrow.items()},
         "machines": {f"{x},{y}": [m.kind, m.loaded_output.name if m.loaded_output else None,
-                                   m.ready_at, m.has_queen, m.out_quality, m.build_kind, m.feed]
+                                   m.ready_at, m.has_queen, m.out_quality, m.build_kind, m.feed,
+                                   m.out_qty]
                      for (x, y), m in surf.machines.items()},
         "animals": [[a.kind, a.name, a.x, a.y, list(a.home),
                      a.happiness, a.age_days, a.produce_ready, a.petted_today]
@@ -200,6 +202,8 @@ def load(path: str = SAVE_PATH) -> GameState:
             m.build_kind = rec[5]
         if len(rec) > 6:
             m.feed = rec[6]
+        if len(rec) > 7:
+            m.out_qty = rec[7]
         world.machines[(x, y)] = m
 
     from ..entities.animal import Animal
@@ -287,6 +291,11 @@ def load(path: str = SAVE_PATH) -> GameState:
                            {r.name for r in content.RECIPES if r.kind == "cook"})
     state.requests = [dict(r) for r in data.get("requests", [])]
     state.demand = dict(data.get("demand") or {})
+    from ..game import projects as _projects
+    state.projects = _projects.merge_loaded(data.get("projects"))
+    # Completed landmarks' tiles live in the grid, but their look-mode records
+    # aren't in the saved buildings list (village-owned) — rebuild them.
+    _projects.register_buildings(world, state.projects)
     state.mail = data.get("mail", [])
     state.pending_build = data.get("pending_build", "")
     state.claims = {tuple(map(int, k.split(","))) for k in data.get("claims", [])}

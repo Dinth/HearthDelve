@@ -19,6 +19,7 @@ class Machine:
     out_quality: int = 0                 # quality (0-5 stars) of the pending output
     build_kind: str = ""                 # construction site: the machine kind it becomes
     feed: int = 0                        # coop/barn: straw stocked in the trough
+    out_qty: int = 1                     # units yielded on collect (the oven bakes in batches)
 
     def status(self, now: int) -> str:
         if self.loaded_output is None:

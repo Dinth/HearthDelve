@@ -62,6 +62,14 @@ def begin(state: GameState, tx: int, ty: int):
     else:
         table = content.fish_in_season(state.season)
     chance = content.FISH_CATCH_CHANCE + skills.fishing_catch_bonus(state)
+    # The Saltmere lighthouse: the beam steadies the boats and draws the far
+    # shoals in — sea casts bite more often, and moonfish rise to the light.
+    if table is content.SEA_FISH:
+        from . import projects
+        from ..entities import items
+        if projects.done(state, "lighthouse"):
+            chance += 0.08
+            table = table + [(items.MOONFISH, 6)]     # a local copy, never the module list
     if not table or random.random() > chance:
         # a "cast that finds nothing" still costs a little time & effort
         p.energy = max(0, p.energy - C.FISH_COST[0])

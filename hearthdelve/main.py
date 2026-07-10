@@ -779,6 +779,18 @@ def _facing_tile_kind(state: GameState, kind: str) -> bool:
     return False
 
 
+def _board_village(state: GameState) -> str:
+    """Which village's notice board the player is standing at (nearest square)."""
+    p = state.player
+    centers = getattr(state.surface, "village_centers", {}) if state.surface else {}
+    best, best_d = "", 10**9
+    for name, (vx, vy) in centers.items():
+        d = max(abs(p.x - vx), abs(p.y - vy))
+        if d < best_d:
+            best, best_d = name, d
+    return best if best_d <= 45 else ""
+
+
 def collect_letter(state: GameState, letter) -> None:
     """Take a letter's contents into the pack and read it out. A tax notice
     settles the land tax instead of holding items."""
@@ -1134,6 +1146,8 @@ def main() -> None:
     eat_sel = 0              # cursor in the eat menu
     mail_sel = 0             # cursor in the post box
     req_sel = 0              # cursor on the village notice board
+    req_village = ""         # which village's board is open (for its project row)
+    contest_sel = 0          # cursor in the festival contest entry chooser
     journal_tab = 0          # journal page: goals | favours | market | homestead
     rel_scroll = 0           # scroll offset in the relationships screen
     target_ctx = None        # active aiming context (throw / site a building)
@@ -1258,7 +1272,9 @@ def main() -> None:
             elif mode == "mail":
                 rendering.render_mail(console, state, mail_sel)
             elif mode == "requests":
-                rendering.render_requests(console, state, req_sel)
+                rendering.render_requests(console, state, req_sel, req_village)
+            elif mode == "contest":
+                rendering.render_contest(console, state, contest_sel)
             elif mode == "target":
                 rendering.render_target(console, state, target_ctx)
             elif mode == "loadmachine":
@@ -1416,7 +1432,11 @@ def main() -> None:
                             else:
                                 state.log.add("Your post box is empty.", C.DIM)
                         elif _at_board(state):
-                            if state.requests:
+                            req_village = _board_village(state)
+                            from .game import projects as gameproj
+                            proj = gameproj.for_village(state, req_village)
+                            has_proj = proj is not None and proj["state"] != "done"
+                            if state.requests or has_proj:
                                 mode, req_sel = "requests", 0
                             else:
                                 state.log.add("The notice board is bare today — "
@@ -1495,7 +1515,7 @@ def main() -> None:
                         npc = village.npc_near(state)
                         if npc is None:
                             state.log.add("There's no one here to talk to.", C.DIM)
-                        elif npc.shop:
+                        elif village.npc_shop(state, npc):
                             # every shopkeeper still gets the daily greeting
                             # (friendship, festival treats, heart gifts), then trades
                             dialogue_line = village.talk(state, npc)
@@ -1676,16 +1696,28 @@ def main() -> None:
                             mode = "play"
 
                 elif mode == "requests":
-                    from .game import requests as gamereq
-                    if cmd in ("cancel", "grab", "quit") or not state.requests:
+                    from .game import requests as gamereq, projects as gameproj
+                    proj = gameproj.for_village(state, req_village)
+                    if proj is not None and proj["state"] == "done":
+                        proj = None
+                    n_rows = len(state.requests) + (1 if proj else 0)
+                    if cmd in ("cancel", "grab", "quit") or not n_rows:
                         mode = "play"
                     elif cmd == "move" and action[2]:
-                        req_sel = (req_sel + action[2]) % len(state.requests)
-                    elif cmd == "confirm":
-                        req_sel = min(req_sel, len(state.requests) - 1)
-                        gamereq.deliver(state, state.requests[req_sel])
-                        req_sel = 0
-                        if not state.requests:
+                        req_sel = (req_sel + action[2]) % n_rows
+                    elif cmd in ("confirm", "use"):
+                        req_sel = min(req_sel, n_rows - 1)
+                        if req_sel < len(state.requests):
+                            if cmd == "confirm":
+                                gamereq.deliver(state, state.requests[req_sel])
+                                req_sel = 0
+                        elif proj is not None and proj["state"] == "open":
+                            # Enter = mats + a 500g instalment; Space = all-in gold
+                            gameproj.contribute(state, proj, all_in=(cmd == "use"))
+                        elif proj is not None:
+                            state.log.add("The frame is already rising — give it a few days.",
+                                          C.DIM)
+                        if not state.requests and (proj is None or proj["state"] != "open"):
                             mode = "play"
 
                 elif mode == "eat":
@@ -1725,13 +1757,31 @@ def main() -> None:
                         mode = "play"
 
                 elif mode == "shop":
-                    entries = village.shop_entries(npc.shop, state)
+                    entries = village.shop_entries(village.npc_shop(state, npc), state, npc)
                     if cmd in ("cancel", "talk", "quit"):
                         mode = "play"
                     elif cmd == "move" and action[2] and entries:
                         shop_sel = (shop_sel + action[2]) % len(entries)
                     elif cmd == "confirm" and entries:
-                        village.purchase(state, entries[min(shop_sel, len(entries) - 1)])
+                        picked = entries[min(shop_sel, len(entries) - 1)]
+                        if picked[0] == "contest":       # the fair: pick an entry to judge
+                            mode, contest_sel = "contest", 0
+                        else:
+                            village.purchase(state, picked)
+
+                elif mode == "contest":
+                    goods = village.contest_items(state)
+                    if cmd in ("cancel", "quit") or not goods:
+                        mode, shop_sel = "shop", 0
+                        if not goods:
+                            state.log.add("You've nothing fine enough to enter — "
+                                          "bring quality produce.", C.DIM)
+                    elif cmd == "move" and action[2]:
+                        contest_sel = (contest_sel + action[2]) % len(goods)
+                    elif cmd == "confirm":
+                        it, _q, ql = goods[min(contest_sel, len(goods) - 1)]
+                        dialogue_line = village.enter_contest(state, it, ql)
+                        mode = "dialogue"
 
                 elif mode == "gift":
                     gifts = village.giftable_items(state, npc)
@@ -1748,7 +1798,7 @@ def main() -> None:
                     if cmd in ("cancel", "journal", "quit"):
                         mode = "play"
                     elif cmd == "move" and action[1]:
-                        journal_tab = (journal_tab + action[1]) % 4
+                        journal_tab = (journal_tab + action[1]) % len(rendering._JOURNAL_TABS)
 
                 elif mode == "relations":
                     if cmd in ("cancel", "relations", "quit"):

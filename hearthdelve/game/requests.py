@@ -81,10 +81,9 @@ def _request_pool(state: GameState, role: str) -> list:
     parts = [it.SLIME_GEL, it.BAT_WING, it.LURKER_SCALE, it.WRAITH_ESSENCE]
     pools = {
         "innkeeper":  _known_dishes(state) + drinks + _fish_pool(state),
-        # No shop-stocked fuels here: a coal favour must never be fillable at a
-        # profit straight off Bron's own shelf.
-        "blacksmith": [it.COPPER_ORE, it.IRON_ORE, it.TIN_ORE,
-                       it.COPPER_BAR, it.IRON_BAR],
+        # Nothing Bron himself sells (fuels, bars): a favour must never be
+        # fillable at a profit straight off his own shelf.
+        "blacksmith": [it.COPPER_ORE, it.IRON_ORE, it.TIN_ORE],
         "carpenter":  [it.WOOD, it.TIMBER_PLANK, it.STONE],
         "forester":   [it.WOOD, it.TIMBER_PLANK] + mushrooms,
         "forager":    mushrooms + parts + [it.HONEY, it.ASTER] + crops,

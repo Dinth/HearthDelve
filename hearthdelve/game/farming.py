@@ -299,6 +299,10 @@ def new_day(state: GameState, rested: bool = True) -> None:
     from . import requests
     requests.new_day(state)
 
+    # A funded restoration project that couldn't find ground looks again.
+    from . import projects
+    projects.new_day(state)
+
     # The crown's weekly land tax on claimed wilderness (karma-only if unpaid).
     from . import land
     land.weekly_tax(state)

@@ -281,7 +281,61 @@ def _finish_construction(state: GameState) -> None:
     done = [(pos, m) for pos, m in surf.machines.items()
             if m.kind == "site" and now >= m.ready_at]
     for (x, y), m in done:
-        _raise_building(state, x, y, m.build_kind)
+        # A site may be raising a farm outbuilding, a village restoration
+        # project, or a house fitting — each finishes its own way.
+        from ..data import content
+        if m.build_kind in content.PROJECTS:
+            from . import projects
+            projects.finish(state, x, y, m)
+        elif m.build_kind in ("oven", "cellar"):
+            _finish_house_machine(state, x, y, m)
+        else:
+            _raise_building(state, x, y, m.build_kind)
+
+
+def find_house_spot(state: GameState, kind: str):
+    """Where a farmhouse fitting goes — the oven on a free interior floor tile
+    (back wall first, never the bed or the doorway), the cellar dug just outside
+    the walls. Returns (x, y) or None if the house is too cluttered."""
+    surf = state.surface
+    if surf is None or not surf.bed:
+        return None
+    hx, hy = surf.bed[0] - 1, surf.bed[1] - 1        # worldgen: bed = (hx+1, hy+1)
+    w, h = 6, 5
+    if kind == "oven":
+        door_inside = (hx + w // 2, hy + h - 2)      # keep the doorway clear
+        for spot in ((hx + 4, hy + 1), (hx + 2, hy + 1), (hx + 4, hy + 2),
+                     (hx + 1, hy + 2), (hx + 4, hy + 3), (hx + 1, hy + 3),
+                     (hx + 2, hy + 3)):
+            x, y = spot
+            if (spot != door_inside and spot != surf.bed
+                    and surf.in_bounds(x, y) and surf.tiles[x, y] == tile.HOUSE_FLOOR
+                    and spot not in surf.machines and spot not in surf.crops):
+                return spot
+        return None
+    # cellar: the ring just outside the walls, back row first
+    from . import land
+    ring = ([(x, hy - 1) for x in range(hx, hx + w)]
+            + [(hx - 1, y) for y in range(hy, hy + h)]
+            + [(hx + w, y) for y in range(hy, hy + h)])
+    for spot in ring:
+        x, y = spot
+        if (surf.in_bounds(x, y) and surf.tiles[x, y] in _GROUND
+                and spot not in surf.machines and spot not in surf.crops
+                and spot not in surf.trees and not land.owned_by_other(state, x, y)):
+            return spot
+    return None
+
+
+def _finish_house_machine(state: GameState, x: int, y: int, m) -> None:
+    """A house fitting (oven, cellar) finishes: the scaffold gives way to the
+    machine itself, standing ready on the restored floor."""
+    surf = state.surface
+    inside = surf.bed and abs(x - surf.bed[0]) <= 4 and abs(y - surf.bed[1]) <= 3
+    surf.tiles[x, y] = tile.HOUSE_FLOOR if inside else tile.GRASS
+    surf.machines[(x, y)] = Machine(kind=m.build_kind)
+    state.log.add(f"Tomas hangs up his tools — your {MACHINES[m.build_kind].name.lower()} "
+                  "is ready.", (200, 220, 160))
 
 
 # --- carpenter construction -------------------------------------------------
@@ -298,7 +352,14 @@ def _build_wh(kind: str):
 
 
 def _build_name(kind: str) -> str:
-    return "greenhouse" if kind == "greenhouse" else MACHINES[kind].name.lower()
+    if kind == "greenhouse":
+        return "greenhouse"
+    if kind in MACHINES:
+        return MACHINES[kind].name.lower()
+    from ..data import content
+    if kind in content.PROJECTS:                # a village restoration site
+        return content.PROJECTS[kind].name
+    return kind.replace("_", " ")
 
 
 def _footprint(door, kind):

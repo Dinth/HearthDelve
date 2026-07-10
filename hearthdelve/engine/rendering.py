@@ -694,6 +694,9 @@ def _building_label(state: GameState, b: dict) -> str:
         return f"the {v} general store"
     if kind == "smithy":
         return f"the {v} smithy"
+    from ..data import content as _c
+    if kind in _c.PROJECTS:
+        return f"the {_c.PROJECTS[kind].name} — raised by your hand"
     if kind == "tent":
         owner = b.get("owner")
         if owner:
@@ -1067,17 +1070,25 @@ def render_mail(con: tcod.console.Console, state: GameState, sel: int) -> None:
     con.print(x + 2, y + h - 2, hint, fg=C.DIM)
 
 
-def render_requests(con: tcod.console.Console, state: GameState, sel: int) -> None:
-    """The village notice board: pinned favours, who wants what, and the pay."""
-    from ..game import requests as gamereq
+def render_requests(con: tcod.console.Console, state: GameState, sel: int,
+                    village: str = "") -> None:
+    """The village notice board: pinned favours, who wants what, and the pay —
+    plus this village's restoration project, if one is open or rising."""
+    from ..game import requests as gamereq, projects as gameproj
+    from ..data import content
     from ..entities import items as I
     reqs = state.requests
-    w = 64
-    h = max(9, len(reqs) * 3 + 6)
-    x, y = _modal(con, w, h, "Village Notice Board")
-    if not reqs:
+    proj = gameproj.for_village(state, village) if village else None
+    if proj is not None and proj["state"] == "done":
+        proj = None
+    w = 66
+    h = max(9, len(reqs) * 3 + (5 if proj else 0) + 6)
+    h = min(C.SCREEN_H - 4, h)
+    x, y = _modal(con, w, h, f"{village + ' ' if village else ''}Notice Board")
+    if not reqs and not proj:
         con.print(x + 2, y + 2, "The board is bare today — favours come and go.", fg=C.DIM)
-    sel = max(0, min(sel, len(reqs) - 1)) if reqs else 0
+    n_rows = len(reqs) + (1 if proj else 0)
+    sel = max(0, min(sel, n_rows - 1)) if n_rows else 0
     row = 0
     for i, r in enumerate(reqs):
         it = I.by_name(r["item"])
@@ -1098,7 +1109,33 @@ def render_requests(con: tcod.console.Console, state: GameState, sel: int) -> No
         con.print(x + w - 16, y + 2 + row, f"{days} day{'s' if days != 1 else ''} left",
                   fg=(160, 150, 130))
         row += 2
-    con.print(x + 2, y + h - 2, "↑↓ select   Enter deliver   Esc close", fg=C.DIM)
+    if proj is not None:
+        d = content.PROJECTS[proj["id"]]
+        i = len(reqs)
+        con.print(x + 2, y + 2 + row, f"── Village project: {d.name} "
+                  + "─" * max(0, w - 26 - len(d.name)), fg=_HDR)
+        row += 1
+        bg = (54, 50, 36) if i == sel else (20, 22, 32)
+        if i == sel:
+            con.draw_rect(x + 1, y + 2 + row, w - 2, 1, ch=ord(" "), bg=bg)
+        if proj["state"] == "building":
+            mins = proj.get("ready_at", 0) - state.abs_minutes
+            days = max(1, round(mins / 1440))
+            con.print(x + 2, y + 2 + row, ("▸ " if i == sel else "  ")
+                      + f"Beams are rising — finished in ~{days} day{'s' if days != 1 else ''}.",
+                      fg=(200, 220, 160), bg=bg)
+        else:
+            gold_left, mats_left = gameproj.remaining(state, proj)
+            need = " · ".join([f"{q} {it.name}" for it, q in mats_left[:3]]
+                              + ([f"{gold_left}g"] if gold_left else []))
+            con.print(x + 2, y + 2 + row, ("▸ " if i == sel else "  ")
+                      + f"Contribute — needs {need}"[:w - 4], fg=C.WHITE, bg=bg)
+        row += 1
+        con.print(x + 4, y + 2 + row, d.perk[:w - 8], fg=(232, 200, 120))
+        row += 1
+    footer = ("↑↓ · Enter deliver/give (500g) · Space all-in gold · Esc" if proj
+              else "↑↓ select   Enter deliver   Esc close")
+    con.print(x + 2, y + h - 2, footer[:w - 4], fg=C.DIM)
 
 
 def render_eat(con: tcod.console.Console, state: GameState, sel: int) -> None:
@@ -1260,7 +1297,9 @@ def build_codex_pages(state: GameState):
         ("  Shift+C          talk to a villager / open a shop", C.WHITE),
         ("  f                give a villager a gift", C.WHITE),
         ("  g at ‡ board     village notice board — favours for gold &", C.WHITE),
-        ("                   friendship (j shows them from anywhere)", C.DIM),
+        ("                   friendship, and the village's great project:", C.DIM),
+        ("                   fund it in instalments for a lasting landmark", C.DIM),
+        ("                   & perk (j → Projects shows them anywhere)", C.DIM),
         ("  > / <            descend / climb a dungeon (on stairs)", C.WHITE),
         ("  s                sleep in bed -> next day", C.WHITE),
         ("  i                inventory  (a-z select; Shift+D drops the stack)", C.WHITE),
@@ -1849,7 +1888,7 @@ def render_ship(con: tcod.console.Console, state: GameState, sel: int) -> None:
     con.print(x + 2, y + h - 2, "↑↓ select · Enter stack · Space all · Esc close", fg=C.DIM)
 
 
-_JOURNAL_TABS = ("Goals", "Favours", "Market", "Homestead")
+_JOURNAL_TABS = ("Goals", "Favours", "Market", "Homestead", "Projects")
 
 
 def render_journal(con: tcod.console.Console, state: GameState, tab: int = 0) -> None:
@@ -1900,6 +1939,28 @@ def render_journal(con: tcod.console.Console, state: GameState, tab: int = 0) ->
         rows.append((0, "", C.WHITE))
         rows.append((0, "Cravings come and go with the morning post; the shipping", C.DIM))
         rows.append((0, "bin pays the marked-up price the night you ship.", C.DIM))
+    elif tab == 4:
+        from ..game import projects as gameproj
+        from ..data import content as _c
+        for proj in state.projects:
+            d = _c.PROJECTS[proj["id"]]
+            if proj["state"] == "done":
+                rows.append((0, f" ✔ {d.name}", (150, 205, 150)))
+                rows.append((2, d.perk, (232, 200, 120)))
+            elif proj["state"] == "building":
+                days = max(1, round((proj.get("ready_at", 0) - state.abs_minutes) / 1440))
+                rows.append((0, f" ▧ {d.name} — rising, ~{days} day{'s' if days != 1 else ''}",
+                             (200, 220, 160)))
+                rows.append((2, d.perk, C.DIM))
+            else:
+                gold_left, mats_left = gameproj.remaining(state, proj)
+                need = " · ".join([f"{q} {it.name}" for it, q in mats_left[:3]]
+                                  + ([f"{gold_left}g"] if gold_left else []))
+                rows.append((0, f" ○ {d.name}  ({proj['village']})", C.WHITE))
+                rows.append((2, f"needs {need}"[:56], C.DIM))
+                rows.append((2, d.perk, C.DIM))
+            rows.append((0, "", C.WHITE))
+        rows.append((0, "Contribute at that village's notice board (g).", C.DIM))
     else:
         surf = state.surface
         now = state.abs_minutes
@@ -1957,8 +2018,8 @@ def render_journal(con: tcod.console.Console, state: GameState, tab: int = 0) ->
                              C.WHITE))
 
     done, total = quests.progress(state)
-    title = {0: f"Journal — Goals ({done}/{total})", 1: "Journal — Favours",
-             2: "Journal — Market", 3: "Journal — Homestead"}[tab]
+    title = (f"Journal — Goals ({done}/{total})" if tab == 0
+             else f"Journal — {_JOURNAL_TABS[tab]}")
     w = 62
     h = min(C.SCREEN_H - 4, max(10, len(rows) + 6))
     x, y = _modal(con, w, h, title)
@@ -2064,11 +2125,13 @@ def render_shop(con: tcod.console.Console, state: GameState, npc, sel: int, line
     from ..data import content
     from ..entities import items as I
 
-    entries = village.shop_entries(npc.shop, state)
+    shop = village.npc_shop(state, npc)
+    entries = village.shop_entries(shop, state, npc)
     title = {"general": "General Store", "blacksmith": "Blacksmith",
-             "tavern": "Tavern", "carpenter": "Carpentry"}.get(npc.shop, "Shop")
+             "tavern": "Tavern", "carpenter": "Carpentry",
+             "trader": "Wagon"}.get(shop, "Shop")
     header = line.split("\n") if line else []             # the keeper's greeting
-    w = 68 if npc.shop == "carpenter" else 56
+    w = 68 if shop == "carpenter" else 56
     h = min(C.SCREEN_H - 4, len(entries) + 6 + len(header))
     x, y = _modal(con, w, h, f"{npc.name}'s {title}")
     p = state.player
@@ -2098,6 +2161,18 @@ def render_shop(con: tcod.console.Console, state: GameState, npc, sel: int, line
             afford = p.gold >= price
             con.print(x + 2, yy, ("▸ " if i == sel else "  ") + item.name, fg=C.WHITE if afford else C.DIM, bg=rowbg)
             con.print(x + w - 10, yy, f"{price}g", fg=C.GOLD_COLOR if afford else C.DIM, bg=rowbg)
+        elif e[0] == "contest":
+            _, fest_name = e
+            con.print(x + 2, yy, ("▸ " if i == sel else "  ")
+                      + f"Enter the produce contest ({fest_name})"[:w - 12],
+                      fg=(232, 200, 120), bg=rowbg)
+            con.print(x + w - 8, yy, "fair!", fg=(232, 200, 120), bg=rowbg)
+        elif e[0] == "tradebuy":
+            _, item, price, _key = e
+            afford = p.gold >= price
+            con.print(x + 2, yy, ("▸ " if i == sel else "  ") + item.name[:w - 14],
+                      fg=(232, 200, 120) if afford else C.DIM, bg=rowbg)
+            con.print(x + w - 10, yy, f"{price}g", fg=C.GOLD_COLOR if afford else C.DIM, bg=rowbg)
         elif e[0] == "recipe":
             _, name, price = e
             afford = p.gold >= price
@@ -2115,7 +2190,7 @@ def render_shop(con: tcod.console.Console, state: GameState, npc, sel: int, line
             con.print(x + 2, yy, ("▸ " if i == sel else "  ") + "Cancel current order",
                       fg=(224, 180, 120), bg=rowbg)
             con.print(x + w - 12, yy, "refund", fg=(190, 180, 150), bg=rowbg)
-        elif e[0] == "commission":
+        elif e[0] in ("commission", "housejob"):
             _, label, kind, price, mats = e
             matstr = ", ".join(f"{q} {it.name.split()[0].lower()}" for it, q in mats)
             afford = p.gold >= price and all(p.inventory.count(it) >= q for it, q in mats)
@@ -2130,7 +2205,7 @@ def render_shop(con: tcod.console.Console, state: GameState, npc, sel: int, line
                 txt, cost = f"{tool.name}: Mithril (max)", ""
                 col = C.DIM
             else:
-                gold, bar, count = content.upgrade_cost(tier)
+                gold, bar, count = village.upgrade_price(state, tier)
                 txt = f"{tool.name}: {C.TOOL_TIERS[tier]}→{C.TOOL_TIERS[tier + 1]}"
                 cost = f"{gold}g +{count} {bar.name.split()[0]}"
                 affordable = p.gold >= gold and p.inventory.count(bar) >= count
@@ -2143,6 +2218,35 @@ def render_shop(con: tcod.console.Console, state: GameState, npc, sel: int, line
     if end < len(entries):
         con.print(x + w - 4, y + h - 3, "▼", fg=_HDR)
     con.print(x + 2, y + h - 2, f"Gold {p.gold}g   ↑↓ Enter buy/upgrade   Esc close", fg=C.DIM)
+
+
+def render_contest(con: tcod.console.Console, state: GameState, sel: int) -> None:
+    """Pick one fine good to set on the Grange judging table — stars decide."""
+    from ..game import village, skills
+    goods = village.contest_items(state)
+    w, h = 52, min(C.SCREEN_H - 4, max(8, len(goods) + 6))
+    body = h - 5
+    x, y = _modal(con, w, h, "The Produce Contest")
+    con.print(x + 2, y + 1, "One entry — your finest. The judges love stars.", fg=C.DIM)
+    if not goods:
+        con.print(x + 2, y + 3, "Nothing on you is fine enough to show.", fg=C.DIM)
+    sel = max(0, min(sel, len(goods) - 1)) if goods else 0
+    start, end = _window(sel, len(goods), body)
+    for row, (it, q, ql) in enumerate(goods[start:end]):
+        i = start + row
+        yy = y + 3 + row
+        rowbg = (54, 50, 36) if i == sel else (20, 22, 32)
+        if i == sel:
+            con.draw_rect(x + 1, yy, w - 2, 1, ch=ord(" "), bg=rowbg)
+        stars = skills.stars(ql) or "·"
+        con.print(x + 2, yy, ("▸ " if i == sel else "  ") + f"{it.name}"[:w - 14],
+                  fg=C.WHITE, bg=rowbg)
+        con.print(x + w - 10, yy, f"{stars:>5}", fg=(250, 220, 110), bg=rowbg)
+    if start > 0:
+        con.print(x + w - 4, y + 3, "▲", fg=_HDR)
+    if end < len(goods):
+        con.print(x + w - 4, y + h - 3, "▼", fg=_HDR)
+    con.print(x + 2, y + h - 2, "↑↓ select   Enter show it   Esc back", fg=C.DIM)
 
 
 def render_gift(con: tcod.console.Console, state: GameState, npc, sel: int) -> None:

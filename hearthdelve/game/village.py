@@ -302,19 +302,198 @@ def _inn_purchases(state: GameState):
     return out
 
 
+# --- the festival produce contest (held at the Grange Hall) -------------------
+def _contest_key(state: GameState) -> str | None:
+    fest = content.festival_on(state.season, state.day_of_season)
+    return f"contest_{state.year}_{state.season}_{fest[0]}" if fest else None
+
+
+def contest_open(state: GameState) -> str | None:
+    """The festival whose produce contest awaits an entry today, or None —
+    contests run only once the Grange Hall stands, once per festival."""
+    from . import projects
+    fest = content.festival_on(state.season, state.day_of_season)
+    if (fest and projects.done(state, "grange_hall")
+            and not state.stats.get(_contest_key(state))):
+        return fest[1]
+    return None
+
+
+def contest_items(state: GameState) -> list:
+    """What can go on the judging table: any quality-bearing produce carried."""
+    from . import skills
+    return [(it, q, ql) for it, q, ql in state.player.inventory.slots
+            if skills.has_quality(it) and it.value > 0
+            and it.kind in ("crop", "artisan", "food", "fish", "animal")]
+
+
+def enter_contest(state: GameState, item, ql: int) -> str:
+    """Judge one entry at the Grange fair. The rivals and their scores are fixed
+    the moment the festival dawns (seeded from seed+day — no re-rolling), and
+    the field stiffens gently with the years. Prizes are prestige, not gold:
+    the contest is where a 5-star good goes to mean something."""
+    import random as _random
+    from . import karma, requests as gamereq, skills
+    fest = content.festival_on(state.season, state.day_of_season)
+    state.stats[_contest_key(state)] = 1
+    state.player.inventory.remove(item, 1, quality=ql)
+    state.bump("contests_entered")
+    rng = _random.Random((state.seed * 42_589 + state.day * 631) & 0x7FFFFFFF)
+    grown = [n for n in state.surface.npcs if n.role != "child"]
+    rivals = rng.sample(grown, min(3, len(grown)))
+    rival_scores = sorted((rng.uniform(2.5, 5.5) + 0.35 * max(0, state.year - 1)
+                           for _ in rivals), reverse=True)
+    mine = ql * 1.6 + min(3.5, item.value / 140.0) + rng.uniform(0.0, 1.2)
+    place = 1 + sum(1 for s in rival_scores if s > mine)
+    star = (" " + skills.stars(ql)) if ql else ""
+    entry = f"{item.name.lower()}{star}"
+
+    if place == 1:
+        state.bump("contests_won")
+        state.player.inventory.add(items.FAIR_RIBBON, 1)
+        for n in state.surface.npcs:
+            if getattr(n, "village", "") == "Mossford":
+                n.friendship = min(MAX_HEARTS * 100, n.friendship + 100)
+        karma.adjust(state, 3)
+        extra = ""
+        if rng.random() < 0.4:
+            pool = gamereq.unknown_recipes(state)
+            if pool:
+                gamereq.learn_recipe(state, rng.choice(pool), teacher="The judge")
+                extra = "\nThere's a recipe card tucked under the ribbon, too."
+        state.log.add(f"First prize at {fest[1]} — your {entry} takes the ribbon!",
+                      (232, 200, 120))
+        return (f"The judge holds your {entry} aloft — the square erupts!\n"
+                f"\"FIRST PRIZE! Finest thing the Grange has seen in years.\"\n"
+                f"A fair ribbon is pinned on you, to warm applause.{extra}")
+    if place <= 3:
+        judge = next((n for n in state.surface.npcs
+                      if n.role == "innkeeper" and n.village == "Mossford"), None)
+        if judge is not None:
+            judge.friendship = min(MAX_HEARTS * 100, judge.friendship + 45)
+        karma.adjust(state, 1)
+        state.player.inventory.add(fest[3], 1)
+        state.log.add(f"Your {entry} places {place}{'nd' if place == 2 else 'rd'} at the fair.",
+                      (200, 220, 160))
+        return (f"\"{place}{'nd' if place == 2 else 'rd'} place — well grown!\" says the judge,\n"
+                f"pressing a {fest[3].name.lower()} into your hands.\n"
+                f"{rivals[0].name}'s entry edges the field this year.")
+    karma.adjust(state, 1)
+    state.log.add("No ribbon this year — but the entering's half the fun.", C.DIM)
+    return (f"The judge nods kindly over your {entry}.\n"
+            f"\"Good, honest work — but {rivals[0].name}'s entry is a marvel.\n"
+            "Bring me your finest next fair, eh?\"")
+
+
 # --- shops ------------------------------------------------------------------
-def shop_entries(shop: str, state: GameState | None = None):
+def npc_shop(state: GameState, npc: NPC) -> str | None:
+    """The shop an NPC keeps *right now*. Derived, never stored on the NPC
+    (NPCs are regenerated from content on every load): traders open their
+    wagons by role, and Willa's only once the Fenwick causeway lets goods
+    through."""
+    if npc.shop:
+        return npc.shop
+    if npc.role == "trader":
+        from . import projects
+        if npc.name == "Willa" and not projects.done(state, "causeway"):
+            return None
+        return "trader"
+    return None
+
+
+def trader_window(seed: int, day: int) -> tuple[int, int]:
+    """(window index, window seed) for the traders' rotating stock. Windows run
+    3-6 days, their lengths drifting from the seed — fully derived from
+    (seed, day), so the rotation needs no save field and never goes stale."""
+    import random as _random
+    n, start = 0, 0
+    while True:
+        length = 3 + _random.Random((seed * 611_953 + n * 2_741) & 0x7FFFFFFF).randint(0, 3)
+        if day < start + length:
+            return n, (seed * 887 + n * 104_729) & 0x7FFFFFFF
+        start += length
+        n += 1
+
+
+def trader_entries(state: GameState, npc: NPC) -> list:
+    """A trader's wagon this window: a few dear, rare things — the non-crafter's
+    road to high-tier gear, priced at 3-4x its worth. Slots are drawn
+    deterministically per (seed, window, trader); bought slots are remembered
+    in stats so a wagon can sell out."""
+    import random as _random
+    import zlib
+    window, wseed = trader_window(state.seed, state.day)
+    rng = _random.Random(wseed ^ zlib.crc32(npc.name.encode()))
+    deep = npc.name == "Willa"                       # the causeway trader digs deeper
+    slots: list[tuple] = []                          # ("tradebuy", item, price) pre-key
+
+    for _ in range(2):                               # high-tier gear, sometimes affixed
+        base = rng.choice(sorted(content.WEAPON_BASES))
+        metal = rng.choice(("mithril", "adamantium"))
+        pfx, sfx = ("", "")
+        if rng.random() < 0.4:
+            pfx, sfx = content.roll_craft_affix(10, rng, "weapon")
+        it = content.make_gear(base, metal, pfx, sfx)
+        slots.append((it, content._round5(it.value * rng.uniform(3.0, 4.0))))
+    gem = rng.choice(sorted(content.CUT_GEM.values(), key=lambda i: i.name))
+    slots.append((gem, content._round5(gem.value * 2.0)))
+    slots.append((items.GEODE, content._round5(items.GEODE.value * 1.5)))
+    sap = rng.choice((items.CHERRY_SAPLING, items.APPLE_SAPLING, items.PEACH_SAPLING))
+    slots.append((sap, content._round5(700 * 1.5)))
+    if deep:
+        bar = rng.choice((items.GOLD_BAR, items.PLATINUM_BAR))
+        slots.append((bar, content._round5(bar.value * 2.0)))
+        slots.append((items.SILK_CLOTH, content._round5(items.SILK_CLOTH.value * 1.5)))
+        if rng.random() < 0.25:
+            slots.append((items.BEE_QUEEN, content._round5(items.BEE_QUEEN.value * 2.0)))
+
+    out = []
+    for i, (it, price) in enumerate(slots):
+        key = f"trader_{npc.name}_{window}_{i}"
+        if not state.stats.get(key):                 # sold slots stay sold this window
+            out.append(("tradebuy", it, price, key))
+    # a recipe card, drawn unconditionally (determinism) but hidden once known
+    card_pool = sorted(r.name for r in content.RECIPES
+                       if r.kind == "cook"
+                       and r.name not in dict(content.TAVERN_RECIPES)
+                       and r.name not in content.STARTER_RECIPES)
+    card = rng.choice(card_pool)
+    if card not in state.known_recipes:
+        out.append(("recipe", card, 260))
+    return out
+
+
+def shop_entries(shop: str, state: GameState | None = None, npc: NPC | None = None):
     """List of entries for a shop: ('buy', item, price) | ('upgrade', tool) |
     ('meal', ...) | ('sellto', item, price, quality) | ('commission', ...)."""
+    if shop == "trader":
+        return trader_entries(state, npc) if state is not None and npc is not None else []
     if shop == "general":
         return [("buy", it, price) for it, price in content.GENERAL_STOCK]
     if shop == "blacksmith":
         ups = [("upgrade", t) for t in items.TIERED_TOOLS]
-        buys = [("buy", it, price) for it, price in content.BLACKSMITH_STOCK]
+        buys = [("buy", it, price) for it, price in content.blacksmith_stock()]
+        # With the Deep Forge raised, Bron works the deep metals too — bars at
+        # the usual doubled rate, finished pieces at a steep premium (the
+        # non-crafter's path to endgame gear, paid in dungeon gold).
+        if state is not None:
+            from . import projects
+            if projects.done(state, "deep_forge"):
+                buys += [("buy", b, content._round5(b.value * 2.0))
+                         for b in content.DEEP_FORGE_BARS]
+                buys += [("buy", it, content._round5(it.value * 2.8))
+                         for m in content.DEEP_FORGE_METALS
+                         for it in (content.make_gear(b, m) for b in content.WEAPON_BASES)]
         return ups + buys
     if shop == "tavern":
         meals = [("meal", label, price, stam, hp)
                  for (label, price, stam, hp) in content.TAVERN_MENU]
+        # On a fair day (with the Grange standing), the innkeeper judges the
+        # produce contest — one entry per festival.
+        if state is not None:
+            fest_name = contest_open(state)
+            if fest_name:
+                meals = [("contest", fest_name)] + meals
         # The house recipes: an innkeeper will part with one, for a price.
         cards = [("recipe", name, price) for name, price in content.TAVERN_RECIPES
                  if state is not None and name not in state.known_recipes]
@@ -322,6 +501,14 @@ def shop_entries(shop: str, state: GameState | None = None):
     if shop == "carpenter":
         jobs = [("commission", label, kind, gold, mats)
                 for (label, kind, gold, mats) in content.CARPENTER_JOBS]
+        # Farmhouse fittings (oven, cellar) — auto-sited, hidden once owned or
+        # already under Tomas's hammer.
+        if state is not None and state.surface is not None:
+            for label, kind, gold, mats in content.HOUSE_JOBS:
+                owned = any(m.kind == kind or (m.kind == "site" and m.build_kind == kind)
+                            for m in state.surface.machines.values())
+                if not owned:
+                    jobs.append(("housejob", label, kind, gold, mats))
         # If an order is outstanding, offer to cancel it (with a full refund) so
         # you're never locked out of the carpenter by a build you can't site.
         if state is not None and state.pending_build:
@@ -419,8 +606,55 @@ def purchase(state: GameState, entry) -> None:
         state.log.add(f"Tomas shakes on it. \"Head home and show me where the "
                       f"{label.split('(')[0].strip().lower()} should go — press p to set the spot.\"",
                       (200, 220, 160))
+    elif entry[0] == "tradebuy":
+        _, item, price, key = entry
+        if state.player.gold < price:
+            state.log.add("You can't afford that.", C.DIM)
+            return
+        state.player.gold -= price
+        state.player.inventory.add(item, 1)
+        state.stats[key] = 1                          # this slot is sold this window
+        state.log.add(f"Bought {item.name} for {price}g — the trader wraps it carefully.")
+    elif entry[0] == "housejob":
+        _, label, kind, gold, mats = entry
+        p = state.player
+        from . import husbandry
+        from ..entities.machine import Machine
+        from ..world import tile
+        spot = husbandry.find_house_spot(state, kind)
+        if spot is None:
+            state.log.add("Tomas scratches his head — no clear spot for it. "
+                          "Tidy up around the farmhouse first.", C.DIM)
+            return
+        if p.gold < gold:
+            state.log.add("You can't afford that.", C.DIM)
+            return
+        missing = [f"{q}x {it.name}" for it, q in mats if p.inventory.count(it) < q]
+        if missing:
+            state.log.add(f"Tomas needs materials: {', '.join(missing)}.", C.DIM)
+            return
+        p.gold -= gold
+        for it, q in mats:
+            p.inventory.remove(it, q)
+        surf = state.surface
+        surf.tiles[spot] = tile.SCAFFOLD
+        surf.machines[spot] = Machine(kind="site", build_kind=kind,
+                                      ready_at=(state.day + 2) * 1440 + C.DAY_START_MIN)
+        name = content.MACHINES[kind].name.lower()
+        state.log.add(f"Tomas sets to work on your {name} — ready in 2 mornings.",
+                      (200, 220, 160))
     elif entry[0] == "upgrade":
         upgrade_tool(state, entry[1])
+
+
+def upgrade_price(state: GameState, tier: int):
+    """(gold, bar, count) for a tool upgrade — the Deep Forge, once raised,
+    takes a fifth off Bron's labour."""
+    from . import projects
+    gold, bar, count = content.upgrade_cost(tier)
+    if projects.done(state, "deep_forge"):
+        gold = round(gold * 0.8)
+    return gold, bar, count
 
 
 def upgrade_tool(state: GameState, tool) -> None:
@@ -429,7 +663,7 @@ def upgrade_tool(state: GameState, tool) -> None:
     if tier >= len(C.TOOL_TIERS) - 1:
         state.log.add(f"Your {C.TOOL_TIERS[tier]} {tool.name} can't be improved further.", C.DIM)
         return
-    gold, bar, count = content.upgrade_cost(tier)
+    gold, bar, count = upgrade_price(state, tier)
     if p.gold < gold or p.inventory.count(bar) < count:
         state.log.add(f"Bron needs {gold}g + {count} {bar.name} for that upgrade.", C.DIM)
         return

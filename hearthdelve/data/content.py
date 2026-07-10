@@ -988,6 +988,16 @@ for _f in _FRUIT_ITEMS:
         FRUIT_WINE[_f] = _variant(f"{_f.name} Wine", "ø", _f, WINE_MULT, "wine")
 VEG_PICKLE = {v: _variant(f"Pickled {v.name}", "■", v, PICKLE_MULT, "pickles") for v in _VEG_ITEMS}
 
+# The cellar (a farmhouse upgrade) matures every drink into an aged vintage —
+# same family, so a wine-lover's gift tastes cover the aged bottle too.
+AGE_MULT = 1.5
+AGED_DRINK: dict[Item, Item] = {}
+for _d in sorted(set(FRUIT_WINE.values()), key=lambda i: i.name):
+    AGED_DRINK[_d] = items.register(items.Item(
+        f"Aged {_d.name}", _d.glyph, "artisan",
+        f"{_d.name} matured in the cellar; deep and mellow.",
+        value=round(_d.value * AGE_MULT), family=_d.family, source=_d.source))
+
 
 # --- Machines (placed; process inputs over time) -----------------------------
 @dataclass(frozen=True)
@@ -1055,7 +1065,29 @@ MACHINES: dict[str, MachineDef] = {
     "pen":        MachineDef("pen", "Sheep Pen", "n", (196, 200, 176), 0, "",
                              None, "A pen for sheep; shear them for wool.", capacity=4, houses="sheep",
                              footprint=(5, 4)),
+    # Farmhouse fittings — commissioned from the carpenter (see HOUSE_JOBS),
+    # not built from the craft menu.
+    "oven":       MachineDef("oven", "Farm Oven", "Ω", (232, 148, 76), 300, "bake",
+                             None, "Bakes a double batch of any baked recipe you know, "
+                                   "a touch finer than the pan."),
+    "cellar":     MachineDef("cellar", "Cellar", "Θ", (168, 152, 170), 4320, "age",
+                             None, "Ages wine, mead and cheese over days into something finer."),
 }
+
+# Farmhouse fittings Tomas installs for a price — sited automatically (the oven
+# indoors, the cellar dug by the back wall), no placing needed.
+#   (label, machine kind, gold, ((item, qty), ...))
+HOUSE_JOBS: list = [
+    ("Farm Kitchen (a proper oven indoors)", "oven", 2500,
+     ((items.STONE, 40), (items.IRON_BAR, 4), (items.TIMBER_PLANK, 20))),
+    ("Cellar (ages wine, mead & cheese)", "cellar", 3500,
+     ((items.STONE, 60), (items.TIMBER_PLANK, 30), (items.IRON_BAR, 2))),
+]
+
+# The recipes an oven can batch-bake (they still cook fine by hand — the oven
+# is bigger and finer, never the only way).
+BAKED_GOODS = {"Bread", "Berry Pie", "Meat Pie", "Pumpkin Pie", "Fish Pie", "Yogurt Pie",
+               "Cake", "Cookies", "Shortbread", "Pizza"}
 
 
 # Textile chain: raw fibre -> yarn (spinning wheel) -> cloth (loom) -> garments.
@@ -1955,13 +1987,39 @@ GENERAL_STOCK: list[tuple[Item, int]] = [
 # Blacksmith sells fuel/metal, weapons, and armour: (item, buy price)
 # The smith sells iron & steel of each weapon (forge finer metals yourself, or
 # find them below), the bows & ammo, and the leather/iron/steel armour range.
-_SMITH_WEAPONS = [make_gear(b, m) for m in ("iron", "steel") for b in WEAPON_BASES]
-BLACKSMITH_STOCK: list[tuple[Item, int]] = [
-    (items.COAL, 25), (items.CHARCOAL, 20), (items.COKE, 55), (items.COPPER_BAR, 120),
-] + [(it, it.value) for it in _SMITH_WEAPONS] + [
-    (items.SLING, 45), (make_ranged("Short Bow", "birch"), 110),
-    (make_ranged("Long Bow", "yew"), 260), (items.ARROW, 4), (items.SLING_STONE, 1),
-] + [(it, it.value) for it in ALL_ARMOR]
+_SMITH_WEAPONS = [make_gear(b, m) for m in ("copper", "iron", "steel") for b in WEAPON_BASES]
+def smith_markup(it: Item) -> float:
+    """Buying finished gear over the counter costs well over its worth — the
+    smith's labour is the price of skipping the forge. It steepens up the metal
+    ladder, so a bought edge is always far dearer than a crafted one (a
+    non-crafter build pays in dungeon gold what a smith pays in bars & skill)."""
+    mat = MATERIALS.get(it.material)
+    t = mat.tier if mat else MATERIALS["iron"].tier
+    return 1.8 + 0.14 * max(0, t - 2)
+
+
+def _round5(v: float) -> int:
+    return max(5, int(round(v / 5.0)) * 5)
+
+
+# Bars anyone may buy (at twice their worth) — so a non-crafter can still pay
+# for tool upgrades. The deep metals join only once the Deep Forge stands
+# (see village.shop_entries), at the same doubled rate.
+SMITH_BARS = (items.COPPER_BAR, items.BRONZE_BAR, items.IRON_BAR, items.STEEL_BAR)
+DEEP_FORGE_BARS = (items.SILVER_BAR, items.ADAMANTIUM_BAR, items.MITHRIL_BAR)
+DEEP_FORGE_METALS = ("adamantium", "mithril")
+
+
+def blacksmith_stock() -> list[tuple[Item, int]]:
+    """Bron's counter: fuels at cost, bars at 2x, and finished low/mid gear at
+    the smith's markup. Crafting the same pieces from bars stays far cheaper."""
+    out = [(items.COAL, 25), (items.CHARCOAL, 20), (items.COKE, 55)]
+    out += [(b, _round5(b.value * 2.0)) for b in SMITH_BARS]
+    out += [(it, _round5(it.value * smith_markup(it))) for it in _SMITH_WEAPONS]
+    out += [(items.SLING, 45), (make_ranged("Short Bow", "birch"), 110),
+            (make_ranged("Long Bow", "yew"), 260), (items.ARROW, 4), (items.SLING_STONE, 1)]
+    out += [(it, _round5(it.value * smith_markup(it))) for it in ALL_ARMOR]
+    return out
 
 # --- Festivals ---------------------------------------------------------------
 # Real seasonal festivals on fitting days (never the arbitrary 1st). The whole
@@ -2019,6 +2077,49 @@ CARPENTER_JOBS: list = [
     ("Sheep Pen (raise sheep for wool)", "pen", 500,
      ((items.TIMBER_PLANK, 22), (items.STONE, 8))),
 ]
+
+
+# --- Community restoration projects --------------------------------------------
+# Each village dreams of one great work. The player funds it in stages at that
+# village's notice board (gold and materials, in any instalments); once funded a
+# site is staked near the square and raised over days into a standing landmark
+# with a lasting perk. See game/projects.py for the machinery.
+@dataclass(frozen=True)
+class ProjectDef:
+    id: str
+    name: str
+    village: str
+    gold: int
+    mats: tuple            # ((Item, qty), ...)
+    size: tuple            # landmark footprint (w, h)
+    build_days: int
+    perk: str              # one-line perk text (journal / notice board)
+    flavour: str
+
+
+PROJECTS: dict[str, ProjectDef] = {p.id: p for p in (
+    ProjectDef("grange_hall", "Mossford Grange Hall", "Mossford", 4000,
+               ((items.TIMBER_PLANK, 120), (items.STONE, 60), (items.WOOLEN_CLOTH, 10)),
+               (9, 7), 5,
+               "Festival fairs hold a produce contest at the Grange.",
+               "The old grange burned a generation ago; Mossford still talks of raising it again."),
+    ProjectDef("deep_forge", "Cinderhope Deep Forge", "Cinderhope", 6000,
+               ((items.STONE, 140), (items.IRON_BAR, 24), (items.COAL, 60),
+                (items.TIMBER_PLANK, 40)),
+               (7, 6), 6,
+               "Bron stocks deep-metal bars & gear; tool upgrades cost less. Public forge.",
+               "A great furnace to work the deep metals — Bron has drawn the plans a hundred times."),
+    ProjectDef("lighthouse", "Saltmere Lighthouse", "Saltmere", 5000,
+               ((items.STONE, 180), (items.TIMBER_PLANK, 30), (items.COPPER_BAR, 8)),
+               (5, 5), 5,
+               "Sea fishing bites better; moonfish rise to the beam.",
+               "The point has wrecked boats for years. A light would bring the far shoals in reach."),
+    ProjectDef("causeway", "Fenwick Causeway", "Fenwick", 4500,
+               ((items.STONE, 160), (items.TIMBER_PLANK, 80), (items.IRON_BAR, 6)),
+               (3, 3), 4,
+               "Willa's wagon opens for trade; the fen road is paved and lit.",
+               "One road in, and it floods twice a year. Pave it, and the world reaches Fenwick."),
+)}
 
 
 # tool tier -> the bar needed to reach the NEXT tier (index = current tier)
