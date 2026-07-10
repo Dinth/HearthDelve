@@ -115,6 +115,17 @@ def generate(seed: int, kind: str, depth: int) -> GameMap:
             break
         tiles[rng.choice(cands)] = tile.GEM_VEIN
 
+    # Alchemical deposits, scattered as drifting singles: nitre crusts anywhere,
+    # sulphur seams mostly where the rock runs hot (deeper floors).
+    nitre = rng.randint(0, 2)
+    sulphur = rng.randint(0, 1) + (1 if depth >= 2 and rng.random() < 0.6 else 0)
+    for tid, n in ((tile.NITRE_DEPOSIT, nitre), (tile.SULPHUR_DEPOSIT, sulphur)):
+        for _ in range(n):
+            cands = [p for p in walls if tiles[p] == tile.DUNGEON_WALL]
+            if not cands:
+                break
+            tiles[rng.choice(cands)] = tid
+
     # Underground lakes: a small pool in a couple of rooms. Never the entry
     # (rooms[0]) nor the down-stairs room (rooms[-1]) — a pool there could drown
     # the stairs tile itself. A lake can still stray onto a corridor and cut off

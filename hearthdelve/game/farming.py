@@ -155,6 +155,8 @@ def harvest(state: GameState, x: int, y: int) -> bool:
     crop = plot.crop
     from . import skills
     q = skills.roll_quality(state, "Farming")
+    if plot.fertilized:
+        q = min(5, q + 1)                     # nitre-fed soil bears finer
     state.player.inventory.add(crop.produce, 1, quality=q)
     state.bump("crops_harvested")
     skills.gain(state, "Farming", 8)     # ~150 harvests to master, not one weekend

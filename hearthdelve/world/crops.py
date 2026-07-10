@@ -22,6 +22,7 @@ class CropPlot:
     days_grown: int = 0
     watered: bool = False
     dead: bool = False
+    fertilized: bool = False   # nitre-fed soil: the harvest comes up a star finer
 
     @property
     def mature(self) -> bool:

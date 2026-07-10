@@ -401,6 +401,11 @@ def machine_load_options(state: GameState, mdef) -> list:
         for src, out in content.SMOKE_RECIPES:
             if inv.count(src) >= 1:
                 opts.append({"inputs": [(src, 1)], "output": out, "quality_from": src})
+        # The saltpeter cure: a whole ham, if you've pork and nitre both.
+        if inv.count(items.PORK) >= 1 and inv.count(items.SALTPETER) >= 1:
+            opts.append({"inputs": [(items.PORK, 1), (items.SALTPETER, 1)],
+                         "output": items.CURED_HAM, "quality_from": items.PORK,
+                         "minutes": 1440})              # a full day in the smoke
     elif a == "fiber":
         for src, out in content.SPIN_RECIPES.items():
             if inv.count(src) >= 1:

@@ -37,6 +37,10 @@ def resolve_tool(tool: Item, t: TileType) -> tuple[bool, int | None, str]:
             return True, tile.GRASS, "You chip a gem free!"
         if t.name == "ore_vein":
             return True, tile.GRASS, "You mine the ore vein."
+        if t.name == "sulphur_deposit":
+            return True, tile.GRASS, "You chip away the yellow seam."
+        if t.name == "nitre_deposit":
+            return True, tile.GRASS, "You scrape the nitre crust free."
         if t.name in ("rock", "ruins_wall"):
             return True, tile.GRASS, "You break the rock apart."
         return False, None, "Your pickaxe needs rock or ore to swing at."

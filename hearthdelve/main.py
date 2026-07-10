@@ -490,6 +490,18 @@ def _gather_drop(state: GameState, item, target) -> None:
         state.bump("ore_mined")
         skills.gain(state, "Mining", 16)
         state.log.add("  (+" + ", +".join(got) + ")", C.DIM)
+    elif item is items.PICKAXE and target.name == "sulphur_deposit":
+        n = 1 + (random.random() < 0.5)
+        inv.add(items.SULPHUR, n)
+        state.bump("ore_mined")
+        skills.gain(state, "Mining", 10)
+        state.log.add(f"  (+{n} Sulphur)", C.DIM)
+    elif item is items.PICKAXE and target.name == "nitre_deposit":
+        n = 1 + (random.random() < 0.5)
+        inv.add(items.SALTPETER, n)
+        state.bump("ore_mined")
+        skills.gain(state, "Mining", 10)
+        state.log.add(f"  (+{n} Saltpeter)", C.DIM)
     elif item is items.PICKAXE and target.name in ("rock", "ruins_wall"):
         inv.add(items.STONE, 2)
         state.bump("ore_mined")
@@ -696,6 +708,18 @@ def do_grab(state: GameState) -> None:
             turns.advance_time(state, C.HARVEST_COST[1])
             return
         if (gx, gy) in state.world.crops:
+            plot = state.world.crops[(gx, gy)]
+            # A growing crop takes fertiliser (g with some in the pack): the
+            # nitre-fed soil grows a finer harvest (+1 star at picking).
+            if (not plot.mature and not plot.dead and not plot.fertilized
+                    and p.inventory.count(items.FERTILISER) > 0
+                    and not land.owned_by_other(state, gx, gy)):
+                p.inventory.remove(items.FERTILISER, 1)
+                plot.fertilized = True
+                turns.advance_time(state, C.HARVEST_COST[1])
+                state.log.add(f"You work fertiliser into the soil around the "
+                              f"{plot.crop.name.lower()}.", (200, 220, 160))
+                return
             if farming.harvest(state, gx, gy):
                 if stealing:
                     land.penalize(state, gx, gy, "harvest")

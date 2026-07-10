@@ -263,7 +263,27 @@ def _attack_player(state: GameState, m) -> None:
 # --- the Bomb ability --------------------------------------------------------
 BOMB_DAMAGE = 8
 BOMB_RANGE = 5                     # how far a bomb can be lobbed
-_BREAKABLE = {"rock", "ore_vein", "gem_vein", "ruins_wall"}
+_BREAKABLE = {"rock", "ore_vein", "gem_vein", "ruins_wall",
+              "sulphur_deposit", "nitre_deposit"}
+
+# What each bomb kind does: (blast radius in tiles, damage). The gunpowder
+# charge is the delver's answer to deep rock — a wide blast that cracks veins
+# no matter what pickaxe you carry.
+BOMB_STATS = {items.BOMB: (1, 8), items.BLAST_CHARGE: (2, 16)}
+
+
+def _carried_bomb(state: GameState):
+    """The bomb a throw will spend: the one readied in the ammo slot if it's a
+    bomb and still carried (so readying cheap bombs saves your charges),
+    otherwise the plain bomb first, then a blast charge."""
+    p = state.player
+    ready = p.equipment.get("ammo")
+    if ready is not None and ready.kind == "bomb" and p.inventory.count(ready) > 0:
+        return ready
+    for b in (items.BOMB, items.BLAST_CHARGE):
+        if p.inventory.count(b) > 0:
+            return b
+    return None
 
 
 def _line(x0: int, y0: int, x1: int, y1: int):
@@ -314,17 +334,18 @@ def in_bomb_range(state: GameState, tx: int, ty: int) -> bool:
     return in_range(state, tx, ty, BOMB_RANGE)
 
 
-def _detonate(state: GameState, bx: int, by: int) -> None:
-    """Resolve the 3x3 blast at (bx, by): damage mobs, shatter rock/ore/gems."""
+def _detonate(state: GameState, bx: int, by: int, radius: int = 1,
+              dmg: int = BOMB_DAMAGE) -> None:
+    """Resolve the blast at (bx, by): damage mobs, shatter rock/ore/gems."""
     hit = []
-    for x in range(bx - 1, bx + 2):
-        for y in range(by - 1, by + 2):
+    for x in range(bx - radius, bx + radius + 1):
+        for y in range(by - radius, by + radius + 1):
             if not state.world.in_bounds(x, y):
                 continue
             m = mob_at(state, x, y)
             if m:
                 m.awake = True                  # the blast rouses survivors
-                m.hp -= BOMB_DAMAGE
+                m.hp -= dmg
                 hit.append(m)
             t = state.world.tile_at(x, y)
             if t.name in _BREAKABLE:
@@ -337,7 +358,8 @@ def _detonate(state: GameState, bx: int, by: int) -> None:
 def throw_bomb_at(state: GameState, tx: int, ty: int) -> bool:
     """Lob a bomb at an aimed tile (see targeting mode). Returns True if thrown."""
     p = state.player
-    if p.inventory.count(items.BOMB) < 1:
+    bomb = _carried_bomb(state)
+    if bomb is None:
         state.log.add("You have no bombs. (craft one: 1 Coal + 2 Fiber)", C.DIM)
         return False
     if p.energy < C.BOMB_COST[0]:
@@ -347,10 +369,13 @@ def throw_bomb_at(state: GameState, tx: int, ty: int) -> bool:
         state.log.add("Best not drop it at your own feet — aim away.", C.DIM)
         return False
     bx, by = bomb_landing(state, tx, ty)
-    p.inventory.remove(items.BOMB, 1)
+    p.inventory.remove(bomb, 1)
     p.energy = max(0, p.energy - C.BOMB_COST[0])
-    state.log.add("You hurl a bomb — BOOM!", (236, 180, 90))
-    _detonate(state, bx, by)
+    radius, dmg = BOMB_STATS.get(bomb, (1, BOMB_DAMAGE))
+    state.log.add("You set a blast charge flying — a THUNDERCLAP rolls through the rock!"
+                  if bomb is items.BLAST_CHARGE else "You hurl a bomb — BOOM!",
+                  (236, 180, 90))
+    _detonate(state, bx, by, radius, dmg)
     from . import turns
     turns.advance_time(state, C.BOMB_COST[1])
     return True
@@ -383,7 +408,7 @@ def can_shoot(state: GameState) -> bool:
 
 def can_throw(state: GameState) -> bool:
     """True if the player is carrying at least one bomb to lob."""
-    return state.player.inventory.count(items.BOMB) >= 1
+    return _carried_bomb(state) is not None
 
 
 def can_fire(state: GameState) -> bool:
@@ -518,6 +543,10 @@ def _shatter(state: GameState, x: int, y: int, t) -> None:
         inv.add(content.ore_for_depth(state.world.depth, random), 1)
         if random.random() < 0.5:
             inv.add(items.COAL, 1)
+    elif t.name == "sulphur_deposit":
+        inv.add(items.SULPHUR, 1)
+    elif t.name == "nitre_deposit":
+        inv.add(items.SALTPETER, 1)
     elif t.name in ("rock", "ruins_wall"):
         inv.add(items.STONE, 1)
     floor = tile.DUNGEON_FLOOR if state.world.is_dungeon else tile.GRASS

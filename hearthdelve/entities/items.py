@@ -174,6 +174,12 @@ CAVE_MUSHROOM = Item("Cave Mushroom", "τ", "material", "An earthy cave fungus �
 SLIME_GEL     = Item("Slime Gel",     "*", "material", "Sticky residue from a cave slime.",       value=15)
 BAT_WING      = Item("Bat Wing",      "~", "material", "A leathery wing from a cave bat.",         value=20)
 BOAR_HIDE     = Item("Boar Hide",     "u", "material", "Tough hide from a wild boar.",             value=40)
+# Alchemical minerals from dungeon deposits — powder, fertiliser & curing salt.
+SULPHUR     = Item("Sulphur",     "▪", "material", "Brimstone-yellow crystals from a hot seam.", value=30)
+SALTPETER   = Item("Saltpeter",   "▪", "material", "White nitre crust — powder, fertiliser or curing salt.", value=35)
+GUNPOWDER   = Item("Gunpowder",   "▪", "material", "Milled black powder. Handle gently.", value=90)
+FERTILISER  = Item("Fertiliser",  "≈", "material", "Nitre-rich meal — fertilised soil grows finer crops (g at a growing crop).", value=25)
+
 # Meat is TYPED — the cut carries its animal the way a jam carries its fruit
 # (family "meat" lets recipes ask for "any meat" and old generic Meat still fit).
 MEAT          = Item("Meat",          "▬", "material", "Game meat; good in a pie.", value=55, family="meat")
@@ -311,6 +317,7 @@ JERKY       = Item("Jerky",       "▬", "artisan", "Smoke-cured strips of meat;
 SAUSAGES    = Item("Sausages",    "▬", "artisan", "Plump smoked sausages.", value=170, energy=55, family="sausages")
 BACON       = Item("Bacon",       "▬", "artisan", "Streaky smoked bacon — pork, always pork.", value=180, energy=50, family="bacon", source=PORK)
 SMOKED_FISH = Item("Smoked Fish", "»", "artisan", "Fish slow-smoked to a delicacy.", value=200, energy=50)
+CURED_HAM   = Item("Cured Ham",   "▬", "artisan", "A whole ham, saltpeter-cured and smoked — keeps a year, feasts a table.", value=280, energy=70, family="ham")
 
 # --- Beekeeping -------------------------------------------------------------
 HONEY       = Item("Honey",       "*", "material", "Sweet golden honey from a hive.",       value=75)
@@ -377,6 +384,7 @@ SLING_STONE = Item("Sling Stone", ".", "ammo",   "Smooth stones for a sling.", v
 
 # --- Consumables -------------------------------------------------------------
 BOMB        = Item("Bomb",        "*", "bomb",     "Aim & throw (t): harms monsters and shatters rock/ore.", value=0)
+BLAST_CHARGE= Item("Blast Charge","*", "bomb",     "A gunpowder charge: a wide, vein-cracking blast. Ready it in the ammo slot to throw it first.", value=0)
 
 
 # Registry of every defined item, for save/load by name.

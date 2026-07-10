@@ -184,4 +184,9 @@ SCAFFOLD      = _add(TileType("scaffold",       "▦", (176, 148, 104), (44, 38,
 # NB: appended last on purpose — tile ids are positional and live in saved maps.
 NOTICE_BOARD  = _add(TileType("notice_board",   "‡", (214, 178, 110), (40, 34, 26), walkable=False, kind="board"))
 
+# --- Alchemical deposits (dungeon walls) ----------------------------------------
+# Soft minerals — any pickaxe bites them, whatever the depth band.
+SULPHUR_DEPOSIT = _add(TileType("sulphur_deposit", "▓", (222, 196, 70), (44, 40, 26), walkable=False, kind="sulphur"))
+NITRE_DEPOSIT   = _add(TileType("nitre_deposit",   "▓", (226, 222, 206), (40, 40, 40), walkable=False, kind="nitre"))
+
 TILE_COUNT = len(TILES)

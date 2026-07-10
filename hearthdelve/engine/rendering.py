@@ -637,6 +637,8 @@ _TILE_DESC = {
     "dungeon_wall": "solid dungeon rock.",
     "dungeon_floor": "the dungeon floor.",
     "gem_vein": "a gem vein glinting in the rock — mine it with a pickaxe.",
+    "sulphur_deposit": "a brimstone-yellow seam — sulphur, for powder-making (any pick bites it).",
+    "nitre_deposit": "a pale nitre crust — saltpeter: powder, fertiliser or curing salt.",
     "gold_pile": "a glittering pile of gold — step on it to grab it.",
     "chest": "a treasure chest — press g to pry it open.",
     "rubble": "loose rubble — slow going underfoot.",
@@ -823,7 +825,8 @@ def describe(state: GameState, x: int, y: int) -> str:
         if plot.mature:
             return f"{poss}{name} — ripe! Harvest it with g{theft}."
         water = "watered" if plot.watered else "needs watering"
-        return f"{poss}{name}, still growing ({water}){theft}."
+        fert = ", fertilised" if plot.fertilized else ""
+        return f"{poss}{name}, still growing ({water}{fert}){theft}."
     tree = state.world.trees.get((x, y))
     if tree is not None:
         if not tree.mature:
