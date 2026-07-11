@@ -280,7 +280,7 @@ def _carried_bomb(state: GameState):
     ready = p.equipment.get("ammo")
     if ready is not None and ready.kind == "bomb" and p.inventory.count(ready) > 0:
         return ready
-    for b in (items.BOMB, items.BLAST_CHARGE):
+    for b in (items.BOMB, items.BLAST_CHARGE, items.FIRECRACKER):
         if p.inventory.count(b) > 0:
             return b
     return None
@@ -371,14 +371,41 @@ def throw_bomb_at(state: GameState, tx: int, ty: int) -> bool:
     bx, by = bomb_landing(state, tx, ty)
     p.inventory.remove(bomb, 1)
     p.energy = max(0, p.energy - C.BOMB_COST[0])
-    radius, dmg = BOMB_STATS.get(bomb, (1, BOMB_DAMAGE))
-    state.log.add("You set a blast charge flying — a THUNDERCLAP rolls through the rock!"
-                  if bomb is items.BLAST_CHARGE else "You hurl a bomb — BOOM!",
-                  (236, 180, 90))
-    _detonate(state, bx, by, radius, dmg)
+    if bomb is items.FIRECRACKER:                # a bang, not a blast
+        _crack(state, bx, by)
+    else:
+        radius, dmg = BOMB_STATS.get(bomb, (1, BOMB_DAMAGE))
+        state.log.add("You set a blast charge flying — a THUNDERCLAP rolls through the rock!"
+                      if bomb is items.BLAST_CHARGE else "You hurl a bomb — BOOM!",
+                      (236, 180, 90))
+        _detonate(state, bx, by, radius, dmg)
     from . import turns
     turns.advance_time(state, C.BOMB_COST[1])
     return True
+
+
+def _crack(state: GameState, bx: int, by: int) -> None:
+    """A firecracker: no blast, all noise. On the surface it sends every wild
+    critter nearby bolting and keeps raiders off your land for days; in the
+    dark it just tells everything exactly where you are."""
+    if state.world.is_dungeon:
+        roused = 0
+        for m in state.world.monsters:
+            if max(abs(m.x - bx), abs(m.y - by)) <= 12 and not m.awake:
+                m.awake = True
+                roused += 1
+        state.log.add("CRACK-BANG! The report rolls through the dark"
+                      + (f" — {roused} things stir." if roused else "."), (236, 180, 90))
+        return
+    fled = 0
+    for m in list(state.world.monsters):
+        if getattr(m, "kind", "") == "wildlife" and max(abs(m.x - bx), abs(m.y - by)) <= 12:
+            state.world.monsters.remove(m)
+            fled += 1
+    state.stats["wildlife_calm_until"] = state.day + 3
+    state.log.add("CRACK-BANG! " + (f"{fled} critter{'s' if fled != 1 else ''} bolt for "
+                  "the treeline — " if fled else "")
+                  + "the wildlife will keep clear of your fields a few days.", (236, 180, 90))
 
 
 def throw_bomb(state: GameState) -> bool:

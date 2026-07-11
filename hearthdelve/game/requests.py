@@ -84,7 +84,9 @@ def _request_pool(state: GameState, role: str) -> list:
                       + [it.TRUFFLE, it.PORK, it.BEEF],
         # Nothing Bron himself sells (fuels, bars): a favour must never be
         # fillable at a profit straight off his own shelf.
-        "blacksmith": [it.COPPER_ORE, it.IRON_ORE, it.TIN_ORE, it.SULPHUR, it.SALTPETER],
+        # ...including blasting powder for the mine crews (the miner's commission).
+        "blacksmith": [it.COPPER_ORE, it.IRON_ORE, it.TIN_ORE, it.SULPHUR, it.SALTPETER,
+                       it.GUNPOWDER],
         "carpenter":  [it.WOOD, it.TIMBER_PLANK, it.STONE],
         "forester":   [it.WOOD, it.TIMBER_PLANK] + mushrooms,
         "forager":    mushrooms + parts + [it.HONEY, it.ASTER] + crops,
@@ -151,10 +153,51 @@ def _new_request(state: GameState, rng) -> dict | None:
             "flavor": _FLAVOR.get(npc.role, _FLAVOR_DEFAULT).format(want=want)}
 
 
+def _year_finale():
+    """(season, day, name) of the year's last festival — the fireworks night."""
+    order = {s: i for i, s in enumerate(C.SEASONS)}
+    best = None
+    for season, fests in content.FESTIVALS.items():
+        for f in fests:
+            key = (order[season], f[0])
+            if best is None or key > best[0]:
+                best = (key, season, f[0], f[1])
+    return best[1], best[2], best[3]
+
+
+FIREWORKS_QTY = 8
+
+
+def _fireworks_commission(state: GameState) -> None:
+    """The standing annual order: in the run-up to the year's last festival,
+    the innkeepers post for firecrackers to light the closing night. Fill it
+    and the show goes up over the square — every year, a new order."""
+    season, fday, fname = _year_finale()
+    if state.season != season or not (fday - 10 <= state.day_of_season < fday):
+        return
+    if state.stats.get(f"fireworks_{state.year}"):
+        return
+    if any(r.get("annual") == "fireworks" for r in state.requests):
+        return
+    host = next((n for n in getattr(state.surface, "npcs", ())
+                 if n.role == "innkeeper"), None)
+    if host is None:
+        return
+    gold = int(items.FIRECRACKER.value * FIREWORKS_QTY * 2.2 / 5) * 5
+    state.requests.append({
+        "npc": host.name, "item": "Firecracker", "qty": FIREWORKS_QTY, "gold": gold,
+        "expires": state.day + (fday - state.day_of_season),
+        "flavor": f"{fname} closes the year — bring firecrackers and we'll light the sky!",
+        "annual": "fireworks"})
+    state.log.add(f"The innkeepers post the year's fireworks order: {FIREWORKS_QTY} "
+                  f"firecrackers before {fname}!", (232, 200, 120))
+
+
 def new_day(state: GameState) -> None:
     """Dawn tick: quietly retire stale favours, maybe pin fresh ones, and let
     the market's craving shift. Drifting chances, not a fixed cadence."""
     state.requests = [r for r in state.requests if r["expires"] > state.day]
+    _fireworks_commission(state)
     for r in state.requests:
         if r["expires"] == state.day + 1:     # last chance — say so at dawn
             state.log.add(f"{r['npc']}'s favour ({r['qty']} {r['item']}) comes down "
@@ -213,6 +256,10 @@ def deliver(state: GameState, req: dict) -> bool:
     extra = f" (+{bonus}g for the quality)" if bonus else ""
     state.log.add(f"You fill {req['npc']}'s favour — {req['gold']}g{extra}, with thanks.",
                   (232, 200, 120))
+    if req.get("annual") == "fireworks":
+        state.stats[f"fireworks_{state.year}"] = 1
+        state.log.add("The fireworks are promised — watch the sky on the festival night!",
+                      (232, 200, 120))
     skills.gain_char_xp(state, 30)
     rng = random.Random((state.seed * 977 + state.day * 431
                          + state.stats.get("requests_filled", 0)) & 0x7FFFFFFF)

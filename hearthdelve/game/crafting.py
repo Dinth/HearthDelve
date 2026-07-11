@@ -731,8 +731,9 @@ def sellable_items(state: GameState):
 
 def edible_items(state: GameState):
     """Anything nourishing in the pack (cooked dishes plus raw eggs/milk/cheese),
-    one entry per (item, quality)."""
-    return [(it, q, ql) for it, q, ql in state.player.inventory.slots if it.energy > 0]
+    and remedies like the salve — one entry per (item, quality)."""
+    return [(it, q, ql) for it, q, ql in state.player.inventory.slots
+            if it.energy > 0 or it.heal > 0]
 
 
 def slot_value(item, quality: int) -> int:

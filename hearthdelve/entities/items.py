@@ -18,6 +18,7 @@ class Item:
     stackable: bool = True
     value: int = 0       # base sell price (0 = not sellable)
     energy: int = 0      # stamina restored when eaten (food dishes)
+    heal: int = 0        # HP restored when used (remedies like the sulphur salve)
     buff: str = ""       # a temporary boon granted on eating (see skills.BUFFS)
     family: str = ""     # groups per-source artisan goods (all jams share "jam")
                          # so NPC gift tastes & the like match any variant
@@ -179,6 +180,7 @@ SULPHUR     = Item("Sulphur",     "▪", "material", "Brimstone-yellow crystals 
 SALTPETER   = Item("Saltpeter",   "▪", "material", "White nitre crust — powder, fertiliser or curing salt.", value=35)
 GUNPOWDER   = Item("Gunpowder",   "▪", "material", "Milled black powder. Handle gently.", value=90)
 FERTILISER  = Item("Fertiliser",  "≈", "material", "Nitre-rich meal — fertilised soil grows finer crops (g at a growing crop).", value=25)
+SALVE       = Item("Sulphur Salve", "!", "material", "A pungent wound-salve of brimstone, honey and wax (use it from the eat menu, x).", value=85, heal=30)
 
 # Meat is TYPED — the cut carries its animal the way a jam carries its fruit
 # (family "meat" lets recipes ask for "any meat" and old generic Meat still fit).
@@ -385,6 +387,7 @@ SLING_STONE = Item("Sling Stone", ".", "ammo",   "Smooth stones for a sling.", v
 # --- Consumables -------------------------------------------------------------
 BOMB        = Item("Bomb",        "*", "bomb",     "Aim & throw (t): harms monsters and shatters rock/ore.", value=0)
 BLAST_CHARGE= Item("Blast Charge","*", "bomb",     "A gunpowder charge: a wide, vein-cracking blast. Ready it in the ammo slot to throw it first.", value=0)
+FIRECRACKER = Item("Firecracker", "*", "bomb",     "A harmless CRACK-BANG: scares crop-raiding wildlife off your land for days. The festivals love them.", value=40)
 
 
 # Registry of every defined item, for save/load by name.

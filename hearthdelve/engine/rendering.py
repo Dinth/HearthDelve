@@ -1159,7 +1159,7 @@ def render_eat(con: tcod.console.Console, state: GameState, sel: int) -> None:
             con.draw_rect(x + 1, y + 2 + row, w - 2, 1, ch=ord(" "), bg=bg)
         star = (" " + skills.stars(ql)) if ql else ""
         gain = round(it.energy * (1 + 0.12 * ql))
-        hp = max(1, gain // 6)
+        hp = (max(1, gain // 6) if it.energy else 0) + it.heal
         # Show the boon up front, so a Hearty meal can be chosen on purpose.
         buff = f" ↯{skills.BUFFS[it.buff]}" if it.buff in skills.BUFFS else ""
         label = f"{q:>2} {it.name}{star}{buff}"

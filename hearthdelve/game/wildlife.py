@@ -90,7 +90,15 @@ def _notice(state: GameState, m, msg: str, color=(180, 170, 120)) -> None:
         state.log.add(msg, color)
 
 
+def _spooked(state: GameState) -> bool:
+    """A firecracker's echo lingers: for a few days after one goes off, the
+    wildlife keeps well clear of anything that smells of the farm."""
+    return state.stats.get("wildlife_calm_until", 0) > state.day
+
+
 def _eat_crops(state: GameState, m) -> bool:
+    if _spooked(state):
+        return False
     for cx, cy in [(m.x, m.y)] + _neighbours(m):
         plot = state.world.crops.get((cx, cy))
         if plot is not None and not plot.dead:
@@ -102,6 +110,8 @@ def _eat_crops(state: GameState, m) -> bool:
 
 
 def _eat_berries(state: GameState, m) -> bool:
+    if _spooked(state):
+        return False
     for bx, by in _neighbours(m):
         if state.world.tile_at(bx, by).kind == "shrub_berry":
             btile = int(state.world.tiles[bx, by])
@@ -142,6 +152,8 @@ def _nearest_food(state: GameState, m):
 
 
 def _raid_hive(state: GameState, m, hx: int, hy: int) -> bool:
+    if _spooked(state):
+        return False
     mac = state.world.machines.get((hx, hy))
     if mac is None or mac.kind != "beehive" or not mac.has_queen:
         return False
