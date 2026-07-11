@@ -389,6 +389,16 @@ def _place_waypoints(gm: GameMap) -> None:
                     if gm.tiles[x + dx, y + dy] in _SIGN_ROADS]
             if len(dirs) < 3:
                 continue          # not a junction at all
+            # A thickened zigzag corner reads like a junction (3 road
+            # neighbours) but isn't one: at a real T or crossroads of 1-wide
+            # roads the gaps BETWEEN the arms are open ground, while a
+            # gap-filled corner has road in the diagonal. Hill switchbacks
+            # used to sprout a signpost every eight tiles because of this.
+            _DIAG = {((0, -1), (1, 0)): (1, -1), ((1, 0), (0, 1)): (1, 1),
+                     ((0, 1), (-1, 0)): (-1, 1), ((-1, 0), (0, -1)): (-1, -1)}
+            if any(a in dirs and b in dirs and gm.tiles[x + dx, y + dy] in _SIGN_ROADS
+                   for (a, b), (dx, dy) in _DIAG.items()):
+                continue          # fat corner of one road, not a meeting of routes
             through = sum(_branch_through(gm, x, y, dx, dy) for dx, dy in dirs)
             if through < 3:
                 continue          # a household spur off a road — no signpost needed
@@ -483,6 +493,11 @@ def _draw_roads(gm: GameMap, centers: dict) -> None:
         _draw_road(gm, hub, d)
         nc = min(pts, key=lambda c: (c[0] - d[0]) ** 2 + (c[1] - d[1]) ** 2)
         _draw_road(gm, nc, d)
+    # The West Pass: the Cinderhope road runs on to the map's western edge,
+    # where the Westreach begins (walk off the edge to cross).
+    if "Cinderhope" in centers:
+        ccx, ccy = centers["Cinderhope"]
+        _draw_road(gm, (ccx, ccy), (2, ccy))
     _fill_road_gaps(gm)
 
 

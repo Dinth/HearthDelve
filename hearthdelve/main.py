@@ -48,7 +48,8 @@ _KONAMI = [int(_K.UP), int(_K.UP), int(_K.DOWN), int(_K.DOWN),
 
 
 def _cheat_locations(state: GameState):
-    """(label, (x, y)) surface teleport targets for the cheat menu."""
+    """(label, target) teleport targets for the cheat menu. Targets are surface
+    (x, y) coords, or a special string for the far places."""
     surf = state.surface
     locs = [("Home (the farm)", surf.spawn)]
     for name, c in getattr(surf, "village_centers", {}).items():
@@ -58,15 +59,41 @@ def _cheat_locations(state: GameState):
             locs.append(("The Wildwood hut", b["front"]))
     for (dx, dy) in surf.dungeons:
         locs.append((f"Enter dungeon — {surf.dungeon_kind.get((dx, dy), 'delve')}", (dx, dy)))
+    locs.append(("The Westreach (volcano)", "west:volcano"))
+    locs.append(("Khazgrim (the dwarf town)", "west:khazgrim"))
     return locs
 
 
 def _cheat_go(state: GameState, target) -> None:
     """Teleport to a surface spot — or, if it's a dungeon entrance, drop right
-    into the dungeon."""
+    into the dungeon. String targets reach the Westreach and Khazgrim."""
     if state.world.is_dungeon:
-        delve.leave_to_surface(state)          # back to the surface first
+        delve.leave_to_surface(state)          # back to the open air first
+    if isinstance(target, str) and target.startswith("west:"):
+        from .world import westgen, tile as _t
+        import numpy as _np
+        if state.west is None:
+            state.west = westgen.generate(state.seed)
+        west = state.west
+        if target == "west:volcano":
+            lava = _np.argwhere(west.tiles == _t.LAVA)
+            cx, cy = ((int(lava[:, 0].mean()), int(lava[:, 1].mean())) if len(lava)
+                      else west.spawn)
+            state.world = west
+            state.player.x, state.player.y = _edge_landing(west, cx + 12, cy, step=1)
+        else:                                  # Khazgrim: straight down the mine
+            mouth = next((pos for pos, k in west.dungeon_kind.items()
+                          if k == "dwarfhold"), west.spawn)
+            state.world = west
+            state.player.x, state.player.y = mouth
+            delve.enter(state, "dwarfhold")
+            from .world import dwarftown
+            while state.depth < dwarftown.TOWN_DEPTH:
+                delve.descend(state)
+        state.cam_focus = None
+        return
     surf = state.surface
+    state.world = surf                          # a surface target from anywhere
     state.player.x, state.player.y = target
     if target in surf.dungeons:                # a dungeon mouth — descend into it
         delve.enter(state, surf.dungeon_kind.get(target, "mine"))

@@ -170,14 +170,26 @@ def load(path: str = SAVE_PATH) -> GameState:
     world = worldgen.generate(data["seed"])           # rebuild base world
 
     w, h = data["tiles_shape"]
-    # Villages gained notice boards after some saves were written; remember where
-    # the regenerated world put them so an older grid can be stamped below.
+    # Keep the freshly-generated grid: worldgen improvements (new boards, the
+    # West Pass road, tamed signposts) are retrofitted onto older saved grids
+    # below, wherever the player hasn't touched the ground.
     from ..world import tile as _tile
-    _boards = np.argwhere(world.tiles == _tile.NOTICE_BOARD)
+    _fresh = world.tiles.copy()
     world.tiles = np.frombuffer(base64.b64decode(data["tiles"]), dtype=np.uint8).reshape(w, h).copy()
-    for bx, by in _boards:
-        if world.tiles[bx, by] == _tile.COBBLE:   # untouched square corner -> board
+    # Notice boards: stamp onto untouched square corners.
+    for bx, by in np.argwhere(_fresh == _tile.NOTICE_BOARD):
+        if world.tiles[bx, by] == _tile.COBBLE:
             world.tiles[bx, by] = _tile.NOTICE_BOARD
+    # Signposts: older worldgen sprinkled them down every hill switchback —
+    # any post the fresh world no longer plants reverts to its natural ground.
+    extra_posts = (world.tiles == _tile.SIGNPOST) & (_fresh != _tile.SIGNPOST)
+    world.tiles[extra_posts] = _fresh[extra_posts]
+    # New roads (the West Pass): lay fresh road/bridge over still-wild ground.
+    _natural = np.isin(world.tiles, (_tile.GRASS, _tile.MEADOW, _tile.TALL_GRASS,
+                                     _tile.DIRT_PATH, _tile.SAND, _tile.FOG_GRASS,
+                                     _tile.MOOR, _tile.HILL, _tile.SCREE, _tile.BUSH))
+    _roads = np.isin(_fresh, (_tile.ROAD, _tile.BRIDGE)) & _natural
+    world.tiles[_roads] = _fresh[_roads]
 
     world.crops = {}
     for key, rec in data["crops"].items():
