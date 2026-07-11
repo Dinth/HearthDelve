@@ -314,6 +314,7 @@ def contest_open(state: GameState) -> str | None:
     from . import projects
     fest = content.festival_on(state.season, state.day_of_season)
     if (fest and projects.done(state, "grange_hall")
+            and state.world is state.surface        # the fair is up in the sunlight
             and not state.stats.get(_contest_key(state))):
         return fest[1]
     return None
@@ -424,7 +425,7 @@ def trader_entries(state: GameState, npc: NPC) -> list:
     import zlib
     window, wseed = trader_window(state.seed, state.day)
     rng = _random.Random(wseed ^ zlib.crc32(npc.name.encode()))
-    deep = npc.name == "Willa"                       # the causeway trader digs deeper
+    deep = npc.name in ("Willa", "Kazrik")           # causeway & tunnel traders dig deeper
     slots: list[tuple] = []                          # ("tradebuy", item, price) pre-key
 
     for _ in range(2):                               # high-tier gear, sometimes affixed
@@ -475,10 +476,12 @@ def shop_entries(shop: str, state: GameState | None = None, npc: NPC | None = No
         buys = [("buy", it, price) for it, price in content.blacksmith_stock()]
         # With the Deep Forge raised, Bron works the deep metals too — bars at
         # the usual doubled rate, finished pieces at a steep premium (the
-        # non-crafter's path to endgame gear, paid in dungeon gold).
+        # non-crafter's path to endgame gear, paid in dungeon gold). Thrunn of
+        # Khazgrim has never stopped working them.
         if state is not None:
             from . import projects
-            if projects.done(state, "deep_forge"):
+            if (projects.done(state, "deep_forge")
+                    or (npc is not None and getattr(npc, "village", "") == "Khazgrim")):
                 buys += [("buy", b, content._round5(b.value * 2.0))
                          for b in content.DEEP_FORGE_BARS]
                 buys += [("buy", it, content._round5(it.value * 2.8))

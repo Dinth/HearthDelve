@@ -163,13 +163,22 @@ def _raid_hive(state: GameState, m, hx: int, hy: int) -> bool:
     return True
 
 
+HUNT_RANGE = 8                  # a predator arms itself when you stray this close
+
+
 def _behave(state: GameState, m) -> None:
     p = state.player
     dist = max(abs(m.x - p.x), abs(m.y - p.y))
     skittish = m.behavior == "skittish"
 
-    if m.hostile and dist > CALM_DIST:
+    # Westreach predators hunt on sight — no provocation needed.
+    if m.behavior == "predator" and not m.hostile and dist <= HUNT_RANGE:
+        m.hostile = True
+
+    if m.hostile and dist > CALM_DIST and m.behavior != "predator":
         m.hostile = False
+    elif m.hostile and m.behavior == "predator" and dist > CALM_DIST + 6:
+        m.hostile = False           # even a wolf gives up a long chase
     if m.hostile:
         if dist == 1:
             from .combat import _attack_player
@@ -263,4 +272,33 @@ def respawn(state: GameState, rng: random.Random) -> None:
             surf.monsters.append(Mob(c.name, c.glyph, c.color, c.hp, c.hp, c.speed, c.behavior, x, y,
                                      dv=c.dv, pv=c.pv, to_hit=c.to_hit, dmg=c.dmg,
                                      kind="wildlife", diet=c.diet, seasons=c.seasons))
+            break
+
+
+WEST_CAP = 22
+
+
+def respawn_west(state: GameState, rng: random.Random) -> None:
+    """The Westreach restocks itself the same slow way the Vale does — from
+    its own, meaner bestiary. Called from new_day once the region exists."""
+    west = state.west
+    if west is None:
+        return
+    from ..data import content
+    from ..entities.monster import Mob
+    alive = sum(1 for m in west.monsters if m.alive)
+    if alive >= WEST_CAP:
+        return
+    for _ in range(rng.randint(0, 2)):
+        for _try in range(30):
+            x, y = rng.randint(4, west.width - 5), rng.randint(4, west.height - 5)
+            if not west.walkable(x, y):
+                continue
+            if any(m.x == x and m.y == y for m in west.monsters):
+                continue
+            c = rng.choice(content.WEST_WILDLIFE)
+            west.monsters.append(Mob(c.name, c.glyph, c.color, c.hp, c.hp, c.speed,
+                                     c.behavior, x, y, dv=c.dv, pv=c.pv, to_hit=c.to_hit,
+                                     dmg=c.dmg, kind="wildlife", diet=c.diet,
+                                     seasons=c.seasons))
             break

@@ -183,6 +183,11 @@ def _place_machine(state: GameState, kind: str) -> bool:
         # placed underground they'd be lost when the floor re-rolls.
         state.log.add(f"You can only set down a {MACHINES[kind].name.lower()} on the surface.", C.DIM)
         return False
+    if state.world is not state.surface:
+        # The Westreach is too far to tend — nothing left out there would keep.
+        state.log.add(f"Too far from home — a {MACHINES[kind].name.lower()} needs "
+                      "tending. Set it up back in the Vale.", C.DIM)
+        return False
     tx, ty = p.x + p.facing[0], p.y + p.facing[1]
     if not state.world.in_bounds(tx, ty):
         state.log.add("There's no room to place that there.", C.DIM)

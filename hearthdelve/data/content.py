@@ -117,6 +117,7 @@ MATERIALS: dict[str, Material] = {
     "wool":       Material("wool",       3, a_pv=3.0, value_mult=0.8),
     "linen":      Material("linen",      3, a_pv=3.0, value_mult=1.0),
     "silk":       Material("silk",       4, a_dv=1, a_pv=4.0, value_mult=2.5),
+    "fur":        Material("fur",        4, a_pv=4.0, value_mult=1.4),   # wolf-pelt warmth
 }
 # Bow woods, weakest first (for depth scaling & the codex).
 BOW_WOODS = ["birch", "willow", "yew", "composite"]
@@ -1253,6 +1254,9 @@ RECIPES: list[Recipe] = [
            desc="A pungent wound-dressing — restores health without a meal (x)."),
     Recipe("Leather Armor", "item", ((items.BOAR_HIDE, 3), (items.FIBER, 4)),
            output=items.LEATHER_ARMOR, out_qty=1, desc="Tanned boar-hide body armour (+2 Protection)."),
+    Recipe("Hide Cloak", "item", ((items.WOLF_PELT, 2), (items.FIBER, 2)),
+           output=make_gear("Cloak", "fur"), out_qty=1,
+           desc="A thick wolf-pelt cloak — the Westreach wind means nothing to it."),
     Recipe("Fence Panels", "item", ((items.WOOD, 1),), output=items.FENCE, out_qty=2,
            desc="Timber fence panels for your pack — set them down with 'Set Fence'."),
     Recipe("Set Fence", "build", ((items.FENCE, 1),), machine="fence",
@@ -1552,6 +1556,23 @@ BEAR = Critter("Bear", "B", (120, 88, 62), 42, 2, "defensive", "honey",
                dv=8, pv=3, to_hit=5, dmg=(5, 10), seasons=_NO_WINTER,
                desc="A great shaggy bear — slow to anger, fearsome when roused, mad for honey.")
 
+# The Westreach's beasts: leaner, meaner, and some hunt on sight ("predator"
+# behaviour — they arm themselves when you stray into range; see wildlife._behave).
+WEST_WILDLIFE: list[Critter] = [
+    Critter("Ash Wolf", "w", (150, 148, 152), 16, 3, "predator", "",
+            dv=10, pv=1, to_hit=5, dmg=(3, 6),
+            desc="A grey hunter of the ash slopes; it does not wait to be provoked."),
+    Critter("Cinder Boar", "P", (176, 110, 88), 26, 2, "defensive", "crops",
+            dv=6, pv=3, to_hit=4, dmg=(4, 8),
+            desc="A scarred hill boar, half again the lowland kind."),
+    Critter("Rock Viper", "s", (170, 168, 120), 8, 3, "predator", "",
+            dv=13, pv=0, to_hit=7, dmg=(2, 7),
+            desc="A sand-still coil among the scree — fast, venom-toothed, ill-tempered."),
+    Critter("Ember Drake", "D", (232, 130, 60), 34, 2, "predator", "",
+            dv=9, pv=4, to_hit=6, dmg=(4, 9),
+            desc="A dog-sized drake that suns itself on the caldera rock. Territorial is a kind word."),
+]
+
 
 # --- Villages, NPCs, shops (M3b) ---------------------------------------------
 def village_npcs() -> dict[str, list[NPC]]:
@@ -1675,7 +1696,10 @@ def village_npcs() -> dict[str, list[NPC]]:
                 blurbs=("Bring me ore and bars and I'll sharpen your tools!\n"
                         "Wooden tools? We'll fix that. Bronze and up, that's my trade.",
                         "Nothing like the ring of a hammer at dawn. Wakes the whole\n"
-                        "street — and I don't apologise for it."),
+                        "street — and I don't apologise for it.",
+                        "West past the world's edge stands a fire-mountain, and under\n"
+                        "it DWARF-work — a mine older than any village. I'd give my\n"
+                        "beard to see their forges. If I had one."),
                 heart_blurbs=((3, "Burned my hand near to ruin, first forge I ever lit.\n"
                                   "Almost gave it up. The anvil wouldn't let me."),
                               (6, "A bit of me goes into every tool I make.\n"
@@ -1701,7 +1725,10 @@ def village_npcs() -> dict[str, list[NPC]]:
                 blurbs=("The old chapel has stood longer than the outpost.\n"
                         "Rest a moment. Even miners must look up sometimes.",
                         "The stone remembers what folk forget.\n"
-                        "I just keep the dust off it."),
+                        "I just keep the dust off it.",
+                        "In the western hills there's a tomb no chapel ever blessed.\n"
+                        "If your road runs past it, walk on. And if you cannot walk\n"
+                        "on — then go in well-armed, and leave nothing open."),
                 heart_blurbs=((3, "There are names on these graves older than any record.\n"
                                   "Forty years I've spent learning who they were."),
                               (6, "Between us — there's a vault beneath the chapel floor.\n"
@@ -1727,7 +1754,10 @@ def village_npcs() -> dict[str, list[NPC]]:
                 blurbs=("Twenty years down the shafts and my back knows every one.\n"
                         "Worth it for the glint, though.",
                         "Copper's steady, but it's silver a man dreams of.\n"
-                        "Silver, and maybe a little peace."),
+                        "Silver, and maybe a little peace.",
+                        "My grandfather traded with dwarves under the smoking mountain,\n"
+                        "far west. Folk say that mine's dead now. Grandfather said\n"
+                        "dwarves don't die out — they dig deeper."),
                 heart_blurbs=((3, "My father spoke of a silver seam under the grotto.\n"
                                   "Never found it. I reckon it's still down there."),
                               (6, "Strike that seam and I'll not hoard it — half to Mabel,\n"
@@ -1753,7 +1783,10 @@ def village_npcs() -> dict[str, list[NPC]]:
                 blurbs=("Rare goods, fair prices — when I'm passing through.\n"
                         "A fine vintage fetches a fine coin out east.",
                         "I keep moving. Bad habit, or good sense —\n"
-                        "depends who's asking."),
+                        "depends who's asking.",
+                        "Walk far enough west and the sky goes grey with ash — a live\n"
+                        "volcano, and things with teeth sunning on it. Also sulphur by\n"
+                        "the sackful, if you've the nerve to fill a sack."),
                 heart_blurbs=((3, "Cinderhope's a fine place to not be found, you follow.\n"
                                   "Quiet. Out of the way. No questions."),
                               (6, "There was a deal, out east, that went poorly.\n"
@@ -1938,6 +1971,71 @@ def village_npcs() -> dict[str, list[NPC]]:
                 bio="A Fenwick child; fearless of the bog, forever muddy to the ears."),
         ],
     }
+
+
+def dwarf_npcs() -> list[NPC]:
+    """The folk of Khazgrim — the living town on the fourth level of the old
+    dwarven mine under the volcano. They keep shops (the smith works the deep
+    metals as a matter of course), take gifts, and remember a friend."""
+    return [
+        NPC("Thrunn", "h", (216, 170, 110), shop="blacksmith", role="blacksmith",
+            blurbs=("Surface-crawler! Ha — don't bristle, coin is coin down here.\n"
+                    "Mithril, adamantium — we never stopped working the deep seams.",
+                    "Your Bron does honest work, for a man. Tell him Thrunn said so\n"
+                    "and watch him spit."),
+            heart_blurbs=((3, "The old town above the forge-level died when the mountain\n"
+                              "last coughed. We rebuilt below it. Dwarves don't leave."),
+                          (6, "You swing a pick like a dwarf three sizes too tall.\n"
+                              "That's the finest thing I say to anyone.")),
+            loves=(items.GOLD_BAR, items.MITHRIL_ORE, items.MEAD),
+            likes=(items.COAL, items.GUNPOWDER, items.ADAMANTITE_ORE),
+            dislikes=(items.ASTER, items.TULIP),
+            gifts=(items.MITHRIL_ORE, items.STEEL_BAR, items.COKE),
+            village="Khazgrim",
+            bio="Forge-master of Khazgrim; works metals Bron only dreams of."),
+        NPC("Brokka", "h", (206, 160, 130), shop="tavern", role="innkeeper",
+            blurbs=("Sit! The stone-ale's dark and the stew has... character.\n"
+                    "Mind the third tankard — it minds you.",
+                    "News from the sun? We hear it all eventually. The mountain\n"
+                    "carries voices down, if you know where to press your ear."),
+            heart_blurbs=((3, "I brewed for three kings' tables before the collapse.\n"
+                              "Now I brew for miners, and they're politer."),
+                          (6, "For you? The old cask. I was saving it for a coronation,\n"
+                              "but I've stopped believing in kings.")),
+            loves=(items.MEAD, items.AGED_MEAD, items.CURED_HAM),
+            likes=(items.CHEESE, items.MUSHROOM_STEW, items.JERKY),
+            dislikes=(items.FIBER,),
+            gifts=(items.MEAD, items.CAVE_MUSHROOM, items.GLOWCAP),
+            village="Khazgrim",
+            bio="Keeps the Undertankard, Khazgrim's alehall; brews in the dark."),
+        NPC("Kazrik", "h", (190, 176, 200), shop=None, role="trader",
+            blurbs=("Everything has a buyer. EVERYTHING. The trick is the road\n"
+                    "between — and I know roads no map admits to.",
+                    "Bring me the strange and the shiny. I pay in kind."),
+            heart_blurbs=((3, "I've walked to the sea through tunnels no one remembers\n"
+                              "digging. The world below is wider than the one above."),
+                          (6, "There's a door at the bottom of this mine even we don't\n"
+                              "open. When you're ready — ask the Elder. Not me.")),
+            loves=(items.CUT_DIAMOND, items.DRAKE_SCALE, items.GRAPE_WINE),
+            likes=(items.GEODE, items.SILK_CLOTH), dislikes=(),
+            gifts=(items.GEODE, items.SILVER_BAR),
+            village="Khazgrim",
+            bio="Khazgrim's tunnel-trader; his wagon has seen roads without sky."),
+        NPC("Elder Durn", "h", (180, 188, 196), shop=None, role="elder",
+            blurbs=("Hm. A surfacer, standing in Khazgrim. The mountain turns\n"
+                    "strange pages these days.",
+                    "The tomb east of here? Leave it be, or go well-armed.\n"
+                    "Our dead sleep sound. Theirs... argue."),
+            heart_blurbs=((3, "Four hundred years I've kept the count of this hold.\n"
+                              "You are the first sun-walker in ninety of them."),
+                          (6, "Below the old workings there is a sealed gallery.\n"
+                              "What sleeps there is why we live SO far down. Ask no more.")),
+            loves=(items.SAPPHIRE, items.WRAITH_ESSENCE, items.AGED_MEAD),
+            likes=(items.JAM,), dislikes=(items.GUNPOWDER,),
+            gifts=(items.SAPPHIRE, items.AMETHYST),
+            village="Khazgrim",
+            bio="The keeper of Khazgrim's long count; old even as dwarves reckon."),
+    ]
 
 
 def camp_npcs() -> list[NPC]:
@@ -2274,6 +2372,11 @@ MONSTER_DROPS: dict[str, list] = {
     "Cave Slime":   [(items.SLIME_GEL, 0.7)],
     "Bat":          [(items.BAT_WING, 0.6)],
     "Boar":         [(items.BOAR_HIDE, 0.5), (items.PORK, 0.7)],
+    # The Westreach's beasts
+    "Ash Wolf":     [(items.WOLF_PELT, 0.6)],
+    "Cinder Boar":  [(items.BOAR_HIDE, 0.6), (items.PORK, 0.9)],
+    "Rock Viper":   [(items.SULPHUR, 0.3)],
+    "Ember Drake":  [(items.DRAKE_SCALE, 0.8), (items.SULPHUR, 0.6)],
     "Cave Spider":  [(items.SPIDER_SILK, 0.6)],
     "Deep Lurker":  [(items.LURKER_SCALE, 0.6)],
     "Wraith":       [(items.WRAITH_ESSENCE, 0.5)],

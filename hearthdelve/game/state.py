@@ -53,9 +53,16 @@ class GameState:
 
     # delving: surface is the persistent farm; world is the active map
     surface: GameMap | None = None
+    # the Westreach — the volcanic frontier west of the map. Born lazily the
+    # first time the player crosses the western edge, persistent thereafter.
+    west: GameMap | None = None
+    # the folk of Khazgrim (the dwarf town in the old mine): created on first
+    # visit, re-seated on their floor each build; friendship persists in saves
+    dwarves: list | None = None
     depth: int = 0                       # 0 = surface, >=1 = dungeon floor
     dungeon_kind: str = ""
     return_pos: tuple[int, int] = (0, 0)
+    return_west: bool = False            # the active delve began on the Westreach
 
     # goals / journal
     stats: dict = field(default_factory=dict)          # lifetime counters

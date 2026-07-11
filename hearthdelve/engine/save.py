@@ -105,6 +105,21 @@ def save(state: GameState, path: str = SAVE_PATH) -> None:
         "requests": [dict(r) for r in state.requests],
         "demand": dict(state.demand),
         "projects": [dict(p) for p in state.projects],
+        # The Westreach, once discovered: its grid + beasts persist like the
+        # surface's. (Regenerated from seed on load, then overlaid.)
+        "west": None if state.west is None else {
+            "tiles": base64.b64encode(np.ascontiguousarray(state.west.tiles).tobytes()).decode("ascii"),
+            "wildlife": [[m.name, m.glyph, list(m.color), m.hp, m.max_hp, m.speed, m.behavior,
+                          m.x, m.y, m.dv, m.pv, m.to_hit, list(m.dmg), m.awake,
+                          m.kind, m.diet, m.hostile, list(m.seasons)]
+                         for m in state.west.monsters],
+        },
+        "on_west": ((state.world is state.west and state.west is not None)
+                    or (state.depth > 0 and state.return_west)),
+        # Khazgrim's folk remember a friend across saves.
+        "dwarves": None if state.dwarves is None else {
+            n.name: [n.friendship, n.gifted_today, n.talked_today, n._blurb_i, n.met]
+            for n in state.dwarves},
         "mail": [{"sender": m["sender"], "body": m["body"],
                   "items": [[(it.name if hasattr(it, "name") else it), q, ql]
                             for it, q, ql in m.get("items", [])],
@@ -299,6 +314,36 @@ def load(path: str = SAVE_PATH) -> GameState:
     # Completed landmarks' tiles live in the grid, but their look-mode records
     # aren't in the saved buildings list (village-owned) — rebuild them.
     _projects.register_buildings(world, state.projects)
+
+    # The Westreach: regenerate from seed, then overlay the saved grid & beasts.
+    raw_west = data.get("west")
+    if raw_west:
+        from ..world import westgen
+        from ..entities.monster import Mob as _Mob
+        wmap = westgen.generate(data["seed"])
+        wmap.tiles = np.frombuffer(base64.b64decode(raw_west["tiles"]),
+                                   dtype=np.uint8).reshape(westgen.W, westgen.H).copy()
+        wmap.monsters = []
+        for rec in raw_west.get("wildlife", []):
+            (nm, glyph, color, hp, mhp, spd, behavior, mx, my,
+             dv, pv, th, dmg, awake, mkind, diet, hostile, seasons) = rec
+            wmap.monsters.append(_Mob(nm, glyph, tuple(color), hp, mhp, spd, behavior, mx, my,
+                                      dv=dv, pv=pv, to_hit=th, dmg=tuple(dmg), awake=awake,
+                                      kind=mkind, diet=diet, hostile=hostile,
+                                      seasons=tuple(seasons)))
+        state.west = wmap
+        if data.get("on_west"):
+            state.world = wmap        # the player saved out in the Westreach
+
+    raw_dwarves = data.get("dwarves")
+    if raw_dwarves:
+        state.dwarves = content.dwarf_npcs()
+        for n in state.dwarves:
+            rec = raw_dwarves.get(n.name)
+            if rec:
+                n.friendship, n.gifted_today, n.talked_today, n._blurb_i = rec[:4]
+                if len(rec) > 4:
+                    n.met = rec[4]
     state.mail = data.get("mail", [])
     state.pending_build = data.get("pending_build", "")
     state.claims = {tuple(map(int, k.split(","))) for k in data.get("claims", [])}

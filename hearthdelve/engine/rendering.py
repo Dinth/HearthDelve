@@ -140,6 +140,51 @@ def camera_origin(state: GameState) -> tuple[int, int]:
     return cx, cy
 
 
+def _westreach_ambience(con, state: GameState, view, ox: int, oy: int, t: float) -> None:
+    """Weather theatre for the volcano country, painted over the composed view
+    (the player is drawn after, so you never vanish into your own weather)."""
+    vw, vh = C.VIEW_W, C.VIEW_H
+    xs = (ox + np.arange(vw, dtype=np.float32))[:, None]
+    ys = (oy + np.arange(vh, dtype=np.float32))[None, :]
+
+    # Rain on hot rock: the whole reach steams — a thick, drifting white-out.
+    if state.weather in ("Rain", "Storm"):
+        mist = _hash01(np.floor(xs * 0.5 - t * 2.2), np.floor(ys * 0.5 + t * 0.4))
+        a = ((0.34 if state.weather == "Rain" else 0.46) + 0.30 * mist)[..., None]
+        grey = np.array([170.0, 173.0, 174.0], np.float32)
+        fgc = con.rgb["fg"][:vw, :vh].astype(np.float32)
+        bgc = con.rgb["bg"][:vw, :vh].astype(np.float32)
+        con.rgb["fg"][:vw, :vh] = (fgc * (1 - a) + grey * a).astype(np.uint8)
+        con.rgb["bg"][:vw, :vh] = (bgc * (1 - a * 0.7) + grey * 0.55 * a).astype(np.uint8)
+
+    # Ashfall: on snow-weather days (it never snows white here) and on the
+    # mountain's own restless days, grey flakes sift down the view.
+    ashy = state.weather == "Snow" or (state.day * 7919 + state.seed) % 3 == 0
+    if ashy and state.weather not in ("Rain", "Storm"):
+        for i in range(44):
+            h1 = (i * 2654435761) % 1000 / 1000.0
+            h2 = (i * 40503 + 977) % 1000 / 1000.0
+            x = int((h1 * vw + t * (1.5 + h2)) % vw)
+            y = int((h2 * vh + t * (5.0 + 3.0 * h1)) % vh)
+            con.rgb["ch"][x, y] = ord("∙" if (i % 3) else "·")
+            con.rgb["fg"][x, y] = (158, 152, 148)
+
+    # The eruption: every so often the caldera spits a fountain of sparks —
+    # loud, bright, and entirely uninterested in you.
+    if (t % 41.0) < 5.5:
+        lava = np.argwhere(view == tile.LAVA)
+        if len(lava):
+            cx, cy = int(lava[:, 0].mean()), int(lava[:, 1].mean())
+            for i in range(12):
+                rise = (t * 6.0 + i * 1.31) % 7.0
+                sx = cx + int(round(3.0 * np.sin(i * 2.4 + t * 0.9) * (rise / 7.0)))
+                sy = cy - 1 - int(rise)
+                if 0 <= sx < vw and 0 <= sy < vh:
+                    heat = max(0.25, 1.0 - rise / 7.0)
+                    con.rgb["ch"][sx, sy] = ord("*" if rise < 3 else "·")
+                    con.rgb["fg"][sx, sy] = (255, int(120 + 120 * heat), int(50 * heat))
+
+
 def render_world(con: tcod.console.Console, state: GameState, anim_time: float = 0.0) -> None:
     w = state.world
     ox, oy = camera_origin(state)
@@ -298,6 +343,25 @@ def render_world(con: tcod.console.Console, state: GameState, anim_time: float =
         gemfg = np.clip(base * (0.7 + 0.55 * spark)[..., None], 0, 255)
         fg = np.where(gem_mask[..., None], gemfg, fg)
 
+    # The caldera breathes: lava pulses between ember-red and furnace-orange
+    # (each tile on its own phase), and throws a warm halo on the rock beside it.
+    lava_mask = view == tile.LAVA
+    if lava_mask.any():
+        lph = _hash01(xs + 5.0, ys + 8.0)
+        pulse = (0.72 + 0.28 * np.sin(t * 2.4 + lph * 6.28)).astype(np.float32)
+        bg = np.where(lava_mask[..., None],
+                      np.stack([205 * pulse, 62 * pulse, 10 + 8 * pulse], axis=-1), bg)
+        fg = np.where(lava_mask[..., None],
+                      np.stack([np.full_like(pulse, 255.0), 140 + 80 * pulse, 30 + 30 * pulse],
+                               axis=-1), fg)
+        halo = np.zeros_like(lava_mask)
+        halo[1:, :] |= lava_mask[:-1, :]; halo[:-1, :] |= lava_mask[1:, :]
+        halo[:, 1:] |= lava_mask[:, :-1]; halo[:, :-1] |= lava_mask[:, 1:]
+        halo &= ~lava_mask
+        if halo.any():
+            warm = np.array([64.0, 20.0, 4.0], np.float32) * (0.5 + 0.5 * pulse)[..., None]
+            bg = np.where(halo[..., None], np.minimum(255.0, bg + warm), bg)
+
     if w.is_dungeon and w.visible is not None:
         # Fog of war: lit where visible, dim where explored, black otherwise.
         vis = w.visible[ox:ox + C.VIEW_W, oy:oy + C.VIEW_H]
@@ -375,6 +439,10 @@ def render_world(con: tcod.console.Console, state: GameState, anim_time: float =
             sx, sy = m.x - ox, m.y - oy
             if 0 <= sx < C.VIEW_W and 0 <= sy < C.VIEW_H and w.visible[m.x, m.y]:
                 _draw(sx, sy, m.glyph, m.color, (36, 24, 24))
+        for npc in w.npcs:                           # underground folk (the dwarf town)
+            sx, sy = npc.x - ox, npc.y - oy
+            if 0 <= sx < C.VIEW_W and 0 <= sy < C.VIEW_H and w.visible[npc.x, npc.y]:
+                _draw(sx, sy, npc.glyph, npc.color, (42, 38, 50))
     elif not w.is_dungeon:
         season = state.season
         for npc in state.world.npcs:
@@ -400,6 +468,12 @@ def render_world(con: tcod.console.Console, state: GameState, anim_time: float =
             elif a.produce_ready:
                 col = (250, 240, 170)
             _draw(sx, sy, a.glyph, col)
+
+    # Westreach ambience: rain boils off the mountain as blinding steam, ash
+    # sifts down on still days, and now and then the caldera spits a (harmless,
+    # glorious) fountain of sparks.
+    if state.west is not None and w is state.west:
+        _westreach_ambience(con, state, view, ox, oy, t)
 
     # player, centered-ish — always full-bright so you never lose yourself
     px, py = state.player.x - ox, state.player.y - oy
@@ -639,6 +713,8 @@ _TILE_DESC = {
     "gem_vein": "a gem vein glinting in the rock — mine it with a pickaxe.",
     "sulphur_deposit": "a brimstone-yellow seam — sulphur, for powder-making (any pick bites it).",
     "nitre_deposit": "a pale nitre crust — saltpeter: powder, fertiliser or curing salt.",
+    "lava": "molten rock, seething in the caldera. Keep well back.",
+    "ash": "grey volcanic ash, soft underfoot.",
     "gold_pile": "a glittering pile of gold — step on it to grab it.",
     "chest": "a treasure chest — press g to pry it open.",
     "rubble": "loose rubble — slow going underfoot.",
@@ -1543,6 +1619,14 @@ def build_codex_pages(state: GameState):
         mon.append((f"      {c.desc}", C.DIM))
     mon.append(("", C.WHITE))
     mon.append(("Fence your fields — critters can't reach crops behind a fence.", C.DIM))
+    mon.append(("", C.WHITE))
+    mon.append(("The Westreach (walk off the map's western edge)", _HDR))
+    mon.append(("  Volcanic hill country: ore-rich crags, sulphur & nitre on the", C.WHITE))
+    mon.append(("  mountain, and beasts that hunt on sight. No bed, no fields —", C.DIM))
+    mon.append(("  an expedition, not a stroll. Walk east to come home.", C.DIM))
+    for c in content.WEST_WILDLIFE:
+        mon.append((f" {c.glyph}  {c.name}   {c.behavior}", _KEY))
+        mon.append((f"      {c.desc}", C.DIM))
     pages.append(("Monsters", mon))
 
     # --- Page: Villagers ----------------------------------------------------

@@ -185,6 +185,14 @@ def try_move(state: GameState, dx: int, dy: int) -> None:
             _dungeon_tile_fx(state)
     else:
         if not state.world.in_bounds(nx, ny):
+            # Walking off the western edge crosses into the Westreach (and the
+            # Westreach's eastern edge leads home) — the world is wider than
+            # the map.
+            if nx < 0 and state.world is state.surface:
+                _cross_to_west(state)
+            elif state.west is not None and state.world is state.west \
+                    and nx >= state.world.width:
+                _cross_to_surface(state)
             return
         t = state.world.tile_at(nx, ny)
         blocked = {
@@ -793,6 +801,45 @@ def _at_postbox(state: GameState) -> bool:
 
 def _at_board(state: GameState) -> bool:
     return _facing_tile_kind(state, "board")
+
+
+def _edge_landing(gm, x0: int, y0: int, step: int):
+    """A walkable arrival tile near (x0, y0), scanning inward (by `step` in x)
+    and outward in y — so a crossing never strands you in rock or lava."""
+    for dx in range(0, 12):
+        for dy in [0] + [s * d for d in range(1, 9) for s in (1, -1)]:
+            x, y = x0 + dx * step, y0 + dy
+            if gm.in_bounds(x, y) and gm.walkable(x, y):
+                return (x, y)
+    return gm.spawn or (x0, y0)
+
+
+def _cross_to_west(state: GameState) -> None:
+    from .world import westgen
+    first = state.west is None
+    if first:
+        state.west = westgen.generate(state.seed)
+    west = state.west
+    wy = int(state.player.y / state.surface.height * west.height)
+    state.player.x, state.player.y = _edge_landing(west, west.width - 2, wy, step=-1)
+    state.world = west
+    state.cam_focus = None
+    if first:
+        state.log.add("You crest the pass into the Westreach — hill country, ash "
+                      "on the wind, and eyes in the rocks.", (232, 200, 120))
+        state.log.add("The beasts out here don't wait to be provoked. Walk east to "
+                      "come home.", C.DIM)
+    else:
+        state.log.add("You cross the pass into the Westreach.", (210, 200, 190))
+
+
+def _cross_to_surface(state: GameState) -> None:
+    surf = state.surface
+    sy = int(state.player.y / state.world.height * surf.height)
+    state.player.x, state.player.y = _edge_landing(surf, 1, sy, step=1)
+    state.world = surf
+    state.cam_focus = None
+    state.log.add("You come down out of the hills, back into the Vale.", (210, 200, 190))
 
 
 def _facing_tile_kind(state: GameState, kind: str) -> bool:

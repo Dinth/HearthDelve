@@ -174,13 +174,15 @@ COKE        = Item("Coke",        "♦", "material", "Coal baked in a kiln; the 
 CAVE_MUSHROOM = Item("Cave Mushroom", "τ", "material", "An earthy cave fungus — good in a stew.", value=30)
 SLIME_GEL     = Item("Slime Gel",     "*", "material", "Sticky residue from a cave slime.",       value=15)
 BAT_WING      = Item("Bat Wing",      "~", "material", "A leathery wing from a cave bat.",         value=20)
-BOAR_HIDE     = Item("Boar Hide",     "u", "material", "Tough hide from a wild boar.",             value=40)
+BOAR_HIDE     = Item("Boar Hide",     "u", "material", "Tough hide from a wild boar; tans into leather armour.", value=40)
+WOLF_PELT     = Item("Wolf Pelt",     "u", "material", "A thick grey pelt from an ash wolf; makes a fine hide cloak.", value=60)
 # Alchemical minerals from dungeon deposits — powder, fertiliser & curing salt.
 SULPHUR     = Item("Sulphur",     "▪", "material", "Brimstone-yellow crystals from a hot seam.", value=30)
 SALTPETER   = Item("Saltpeter",   "▪", "material", "White nitre crust — powder, fertiliser or curing salt.", value=35)
 GUNPOWDER   = Item("Gunpowder",   "▪", "material", "Milled black powder. Handle gently.", value=90)
 FERTILISER  = Item("Fertiliser",  "≈", "material", "Nitre-rich meal — fertilised soil grows finer crops (g at a growing crop).", value=25)
 SALVE       = Item("Sulphur Salve", "!", "material", "A pungent wound-salve of brimstone, honey and wax (use it from the eat menu, x).", value=85, heal=30)
+DRAKE_SCALE = Item("Drake Scale",   "u", "material", "A heat-shimmering scale from an ember drake — collectors pay dearly.", value=130)
 
 # Meat is TYPED — the cut carries its animal the way a jam carries its fruit
 # (family "meat" lets recipes ask for "any meat" and old generic Meat still fit).

@@ -62,6 +62,9 @@ def in_greenhouse(world, x: int, y: int) -> bool:
 
 def plant(state: GameState, x: int, y: int, seed: Item) -> None:
     world = state.world
+    if world is not state.surface:
+        state.log.add("Nothing sown out here would survive untended — plant at home.", C.DIM)
+        return
     if world.tile_at(x, y).name != "tilled":
         state.log.add("You can only plant on tilled soil.", C.DIM)
         return
@@ -290,8 +293,8 @@ def new_day(state: GameState, rested: bool = True) -> None:
     from . import husbandry
     husbandry.new_day(state)
 
-    # residents are open to a fresh chat and gift each day
-    for npc in state.world.npcs:
+    # residents are open to a fresh chat and gift each day — dwarves included
+    for npc in list(state.world.npcs) + list(state.dwarves or []):
         npc.gifted_today = False
         npc.talked_today = False
 
@@ -304,6 +307,10 @@ def new_day(state: GameState, rested: bool = True) -> None:
     # A funded restoration project that couldn't find ground looks again.
     from . import projects
     projects.new_day(state)
+
+    # The Westreach restocks its beasts once it's been discovered.
+    from . import wildlife as _wildlife
+    _wildlife.respawn_west(state, random)
 
     # The crown's weekly land tax on claimed wilderness (karma-only if unpaid).
     from . import land
@@ -557,7 +564,10 @@ def collapse(state: GameState, reason: str) -> None:
         loss = f"You lose {gold_lost}g"
         loss += f" and {dropped} loose items." if dropped else "."
         state.log.add(loss, (200, 160, 140))
-    # you're carried to bed and wake there the next morning
+    # you're carried to bed and wake there the next morning — whichever map you
+    # dropped on (a Westreach collapse is a long, humbling carry home)
+    if state.world is not state.surface:
+        state.world = state.surface
     if state.surface and state.surface.bed:
         state.player.x, state.player.y = state.surface.bed
     new_day(state, rested=False)

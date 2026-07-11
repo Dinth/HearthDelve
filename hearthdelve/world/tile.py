@@ -189,4 +189,8 @@ NOTICE_BOARD  = _add(TileType("notice_board",   "‡", (214, 178, 110), (40, 34,
 SULPHUR_DEPOSIT = _add(TileType("sulphur_deposit", "▓", (222, 196, 70), (44, 40, 26), walkable=False, kind="sulphur"))
 NITRE_DEPOSIT   = _add(TileType("nitre_deposit",   "▓", (226, 222, 206), (40, 40, 40), walkable=False, kind="nitre"))
 
+# --- The Westreach (the volcanic hill country west of the Vale) -----------------
+LAVA = _add(TileType("lava", "≈", (255, 140, 40), (120, 30, 10), walkable=False, kind="lava"))
+ASH  = _add(TileType("ash",  ".", (150, 140, 134), (38, 35, 33)))
+
 TILE_COUNT = len(TILES)

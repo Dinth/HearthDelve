@@ -98,7 +98,7 @@ def _request_pool(state: GameState, role: str) -> list:
                                      "Pancakes", "Berry Pie", "Cake")]
                       + [c for c in crops if content.is_fruit(c)],
         "trader":     preserves + drinks + [it.WOOLEN_CLOTH, it.COTTON_CLOTH,
-                                            it.LINEN_CLOTH] + parts,
+                                            it.LINEN_CLOTH, it.DRAKE_SCALE] + parts,
     }
     default = crops + preserves + _known_dishes(state) + [it.EGG, it.MILK, it.CHEESE]
     pool = pools.get(role, default) or default

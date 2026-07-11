@@ -71,7 +71,19 @@ def _go_to_floor(state: GameState, depth: int, descending: bool) -> None:
     key = (state.dungeon_kind, depth)
     gm = state.floor_cache.get(key)
     if gm is None:
-        gm = dungeon.generate(_floor_seed(state, depth), state.dungeon_kind, depth)
+        from ..world import dwarftown
+        if state.dungeon_kind == "dwarfhold" and depth == dwarftown.TOWN_DEPTH:
+            # Khazgrim: the living town — seeded from the world alone, so its
+            # halls never re-roll, and its folk are the same folk every visit.
+            if state.dwarves is None:
+                from ..data import content
+                state.dwarves = content.dwarf_npcs()
+            gm = dwarftown.generate(state.seed, state.dwarves)
+            state.log.add("Braziers. Voices. Ale-smell. This level is LIVED IN — "
+                          "you've found Khazgrim, the dwarves' town under the mountain.",
+                          (232, 200, 120))
+        else:
+            gm = dungeon.generate(_floor_seed(state, depth), state.dungeon_kind, depth)
         state.floor_cache[key] = gm
     state.world = gm
     state.stats["deepest_depth"] = max(state.stats.get("deepest_depth", 0), depth)
@@ -84,6 +96,7 @@ def _go_to_floor(state: GameState, depth: int, descending: bool) -> None:
 def enter(state: GameState, kind: str) -> None:
     """Step from a surface entrance into floor 1 of a dungeon site."""
     state.return_pos = (state.player.x, state.player.y)
+    state.return_west = state.west is not None and state.world is state.west
     state.dungeon_kind = kind
     state.depth = 1
     _go_to_floor(state, 1, descending=True)
@@ -107,7 +120,10 @@ def ascend(state: GameState) -> None:
 
 
 def leave_to_surface(state: GameState) -> None:
-    """Return to the farm (used by ascend and by fainting in the dark)."""
+    """Return to the open air — whichever map the delve began on (used by
+    ascend and by fainting in the dark)."""
     state.depth = 0
-    state.world = state.surface
+    state.world = (state.west if (state.return_west and state.west is not None)
+                   else state.surface)
     state.player.x, state.player.y = state.return_pos
+    state.return_west = False
