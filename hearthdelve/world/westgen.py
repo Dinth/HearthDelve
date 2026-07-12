@@ -15,7 +15,7 @@ import numpy as np
 
 from . import tile
 from .gamemap import GameMap
-from .worldgen import _grow_veins, _noise_field
+from .worldlib import grow_veins as _grow_veins, noise_field as _noise_field
 
 W, H = 320, 320
 
