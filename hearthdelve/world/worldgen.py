@@ -369,11 +369,22 @@ def _draw_roads(gm: GameMap, centers: dict) -> None:
         nc = min(pts, key=lambda c: (c[0] - d[0]) ** 2 + (c[1] - d[1]) ** 2)
         _draw_road(gm, nc, d)
     # The West Pass: the Cinderhope road runs on to the map's western edge,
-    # where the Westreach begins (walk off the edge to cross).
+    # where the Westreach begins (walk off the edge to cross). It ends at a
+    # walkable edge cell (the rim is often rock), and — with terrain-aware
+    # costs — winds through the hill country rather than cutting a dead line.
     if "Cinderhope" in centers:
         ccx, ccy = centers["Cinderhope"]
-        _draw_road(gm, (ccx, ccy), (2, ccy))
+        _draw_road(gm, (ccx, ccy), _west_gap(gm, ccy))
     _fill_road_gaps(gm)
+
+
+def _west_gap(gm: GameMap, near_y: int) -> tuple[int, int]:
+    """The walkable cell on the map's western edge (x=0) nearest row `near_y` —
+    the mouth of the West Pass. Falls back to (0, near_y) if the rim is solid."""
+    walkable = [y for y in range(gm.height) if gm.walkable(0, y)]
+    if not walkable:
+        return (0, near_y)
+    return (0, min(walkable, key=lambda y: abs(y - near_y)))
 
 
 # --- building shells & interiors ---------------------------------------------

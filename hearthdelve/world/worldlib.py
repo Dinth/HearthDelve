@@ -74,16 +74,37 @@ _ROAD_KINDS = ("road", "bridge", "cobble")
 SIGN_ROADS = (tile.ROAD, tile.BRIDGE, tile.COBBLE)
 
 
+# How hard the land is to build a road across. Roads seek the low numbers, so a
+# route naturally hugs gentle ground and skirts crags — which keeps village
+# roads straight across the plains (uniform cost) yet makes a mountain approach
+# wind through the passable folds instead of cutting a dead line over the rock.
+_EASY = 4                           # grass, meadow, path, sand, flowers, dirt
+_ROUGHNESS_BY_NAME = {
+    "tall_grass": 6, "fog_grass": 6, "moor": 7,
+    "marsh": 9, "hill": 10, "scree": 12,
+}
+
+
+def _terrain_cost(t: tile.TileType) -> int:
+    if t.kind == "water":
+        return 6                    # ford/bridge a river rather than detour far
+    if t.kind == "wall":
+        return 40                   # rock & cliff: wind around, cross only if walled in
+    if t.kind == "tree":
+        return 8                    # a road clears a tree — mild, skirts a stand
+    if t.kind in ("foliage", "shrub", "shrub_berry", "reeds"):
+        return 9                    # push through brush
+    return _ROUGHNESS_BY_NAME.get(t.name, _EASY)
+
+
 def _road_cost(t: tile.TileType, reuse: bool) -> int:
-    """Pathing cost of one tile type. Precedence mirrors the layered masks the
-    road planner historically applied: blocked > water > paving > open country."""
+    """Pathing cost of one tile type: 0 = impassable (built features), 1 = reuse
+    an existing road, else the terrain's build difficulty (see _terrain_cost)."""
     if t.name in ROAD_BLOCK:
         return 0                    # never pave buildings/plots
-    if t.kind == "water":
-        return 6                    # bridge a river rather than detour far
     if t.name in _ROAD_NAMES:
-        return 1 if reuse else 4    # reuse existing roads -> junctions
-    return 4                        # open country
+        return 1 if reuse else _EASY   # reuse existing roads -> junctions
+    return _terrain_cost(t)
 
 
 # Per-tile-id lookup tables: one fancy-index builds a whole cost/mask grid.
@@ -127,14 +148,41 @@ def draw_road(gm: GameMap, a: tuple[int, int], b: tuple[int, int]) -> None:
 
 
 def fill_road_gaps(gm: GameMap) -> None:
-    """Close single-tile holes in a straight run of road (e.g. a stray flower or
-    a bump the pathfinder stepped around), so road lines read as continuous."""
+    """Close single-tile holes in a *straight run* of road (a stray flower or a
+    bump the pathfinder stepped around), so road lines read as continuous.
+
+    A gap is only filled when the road carries straight through it — two road
+    cells on each side along one axis. Requiring the run to continue (not just
+    a road cell either side) is what stops the fill from welding two roads that
+    merely run parallel a tile apart into an ugly wide band near a village."""
     t = gm.tiles
-    road = _ROADKIND_BY_ID[t]
-    fill = np.zeros(t.shape, dtype=bool)
-    fill[1:-1, 1:-1] = _GAPFILL_BY_ID[t][1:-1, 1:-1] & (
-        (road[1:-1, :-2] & road[1:-1, 2:])       # road above AND below
-        | (road[:-2, 1:-1] & road[2:, 1:-1]))    # road left AND right
+    r = _ROADKIND_BY_ID[t]
+    n = t.shape[1]
+
+    def col(off):     # road grid shifted so [:, k] sees the neighbour k+off rows away
+        s = np.zeros_like(r)
+        if off < 0:
+            s[:, -off:] = r[:, :n + off]
+        elif off > 0:
+            s[:, :n - off] = r[:, off:]
+        else:
+            s = r
+        return s
+
+    def row(off):
+        s = np.zeros_like(r)
+        m = t.shape[0]
+        if off < 0:
+            s[-off:, :] = r[:m + off, :]
+        elif off > 0:
+            s[:m - off, :] = r[off:, :]
+        else:
+            s = r
+        return s
+
+    vertical = col(-1) & col(1) & col(-2) & col(2)     # gap mid straight N-S run
+    horizontal = row(-1) & row(1) & row(-2) & row(2)   # gap mid straight E-W run
+    fill = _GAPFILL_BY_ID[t] & (vertical | horizontal)
     water = fill & _WATER_BY_ID[t]
     t[water] = tile.BRIDGE
     t[fill & ~water] = tile.ROAD
