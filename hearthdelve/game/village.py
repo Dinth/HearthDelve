@@ -1,12 +1,37 @@
 """Village life: NPC schedules, talking, gifting, shops, and tool upgrades."""
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from ..data import content
 from ..engine import constants as C
 from ..entities import items
 from ..entities.npc import NPC, MAX_HEARTS
 from . import karma
 from .state import GameState
+
+
+@dataclass(frozen=True)
+class ShopRow:
+    """One row on a shop counter. `kind` names what Enter does; everything
+    else lives in named fields, so the builders here, the renderer's cells
+    and the purchase dispatch can never drift out of step on a shape.
+
+    kinds: buy · meal · recipe · sellto · commission · housejob ·
+           cancel_build · tradebuy · upgrade · contest
+    """
+    kind: str
+    label: str = ""            # left-column text (item / meal / job name)
+    price: int = 0             # gold the row moves (a sellto pays the player)
+    item: object = None        # the good bought or sold
+    tool: object = None        # the tool an upgrade improves
+    build: str = ""            # machine kind a commission raises / cancels
+    mats: tuple = ()           # ((Item, qty), ...) a commission consumes
+    stam: int = 0              # a tavern meal's stamina restore…
+    hp: int = 0                # …and heal
+    quality: int = 0           # star quality of the unit sold (sellto)
+    name: str = ""             # recipe name / festival name
+    key: str = ""              # stats key marking a trader slot sold
 
 
 # --- schedule ---------------------------------------------------------------
@@ -298,7 +323,7 @@ def _inn_purchases(state: GameState):
         stacks = sorted((e for e in inv.slots if e[0] is it), key=lambda e: e[2])
         q = stacks[0][2]
         price = round(it.value * skills.value_mult(q) * INN_PREMIUM)
-        out.append(("sellto", it, price, q))
+        out.append(ShopRow("sellto", label=it.name, item=it, price=price, quality=q))
     return out
 
 
@@ -452,7 +477,7 @@ def trader_entries(state: GameState, npc: NPC) -> list:
     for i, (it, price) in enumerate(slots):
         key = f"trader_{npc.name}_{window}_{i}"
         if not state.stats.get(key):                 # sold slots stay sold this window
-            out.append(("tradebuy", it, price, key))
+            out.append(ShopRow("tradebuy", label=it.name, item=it, price=price, key=key))
     # a recipe card, drawn unconditionally (determinism) but hidden once known
     card_pool = sorted(r.name for r in content.RECIPES
                        if r.kind == "cook"
@@ -460,20 +485,22 @@ def trader_entries(state: GameState, npc: NPC) -> list:
                        and r.name not in content.STARTER_RECIPES)
     card = rng.choice(card_pool)
     if card not in state.known_recipes:
-        out.append(("recipe", card, 260))
+        out.append(ShopRow("recipe", name=card, price=260))
     return out
 
 
-def shop_entries(shop: str, state: GameState | None = None, npc: NPC | None = None):
-    """List of entries for a shop: ('buy', item, price) | ('upgrade', tool) |
-    ('meal', ...) | ('sellto', item, price, quality) | ('commission', ...)."""
+def shop_entries(shop: str, state: GameState | None = None,
+                 npc: NPC | None = None) -> list[ShopRow]:
+    """The rows on a shop's counter, in display order."""
     if shop == "trader":
         return trader_entries(state, npc) if state is not None and npc is not None else []
     if shop == "general":
-        return [("buy", it, price) for it, price in content.GENERAL_STOCK]
+        return [ShopRow("buy", label=it.name, item=it, price=price)
+                for it, price in content.GENERAL_STOCK]
     if shop == "blacksmith":
-        ups = [("upgrade", t) for t in items.TIERED_TOOLS]
-        buys = [("buy", it, price) for it, price in content.blacksmith_stock()]
+        ups = [ShopRow("upgrade", tool=t) for t in items.TIERED_TOOLS]
+        buys = [ShopRow("buy", label=it.name, item=it, price=price)
+                for it, price in content.blacksmith_stock()]
         # With the Deep Forge raised, Bron works the deep metals too — bars at
         # the usual doubled rate, finished pieces at a steep premium (the
         # non-crafter's path to endgame gear, paid in dungeon gold). Thrunn of
@@ -482,27 +509,30 @@ def shop_entries(shop: str, state: GameState | None = None, npc: NPC | None = No
             from . import projects
             if (projects.done(state, "deep_forge")
                     or (npc is not None and getattr(npc, "village", "") == "Khazgrim")):
-                buys += [("buy", b, content._round5(b.value * 2.0))
+                buys += [ShopRow("buy", label=b.name, item=b,
+                                 price=content._round5(b.value * 2.0))
                          for b in content.DEEP_FORGE_BARS]
-                buys += [("buy", it, content._round5(it.value * 2.8))
+                buys += [ShopRow("buy", label=it.name, item=it,
+                                 price=content._round5(it.value * 2.8))
                          for m in content.DEEP_FORGE_METALS
                          for it in (content.make_gear(b, m) for b in content.WEAPON_BASES)]
         return ups + buys
     if shop == "tavern":
-        meals = [("meal", label, price, stam, hp)
+        meals = [ShopRow("meal", label=label, price=price, stam=stam, hp=hp)
                  for (label, price, stam, hp) in content.TAVERN_MENU]
         # On a fair day (with the Grange standing), the innkeeper judges the
         # produce contest — one entry per festival.
         if state is not None:
             fest_name = contest_open(state)
             if fest_name:
-                meals = [("contest", fest_name)] + meals
+                meals = [ShopRow("contest", name=fest_name)] + meals
         # The house recipes: an innkeeper will part with one, for a price.
-        cards = [("recipe", name, price) for name, price in content.TAVERN_RECIPES
+        cards = [ShopRow("recipe", name=name, price=price)
+                 for name, price in content.TAVERN_RECIPES
                  if state is not None and name not in state.known_recipes]
         return meals + cards + (_inn_purchases(state) if state is not None else [])
     if shop == "carpenter":
-        jobs = [("commission", label, kind, gold, mats)
+        jobs = [ShopRow("commission", label=label, build=kind, price=gold, mats=tuple(mats))
                 for (label, kind, gold, mats) in content.CARPENTER_JOBS]
         # Farmhouse fittings (oven, cellar) — auto-sited, hidden once owned or
         # already under Tomas's hammer.
@@ -511,11 +541,12 @@ def shop_entries(shop: str, state: GameState | None = None, npc: NPC | None = No
                 owned = any(m.kind == kind or (m.kind == "site" and m.build_kind == kind)
                             for m in state.surface.machines.values())
                 if not owned:
-                    jobs.append(("housejob", label, kind, gold, mats))
+                    jobs.append(ShopRow("housejob", label=label, build=kind,
+                                        price=gold, mats=tuple(mats)))
         # If an order is outstanding, offer to cancel it (with a full refund) so
         # you're never locked out of the carpenter by a build you can't site.
         if state is not None and state.pending_build:
-            return [("cancel_build", state.pending_build)] + jobs
+            return [ShopRow("cancel_build", build=state.pending_build)] + jobs
         return jobs
     return []
 
@@ -528,56 +559,52 @@ def _job_for(kind: str):
     return None
 
 
-def purchase(state: GameState, entry) -> None:
-    if entry[0] == "buy":
-        _, item, price = entry
-        if state.player.gold < price:
+def purchase(state: GameState, row: ShopRow) -> None:
+    """Perform a shop row's transaction. One dispatch, on named fields."""
+    if row.kind == "buy":
+        if state.player.gold < row.price:
             state.log.add("You can't afford that.", C.DIM)
             return
-        state.player.gold -= price
-        state.player.inventory.add(item, 1)
-        state.log.add(f"Bought {item.name} for {price}g.")
-    elif entry[0] == "meal":
-        _, label, price, stam, hp = entry
+        state.player.gold -= row.price
+        state.player.inventory.add(row.item, 1)
+        state.log.add(f"Bought {row.item.name} for {row.price}g.")
+    elif row.kind == "meal":
         p = state.player
-        if p.gold < price:
+        if p.gold < row.price:
             state.log.add("You can't afford that.", C.DIM)
             return
-        p.gold -= price
-        p.energy = min(p.max_energy, p.energy + stam)
-        p.hp = min(p.max_hp, p.hp + hp)
+        p.gold -= row.price
+        p.energy = min(p.max_energy, p.energy + row.stam)
+        p.hp = min(p.max_hp, p.hp + row.hp)
         state.bump("meals_eaten")
         from . import turns
         from ..engine import constants as _C
         turns.advance_time(state, _C.USE_SECONDS)
-        gains = f"+{stam} stamina" + (f", +{hp} HP" if hp else "")
-        state.log.add(f"You tuck into {label.lower()}. ({gains})", (180, 230, 160))
-    elif entry[0] == "recipe":
-        _, name, price = entry
+        gains = f"+{row.stam} stamina" + (f", +{row.hp} HP" if row.hp else "")
+        state.log.add(f"You tuck into {row.label.lower()}. ({gains})", (180, 230, 160))
+    elif row.kind == "recipe":
         p = state.player
-        if name in state.known_recipes:
+        if row.name in state.known_recipes:
             return
-        if p.gold < price:
+        if p.gold < row.price:
             state.log.add("You can't afford that.", C.DIM)
             return
-        p.gold -= price
+        p.gold -= row.price
         from . import requests
-        requests.learn_recipe(state, name, teacher="The innkeeper")
-    elif entry[0] == "sellto":
-        _, item, price, q = entry
+        requests.learn_recipe(state, row.name, teacher="The innkeeper")
+    elif row.kind == "sellto":
         p = state.player
-        if p.inventory.count(item, q) <= 0:
+        if p.inventory.count(row.item, row.quality) <= 0:
             return
-        p.inventory.remove(item, 1, quality=q)
-        p.gold += price
-        state.bump("gold_earned", price)
+        p.inventory.remove(row.item, 1, quality=row.quality)
+        p.gold += row.price
+        state.bump("gold_earned", row.price)
         from . import skills
-        star = (" " + skills.stars(q)) if q else ""
-        state.log.add(f"The innkeeper takes your {item.name.lower()}{star} for {price}g.",
+        star = (" " + skills.stars(row.quality)) if row.quality else ""
+        state.log.add(f"The innkeeper takes your {row.item.name.lower()}{star} for {row.price}g.",
                       (240, 214, 120))
-    elif entry[0] == "cancel_build":
-        _, kind = entry
-        job = _job_for(kind)
+    elif row.kind == "cancel_build":
+        job = _job_for(row.build)
         if not state.pending_build or job is None:
             return
         label, gold, mats = job
@@ -589,65 +616,62 @@ def purchase(state: GameState, entry) -> None:
         state.log.add(f"Tomas tears up the order for the "
                       f"{label.split('(')[0].strip().lower()} and returns your {gold}g and materials.",
                       (200, 220, 160))
-    elif entry[0] == "commission":
-        _, label, kind, gold, mats = entry
+    elif row.kind == "commission":
         p = state.player
         if state.pending_build:
             state.log.add("You already have a building on order — set it down first.", C.DIM)
             return
-        if p.gold < gold:
+        if p.gold < row.price:
             state.log.add("You can't afford that.", C.DIM)
             return
-        missing = [f"{q}x {it.name}" for it, q in mats if p.inventory.count(it) < q]
+        missing = [f"{q}x {it.name}" for it, q in row.mats if p.inventory.count(it) < q]
         if missing:
             state.log.add(f"Tomas needs materials: {', '.join(missing)}.", C.DIM)
             return
-        p.gold -= gold
-        for it, q in mats:
+        p.gold -= row.price
+        for it, q in row.mats:
             p.inventory.remove(it, q)
-        state.pending_build = kind
+        state.pending_build = row.build
         state.log.add(f"Tomas shakes on it. \"Head home and show me where the "
-                      f"{label.split('(')[0].strip().lower()} should go — press p to set the spot.\"",
+                      f"{row.label.split('(')[0].strip().lower()} should go — press p to set the spot.\"",
                       (200, 220, 160))
-    elif entry[0] == "tradebuy":
-        _, item, price, key = entry
-        if state.player.gold < price:
+    elif row.kind == "tradebuy":
+        if state.player.gold < row.price:
             state.log.add("You can't afford that.", C.DIM)
             return
-        state.player.gold -= price
-        state.player.inventory.add(item, 1)
-        state.stats[key] = 1                          # this slot is sold this window
-        state.log.add(f"Bought {item.name} for {price}g — the trader wraps it carefully.")
-    elif entry[0] == "housejob":
-        _, label, kind, gold, mats = entry
+        state.player.gold -= row.price
+        state.player.inventory.add(row.item, 1)
+        state.stats[row.key] = 1                      # this slot is sold this window
+        state.log.add(f"Bought {row.item.name} for {row.price}g — the trader wraps it carefully.")
+    elif row.kind == "housejob":
         p = state.player
         from . import husbandry
         from ..entities.machine import Machine
         from ..world import tile
-        spot = husbandry.find_house_spot(state, kind)
+        spot = husbandry.find_house_spot(state, row.build)
         if spot is None:
             state.log.add("Tomas scratches his head — no clear spot for it. "
                           "Tidy up around the farmhouse first.", C.DIM)
             return
-        if p.gold < gold:
+        if p.gold < row.price:
             state.log.add("You can't afford that.", C.DIM)
             return
-        missing = [f"{q}x {it.name}" for it, q in mats if p.inventory.count(it) < q]
+        missing = [f"{q}x {it.name}" for it, q in row.mats if p.inventory.count(it) < q]
         if missing:
             state.log.add(f"Tomas needs materials: {', '.join(missing)}.", C.DIM)
             return
-        p.gold -= gold
-        for it, q in mats:
+        p.gold -= row.price
+        for it, q in row.mats:
             p.inventory.remove(it, q)
         surf = state.surface
         surf.tiles[spot] = tile.SCAFFOLD
-        surf.machines[spot] = Machine(kind="site", build_kind=kind,
+        surf.machines[spot] = Machine(kind="site", build_kind=row.build,
                                       ready_at=(state.day + 2) * 1440 + C.DAY_START_MIN)
-        name = content.MACHINES[kind].name.lower()
+        name = content.MACHINES[row.build].name.lower()
         state.log.add(f"Tomas sets to work on your {name} — ready in 2 mornings.",
                       (200, 220, 160))
-    elif entry[0] == "upgrade":
-        upgrade_tool(state, entry[1])
+    elif row.kind == "upgrade":
+        upgrade_tool(state, row.tool)
 
 
 def upgrade_price(state: GameState, tier: int):

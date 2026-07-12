@@ -677,7 +677,7 @@ class ShopScreen(Screen):
             self.sel = (self.sel + action[2]) % len(entries)
         elif cmd == "confirm" and entries:
             picked = entries[min(self.sel, len(entries) - 1)]
-            if picked[0] == "contest":       # the fair: pick an entry to judge
+            if picked.kind == "contest":     # the fair: pick an entry to judge
                 ui.push(ContestScreen(self.npc))
             else:
                 village.purchase(state, picked)

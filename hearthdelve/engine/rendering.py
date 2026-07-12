@@ -2166,60 +2166,49 @@ def render_shop(con: tcod.console.Console, state: GameState, npc, sel: int, line
     def row(i, dy, selected, rowbg):
         e = entries[i]
         pre = ui.cur(selected)
-        if e[0] == "meal":
-            _, label, price, stam, hp = e
-            afford = p.gold >= price
-            gains = f"+{stam}st" + (f" +{hp}hp" if hp else "")
-            m.text(2, dy, pre + label, fg=C.WHITE if afford else C.DIM, bg=rowbg)
+        afford = p.gold >= e.price
+        if e.kind == "meal":
+            gains = f"+{e.stam}st" + (f" +{e.hp}hp" if e.hp else "")
+            m.text(2, dy, pre + e.label, fg=C.WHITE if afford else C.DIM, bg=rowbg)
             m.text(w - 20, dy, gains, fg=(150, 210, 150), bg=rowbg)
-            m.text(w - 8, dy, f"{price}g", fg=C.GOLD_COLOR if afford else C.DIM, bg=rowbg)
-        elif e[0] == "buy":
-            _, item, price = e
-            afford = p.gold >= price
-            m.text(2, dy, pre + item.name, fg=C.WHITE if afford else C.DIM, bg=rowbg)
-            m.text(w - 10, dy, f"{price}g", fg=C.GOLD_COLOR if afford else C.DIM, bg=rowbg)
-        elif e[0] == "contest":
-            _, fest_name = e
-            m.text(2, dy, pre + f"Enter the produce contest ({fest_name})"[:w - 12],
+            m.text(w - 8, dy, f"{e.price}g", fg=C.GOLD_COLOR if afford else C.DIM, bg=rowbg)
+        elif e.kind == "buy":
+            m.text(2, dy, pre + e.item.name, fg=C.WHITE if afford else C.DIM, bg=rowbg)
+            m.text(w - 10, dy, f"{e.price}g", fg=C.GOLD_COLOR if afford else C.DIM, bg=rowbg)
+        elif e.kind == "contest":
+            m.text(2, dy, pre + f"Enter the produce contest ({e.name})"[:w - 12],
                    fg=(232, 200, 120), bg=rowbg)
             m.text(w - 8, dy, "fair!", fg=(232, 200, 120), bg=rowbg)
-        elif e[0] == "tradebuy":
-            _, item, price, _key = e
-            afford = p.gold >= price
-            m.text(2, dy, pre + item.name[:w - 14],
+        elif e.kind == "tradebuy":
+            m.text(2, dy, pre + e.item.name[:w - 14],
                    fg=(232, 200, 120) if afford else C.DIM, bg=rowbg)
-            m.text(w - 10, dy, f"{price}g", fg=C.GOLD_COLOR if afford else C.DIM, bg=rowbg)
-        elif e[0] == "recipe":
-            _, name, price = e
-            afford = p.gold >= price
-            m.text(2, dy, pre + f"Recipe: {name}",
+            m.text(w - 10, dy, f"{e.price}g", fg=C.GOLD_COLOR if afford else C.DIM, bg=rowbg)
+        elif e.kind == "recipe":
+            m.text(2, dy, pre + f"Recipe: {e.name}",
                    fg=(232, 200, 120) if afford else C.DIM, bg=rowbg)
-            m.text(w - 10, dy, f"{price}g", fg=C.GOLD_COLOR if afford else C.DIM, bg=rowbg)
-        elif e[0] == "sellto":
-            _, item, price, q = e
+            m.text(w - 10, dy, f"{e.price}g", fg=C.GOLD_COLOR if afford else C.DIM, bg=rowbg)
+        elif e.kind == "sellto":
             from ..game import skills
-            star = (" " + skills.stars(q)) if q else ""
-            m.text(2, dy, pre + f"Sell {item.name}{star}", fg=(200, 220, 160), bg=rowbg)
-            m.text(w - 10, dy, f"+{price}g", fg=C.GOLD_COLOR, bg=rowbg)
-        elif e[0] == "cancel_build":
+            star = (" " + skills.stars(e.quality)) if e.quality else ""
+            m.text(2, dy, pre + f"Sell {e.item.name}{star}", fg=(200, 220, 160), bg=rowbg)
+            m.text(w - 10, dy, f"+{e.price}g", fg=C.GOLD_COLOR, bg=rowbg)
+        elif e.kind == "cancel_build":
             m.text(2, dy, pre + "Cancel current order", fg=(224, 180, 120), bg=rowbg)
             m.text(w - 12, dy, "refund", fg=(190, 180, 150), bg=rowbg)
-        elif e[0] in ("commission", "housejob"):
-            _, label, kind, price, mats = e
-            matstr = ", ".join(f"{q} {it.name.split()[0].lower()}" for it, q in mats)
-            afford = p.gold >= price and all(p.inventory.count(it) >= q for it, q in mats)
-            m.text(2, dy, pre + label, fg=C.WHITE if afford else C.DIM, bg=rowbg)
-            m.text(28, dy, matstr[:w - 40], fg=(190, 180, 150) if afford else C.DIM, bg=rowbg)
-            m.text(w - 10, dy, f"{price}g", fg=C.GOLD_COLOR if afford else C.DIM, bg=rowbg)
+        elif e.kind in ("commission", "housejob"):
+            matstr = ", ".join(f"{q} {it.name.split()[0].lower()}" for it, q in e.mats)
+            can = afford and all(p.inventory.count(it) >= q for it, q in e.mats)
+            m.text(2, dy, pre + e.label, fg=C.WHITE if can else C.DIM, bg=rowbg)
+            m.text(28, dy, matstr[:w - 40], fg=(190, 180, 150) if can else C.DIM, bg=rowbg)
+            m.text(w - 10, dy, f"{e.price}g", fg=C.GOLD_COLOR if can else C.DIM, bg=rowbg)
         else:  # upgrade
-            tool = e[1]
-            tier = p.tool_tier.get(tool, 0)
+            tier = p.tool_tier.get(e.tool, 0)
             if tier >= len(C.TOOL_TIERS) - 1:
-                txt, cost = f"{tool.name}: Mithril (max)", ""
+                txt, cost = f"{e.tool.name}: Mithril (max)", ""
                 col = C.DIM
             else:
                 gold, bar, count = village.upgrade_price(state, tier)
-                txt = f"{tool.name}: {C.TOOL_TIERS[tier]}→{C.TOOL_TIERS[tier + 1]}"
+                txt = f"{e.tool.name}: {C.TOOL_TIERS[tier]}→{C.TOOL_TIERS[tier + 1]}"
                 cost = f"{gold}g +{count} {bar.name.split()[0]}"
                 affordable = p.gold >= gold and p.inventory.count(bar) >= count
                 col = C.WHITE if affordable else C.DIM
