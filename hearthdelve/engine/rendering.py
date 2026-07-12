@@ -11,6 +11,7 @@ import numpy as np
 import tcod.console
 
 from . import constants as C
+from . import ui
 from ..entities import items
 from ..world import tile
 from ..game.state import GameState
@@ -1048,13 +1049,7 @@ def render_target(con: tcod.console.Console, state: GameState, ctx) -> None:
     con.print(max(0, C.VIEW_W - len(hint) - 1), 0, hint, fg=C.DIM, bg=(40, 38, 30))
 
 
-# --- Modal overlays ----------------------------------------------------------
-def _modal(con, w, h, title):
-    x = (C.SCREEN_W - w) // 2
-    y = (C.SCREEN_H - h) // 2
-    con.draw_rect(x, y, w, h, ch=ord(" "), fg=C.WHITE, bg=(20, 22, 32))
-    con.draw_frame(x, y, w, h, title=title, fg=(236, 226, 180), bg=(20, 22, 32))
-    return x, y
+# --- Modal overlays (the skeleton lives in engine/ui.py) ----------------------
 
 
 def render_fishing(con: tcod.console.Console, state: GameState, ctx) -> None:
@@ -1065,37 +1060,27 @@ def render_fishing(con: tcod.console.Console, state: GameState, ctx) -> None:
     from ..game import fishing
     L = fishing.TRACK_LEN
     w, h = L + 10, 9
-    x, y = _modal(con, w, h, "A bite!  Reel it in")
+    m = ui.Modal(con, w, h, "A bite!  Reel it in")
     inside = ctx.get("inside", False)
     green, amber = (120, 200, 140), (222, 182, 110)
     bar_col = green if inside else amber
-    tx0 = x + (w - L) // 2                          # left edge of the track
-    trow = y + 3                                    # the track row
-    prow = y + 5                                    # the progress-bar row
+    tx0 = (w - L) // 2                              # left edge of the track
     bar = int(round(ctx["bar"])); bl = ctx["bar_len"]
     fp = int(round(ctx["fish_pos"]))
     filled = int(round(L * ctx["prog"]))
-    con.print(x + 2, y + 1, "Keep the fish in the bracket:", fg=C.DIM)
-    for c in range(L):
+    m.text(2, 1, "Keep the fish in the bracket:", fg=C.DIM)
+    for c in range(L):                              # the track row
         in_bar = bar <= c < bar + bl
-        con.print(tx0 + c, trow, "░" if in_bar else "·",
-                  fg=(70, 84, 70) if in_bar else (58, 66, 82))
-    con.print(tx0 + bar, trow, "[", fg=bar_col)                     # bracket ends
-    con.print(tx0 + min(L - 1, bar + bl - 1), trow, "]", fg=bar_col)
-    con.print(tx0 + fp, trow, "»", fg=(150, 200, 224) if inside else (232, 150, 140))
+        m.text(tx0 + c, 3, "░" if in_bar else "·",
+               fg=(70, 84, 70) if in_bar else (58, 66, 82))
+    m.text(tx0 + bar, 3, "[", fg=bar_col)                          # bracket ends
+    m.text(tx0 + min(L - 1, bar + bl - 1), 3, "]", fg=bar_col)
+    m.text(tx0 + fp, 3, "»", fg=(150, 200, 224) if inside else (232, 150, 140))
     for c in range(L):                              # progress bar, filling left→right
-        con.print(tx0 + c, prow, "█", fg=(120, 200, 140) if c < filled else (44, 52, 48))
+        m.text(tx0 + c, 5, "█", fg=(120, 200, 140) if c < filled else (44, 52, 48))
     pct = int(ctx["prog"] * 100)
-    con.print(tx0, y + 6, f"{pct}%", fg=green if pct >= 60 else amber)
-    con.print(x + 2, y + h - 2, "←/→ move the bracket  ·  Esc to cut the line", fg=C.DIM)
-
-
-def _window(sel: int, total: int, height: int) -> tuple[int, int]:
-    """First/last row index to show so `sel` stays visible in a `height`-row list."""
-    if total <= height:
-        return 0, total
-    start = max(0, min(sel - height // 2, total - height))
-    return start, start + height
+    m.text(tx0, 6, f"{pct}%", fg=green if pct >= 60 else amber)
+    m.footer("←/→ move the bracket  ·  Esc to cut the line")
 
 
 def render_message_log(con: tcod.console.Console, state: GameState, scroll: int) -> None:
@@ -1103,18 +1088,15 @@ def render_message_log(con: tcod.console.Console, state: GameState, scroll: int)
     msgs = state.log.messages
     w, h = 72, C.SCREEN_H - 6
     body = h - 4
-    x, y = _modal(con, w, h, "Message Log")
+    m = ui.Modal(con, w, h, "Message Log")
     total = len(msgs)
     max_scroll = max(0, total - body)
     scroll = max(0, min(scroll, max_scroll))
     start = max(0, total - body - scroll)
     for i, (text, color) in enumerate(msgs[start:start + body]):
-        con.print(x + 2, y + 2 + i, text[:w - 4], fg=color)
-    if scroll < max_scroll:
-        con.print(x + w - 4, y + 2, "▲", fg=_HDR)
-    if scroll > 0:
-        con.print(x + w - 4, y + h - 3, "▼", fg=_HDR)
-    con.print(x + 2, y + h - 2, "↑↓ scroll · Esc close", fg=C.DIM)
+        m.text(2, 2 + i, text[:w - 4], fg=color)
+    m.arrows(scroll < max_scroll, scroll > 0, 2, h - 3)
+    m.footer("↑↓ scroll · Esc close")
 
 
 def render_mail(con: tcod.console.Console, state: GameState, sel: int) -> None:
@@ -1123,30 +1105,21 @@ def render_mail(con: tcod.console.Console, state: GameState, sel: int) -> None:
     w = 60
     list_h = min(10, max(1, len(mail)))          # cap the letter list; it scrolls
     h = list_h + len(body) + 8
-    x, y = _modal(con, w, h, "Post Box")
+    m = ui.Modal(con, w, h, "Post Box")
     if not mail:
-        con.print(x + 2, y + 2, "The post box is empty.", fg=C.DIM)
-    sel = max(0, min(sel, len(mail) - 1)) if mail else 0
-    start, end = _window(sel, len(mail), list_h)
-    for row, letter in enumerate(mail[start:end]):
-        i = start + row
-        bg = (54, 50, 36) if i == sel else (20, 22, 32)
-        if i == sel:
-            con.draw_rect(x + 1, y + 2 + row, w - 2, 1, ch=ord(" "), bg=bg)
+        m.text(2, 2, "The post box is empty.", fg=C.DIM)
+
+    def row(i, dy, selected, bg):
+        letter = mail[i]
         tag = " ⚖ tax due" if letter.get("tax") else " ✉+gift" if letter.get("items") else " ✉"
-        con.print(x + 2, y + 2 + row, ("▸ " if i == sel else "  ") + f"From {letter['sender']}{tag}",
-                  fg=C.WHITE, bg=bg)
-    if start > 0:
-        con.print(x + w - 4, y + 2, "▲", fg=_HDR)
-    if end < len(mail):
-        con.print(x + w - 4, y + 1 + list_h, "▼", fg=_HDR)
-    # the open letter's text below the list
-    ly = y + 3 + list_h
-    for j, bl in enumerate(body):
-        con.print(x + 3, ly + j, bl[:w - 6], fg=(210, 205, 190))
-    hint = ("↑↓ select   Enter settle tax / take letter   Esc close"
-            if any(m.get("tax") for m in mail) else "↑↓ select   Enter take letter   Esc close")
-    con.print(x + 2, y + h - 2, hint, fg=C.DIM)
+        m.text(2, dy, ui.cur(selected) + f"From {letter['sender']}{tag}", fg=C.WHITE, bg=bg)
+
+    m.list(2, list_h, len(mail), sel, row, arrow_top=2, arrow_bottom=1 + list_h)
+    for j, bl in enumerate(body):                # the open letter's text below the list
+        m.text(3, 3 + list_h + j, bl[:w - 6], fg=(210, 205, 190))
+    m.footer("↑↓ select   Enter settle tax / take letter   Esc close"
+             if any(le.get("tax") for le in mail)
+             else "↑↓ select   Enter take letter   Esc close")
 
 
 def render_requests(con: tcod.console.Console, state: GameState, sel: int,
@@ -1163,9 +1136,9 @@ def render_requests(con: tcod.console.Console, state: GameState, sel: int,
     w = 66
     h = max(9, len(reqs) * 3 + (5 if proj else 0) + 6)
     h = min(C.SCREEN_H - 4, h)
-    x, y = _modal(con, w, h, f"{village + ' ' if village else ''}Notice Board")
+    m = ui.Modal(con, w, h, f"{village + ' ' if village else ''}Notice Board")
     if not reqs and not proj:
-        con.print(x + 2, y + 2, "The board is bare today — favours come and go.", fg=C.DIM)
+        m.text(2, 2, "The board is bare today — favours come and go.", fg=C.DIM)
     n_rows = len(reqs) + (1 if proj else 0)
     sel = max(0, min(sel, n_rows - 1)) if n_rows else 0
     row = 0
@@ -1173,48 +1146,46 @@ def render_requests(con: tcod.console.Console, state: GameState, sel: int,
         it = I.by_name(r["item"])
         have = state.player.inventory.count(it) if it else 0
         can = gamereq.can_fulfil(state, r)
-        bg = (54, 50, 36) if i == sel else (20, 22, 32)
+        bg = ui.SEL_BG if i == sel else ui.BASE_BG
         if i == sel:
-            con.draw_rect(x + 1, y + 2 + row, w - 2, 1, ch=ord(" "), bg=bg)
+            m.highlight(2 + row)
         days = r["expires"] - state.day
-        con.print(x + 2, y + 2 + row,
-                  ("▸ " if i == sel else "  ") + f"{r['npc']}: {r['qty']} {r['item']}",
-                  fg=C.WHITE if can else C.DIM, bg=bg)
-        con.print(x + w - 20, y + 2 + row, f"have {have:>2}",
-                  fg=(150, 210, 150) if can else (150, 110, 110), bg=bg)
-        con.print(x + w - 10, y + 2 + row, f"{r['gold']}g", fg=C.GOLD_COLOR, bg=bg)
+        m.text(2, 2 + row, ui.cur(i == sel) + f"{r['npc']}: {r['qty']} {r['item']}",
+               fg=C.WHITE if can else C.DIM, bg=bg)
+        m.text(w - 20, 2 + row, f"have {have:>2}",
+               fg=(150, 210, 150) if can else (150, 110, 110), bg=bg)
+        m.text(w - 10, 2 + row, f"{r['gold']}g", fg=C.GOLD_COLOR, bg=bg)
         row += 1
-        con.print(x + 4, y + 2 + row, f"\"{r['flavor']}\""[:w - 20], fg=C.DIM)
-        con.print(x + w - 16, y + 2 + row, f"{days} day{'s' if days != 1 else ''} left",
-                  fg=(160, 150, 130))
+        m.text(4, 2 + row, f"\"{r['flavor']}\""[:w - 20], fg=C.DIM)
+        m.text(w - 16, 2 + row, f"{days} day{'s' if days != 1 else ''} left",
+               fg=(160, 150, 130))
         row += 2
     if proj is not None:
         d = content.PROJECTS[proj["id"]]
         i = len(reqs)
-        con.print(x + 2, y + 2 + row, f"── Village project: {d.name} "
-                  + "─" * max(0, w - 26 - len(d.name)), fg=_HDR)
+        m.text(2, 2 + row, f"── Village project: {d.name} "
+               + "─" * max(0, w - 26 - len(d.name)), fg=_HDR)
         row += 1
-        bg = (54, 50, 36) if i == sel else (20, 22, 32)
+        bg = ui.SEL_BG if i == sel else ui.BASE_BG
         if i == sel:
-            con.draw_rect(x + 1, y + 2 + row, w - 2, 1, ch=ord(" "), bg=bg)
+            m.highlight(2 + row)
         if proj["state"] == "building":
             mins = proj.get("ready_at", 0) - state.abs_minutes
             days = max(1, round(mins / 1440))
-            con.print(x + 2, y + 2 + row, ("▸ " if i == sel else "  ")
-                      + f"Beams are rising — finished in ~{days} day{'s' if days != 1 else ''}.",
-                      fg=(200, 220, 160), bg=bg)
+            m.text(2, 2 + row, ui.cur(i == sel)
+                   + f"Beams are rising — finished in ~{days} day{'s' if days != 1 else ''}.",
+                   fg=(200, 220, 160), bg=bg)
         else:
             gold_left, mats_left = gameproj.remaining(state, proj)
             need = " · ".join([f"{q} {it.name}" for it, q in mats_left[:3]]
                               + ([f"{gold_left}g"] if gold_left else []))
-            con.print(x + 2, y + 2 + row, ("▸ " if i == sel else "  ")
-                      + f"Contribute — needs {need}"[:w - 4], fg=C.WHITE, bg=bg)
+            m.text(2, 2 + row, ui.cur(i == sel)
+                   + f"Contribute — needs {need}"[:w - 4], fg=C.WHITE, bg=bg)
         row += 1
-        con.print(x + 4, y + 2 + row, d.perk[:w - 8], fg=(232, 200, 120))
+        m.text(4, 2 + row, d.perk[:w - 8], fg=(232, 200, 120))
         row += 1
-    footer = ("↑↓ · Enter deliver/give (500g) · Space all-in gold · Esc" if proj
-              else "↑↓ select   Enter deliver   Esc close")
-    con.print(x + 2, y + h - 2, footer[:w - 4], fg=C.DIM)
+    m.footer(("↑↓ · Enter deliver/give (500g) · Space all-in gold · Esc" if proj
+              else "↑↓ select   Enter deliver   Esc close")[:w - 4])
 
 
 def render_eat(con: tcod.console.Console, state: GameState, sel: int) -> None:
@@ -1223,30 +1194,23 @@ def render_eat(con: tcod.console.Console, state: GameState, sel: int) -> None:
     foods = edible_items(state)
     w, h = 50, min(C.SCREEN_H - 4, max(8, len(foods) + 6))
     body = h - 4
-    x, y = _modal(con, w, h, "Eat  (restores stamina & health)")
+    m = ui.Modal(con, w, h, "Eat  (restores stamina & health)")
     if not foods:
-        con.print(x + 2, y + 2, "Nothing to eat — cook a dish (c) or gather eggs/milk.", fg=C.DIM)
-    sel = max(0, min(sel, len(foods) - 1)) if foods else 0
-    start, end = _window(sel, len(foods), body)
-    for row, (it, q, ql) in enumerate(foods[start:end]):
-        i = start + row
-        bg = (54, 50, 36) if i == sel else (20, 22, 32)
-        if i == sel:
-            con.draw_rect(x + 1, y + 2 + row, w - 2, 1, ch=ord(" "), bg=bg)
+        m.text(2, 2, "Nothing to eat — cook a dish (c) or gather eggs/milk.", fg=C.DIM)
+
+    def row(i, dy, selected, bg):
+        it, q, ql = foods[i]
         star = (" " + skills.stars(ql)) if ql else ""
         gain = round(it.energy * (1 + 0.12 * ql))
         hp = (max(1, gain // 6) if it.energy else 0) + it.heal
         # Show the boon up front, so a Hearty meal can be chosen on purpose.
         buff = f" ↯{skills.BUFFS[it.buff]}" if it.buff in skills.BUFFS else ""
-        label = f"{q:>2} {it.name}{star}{buff}"
-        con.print(x + 2, y + 2 + row, ("▸ " if i == sel else "  ") + label[:w - 22],
-                  fg=C.WHITE, bg=bg)
-        con.print(x + w - 18, y + 2 + row, f"+{gain} st  +{hp} hp", fg=(150, 210, 150), bg=bg)
-    if start > 0:
-        con.print(x + w - 4, y + 2, "▲", fg=_HDR)
-    if end < len(foods):
-        con.print(x + w - 4, y + h - 3, "▼", fg=_HDR)
-    con.print(x + 2, y + h - 2, "↑↓ select   Enter eat   Esc close", fg=C.DIM)
+        m.text(2, dy, ui.cur(selected) + f"{q:>2} {it.name}{star}{buff}"[:w - 22],
+               fg=C.WHITE, bg=bg)
+        m.text(w - 18, dy, f"+{gain} st  +{hp} hp", fg=(150, 210, 150), bg=bg)
+
+    m.list(2, body, len(foods), sel, row, arrow_top=2, arrow_bottom=h - 3)
+    m.footer("↑↓ select   Enter eat   Esc close")
 
 
 def render_load_machine(con: tcod.console.Console, state: GameState, ctx) -> None:
@@ -1264,49 +1228,37 @@ def render_load_machine(con: tcod.console.Console, state: GameState, ctx) -> Non
     body = h - 4
     group = ctx.get("group")
     title = (f"Load {name} — {group}" if group else f"Load {name}  (choose what to make)")
-    x, y = _modal(con, w, h, title)
-    sel = max(0, min(sel, len(rows) - 1)) if rows else 0
-    start, end = _window(sel, len(rows), body)
-    from_col = x + 30            # inputs column — clear of the (wider) label column
-    price_col = x + w - 9
+    m = ui.Modal(con, w, h, title)
+    from_col = 30                # inputs column — clear of the (wider) label column
+    price_col = w - 9
 
     if is_group:
         counts = {}
         for o in ctx["options"]:
             counts[o["group"]] = counts.get(o["group"], 0) + 1
-        for row, gname in enumerate(rows[start:end]):
-            i = start + row
-            bg = (54, 50, 36) if i == sel else (20, 22, 32)
-            if i == sel:
-                con.draw_rect(x + 1, y + 2 + row, w - 2, 1, ch=ord(" "), bg=bg)
-            con.print(x + 2, y + 2 + row, ("▸ " if i == sel else "  ") + gname[:from_col - x - 3],
-                      fg=C.WHITE, bg=bg)
+
+        def row(i, dy, selected, bg):
+            gname = rows[i]
+            m.text(2, dy, ui.cur(selected) + gname[:from_col - 3], fg=C.WHITE, bg=bg)
             n = counts[gname]
-            con.print(from_col, y + 2 + row, f"{n} option{'s' if n != 1 else ''} →",
-                      fg=(160, 180, 205), bg=bg)
+            m.text(from_col, dy, f"{n} option{'s' if n != 1 else ''} →",
+                   fg=(160, 180, 205), bg=bg)
         footer = "↑↓ select   Enter open   Esc cancel"
     else:
-        for row, opt in enumerate(rows[start:end]):
-            i = start + row
-            bg = (54, 50, 36) if i == sel else (20, 22, 32)
-            if i == sel:
-                con.draw_rect(x + 1, y + 2 + row, w - 2, 1, ch=ord(" "), bg=bg)
+        def row(i, dy, selected, bg):
+            opt = rows[i]
             out = opt["output"]
             ins = ", ".join(f"{q} {it.name}" for it, q in opt["inputs"])
             oq = opt.get("out_qty", 1)
             label = opt.get("label") or (f"{oq}x {out.name}" if oq > 1 else out.name)
-            con.print(x + 2, y + 2 + row, ("▸ " if i == sel else "  ") + label[:from_col - x - 3],
-                      fg=C.WHITE, bg=bg)
-            con.print(from_col, y + 2 + row, f"from {ins}"[:price_col - from_col - 1],
-                      fg=(160, 180, 205), bg=bg)
-            con.print(price_col, y + 2 + row, f"{out.value}g", fg=C.GOLD_COLOR, bg=bg)
+            m.text(2, dy, ui.cur(selected) + label[:from_col - 3], fg=C.WHITE, bg=bg)
+            m.text(from_col, dy, f"from {ins}"[:price_col - from_col - 1],
+                   fg=(160, 180, 205), bg=bg)
+            m.text(price_col, dy, f"{out.value}g", fg=C.GOLD_COLOR, bg=bg)
         footer = ("↑↓ select   Enter load   Esc back" if group
                   else "↑↓ select   Enter load   Esc cancel")
-    if start > 0:
-        con.print(x + w - 4, y + 2, "▲", fg=_HDR)
-    if end < len(rows):
-        con.print(x + w - 4, y + h - 3, "▼", fg=_HDR)
-    con.print(x + 2, y + h - 2, footer, fg=C.DIM)
+    m.list(2, body, len(rows), sel, row, arrow_top=2, arrow_bottom=h - 3)
+    m.footer(footer)
 
 
 def render_cheats(con: tcod.console.Console, state: GameState, sel: int, locations) -> None:
@@ -1317,17 +1269,17 @@ def render_cheats(con: tcod.console.Console, state: GameState, sel: int, locatio
             "Add 100 of each building material"]
     rows += [f"Teleport → {name}" for name, _ in locations]
     h = len(rows) + 6
-    x, y = _modal(con, 52, h, "★ Cheats (up up down down ...) ★")
-    con.print(x + 2, y + 1, "The Konami whisper opens a little door.", fg=C.DIM)
+    m = ui.Modal(con, 52, h, "★ Cheats (up up down down ...) ★")
+    m.text(2, 1, "The Konami whisper opens a little door.", fg=C.DIM)
     for i, text in enumerate(rows):
         hot = (i == sel)
-        con.print(x + 2, y + 3 + i, ("→ " if hot else "  ") + text,
-                  fg=(250, 230, 140) if hot else (210, 210, 220))
-    con.print(x + 2, y + h - 2, "↑↓ move · Enter select · Esc close", fg=C.DIM)
+        m.text(2, 3 + i, ("→ " if hot else "  ") + text,
+               fg=(250, 230, 140) if hot else (210, 210, 220))
+    m.footer("↑↓ move · Enter select · Esc close")
 
 
 def render_quit(con: tcod.console.Console, state: GameState) -> None:
-    x, y = _modal(con, 48, 9, "Leave Hollowmere Vale?")
+    m = ui.Modal(con, 48, 9, "Leave Hollowmere Vale?")
     rows = [
         ("The game auto-saves each morning you sleep.", C.DIM),
         ("", C.WHITE),
@@ -1336,10 +1288,10 @@ def render_quit(con: tcod.console.Console, state: GameState) -> None:
         ("[Esc]                 Keep playing", (210, 210, 220)),
     ]
     for i, (text, colour) in enumerate(rows):
-        con.print(x + 3, y + 2 + i, text, fg=colour)
+        m.text(3, 2 + i, text, fg=colour)
 
 
-_HDR = (236, 226, 180)
+_HDR = ui.HDR
 _KEY = (150, 200, 230)
 
 
@@ -1662,7 +1614,7 @@ def render_codex(con: tcod.console.Console, state: GameState, page: int, scroll:
 
     w, h = 66, 44
     body_h = h - 5
-    x, y = _modal(con, w, h, f"Encyclopedia — {title}")
+    m = ui.Modal(con, w, h, f"Encyclopedia — {title}")
 
     max_scroll = max(0, len(rows) - body_h)
     scroll = max(0, min(scroll, max_scroll))
@@ -1671,14 +1623,9 @@ def render_codex(con: tcod.console.Console, state: GameState, page: int, scroll:
         if idx >= len(rows):
             break
         text, color = rows[idx]
-        con.print(x + 2, y + 2 + i, text[:w - 4], fg=color)
-    if scroll < max_scroll:
-        con.print(x + w - 4, y + h - 3, "▼", fg=_HDR)
-    if scroll > 0:
-        con.print(x + w - 4, y + 2, "▲", fg=_HDR)
-
-    footer = f" ← → page {page + 1}/{len(pages)}   ↑ ↓ scroll   Esc close "
-    con.print(x + 2, y + h - 2, footer, fg=C.DIM)
+        m.text(2, 2 + i, text[:w - 4], fg=color)
+    m.arrows(scroll > 0, scroll < max_scroll, 2, h - 3)
+    m.footer(f" ← → page {page + 1}/{len(pages)}   ↑ ↓ scroll   Esc close ")
 
 
 # Inventory categories, in the order they're listed (ADOM-style grouping).
@@ -1742,40 +1689,37 @@ def render_inventory(con: tcod.console.Console, state: GameState, sel: int = 0) 
 
     w, h = 62, min(C.SCREEN_H - 2, max(9, len(rows) + 5))
     body = h - 4
-    x, y = _modal(con, w, h, "PACK")
+    m = ui.Modal(con, w, h, "PACK")
     total = sum(q for _it, q, _ql in slots)
-    con.print(x + 2, y + 1, f"Carrying {total} item(s)", fg=_CAP_FG)
+    m.text(2, 1, f"Carrying {total} item(s)", fg=_CAP_FG)
     gold = f"Gold: {state.player.gold}g"
-    con.print(x + w - 2 - len(gold), y + 1, gold, fg=C.GOLD_COLOR)
+    m.text(w - 2 - len(gold), 1, gold, fg=C.GOLD_COLOR)
 
     if not slots:
-        con.print(x + 2, y + 3, "(empty — grow and forage to fill it)", fg=C.DIM)
+        m.text(2, 3, "(empty — grow and forage to fill it)", fg=C.DIM)
     else:
         sel = max(0, min(sel, len(slots) - 1))
         sel_row = next((r for r, rw in enumerate(rows) if rw[0] == "item" and rw[1] == sel), 0)
-        start, end = _window(sel_row, len(rows), body)
+        start, end = ui.window(sel_row, len(rows), body)
         for r in range(start, end):
-            yy = y + 3 + (r - start)
+            dy = 3 + (r - start)
             rw = rows[r]
             if rw[0] == "head":
-                con.print(x + 2, yy, f"{rw[1]}  ('{rw[2]}')", fg=_SECTION_FG)
+                m.text(2, dy, f"{rw[1]}  ('{rw[2]}')", fg=_SECTION_FG)
                 continue
             i = rw[1]
             it, qty, ql = slots[i]
             picked = (i == sel)
-            bg = (54, 50, 36) if picked else (20, 22, 32)
+            bg = ui.SEL_BG if picked else ui.BASE_BG
             if picked:
-                con.draw_rect(x + 1, yy, w - 2, 1, ch=ord(" "), bg=bg)
-            con.print(x + 3, yy, f"{inv_letter(i)} -", fg=_LETTER_FG, bg=bg)
+                m.highlight(dy)
+            m.text(3, dy, f"{inv_letter(i)} -", fg=_LETTER_FG, bg=bg)
             star = ("  " + skills.stars(ql)) if ql else ""
-            con.print(x + 8, yy, f"{it.glyph} {it.name}{star}", fg=C.WHITE, bg=bg)
+            m.text(8, dy, f"{it.glyph} {it.name}{star}", fg=C.WHITE, bg=bg)
             qs = f"[x{qty}]"
-            con.print(x + w - 2 - len(qs), yy, qs, fg=_BRACKET_FG, bg=bg)
-        if start > 0:
-            con.print(x + w - 3, y + 2, "↑", fg=_HDR)
-        if end < len(rows):
-            con.print(x + w - 3, y + h - 3, "↓", fg=_HDR)
-    con.print(x + 2, y + h - 2, "[a-z] pick  [⇧D] drop  [e] equipment  [Esc] close", fg=_FOOT_FG)
+            m.text(w - 2 - len(qs), dy, qs, fg=_BRACKET_FG, bg=bg)
+        m.arrows(start > 0, end < len(rows), 2, h - 3, dx=-3, glyphs=("↑", "↓"))
+    m.footer("[a-z] pick  [⇧D] drop  [e] equipment  [Esc] close", fg=_FOOT_FG)
 
 
 _SLOT_LABEL = {"head": "Head", "body": "Body", "cloak": "Cloak", "hands": "Gauntlets",
@@ -1822,21 +1766,21 @@ def render_equipment(con: tcod.console.Console, state: GameState) -> None:
     gear = equippables(state)
     nslots = len(PAPERDOLL_SLOTS)
     w, h = 60, min(C.SCREEN_H - 2, 8 + nslots + len(gear))   # stats + in-hand + worn slots + 2 headers + gear + footer
-    x, y = _modal(con, w, h, "PERSONAL EQUIPMENT")
+    m = ui.Modal(con, w, h, "PERSONAL EQUIPMENT")
 
     dv, pv, th = combat.player_dv(state), combat.player_pv(state), combat.player_to_hit(state)
-    con.print(x + 2, y + 1, f"DV {dv}   PV {pv}   To-hit {th:+d}", fg=_CAP_FG)
+    m.text(2, 1, f"DV {dv}   PV {pv}   To-hit {th:+d}", fg=_CAP_FG)
     g = f"Gold: {p.gold}g"
-    con.print(x + w - 2 - len(g), y + 1, g, fg=C.GOLD_COLOR)
+    m.text(w - 2 - len(g), 1, g, fg=C.GOLD_COLOR)
 
     # what's in hand doubles as your weapon
     prof = combat.held_profile(state)
     lo, hi = prof.dmg
     ml = skills.mastery_level(state, prof.category)
-    row = y + 3
-    con.print(x + 2, row, "In hand", fg=_SECTION_FG)
-    con.print(x + 12, row, f": {p.display_name(p.active_tool) if p.active_tool else '-'}"
-              f"  ({prof.category} {lo}-{hi}, mastery {ml})"[:w - 14], fg=C.WHITE)
+    row = 3
+    m.text(2, row, "In hand", fg=_SECTION_FG)
+    m.text(12, row, f": {p.display_name(p.active_tool) if p.active_tool else '-'}"
+           f"  ({prof.category} {lo}-{hi}, mastery {ml})"[:w - 14], fg=C.WHITE)
     row += 1
     # Worn paperdoll (armour, jewellery, ranged/ammo). Each slot is lettered; the
     # letters continue into the carried list below — one namespace for both.
@@ -1858,15 +1802,15 @@ def render_equipment(con: tcod.console.Console, state: GameState) -> None:
             val = f"{it.name}  [DV {st[0]:+d}, PV +{st[1]}]" if (it and st) else "-"
             if slot == "shield" and it and content.is_two_handed(p.active_tool):
                 val += "  (unused — two-handed weapon)"
-        con.print(x + 2, row, f"{inv_letter(i)} {_SLOT_LABEL[slot]}", fg=_SECTION_FG if it else C.DIM)
-        con.print(x + 14, row, ": " + val, fg=C.WHITE if it else C.DIM)
+        m.text(2, row, f"{inv_letter(i)} {_SLOT_LABEL[slot]}", fg=_SECTION_FG if it else C.DIM)
+        m.text(14, row, ": " + val, fg=C.WHITE if it else C.DIM)
         row += 1
 
     row += 1
-    con.print(x + 2, row, "Carried gear — press a letter to equip / take off:", fg=_HDR)
+    m.text(2, row, "Carried gear — press a letter to equip / take off:", fg=_HDR)
     row += 1
     for i, (it, _q, _ql) in enumerate(gear):
-        if row >= y + h - 2:
+        if row >= h - 2:
             break
         st = content.ARMOR_STATS.get(it)
         rs = content.ranged_stat(it)
@@ -1881,10 +1825,10 @@ def render_equipment(con: tcod.console.Console, state: GameState) -> None:
         else:
             pr = content.profile_of(it)
             tag = f"{pr.category}, dmg {pr.dmg[0]}-{pr.dmg[1]}"
-        con.print(x + 3, row, f"{inv_letter(nslots + i)} - {it.glyph} {it.name}", fg=C.WHITE)
-        con.print(x + 34, row, tag, fg=_BRACKET_FG)
+        m.text(3, row, f"{inv_letter(nslots + i)} - {it.glyph} {it.name}", fg=C.WHITE)
+        m.text(34, row, tag, fg=_BRACKET_FG)
         row += 1
-    con.print(x + 2, y + h - 2, "[letter] equip / take off  [i] pack  [Esc] close", fg=_FOOT_FG)
+    m.footer("[letter] equip / take off  [i] pack  [Esc] close", fg=_FOOT_FG)
 
 
 def render_craft(con: tcod.console.Console, state: GameState, sel: int) -> None:
@@ -1910,34 +1854,29 @@ def render_craft(con: tcod.console.Console, state: GameState, sel: int) -> None:
     w = 56
     h = min(C.SCREEN_H - 2, len(rows) + 4)
     body = h - 4
-    x, y = _modal(con, w, h, "Craft  (build machines & cook)")
-    start, end = _window(sel_row, len(rows), body)
+    m = ui.Modal(con, w, h, "Craft  (build machines & cook)")
+    start, end = ui.window(sel_row, len(rows), body)
     for row, entry in enumerate(rows[start:end]):
-        yy = y + 2 + row
+        dy = 2 + row
         if entry[0] == "hdr":
-            con.print(x + 2, yy, entry[1], fg=_HDR)
+            m.text(2, dy, entry[1], fg=_HDR)
             continue
         _kind, r, i = entry
         ok = crafting.has_inputs(state, r)
         marker = "▸" if i == sel else " "
         color = C.WHITE if ok else C.DIM
+        bg = ui.SEL_BG if i == sel else ui.BASE_BG
         if i == sel:
-            con.draw_rect(x + 1, yy, w - 2, 1, ch=ord(" "), bg=(54, 50, 36))
-        con.print(x + 2, yy, f"{marker} {r.name}", fg=color,
-                  bg=(54, 50, 36) if i == sel else (20, 22, 32))
-        con.print(x + 22, yy, f"[{crafting.inputs_str(r)}]"[:w - 24],
-                  fg=(160, 200, 150) if ok else (150, 110, 110),
-                  bg=(54, 50, 36) if i == sel else (20, 22, 32))
-    if start > 0:
-        con.print(x + w - 4, y + 2, "▲", fg=_HDR)
-    if end < len(rows):
-        con.print(x + w - 4, y + h - 3, "▼", fg=_HDR)
+            m.highlight(dy)
+        m.text(2, dy, f"{marker} {r.name}", fg=color, bg=bg)
+        m.text(22, dy, f"[{crafting.inputs_str(r)}]"[:w - 24],
+               fg=(160, 200, 150) if ok else (150, 110, 110), bg=bg)
+    m.arrows(start > 0, end < len(rows), 2, h - 3)
 
     total_cook = sum(1 for r in content.RECIPES if r.kind == "cook")
     known = sum(1 for r in recipes if r.kind == "cook")
     hint = " — friends & taverns teach more" if known < total_cook else ""
-    con.print(x + 2, y + h - 2,
-              f"↑↓ · Enter make · Esc · recipes {known}/{total_cook}{hint}"[:w - 4], fg=C.DIM)
+    m.footer(f"↑↓ · Enter make · Esc · recipes {known}/{total_cook}{hint}"[:w - 4])
 
 
 def render_ship(con: tcod.console.Console, state: GameState, sel: int) -> None:
@@ -1949,30 +1888,30 @@ def render_ship(con: tcod.console.Console, state: GameState, sel: int) -> None:
     pending = sum(crafting.bin_value(state, it, ql) * q for it, q, ql in state.ship_bin.slots)
     boom = state.demand if state.demand and state.day < state.demand.get("until", 0) else {}
     w, h = 52, max(8, len(items_) + 7 + (1 if boom else 0))
-    x, y = _modal(con, w, h, "Shipping Bin  (sells overnight)")
-    top = y + 2
+    m = ui.Modal(con, w, h, "Shipping Bin  (sells overnight)")
+    top = 2
     if boom:
         pct = int(round((boom["mult"] - 1) * 100))
         banner = f"★ The market craves {gamereq.DEMAND_KINDS[boom['kind']]} (+{pct}%)!"
-        con.print(x + 2, top, banner[:w - 4], fg=(232, 200, 120))
+        m.text(2, top, banner[:w - 4], fg=(232, 200, 120))
         top += 1
 
     if not items_:
-        con.print(x + 2, top, "Nothing to sell — grow and gather first.", fg=C.DIM)
+        m.text(2, top, "Nothing to sell — grow and gather first.", fg=C.DIM)
     sel = max(0, min(sel, len(items_) - 1)) if items_ else 0   # keep the cursor on-list as it shrinks
     for i, (it, q, ql) in enumerate(items_):
         marker = "▸" if i == sel else " "
+        bg = ui.SEL_BG if i == sel else ui.BASE_BG
         if i == sel:
-            con.draw_rect(x + 1, top + i, w - 2, 1, ch=ord(" "), bg=(54, 50, 36))
-        bg = (54, 50, 36) if i == sel else (20, 22, 32)
+            m.highlight(top + i)
         star = (" " + skills.stars(ql)) if ql else ""
         hot = boom and it.kind == boom["kind"]
-        con.print(x + 2, top + i, f"{marker} {q:>3}  {it.name}{star}", fg=C.WHITE, bg=bg)
-        con.print(x + w - 12, top + i, f"{crafting.bin_value(state, it, ql)}g ea",
-                  fg=(250, 220, 110) if hot else C.GOLD_COLOR, bg=bg)
+        m.text(2, top + i, f"{marker} {q:>3}  {it.name}{star}", fg=C.WHITE, bg=bg)
+        m.text(w - 12, top + i, f"{crafting.bin_value(state, it, ql)}g ea",
+               fg=(250, 220, 110) if hot else C.GOLD_COLOR, bg=bg)
 
-    con.print(x + 2, y + h - 3, f"In bin (sells tonight): {pending}g", fg=C.GOLD_COLOR)
-    con.print(x + 2, y + h - 2, "↑↓ select · Enter stack · Space all · Esc close", fg=C.DIM)
+    m.text(2, h - 3, f"In bin (sells tonight): {pending}g", fg=C.GOLD_COLOR)
+    m.footer("↑↓ select · Enter stack · Space all · Esc close")
 
 
 _JOURNAL_TABS = ("Goals", "Favours", "Market", "Homestead", "Projects")
@@ -2109,13 +2048,13 @@ def render_journal(con: tcod.console.Console, state: GameState, tab: int = 0) ->
              else f"Journal — {_JOURNAL_TABS[tab]}")
     w = 62
     h = min(C.SCREEN_H - 4, max(10, len(rows) + 6))
-    x, y = _modal(con, w, h, title)
+    m = ui.Modal(con, w, h, title)
     tabs = "   ".join((f"[{n}]" if i == tab else f" {n} ") for i, n in enumerate(_JOURNAL_TABS))
-    con.print(x + 2, y + 1, tabs[:w - 4], fg=(224, 204, 128))
+    m.text(2, 1, tabs[:w - 4], fg=(224, 204, 128))
     body = h - 5
     for row, (indent, text, color) in enumerate(rows[:body]):
-        con.print(x + 2 + indent, y + 3 + row, text[:w - 4 - indent], fg=color)
-    con.print(x + 2, y + h - 2, "← → page   j / Esc close", fg=C.DIM)
+        m.text(2 + indent, 3 + row, text[:w - 4 - indent], fg=color)
+    m.footer("← → page   j / Esc close")
 
 
 _SPOT_LABEL = {"home": "at home", "work": "at work", "inn": "at the inn",
@@ -2128,10 +2067,10 @@ def render_relationships(con: tcod.console.Console, state: GameState, scroll: in
     met = [n for n in state.surface.npcs if n.met] if state.surface else []
     w = 62
     h = min(C.SCREEN_H - 4, max(8, len(met) * 4 + 5))
-    x, y = _modal(con, w, h, "Relationships")
+    m = ui.Modal(con, w, h, "Relationships")
     if not met:
-        con.print(x + 2, y + 2, "You haven't met anyone yet.", C.WHITE)
-        con.print(x + 2, y + 3, "Visit a village and talk (Shift+C).", C.DIM)
+        m.text(2, 2, "You haven't met anyone yet.", C.WHITE)
+        m.text(2, 3, "Visit a village and talk (Shift+C).", C.DIM)
     body = h - 4
     hour = (state.time_minutes // 60) % 24
     lines: list[tuple[int, str, tuple]] = []
@@ -2157,30 +2096,27 @@ def render_relationships(con: tcod.console.Console, state: GameState, scroll: in
     scroll = max(0, min(scroll, max(0, len(lines) - body)))
     for row, (indent, text, color) in enumerate(lines[scroll:scroll + body]):
         if text:
-            con.print(x + 2 + indent, y + 2 + row, text, fg=color)
-    if scroll > 0:
-        con.print(x + w - 4, y + 2, "▲", fg=_HDR)
-    if scroll + body < len(lines):
-        con.print(x + w - 4, y + h - 3, "▼", fg=_HDR)
-    con.print(x + 2, y + h - 2, "r / Esc to close", C.DIM)
+            m.text(2 + indent, 2 + row, text, fg=color)
+    m.arrows(scroll > 0, scroll + body < len(lines), 2, h - 3)
+    m.footer("r / Esc to close")
 
 
 def render_character(con: tcod.console.Console, state: GameState) -> None:
     from ..game import skills, karma
     p = state.player
-    w, h = 50, 12 + len(skills.SKILLS)          # skills list from y+10; grow to fit all of them
-    x, y = _modal(con, w, h, f"Character — Level {p.level}")
+    w, h = 50, 12 + len(skills.SKILLS)          # skills list from row 10; grow to fit all of them
+    m = ui.Modal(con, w, h, f"Character — Level {p.level}")
     nxt = skills.xp_to_next(p.level)
     xpbar = "█" * int(10 * p.xp / nxt) + "·" * (10 - int(10 * p.xp / nxt))
-    con.print(x + 2, y + 2, f"XP  {xpbar}  {p.xp}/{nxt}", fg=(210, 205, 150))
-    con.print(x + 2, y + 3, f"♥ HP      {p.hp}/{p.max_hp}", fg=C.HP_COLOR)
-    con.print(x + 2, y + 4, f"✦ Stamina {p.energy}/{p.max_energy}", fg=C.ENERGY_COLOR)
-    con.print(x + 2, y + 5, f"⛁ Gold    {p.gold}g", fg=C.GOLD_COLOR)
-    con.print(x + 2, y + 6, f"⚔ Weapon  {p.weapon.name if p.weapon else '-'}", fg=C.WHITE)
+    m.text(2, 2, f"XP  {xpbar}  {p.xp}/{nxt}", fg=(210, 205, 150))
+    m.text(2, 3, f"♥ HP      {p.hp}/{p.max_hp}", fg=C.HP_COLOR)
+    m.text(2, 4, f"✦ Stamina {p.energy}/{p.max_energy}", fg=C.ENERGY_COLOR)
+    m.text(2, 5, f"⛁ Gold    {p.gold}g", fg=C.GOLD_COLOR)
+    m.text(2, 6, f"⚔ Weapon  {p.weapon.name if p.weapon else '-'}", fg=C.WHITE)
     ksign = f"+{p.karma}" if p.karma > 0 else str(p.karma)
     kcol = (160, 220, 160) if p.karma >= 8 else (220, 150, 140) if p.karma <= -8 else C.WHITE
-    con.print(x + 2, y + 7, f"☯ Karma   {ksign} ({karma.label(p.karma)})", fg=kcol)
-    con.print(x + 2, y + 9, "Skills", fg=_HDR)
+    m.text(2, 7, f"☯ Karma   {ksign} ({karma.label(p.karma)})", fg=kcol)
+    m.text(2, 9, "Skills", fg=_HDR)
     for i, s in enumerate(skills.SKILLS):
         lvl = skills.skill_level(state, s)
         xp = p.skills.get(s, 0)
@@ -2190,21 +2126,20 @@ def render_character(con: tcod.console.Console, state: GameState) -> None:
             into = xp - lvl * skills.XP_PER_LEVEL
             filled = int(10 * into / skills.XP_PER_LEVEL)
             bar = "█" * filled + "·" * (10 - filled)
-        con.print(x + 2, y + 10 + i, f"{s:<9} L{lvl:<2} {bar}",
-                  fg=C.WHITE if lvl else C.DIM)
-    con.print(x + 2, y + h - 2, "v / Esc to close", C.DIM)
+        m.text(2, 10 + i, f"{s:<9} L{lvl:<2} {bar}", fg=C.WHITE if lvl else C.DIM)
+    m.footer("v / Esc to close")
 
 
 def render_dialogue(con: tcod.console.Console, state: GameState, npc, line: str) -> None:
     parts = line.split("\n")                          # blurbs may be multi-line verse
     w = min(72, max(54, max((len(p) for p in parts), default=0) + 6))
     h = len(parts) + 7
-    x, y = _modal(con, w, h, f"{npc.name}")
+    m = ui.Modal(con, w, h, f"{npc.name}")
     hearts = "♥" * npc.hearts + "·" * (10 - npc.hearts)
-    con.print(x + 2, y + 2, hearts, fg=(220, 130, 150))
+    m.text(2, 2, hearts, fg=(220, 130, 150))
     for i, part in enumerate(parts):
-        con.print(x + 2, y + 4 + i, part[:w - 4], fg=C.WHITE)
-    con.print(x + 2, y + h - 2, "f to gift · any key to close", fg=C.DIM)
+        m.text(2, 4 + i, part[:w - 4], fg=C.WHITE)
+    m.footer("f to gift · any key to close")
 
 
 def render_shop(con: tcod.console.Console, state: GameState, npc, sel: int, line: str = "") -> None:
@@ -2220,71 +2155,62 @@ def render_shop(con: tcod.console.Console, state: GameState, npc, sel: int, line
     header = line.split("\n") if line else []             # the keeper's greeting
     w = 68 if shop == "carpenter" else 56
     h = min(C.SCREEN_H - 4, len(entries) + 6 + len(header))
-    x, y = _modal(con, w, h, f"{npc.name}'s {title}")
+    m = ui.Modal(con, w, h, f"{npc.name}'s {title}")
     p = state.player
-    top = y + 2
+    top = 2
     for hl in header:                                     # innkeeper's greeting
-        con.print(x + 2, top, hl[:w - 4], fg=(210, 205, 190))
+        m.text(2, top, hl[:w - 4], fg=(210, 205, 190))
         top += 1
+    body = (h - 2) - top                                  # rows for the (scrolling) list
 
-    body = (y + h - 2) - top                              # rows for the (scrolling) list
-    sel = max(0, min(sel, len(entries) - 1)) if entries else 0
-    start, end = _window(sel, len(entries), body)
-    for row, e in enumerate(entries[start:end]):
-        i = start + row
-        yy = top + row
-        rowbg = (54, 50, 36) if i == sel else (20, 22, 32)
-        if i == sel:
-            con.draw_rect(x + 1, yy, w - 2, 1, ch=ord(" "), bg=rowbg)
+    def row(i, dy, selected, rowbg):
+        e = entries[i]
+        pre = ui.cur(selected)
         if e[0] == "meal":
             _, label, price, stam, hp = e
             afford = p.gold >= price
             gains = f"+{stam}st" + (f" +{hp}hp" if hp else "")
-            con.print(x + 2, yy, ("▸ " if i == sel else "  ") + label, fg=C.WHITE if afford else C.DIM, bg=rowbg)
-            con.print(x + w - 20, yy, gains, fg=(150, 210, 150), bg=rowbg)
-            con.print(x + w - 8, yy, f"{price}g", fg=C.GOLD_COLOR if afford else C.DIM, bg=rowbg)
+            m.text(2, dy, pre + label, fg=C.WHITE if afford else C.DIM, bg=rowbg)
+            m.text(w - 20, dy, gains, fg=(150, 210, 150), bg=rowbg)
+            m.text(w - 8, dy, f"{price}g", fg=C.GOLD_COLOR if afford else C.DIM, bg=rowbg)
         elif e[0] == "buy":
             _, item, price = e
             afford = p.gold >= price
-            con.print(x + 2, yy, ("▸ " if i == sel else "  ") + item.name, fg=C.WHITE if afford else C.DIM, bg=rowbg)
-            con.print(x + w - 10, yy, f"{price}g", fg=C.GOLD_COLOR if afford else C.DIM, bg=rowbg)
+            m.text(2, dy, pre + item.name, fg=C.WHITE if afford else C.DIM, bg=rowbg)
+            m.text(w - 10, dy, f"{price}g", fg=C.GOLD_COLOR if afford else C.DIM, bg=rowbg)
         elif e[0] == "contest":
             _, fest_name = e
-            con.print(x + 2, yy, ("▸ " if i == sel else "  ")
-                      + f"Enter the produce contest ({fest_name})"[:w - 12],
-                      fg=(232, 200, 120), bg=rowbg)
-            con.print(x + w - 8, yy, "fair!", fg=(232, 200, 120), bg=rowbg)
+            m.text(2, dy, pre + f"Enter the produce contest ({fest_name})"[:w - 12],
+                   fg=(232, 200, 120), bg=rowbg)
+            m.text(w - 8, dy, "fair!", fg=(232, 200, 120), bg=rowbg)
         elif e[0] == "tradebuy":
             _, item, price, _key = e
             afford = p.gold >= price
-            con.print(x + 2, yy, ("▸ " if i == sel else "  ") + item.name[:w - 14],
-                      fg=(232, 200, 120) if afford else C.DIM, bg=rowbg)
-            con.print(x + w - 10, yy, f"{price}g", fg=C.GOLD_COLOR if afford else C.DIM, bg=rowbg)
+            m.text(2, dy, pre + item.name[:w - 14],
+                   fg=(232, 200, 120) if afford else C.DIM, bg=rowbg)
+            m.text(w - 10, dy, f"{price}g", fg=C.GOLD_COLOR if afford else C.DIM, bg=rowbg)
         elif e[0] == "recipe":
             _, name, price = e
             afford = p.gold >= price
-            con.print(x + 2, yy, ("▸ " if i == sel else "  ") + f"Recipe: {name}",
-                      fg=(232, 200, 120) if afford else C.DIM, bg=rowbg)
-            con.print(x + w - 10, yy, f"{price}g", fg=C.GOLD_COLOR if afford else C.DIM, bg=rowbg)
+            m.text(2, dy, pre + f"Recipe: {name}",
+                   fg=(232, 200, 120) if afford else C.DIM, bg=rowbg)
+            m.text(w - 10, dy, f"{price}g", fg=C.GOLD_COLOR if afford else C.DIM, bg=rowbg)
         elif e[0] == "sellto":
             _, item, price, q = e
             from ..game import skills
             star = (" " + skills.stars(q)) if q else ""
-            con.print(x + 2, yy, ("▸ " if i == sel else "  ") + f"Sell {item.name}{star}",
-                      fg=(200, 220, 160), bg=rowbg)
-            con.print(x + w - 10, yy, f"+{price}g", fg=C.GOLD_COLOR, bg=rowbg)
+            m.text(2, dy, pre + f"Sell {item.name}{star}", fg=(200, 220, 160), bg=rowbg)
+            m.text(w - 10, dy, f"+{price}g", fg=C.GOLD_COLOR, bg=rowbg)
         elif e[0] == "cancel_build":
-            con.print(x + 2, yy, ("▸ " if i == sel else "  ") + "Cancel current order",
-                      fg=(224, 180, 120), bg=rowbg)
-            con.print(x + w - 12, yy, "refund", fg=(190, 180, 150), bg=rowbg)
+            m.text(2, dy, pre + "Cancel current order", fg=(224, 180, 120), bg=rowbg)
+            m.text(w - 12, dy, "refund", fg=(190, 180, 150), bg=rowbg)
         elif e[0] in ("commission", "housejob"):
             _, label, kind, price, mats = e
             matstr = ", ".join(f"{q} {it.name.split()[0].lower()}" for it, q in mats)
             afford = p.gold >= price and all(p.inventory.count(it) >= q for it, q in mats)
-            con.print(x + 2, yy, ("▸ " if i == sel else "  ") + label,
-                      fg=C.WHITE if afford else C.DIM, bg=rowbg)
-            con.print(x + 28, yy, matstr[:w - 40], fg=(190, 180, 150) if afford else C.DIM, bg=rowbg)
-            con.print(x + w - 10, yy, f"{price}g", fg=C.GOLD_COLOR if afford else C.DIM, bg=rowbg)
+            m.text(2, dy, pre + label, fg=C.WHITE if afford else C.DIM, bg=rowbg)
+            m.text(28, dy, matstr[:w - 40], fg=(190, 180, 150) if afford else C.DIM, bg=rowbg)
+            m.text(w - 10, dy, f"{price}g", fg=C.GOLD_COLOR if afford else C.DIM, bg=rowbg)
         else:  # upgrade
             tool = e[1]
             tier = p.tool_tier.get(tool, 0)
@@ -2297,14 +2223,11 @@ def render_shop(con: tcod.console.Console, state: GameState, npc, sel: int, line
                 cost = f"{gold}g +{count} {bar.name.split()[0]}"
                 affordable = p.gold >= gold and p.inventory.count(bar) >= count
                 col = C.WHITE if affordable else C.DIM
-            con.print(x + 2, yy, ("▸ " if i == sel else "  ") + txt, fg=col, bg=rowbg)
-            con.print(x + w - 16, yy, cost, fg=(200, 190, 150), bg=rowbg)
+            m.text(2, dy, pre + txt, fg=col, bg=rowbg)
+            m.text(w - 16, dy, cost, fg=(200, 190, 150), bg=rowbg)
 
-    if start > 0:
-        con.print(x + w - 4, top, "▲", fg=_HDR)
-    if end < len(entries):
-        con.print(x + w - 4, y + h - 3, "▼", fg=_HDR)
-    con.print(x + 2, y + h - 2, f"Gold {p.gold}g   ↑↓ Enter buy/upgrade   Esc close", fg=C.DIM)
+    m.list(top, body, len(entries), sel, row, arrow_top=top, arrow_bottom=h - 3)
+    m.footer(f"Gold {p.gold}g   ↑↓ Enter buy/upgrade   Esc close")
 
 
 def render_contest(con: tcod.console.Console, state: GameState, sel: int) -> None:
@@ -2313,27 +2236,19 @@ def render_contest(con: tcod.console.Console, state: GameState, sel: int) -> Non
     goods = village.contest_items(state)
     w, h = 52, min(C.SCREEN_H - 4, max(8, len(goods) + 6))
     body = h - 5
-    x, y = _modal(con, w, h, "The Produce Contest")
-    con.print(x + 2, y + 1, "One entry — your finest. The judges love stars.", fg=C.DIM)
+    m = ui.Modal(con, w, h, "The Produce Contest")
+    m.text(2, 1, "One entry — your finest. The judges love stars.", fg=C.DIM)
     if not goods:
-        con.print(x + 2, y + 3, "Nothing on you is fine enough to show.", fg=C.DIM)
-    sel = max(0, min(sel, len(goods) - 1)) if goods else 0
-    start, end = _window(sel, len(goods), body)
-    for row, (it, q, ql) in enumerate(goods[start:end]):
-        i = start + row
-        yy = y + 3 + row
-        rowbg = (54, 50, 36) if i == sel else (20, 22, 32)
-        if i == sel:
-            con.draw_rect(x + 1, yy, w - 2, 1, ch=ord(" "), bg=rowbg)
+        m.text(2, 3, "Nothing on you is fine enough to show.", fg=C.DIM)
+
+    def row(i, dy, selected, bg):
+        it, q, ql = goods[i]
         stars = skills.stars(ql) or "·"
-        con.print(x + 2, yy, ("▸ " if i == sel else "  ") + f"{it.name}"[:w - 14],
-                  fg=C.WHITE, bg=rowbg)
-        con.print(x + w - 10, yy, f"{stars:>5}", fg=(250, 220, 110), bg=rowbg)
-    if start > 0:
-        con.print(x + w - 4, y + 3, "▲", fg=_HDR)
-    if end < len(goods):
-        con.print(x + w - 4, y + h - 3, "▼", fg=_HDR)
-    con.print(x + 2, y + h - 2, "↑↓ select   Enter show it   Esc back", fg=C.DIM)
+        m.text(2, dy, ui.cur(selected) + f"{it.name}"[:w - 14], fg=C.WHITE, bg=bg)
+        m.text(w - 10, dy, f"{stars:>5}", fg=(250, 220, 110), bg=bg)
+
+    m.list(3, body, len(goods), sel, row, arrow_top=3, arrow_bottom=h - 3)
+    m.footer("↑↓ select   Enter show it   Esc back")
 
 
 def render_gift(con: tcod.console.Console, state: GameState, npc, sel: int) -> None:
@@ -2341,26 +2256,19 @@ def render_gift(con: tcod.console.Console, state: GameState, npc, sel: int) -> N
     gifts = village.giftable_items(state, npc)
     w, h = 48, min(C.SCREEN_H - 4, max(7, len(gifts) + 5))
     body = h - 4
-    x, y = _modal(con, w, h, f"Give a gift to {npc.name}")
+    m = ui.Modal(con, w, h, f"Give a gift to {npc.name}")
     if not gifts:
-        con.print(x + 2, y + 2, "You have nothing to give.", fg=C.DIM)
-    sel = max(0, min(sel, len(gifts) - 1)) if gifts else 0
-    start, end = _window(sel, len(gifts), body)
-    for row, (it, q, ql) in enumerate(gifts[start:end]):
-        i = start + row
-        yy = y + 2 + row
-        rowbg = (54, 50, 36) if i == sel else (20, 22, 32)
-        if i == sel:
-            con.draw_rect(x + 1, yy, w - 2, 1, ch=ord(" "), bg=rowbg)
+        m.text(2, 2, "You have nothing to give.", fg=C.DIM)
+
+    def row(i, dy, selected, bg):
+        it, q, ql = gifts[i]
         # Match the same family-aware taste logic the gift actually uses, so the
         # tag never lies (a "loves Jam" NPC tags any jam variant as loved).
         tag = (" (loves!)" if npc._matches(it, npc.loves)
                else " (likes)" if npc._matches(it, npc.likes)
                else " (dislikes)" if npc._matches(it, npc.dislikes) else "")
         star = (" " + skills.stars(ql)) if ql else ""
-        con.print(x + 2, yy, ("▸ " if i == sel else "  ") + f"{q:>3} {it.name}{star}{tag}", fg=C.WHITE, bg=rowbg)
-    if start > 0:
-        con.print(x + w - 4, y + 2, "▲", fg=_HDR)
-    if end < len(gifts):
-        con.print(x + w - 4, y + h - 3, "▼", fg=_HDR)
-    con.print(x + 2, y + h - 2, "↑↓ select   Enter give   Esc close", fg=C.DIM)
+        m.text(2, dy, ui.cur(selected) + f"{q:>3} {it.name}{star}{tag}", fg=C.WHITE, bg=bg)
+
+    m.list(2, body, len(gifts), sel, row, arrow_top=2, arrow_bottom=h - 3)
+    m.footer("↑↓ select   Enter give   Esc close")
