@@ -362,12 +362,13 @@ def _draw_roads(gm: GameMap, centers: dict) -> None:
                 _paint_road(gm, direct)
             else:
                 _paint_road(gm, via or direct)
-    # Each dungeon is reached from the farm AND its nearest village (more loops);
-    # roads reuse existing roads so they branch at junctions.
+    # Each dungeon is a spur off the nearest node (a village, or the farm) — one
+    # road, so a dungeon tucked beside a village gets a short branch instead of a
+    # second long road shadowing that village's trunk all the way to the farm.
+    nodes = pts + [hub]
     for d in gm.dungeons:
-        _draw_road(gm, hub, d)
-        nc = min(pts, key=lambda c: (c[0] - d[0]) ** 2 + (c[1] - d[1]) ** 2)
-        _draw_road(gm, nc, d)
+        near = min(nodes, key=lambda c: (c[0] - d[0]) ** 2 + (c[1] - d[1]) ** 2)
+        _draw_road(gm, near, d)
     # The West Pass: the Cinderhope road runs on to the map's western edge,
     # where the Westreach begins (walk off the edge to cross). It ends at a
     # walkable edge cell (the rim is often rock), and — with terrain-aware

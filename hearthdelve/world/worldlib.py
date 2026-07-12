@@ -67,7 +67,7 @@ def grow_veins(tiles, w, h, host_id, ore_veins, max_len, gems, rng) -> None:
 ROAD_BLOCK = {"house_wall", "house_floor", "door", "bed", "shipping_bin",
               "fence", "tilled", "dungeon_down", "well", "lamp", "stall",
               "statue", "hearth", "table", "counter", "barrel", "altar", "grave",
-              "tent", "campfire"}
+              "tent", "campfire", "notice_board"}
 _ROAD_NAMES = ("road", "bridge", "cobble")
 _ROAD_KINDS = ("road", "bridge", "cobble")
 
@@ -118,27 +118,65 @@ _GAPFILL_BY_ID = np.array([t.walkable and t.kind not in _ROAD_KINDS
 _SIGNROAD_BY_ID = np.array([i in SIGN_ROADS for i in range(len(tile.TILES))])
 
 
+# A diagonal step covers √2 ≈ 1.4 of a cardinal one, so it's priced 7 against a
+# cardinal 5 (ratio 1.4). Pricing a diagonal as two cardinals (the old cardinal-
+# only graph) over-charged diagonal travel, so routes shunned it and came out as
+# long straight runs with abrupt staircase turns; at the true ratio the planner
+# takes clean diagonals, and roads read as natural lines across the land.
+_CARD, _DIAG = 5, 7
+
+
 def road_path(gm: GameMap, a: tuple[int, int], b: tuple[int, int], reuse: bool = True) -> list:
-    """A*-route from a to b. Cardinal-only, so a river crossing is a proper
-    full-width bridge. With ``reuse`` off, existing roads get no discount, so the
-    path is carved directly (bridging water) instead of detouring along the
-    network."""
+    """A*-route from a to b, diagonals allowed at ~1.4x a cardinal step. With
+    ``reuse`` off, existing roads get no discount, so the path is carved directly
+    (bridging water) instead of detouring along the network. The returned path
+    may step diagonally; paint_road fills a corner at each so the laid road stays
+    cardinally connected (walkable by the run-follower, one piece on the map)."""
     import tcod.path
 
     cost = (_COST_REUSE_BY_ID if reuse else _COST_DIRECT_BY_ID)[gm.tiles]
     cost[a[0], a[1]] = cost[b[0], b[1]] = 1   # endpoints must be reachable
-    graph = tcod.path.SimpleGraph(cost=cost, cardinal=2, diagonal=0)
+    graph = tcod.path.SimpleGraph(cost=cost, cardinal=_CARD, diagonal=_DIAG)
     pf = tcod.path.Pathfinder(graph)
     pf.add_root((b[0], b[1]))
     return pf.path_from((a[0], a[1])).tolist()
 
 
+def _pave(gm: GameMap, x: int, y: int) -> None:
+    if not gm.in_bounds(x, y):
+        return
+    t = tile.TILES[gm.tiles[x, y]]
+    if t.name in ROAD_BLOCK or t.kind in ("bridge", "road", "cobble"):
+        return                             # keep buildings, bridges, and paving
+    gm.tiles[x, y] = tile.BRIDGE if t.kind == "water" else tile.ROAD
+
+
+def _bridge_corner(gm: GameMap, a: tuple[int, int], b: tuple[int, int]) -> None:
+    """Pave one of the two cells that flank a diagonal A->B step, so A and B are
+    cardinally linked (else the road would touch only at the corner — a gap for
+    the run-follower and a diagonal squeeze across water). Prefer a corner that's
+    already road, else the easier ground; never a building."""
+    c1, c2 = (b[0], a[1]), (a[0], b[1])
+    for c in (c1, c2):
+        if gm.in_bounds(*c) and tile.TILES[gm.tiles[c]].kind in ("road", "bridge", "cobble"):
+            return                         # already linked through this corner
+
+    def score(c):
+        if not gm.in_bounds(*c):
+            return 10 ** 6
+        tt = tile.TILES[gm.tiles[c]]
+        return 10 ** 5 if tt.name in ROAD_BLOCK else _terrain_cost(tt)
+
+    _pave(gm, *(c1 if score(c1) <= score(c2) else c2))
+
+
 def paint_road(gm: GameMap, path: list) -> None:
+    prev = None
     for x, y in path:
-        t = tile.TILES[gm.tiles[x, y]]
-        if t.name in ROAD_BLOCK or t.kind in ("bridge", "road"):
-            continue                       # keep buildings, bridges, and paving
-        gm.tiles[x, y] = tile.BRIDGE if t.kind == "water" else tile.ROAD
+        if prev is not None and x != prev[0] and y != prev[1]:
+            _bridge_corner(gm, prev, (x, y))   # diagonal step — keep it connected
+        _pave(gm, x, y)
+        prev = (x, y)
 
 
 def draw_road(gm: GameMap, a: tuple[int, int], b: tuple[int, int]) -> None:
@@ -267,8 +305,8 @@ def place_waypoints(gm: GameMap) -> None:
 # roads, water, or anything already built)
 NO_BUILD = {"water", "river", "road", "bridge", "cobble", "sand", "house_wall",
             "house_floor", "door", "bed", "shipping_bin", "fence", "tilled", "well",
-            "lamp", "stall", "signpost", "statue", "hearth", "table", "counter",
-            "barrel", "altar", "grave", "boat", "dungeon_down"}
+            "lamp", "stall", "signpost", "notice_board", "statue", "hearth", "table",
+            "counter", "barrel", "altar", "grave", "boat", "dungeon_down"}
 
 
 def overlap(a, b, margin: int) -> bool:
