@@ -621,10 +621,14 @@ def render_world(con: tcod.console.Console, state: GameState, anim_time: float =
     dr, dg, db = (1.0, 1.0, 1.0) if w.is_dungeon else daylight_mul(state.time_minutes)
 
     def _draw(sx: int, sy: int, glyph: str, color, cell_bg=None) -> None:
+        # A faint breathing shimmer on each creature, phased by position so they
+        # don't pulse in lockstep — enough that the world looks alive at rest,
+        # not so much it distracts.
+        sh = 1.0 + 0.09 * math.sin(t * 3.0 + sx * 1.3 + sy * 0.7)
         con.rgb["ch"][sx, sy] = ord(glyph)
-        con.rgb["fg"][sx, sy] = (min(255, int(color[0] * dr)),
-                                 min(255, int(color[1] * dg)),
-                                 min(255, int(color[2] * db)))
+        con.rgb["fg"][sx, sy] = (min(255, int(color[0] * dr * sh)),
+                                 min(255, int(color[1] * dg * sh)),
+                                 min(255, int(color[2] * db * sh)))
         if cell_bg is not None:
             con.rgb["bg"][sx, sy] = (min(255, int(cell_bg[0] * dr)),
                                      min(255, int(cell_bg[1] * dg)),
@@ -678,8 +682,9 @@ def render_world(con: tcod.console.Console, state: GameState, anim_time: float =
     # player, centered-ish — always full-bright so you never lose yourself
     px, py = state.player.x - ox, state.player.y - oy
     if 0 <= px < C.VIEW_W and 0 <= py < C.VIEW_H:
+        pb = 0.90 + 0.10 * math.sin(t * 2.2)         # a gentle breathing pulse (dims, never lost)
         con.rgb["ch"][px, py] = ord(state.player.glyph)
-        con.rgb["fg"][px, py] = C.PLAYER_FG
+        con.rgb["fg"][px, py] = tuple(min(255, int(c * pb)) for c in C.PLAYER_FG)
         occupied.add((px, py))
 
     return occupied
