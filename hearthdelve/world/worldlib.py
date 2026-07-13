@@ -135,6 +135,13 @@ def road_path(gm: GameMap, a: tuple[int, int], b: tuple[int, int], reuse: bool =
     import tcod.path
 
     cost = (_COST_REUSE_BY_ID if reuse else _COST_DIRECT_BY_ID)[gm.tiles]
+    jit = getattr(gm, "road_jitter", None)
+    if jit is not None:
+        # A gentle, smooth cost ripple makes a road wander a little on otherwise
+        # uniform ground (where every cell costs the same, the planner would
+        # otherwise draw a dead-straight line) — added only to already-passable
+        # cells so it never lifts a built feature's 0 (impassable) cost.
+        cost = np.where(cost > 0, cost + jit, 0).astype(np.int16)
     cost[a[0], a[1]] = cost[b[0], b[1]] = 1   # endpoints must be reachable
     graph = tcod.path.SimpleGraph(cost=cost, cardinal=_CARD, diagonal=_DIAG)
     pf = tcod.path.Pathfinder(graph)
@@ -224,6 +231,83 @@ def fill_road_gaps(gm: GameMap) -> None:
     water = fill & _WATER_BY_ID[t]
     t[water] = tile.BRIDGE
     t[fill & ~water] = tile.ROAD
+
+
+_PLAINROAD_BY_ID = np.array([i == tile.ROAD for i in range(len(tile.TILES))])
+
+
+def _road_neighbours(t: np.ndarray, x: int, y: int) -> list:
+    return [(x + dx, y + dy) for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1))
+            if 0 <= x + dx < t.shape[0] and 0 <= y + dy < t.shape[1]
+            and _ROADKIND_BY_ID[t[x + dx, y + dy]]]
+
+
+def _restore_ground(gm: GameMap, x: int, y: int) -> None:
+    """Un-pave (x, y): copy a neighbouring open-ground tile so the removed road
+    cell blends into its biome instead of leaving a bare patch."""
+    t = gm.tiles
+    for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1),
+                   (1, 1), (-1, -1), (1, -1), (-1, 1)):
+        nx, ny = x + dx, y + dy
+        if gm.in_bounds(nx, ny) and _GAPFILL_BY_ID[t[nx, ny]]:
+            t[x, y] = t[nx, ny]
+            return
+    t[x, y] = tile.GRASS
+
+
+def _connects_without(gm: GameMap, x: int, y: int, radius: int = 6) -> bool:
+    """After removing road cell (x, y), do all of its road-neighbours stay
+    mutually connected through nearby road? A bounded flood: a 'yes' proves a
+    real short reconnection exists, so removal is safe; a 'no' keeps the cell."""
+    t = gm.tiles
+    nb = _road_neighbours(t, x, y)
+    if len(nb) <= 1:
+        return True
+    seen = {nb[0]}
+    stack = [nb[0]]
+    while stack:
+        cx, cy = stack.pop()
+        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            nx, ny = cx + dx, cy + dy
+            if (nx, ny) == (x, y) or (nx, ny) in seen:
+                continue
+            if abs(nx - x) > radius or abs(ny - y) > radius:
+                continue
+            if gm.in_bounds(nx, ny) and _ROADKIND_BY_ID[t[nx, ny]]:
+                seen.add((nx, ny))
+                stack.append((nx, ny))
+    return all(n in seen for n in nb[1:])
+
+
+def thin_roads(gm: GameMap) -> None:
+    """Trim 2x2 blobs of road back to a single-file staircase.
+
+    The diagonal corner-fill that keeps a diagonal road cardinally connected
+    (paint_road/_bridge_corner) can leave 2x2 squares of paving — a road that
+    visibly *widens*, and worse, reads to the run-follower as a fork so an auto-
+    run halts mid-open-road. Here we drop, from each such square, one ROAD cell
+    whose removal keeps the network locally connected, and copy adjacent ground
+    over it. We never touch BRIDGE (river fords) or COBBLE (village paving), nor
+    a cell beside a door (a dwelling's only access). Repeats until stable."""
+    t = gm.tiles
+    while True:
+        road = _ROADKIND_BY_ID[t]
+        block = road[:-1, :-1] & road[1:, :-1] & road[:-1, 1:] & road[1:, 1:]
+        removed = False
+        for bx, by in np.argwhere(block):
+            bx, by = int(bx), int(by)
+            for cx, cy in ((bx, by), (bx + 1, by), (bx, by + 1), (bx + 1, by + 1)):
+                if not _PLAINROAD_BY_ID[t[cx, cy]]:
+                    continue                       # keep bridges & village cobble
+                if any(gm.in_bounds(cx + dx, cy + dy) and t[cx + dx, cy + dy] == tile.DOOR
+                       for dx in (-1, 0, 1) for dy in (-1, 0, 1)):
+                    continue                       # leave a doorway's road access
+                if _connects_without(gm, cx, cy):
+                    _restore_ground(gm, cx, cy)
+                    removed = True
+                    break                          # this square is handled
+        if not removed:
+            return
 
 
 def gate(center: tuple[int, int], target: tuple[int, int], rx: int, ry: int) -> tuple[int, int]:

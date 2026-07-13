@@ -955,18 +955,45 @@ _NOTABLE_TILE = {"stairs": "a stairway down", "stairs_up": "a stairway up",
 #  halting at every bush beside the road was just noise; forage them with g.)
 
 
-def _notable_nearby(state: GameState) -> str:
+def _is_friendly(state: GameState, m) -> bool:
+    """A surface critter that isn't out to get you — worth noticing once, but not
+    worth halting a run at every step while it grazes beside the road."""
+    return (not state.world.is_dungeon and m.kind == "wildlife" and not m.hostile)
+
+
+def _nearby_friendlies(state: GameState) -> set:
+    """Identities of friendly creatures already within notice range — the ones a
+    run should run *past* rather than stop dead beside every single tile."""
+    p = state.player
+    ack = set()
+    for npc in state.world.npcs:
+        if max(abs(npc.x - p.x), abs(npc.y - p.y)) <= 6:
+            ack.add(id(npc))
+    for m in state.world.monsters:
+        if _is_friendly(state, m) and m.alive and max(abs(m.x - p.x), abs(m.y - p.y)) <= 6:
+            ack.add(id(m))
+    return ack
+
+
+def _notable_nearby(state: GameState, ignore: frozenset = frozenset()) -> str:
     """A reason a run/rest should stop — someone close by or an interesting tile
-    underfoot — or '' if nothing of note (so it stays usable as a boolean)."""
+    underfoot — or '' if nothing of note (so it stays usable as a boolean).
+    Friendly creatures whose id is in `ignore` are passed over: they were already
+    beside us when the run began, so we don't want to halt at them each step."""
     p = state.player
     for npc in state.world.npcs:
+        if id(npc) in ignore:
+            continue                                   # already acknowledged
         if max(abs(npc.x - p.x), abs(npc.y - p.y)) <= 6:
             return f"{npc.name} is nearby"
     for m in state.world.monsters:
         if m.seasons and state.season not in m.seasons:
             continue                                   # hibernating — not around
-        if m.alive and max(abs(m.x - p.x), abs(m.y - p.y)) <= 6:
-            return f"a {m.name.lower()} is nearby"
+        if not (m.alive and max(abs(m.x - p.x), abs(m.y - p.y)) <= 6):
+            continue
+        if _is_friendly(state, m) and id(m) in ignore:
+            continue                                   # a grazing beast we ran past
+        return f"a {m.name.lower()} is nearby"
     for dx in (-1, 0, 1):
         for dy in (-1, 0, 1):
             x, y = p.x + dx, p.y + dy
@@ -1000,6 +1027,35 @@ def _is_road(state: GameState, x: int, y: int) -> bool:
     return state.world.in_bounds(x, y) and state.world.tile_at(x, y).kind in _ROAD_KINDS
 
 
+_CARD4 = ((1, 0), (-1, 0), (0, 1), (0, -1))
+
+
+def _route_groups(state: GameState, x: int, y: int, exclude: tuple) -> list:
+    """Group the road exits from (x, y) into distinct routes, ignoring the way
+    we came from (`exclude`). Two perpendicular exits belong to the SAME route
+    when the diagonal cell between them is also road — that's a widened corner
+    or a blob of paving, not a spot where the road truly splits. So a fat corner
+    or a 2-wide patch collapses to one route (the run flows through it), while a
+    real T or crossroads stays two-or-more (the run stops to let you choose)."""
+    dirs = [d for d in _CARD4 if d != exclude and _is_road(state, x + d[0], y + d[1])]
+    parent = {d: d for d in dirs}
+
+    def find(a):
+        while parent[a] != a:
+            a = parent[a]
+        return a
+
+    for i, d in enumerate(dirs):
+        for e in dirs[i + 1:]:
+            if d[0] * e[0] + d[1] * e[1] == 0 and _is_road(  # perpendicular pair
+                    state, x + d[0] + e[0], y + d[1] + e[1]):
+                parent[find(d)] = find(e)
+    groups: dict = {}
+    for d in dirs:
+        groups.setdefault(find(d), []).append(d)
+    return list(groups.values())
+
+
 def start_run(state: GameState, dx: int, dy: int) -> dict | None:
     """Begin a run; returns its context, or None if blocked immediately."""
     p = state.player
@@ -1008,7 +1064,8 @@ def start_run(state: GameState, dx: int, dy: int) -> dict | None:
         return None
     tunnel = state.world.is_dungeon and not (
         state.world.walkable(p.x - dy, p.y + dx) or state.world.walkable(p.x + dy, p.y - dx))
-    return {"d": (dx, dy), "steps": 0, "on_road": on_road, "tunnel": tunnel}
+    return {"d": (dx, dy), "steps": 0, "on_road": on_road, "tunnel": tunnel,
+            "ack": frozenset(_nearby_friendlies(state))}
 
 
 def run_step(state: GameState, ctx: dict) -> bool:
@@ -1017,17 +1074,21 @@ def run_step(state: GameState, ctx: dict) -> bool:
     dx, dy = ctx["d"]
 
     # Road runs FOLLOW the road: keep straight if we can, otherwise take the
-    # single bend; stop at a fork, a dead end, or the road's end.
+    # single bend; stop where the road genuinely forks, dead-ends, or ends. A
+    # widened corner or a 2-wide patch is one route (see _route_groups), so we
+    # flow through it instead of halting on open road.
     if ctx["on_road"]:
         back = (-dx, -dy)
-        opts = [(ax, ay) for ax, ay in ((1, 0), (-1, 0), (0, 1), (0, -1))
-                if (ax, ay) != back and _is_road(state, p.x + ax, p.y + ay)]
-        if (dx, dy) in opts:
+        groups = _route_groups(state, p.x, p.y, back)
+        if not groups:
+            ctx["stop"] = "The road ends."
+            return False
+        if any((dx, dy) in g for g in groups):
             ndir = (dx, dy)                            # carry straight on
-        elif len(opts) == 1:
-            ndir = opts[0]                             # follow the bend
+        elif len(groups) == 1:                         # one route — follow the bend
+            ndir = min(groups[0], key=lambda d: (d[0] - dx) ** 2 + (d[1] - dy) ** 2)
         else:
-            ctx["stop"] = "The road forks." if opts else "The road ends."
+            ctx["stop"] = "The road forks."
             return False
         nx, ny = p.x + ndir[0], p.y + ndir[1]
         if _entity_at(state, nx, ny):
@@ -1037,16 +1098,15 @@ def run_step(state: GameState, ctx: dict) -> bool:
         ctx["d"] = ndir
         turns.advance_time(state, C.ROAD_MOVE_SECONDS)
         ctx["steps"] += 1
-        note = _notable_nearby(state)
+        note = _notable_nearby(state, ctx["ack"])
         if ctx["steps"] >= RUN_MAX_TILES:
             ctx["stop"] = "You pause to catch your breath."
             return False
         if note:
             ctx["stop"] = f"You stop — {note}."
             return False
-        exits = sum(_is_road(state, p.x + ax, p.y + ay) for ax, ay in ((1, 0), (-1, 0), (0, 1), (0, -1)))
-        if exits > 2:
-            ctx["stop"] = "You reach a junction."
+        if len(_route_groups(state, p.x, p.y, (-ndir[0], -ndir[1]))) > 1:
+            ctx["stop"] = "You reach a junction."     # a real split — you choose
             return False
         return True
 
@@ -1069,7 +1129,7 @@ def run_step(state: GameState, ctx: dict) -> bool:
             return False                               # a trap sprang — it logs its own message
     ctx["steps"] += 1
 
-    note = _notable_nearby(state)
+    note = _notable_nearby(state, ctx["ack"])
     if ctx["steps"] >= RUN_MAX_TILES:
         ctx["stop"] = "You pause to catch your breath."
         return False

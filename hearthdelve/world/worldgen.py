@@ -32,6 +32,7 @@ from .worldlib import (  # noqa: F401  (some are used by siblings via this modul
     paint_road as _paint_road,
     draw_road as _draw_road,
     fill_road_gaps as _fill_road_gaps,
+    thin_roads as _thin_roads,
     gate as _gate,
     branch_through as _branch_through,
     place_waypoints as _place_waypoints,
@@ -54,6 +55,11 @@ from .worldlib import (  # noqa: F401  (some are used by siblings via this modul
 
 # Region ids for the deliberate four-region composition (see generate()).
 REG_FOREST, REG_MARSH, REG_HILLS, REG_PLAINS = 0, 1, 2, 3
+
+# Peak extra cost the road-meander ripple adds to open ground. Small next to the
+# terrain spread (easy 4 → scree 12) so it nudges a road to wander without ever
+# overriding its instinct to hug gentle land and skirt crags.
+_ROAD_MEANDER = 2.2
 
 
 def _wildness(w: int, h: int, seed: int) -> np.ndarray:
@@ -241,10 +247,15 @@ def generate(seed: int = 1337) -> GameMap:
         centers["Thornwake Camp"] = camp
     gm.village_centers = dict(centers)
     _scatter_wild_fruit(gm, wild, seed)
+    # A gentle low-frequency cost ripple so roads meander a touch across open
+    # ground rather than ruling dead-straight lines (see worldlib.road_path).
+    gm.road_jitter = (_noise_field(seed + 5077, w, h, 0.06, octaves=2)
+                      * _ROAD_MEANDER).astype(np.int16)
     _draw_roads(gm, centers)
     if forest_track is not None:                    # a track links the hut to the network
         _draw_road(gm, forest_track, gm.spawn)
         _fill_road_gaps(gm)
+    _thin_roads(gm)                                  # collapse diagonal-fill widenings
     _place_waypoints(gm)
     _populate_wildlife(gm, random.Random(seed + 131))
     return gm
