@@ -1064,6 +1064,10 @@ MACHINES: dict[str, MachineDef] = {
                              None, "Mills grain, cane & salt swiftly and finely.", footprint=(3, 3)),
     "smoker":     MachineDef("smoker", "Smoker", "≡", (150, 120, 96), 720, "smoke",
                              None, "Slow-smokes meat into jerky, or fish into a smoked delicacy."),
+    "tanner":     MachineDef("tanner", "Tanning Rack", "Π", (168, 130, 88), 600, "hide",
+                             None, "Cures raw hides & pelts into leather over half a day."),
+    "chest":      MachineDef("chest", "Storage Chest", "▤", (156, 120, 78), 0, "store",
+                             None, "Stashes goods at home, off your back — no weight to carry."),
     "spinner":    MachineDef("spinner", "Spinning Wheel", "Ø", (196, 176, 140), 120, "fiber",
                              None, "Spins wool, cotton, flax or spider silk into yarn & thread."),
     "loom":       MachineDef("loom", "Loom", "π", (176, 150, 110), 180, "weave",
@@ -1236,6 +1240,10 @@ RECIPES: list[Recipe] = [
            desc="Slow-smoke meat into jerky, or fish into a smoked delicacy."),
     Recipe("Butcher's Block", "build", ((items.TIMBER_PLANK, 8), (items.IRON_BAR, 2), (items.STONE, 4)),
            machine="butcher", desc="Render a grown animal into cuts of meat for the larder."),
+    Recipe("Tanning Rack", "build", ((items.WOOD, 8), (items.FIBER, 4)), machine="tanner",
+           desc="Cure raw hides & pelts into leather over half a day."),
+    Recipe("Storage Chest", "build", ((items.TIMBER_PLANK, 6),), machine="chest",
+           desc="A chest for your goods — stash a haul at home instead of hauling it about."),
     Recipe("Spinning Wheel", "build", ((items.TIMBER_PLANK, 4), (items.WOOD, 4)), machine="spinner",
            desc="Spins wool, cotton, flax & spider silk into yarn and thread."),
     Recipe("Loom", "build", ((items.TIMBER_PLANK, 6), (items.WOOD, 6)), machine="loom",
@@ -1577,6 +1585,34 @@ WEST_WILDLIFE: list[Critter] = [
             dv=9, pv=4, to_hit=6, dmg=(4, 9),
             desc="A dog-sized drake that suns itself on the caldera rock. Territorial is a kind word."),
 ]
+
+
+# What a hunted wild creature yields: (item, chance, (min_qty, max_qty)). Hides
+# and pelts feed the tanning rack; game meat feeds the kitchen; antlers & scales
+# are trophies with their own worth. A moral choice with a karma cost (see
+# combat._on_kill) — but the larder and the tanning rack are real rewards.
+WILDLIFE_DROPS: dict[str, list] = {
+    "Rabbit":      [(items.MEAT, 0.9, (1, 1)), (items.RAW_HIDE, 0.5, (1, 1))],
+    "Squirrel":    [(items.MEAT, 0.7, (1, 1))],
+    "Fox":         [(items.RAW_HIDE, 0.9, (1, 1))],
+    "Deer":        [(items.VENISON, 1.0, (1, 2)), (items.RAW_HIDE, 0.85, (1, 1)),
+                    (items.ANTLER, 0.35, (1, 1))],
+    "Wild Boar":   [(items.MEAT, 1.0, (1, 2)), (items.BOAR_HIDE, 0.9, (1, 1))],
+    "Bear":        [(items.MEAT, 1.0, (2, 4)), (items.RAW_HIDE, 1.0, (1, 2))],
+    "Ash Wolf":    [(items.MEAT, 0.5, (1, 1)), (items.WOLF_PELT, 0.9, (1, 1))],
+    "Cinder Boar": [(items.MEAT, 1.0, (1, 3)), (items.BOAR_HIDE, 1.0, (1, 1))],
+    "Rock Viper":  [(items.RAW_HIDE, 0.4, (1, 1))],
+    "Ember Drake": [(items.MEAT, 0.5, (1, 1)), (items.DRAKE_SCALE, 0.8, (1, 2))],
+}
+
+
+def wildlife_drops(name: str, rng) -> list:
+    """Roll a slain wild creature's yield: a list of (item, qty)."""
+    out = []
+    for item, chance, (lo, hi) in WILDLIFE_DROPS.get(name, ()):
+        if rng.random() < chance:
+            out.append((item, rng.randint(lo, hi)))
+    return out
 
 
 # --- Villages, NPCs, shops (M3b) ---------------------------------------------

@@ -6,6 +6,7 @@ matching the world map and ``console.print(x, y, ...)``.
 from __future__ import annotations
 
 import math
+import random
 
 import numpy as np
 import tcod.console
@@ -97,6 +98,30 @@ def _hash01(a, b):
     return v - np.floor(v)
 
 
+def _blur5(f: np.ndarray) -> np.ndarray:
+    """A gentle 4-neighbour blur (weights .5 centre, .125 each side) that rubs
+    out the hard cell-grid edges so steam reads as cloud, not squares."""
+    out = f * 0.5
+    out[1:, :] += 0.125 * f[:-1, :]
+    out[:-1, :] += 0.125 * f[1:, :]
+    out[:, 1:] += 0.125 * f[:, :-1]
+    out[:, :-1] += 0.125 * f[:, 1:]
+    return out
+
+
+def _shift2d(a: np.ndarray, sx: int, sy: int) -> np.ndarray:
+    """A copy of `a` translated by (sx, sy), vacated cells left at zero (no
+    wrap). Used to stack a rising, drifting steam plume off the caldera."""
+    out = np.zeros_like(a)
+    xw, yw = a.shape[0] - abs(sx), a.shape[1] - abs(sy)
+    if xw <= 0 or yw <= 0:
+        return out
+    xs_, xd_ = (0, sx) if sx >= 0 else (-sx, 0)
+    ys_, yd_ = (0, sy) if sy >= 0 else (-sy, 0)
+    out[xd_:xd_ + xw, yd_:yd_ + yw] = a[xs_:xs_ + xw, ys_:ys_ + yw]
+    return out
+
+
 # Per-channel light multiplier across the day: cool/dim at night, warm at
 # dawn & dusk, neutral-bright at midday. Keyframes are (minute-of-day, rgb-mul).
 _LIGHT_KEYS = [
@@ -141,6 +166,131 @@ def camera_origin(state: GameState) -> tuple[int, int]:
     return cx, cy
 
 
+_STEAM_RNG = random.Random(0xC01DFACE)
+# A steam blob: [world x, world y, vx, vy (tiles/s), age, life (s), radius].
+_S_X, _S_Y, _S_VX, _S_VY, _S_AGE, _S_LIFE, _S_R = range(7)
+
+
+def _steam(con, state: GameState, view, ox: int, oy: int, t: float,
+           vw: int, vh: int, xs, ys) -> None:
+    """Persistent, world-space steam over the Westreach.
+
+    Blobs are born at the caldera while it rains, each takes its own heading,
+    and they drift across the world over ~10-22s, swelling and fading — so a
+    cloud bank keeps roaming even after you've walked past the lava. A dense
+    column also boils straight off the vent whenever it's on screen. State
+    lives on the west map (cosmetic, regenerated on load — never saved)."""
+    gm = state.west
+    if gm is None:
+        return
+    raining = state.weather in ("Rain", "Storm")
+    storm = state.weather == "Storm"
+
+    blobs = getattr(gm, "_steam_blobs", None)
+    if blobs is None:
+        blobs = gm._steam_blobs = []
+    lava = getattr(gm, "_steam_lava", None)
+    if lava is None:
+        lava = gm._steam_lava = np.argwhere(gm.tiles == tile.LAVA)
+
+    # Real-time delta (anim_time is monotonic wall-clock seconds). Clamp so the
+    # first frame / a pause doesn't spawn or teleport a burst.
+    last = getattr(gm, "_steam_t", t)
+    dt = t - last
+    gm._steam_t = t
+    if not (0.0 < dt < 0.5):
+        dt = 0.0
+
+    # Spawn from random points on the caldera while it rains.
+    if raining and len(lava):
+        acc = getattr(gm, "_steam_acc", 0.0) + dt
+        interval = 0.28 if storm else 0.5
+        while acc >= interval and len(blobs) < 72:
+            acc -= interval
+            lx, ly = lava[_STEAM_RNG.randrange(len(lava))]
+            ang = _STEAM_RNG.uniform(0.0, 6.2832)          # a random heading
+            spd = _STEAM_RNG.uniform(0.8, 2.7)
+            blobs.append([float(lx) + _STEAM_RNG.uniform(-1.5, 1.5),
+                          float(ly) + _STEAM_RNG.uniform(-1.5, 1.5),
+                          math.cos(ang) * spd,
+                          math.sin(ang) * spd - 0.5,       # a faint buoyant rise
+                          0.0, _STEAM_RNG.uniform(10.0, 22.0),
+                          _STEAM_RNG.uniform(3.0, 5.5)])
+        gm._steam_acc = acc
+
+    # Advance and cull (blobs keep drifting and fading even once the rain stops).
+    if dt and blobs:
+        for b in blobs:
+            b[_S_AGE] += dt
+            b[_S_X] += b[_S_VX] * dt
+            b[_S_Y] += b[_S_VY] * dt
+        blobs = gm._steam_blobs = [b for b in blobs if b[_S_AGE] < b[_S_LIFE]]
+
+    hot_mask = (view == tile.LAVA) if raining else None
+    lava_vis = hot_mask is not None and bool(hot_mask.any())
+    if not blobs and not lava_vis:
+        return
+
+    field = np.zeros((vw, vh), np.float32)
+
+    # The dense column straight off the vent, when the lava is on screen.
+    if lava_vis:
+        hot = hot_mask.astype(np.float32)
+        base = hot.copy()
+        for k in range(1, 22):
+            base = np.maximum(base, _shift2d(hot, int(round(k * 0.6)), -k) * (0.94 ** k))
+        for _ in range(3):
+            base = np.maximum(base, np.maximum(_shift2d(base, 1, 0),
+                                               _shift2d(base, -1, 0)) * 0.82)
+        turb = _hash01(np.floor(xs * 0.45 - t * 2.4), np.floor(ys * 0.45 - t * 3.2))
+        field = np.maximum(field, base * (0.6 + 0.7 * turb))
+
+    # The roaming blobs, each drawn in its own small window for speed.
+    for b in blobs:
+        sx, sy = b[_S_X] - ox, b[_S_Y] - oy
+        age = b[_S_AGE] / b[_S_LIFE]
+        r = b[_S_R] + 4.0 * age                            # swells as it travels
+        if sx < -r - 2 or sx > vw + r + 2 or sy < -r - 2 or sy > vh + r + 2:
+            continue
+        op = max(0.0, math.sin(math.pi * age)) * 0.85      # fade in, then out
+        x0, x1 = max(0, int(sx - r - 2)), min(vw, int(sx + r + 3))
+        y0, y1 = max(0, int(sy - r - 2)), min(vh, int(sy + r + 3))
+        if x0 >= x1 or y0 >= y1:
+            continue
+        lx = np.arange(x0, x1, dtype=np.float32)[:, None]
+        ly = np.arange(y0, y1, dtype=np.float32)[None, :]
+        field[x0:x1, y0:y1] += op * np.exp(
+            -((lx - sx) ** 2 + (ly - sy) ** 2) / (2.0 * r * r))
+
+    # Break up the blocky look. One blur rounds off the square cell-grid edges;
+    # then drifting turbulence at two frequencies mottles the interior so a bank
+    # of overlapping blobs reads as roiling cloud, not one flat grey slab. No
+    # blur *after* the mottle — that would smooth the texture straight back into
+    # squares (which is exactly what read as blocky before).
+    field = _blur5(field)
+    #   shape: cloud-scale mottle (drifts smoothly);  grain: a per-cell stipple
+    #   (distinct every cell so it actually breaks the grid) that slides across
+    #   the cells over time. floor() only on the coarse term — a sub-cell floor
+    #   on the fine one would just make new little squares.
+    shape = _hash01(np.floor(xs * 0.3 - t * 1.4), np.floor(ys * 0.3 - t * 1.9))
+    grain = _hash01(xs + np.floor(t * 3.0), ys - np.floor(t * 2.0))
+    field = field * (0.22 + 0.34 * shape + 0.6 * grain)
+
+    # Steam is translucent — keep the cap below full so even the dense core
+    # never saturates into one flat slab; the grain then mottles right through
+    # it and terrain glimmers faintly behind, reading as vapour, not a wall.
+    gain = 1.5 if storm else 1.3
+    a = np.clip(field * gain, 0.0, 0.8)
+    if lava_vis:
+        a *= (1.0 - 0.5 * hot_mask.astype(np.float32))     # lava glows through its steam
+    a = a[..., None]
+    steam = np.array([212.0, 215.0, 218.0], np.float32)
+    fgc = con.rgb["fg"][:vw, :vh].astype(np.float32)
+    bgc = con.rgb["bg"][:vw, :vh].astype(np.float32)
+    con.rgb["fg"][:vw, :vh] = (fgc * (1 - a) + steam * a).astype(np.uint8)
+    con.rgb["bg"][:vw, :vh] = (bgc * (1 - a * 0.85) + steam * 0.8 * a).astype(np.uint8)
+
+
 def _westreach_ambience(con, state: GameState, view, ox: int, oy: int, t: float) -> None:
     """Weather theatre for the volcano country, painted over the composed view
     (the player is drawn after, so you never vanish into your own weather)."""
@@ -148,15 +298,10 @@ def _westreach_ambience(con, state: GameState, view, ox: int, oy: int, t: float)
     xs = (ox + np.arange(vw, dtype=np.float32))[:, None]
     ys = (oy + np.arange(vh, dtype=np.float32))[None, :]
 
-    # Rain on hot rock: the whole reach steams — a thick, drifting white-out.
-    if state.weather in ("Rain", "Storm"):
-        mist = _hash01(np.floor(xs * 0.5 - t * 2.2), np.floor(ys * 0.5 + t * 0.4))
-        a = ((0.34 if state.weather == "Rain" else 0.46) + 0.30 * mist)[..., None]
-        grey = np.array([170.0, 173.0, 174.0], np.float32)
-        fgc = con.rgb["fg"][:vw, :vh].astype(np.float32)
-        bgc = con.rgb["bg"][:vw, :vh].astype(np.float32)
-        con.rgb["fg"][:vw, :vh] = (fgc * (1 - a) + grey * a).astype(np.uint8)
-        con.rgb["bg"][:vw, :vh] = (bgc * (1 - a * 0.7) + grey * 0.55 * a).astype(np.uint8)
+    # Rain on the caldera flashes to steam: a thick column boils off the vent,
+    # and blobs of it keep detaching and drifting across the reach on their own
+    # headings (see _steam) — so cloud banks roam even where no lava is in view.
+    _steam(con, state, view, ox, oy, t, vw, vh, xs, ys)
 
     # Ashfall: on snow-weather days (it never snows white here) and on the
     # mountain's own restless days, grey flakes sift down the view.
@@ -470,9 +615,9 @@ def render_world(con: tcod.console.Console, state: GameState, anim_time: float =
                 col = (250, 240, 170)
             _draw(sx, sy, a.glyph, col)
 
-    # Westreach ambience: rain boils off the mountain as blinding steam, ash
-    # sifts down on still days, and now and then the caldera spits a (harmless,
-    # glorious) fountain of sparks.
+    # Westreach ambience: rain boils off the caldera as clouds of steam that
+    # blow downwind, ash sifts down on still days, and now and then the caldera
+    # spits a (harmless, glorious) fountain of sparks.
     if state.west is not None and w is state.west:
         _westreach_ambience(con, state, view, ox, oy, t)
 
@@ -522,6 +667,12 @@ def render_panel(con: tcod.console.Console, state: GameState) -> None:
     _bar(con, x, 8, "✦ Stamina", p.energy, p.max_energy, C.ENERGY_COLOR,
          low_frac=C.LOW_ENERGY_FRAC)
     con.print(x, 11, f"⛁ Gold  {p.gold}g", fg=C.GOLD_COLOR)
+    from ..game import encumbrance as enc
+    load, cap, etier = enc.carried_weight(state), enc.capacity(state), enc.tier(state)
+    load_fg = (C.WHITE, C.WARN_COLOR, C.DANGER_COLOR)[etier]
+    label = enc.TIER_LABEL[etier]
+    con.print(x, 12, f"⚖ Load {load:.0f}/{cap:.0f}{'  ' + label if label else ''}"[:C.PANEL_W - 2],
+              fg=load_fg)
     from ..game import skills
     b = skills.active_buff(state)
     if b:
@@ -536,7 +687,12 @@ def render_panel(con: tcod.console.Console, state: GameState) -> None:
         con.print(x, 14, f"★ {DEMAND_KINDS[d['kind']].title()} +{pct}%"[:C.PANEL_W - 2],
                   fg=(232, 200, 120))
 
-    # --- hotbar (keys 1-9) ---
+    # What Space/g would do on the tile you're facing — a live action preview.
+    hint = facing_hint(state)
+    if hint:
+        con.print(x, 15, f"▸ {hint}"[:C.PANEL_W - 2], fg=(150, 200, 160))
+
+    # --- hotbar (keys 1-9, 0) ---
     tool = p.active_tool
     if tool is items.SEED_POUCH:
         active_label = p.active_seed.name if p.active_seed else "Seed Pouch"
@@ -553,17 +709,17 @@ def render_panel(con: tcod.console.Console, state: GameState) -> None:
             seed = p.active_seed
             nm = seed.name if seed else "Seeds"
             cnt = f"[{p.inventory.count(seed)}]" if seed else "[0]"
-            name = f"{i + 1} {nm}"[:C.PANEL_W - 3 - len(cnt)]
+            name = f"{(i + 1) % 10} {nm}"[:C.PANEL_W - 3 - len(cnt)]
             con.print(x, yy, name, fg=fg, bg=rowbg)
             con.print(x0 + C.PANEL_W - 1 - len(cnt), yy, cnt, fg=fg, bg=rowbg)
         elif it.stackable:
             # right-align the carried amount, e.g.  "6 Parsnip Seeds  [15]"
             cnt = f"[{p.inventory.count(it)}]"
-            name = f"{i + 1} {p.display_name(it)}"[:C.PANEL_W - 3 - len(cnt)]
+            name = f"{(i + 1) % 10} {p.display_name(it)}"[:C.PANEL_W - 3 - len(cnt)]
             con.print(x, yy, name, fg=fg, bg=rowbg)
             con.print(x0 + C.PANEL_W - 1 - len(cnt), yy, cnt, fg=fg, bg=rowbg)
         else:
-            con.print(x, yy, f"{i + 1} {p.display_name(it)}"[:C.PANEL_W - 3], fg=fg, bg=rowbg)
+            con.print(x, yy, f"{(i + 1) % 10} {p.display_name(it)}"[:C.PANEL_W - 3], fg=fg, bg=rowbg)
     row = 18 + len(p.hotbar) + 1            # a blank spacer below the hotbar
     if p.weapon:
         con.print(x, row, f"⚔ {p.weapon.name}"[:C.PANEL_W - 2], fg=C.DIM)
@@ -678,6 +834,52 @@ def render_facing(con: tcod.console.Console, state: GameState) -> None:
         if ok:
             color = C.TARGET_OK
     con.rgb["bg"][sx, sy] = color
+
+
+_TOOL_VERB = {
+    items.HOE: "till", items.WATERING_CAN: "water", items.AXE: "chop",
+    items.PICKAXE: "mine", items.MACHETE: "clear", items.FISHING_ROD: "fish",
+}
+
+
+def facing_hint(state: GameState) -> str:
+    """A one-line preview of what acting on the faced tile would do — so the
+    player learns the context verbs without opening Look mode every time."""
+    from ..game.actions import resolve_tool
+    p = state.player
+    w = state.world
+    tx, ty = p.x + p.facing[0], p.y + p.facing[1]
+    if not w.in_bounds(tx, ty):
+        return ""
+    plot = w.crops.get((tx, ty))
+    if plot is not None:
+        if plot.dead:
+            return "g: clear withered crop"
+        if plot.mature:
+            return f"g: harvest {plot.crop.name.lower()}"
+        days = max(0, plot.crop.days_to_mature - plot.days_grown)
+        return f"{plot.crop.name.lower()}: ~{days}d ripe{'' if plot.watered else ', dry'}"
+    tree = w.trees.get((tx, ty))
+    if tree is not None and tree.mature and tree.has_fruit:
+        return f"g: pick {tree.fruit.name.lower()}"
+    if (tx, ty) in w.machines:
+        from ..data.content import MACHINES
+        return f"g: use {MACHINES[w.machines[(tx, ty)].kind].name.lower()}"
+    t = w.tile_at(tx, ty)
+    named = {"bin": "b: ship goods", "notice_board": "g: read the board",
+             "bed": "s: sleep here", "chest": "g: open the chest",
+             "stairs": "> : descend", "dungeon_down": "> : enter"}
+    if t.kind in named:
+        return named[t.kind]
+    if t.name in named:
+        return named[t.name]
+    tool = p.active_tool
+    if tool is not None:
+        ok, _new, _msg = resolve_tool(tool, t)
+        if ok:
+            verb = _TOOL_VERB.get(tool, "cut" if tool.kind == "weapon" else "use")
+            return f"Space: {verb}"
+    return ""
 
 
 # --- Look mode ---------------------------------------------------------------
@@ -903,11 +1105,15 @@ def describe(state: GameState, x: int, y: int) -> str:
             return f"{poss}{name} — ripe! Harvest it with g{theft}."
         water = "watered" if plot.watered else "needs watering"
         fert = ", fertilised" if plot.fertilized else ""
-        return f"{poss}{name}, still growing ({water}{fert}){theft}."
+        days = max(0, plot.crop.days_to_mature - plot.days_grown)
+        when = "ripe tomorrow" if days <= 1 else f"~{days} days to ripe"
+        return f"{poss}{name}, still growing — {when} ({water}{fert}){theft}."
     tree = state.world.trees.get((x, y))
     if tree is not None:
         if not tree.mature:
-            return f"a young {tree.name.lower()} sapling, still growing."
+            td = max(0, tree.days_to_mature - tree.age)
+            return (f"a young {tree.name.lower()} sapling — "
+                    f"{'bears next season' if td <= 1 else f'~{td} days to bear'}.")
         if tree.has_fruit:
             return f"a {tree.name.lower()} tree, heavy with fruit — pick it (g){theft}."
         return f"a {tree.name.lower()} tree; bears fruit in {tree.season}."
@@ -1289,6 +1495,101 @@ def render_quit(con: tcod.console.Console, state: GameState) -> None:
     ]
     for i, (text, colour) in enumerate(rows):
         m.text(3, 2 + i, text, fg=colour)
+
+
+def render_intro(con: tcod.console.Console, state: GameState) -> None:
+    """The opening page shown when a new game begins — the premise and the
+    handful of controls a new farmer needs before their first morning."""
+    gold, key = (236, 226, 180), (150, 200, 230)
+    w = min(C.SCREEN_W - 2, 68)
+    h = min(C.SCREEN_H - 2, 27)
+    m = ui.Modal(con, w, h, "Hearthdelve — Hollowmere Vale")
+    y = 2
+    letter = [
+        "A letter, in a familiar hand:",
+        "",
+        "  \"The old farm in the Vale is yours now. The fields have gone",
+        "   to grass and the tools to rust, but the soil is good and the",
+        "   folk are kind. There's iron in the dark below, if you've the",
+        "   nerve for it. Make something of the place. — your grandfather\"",
+    ]
+    for ln in letter:
+        m.text(3, y, ln, fg=gold if ln.startswith("A letter") else C.DIM)
+        y += 1
+    y += 1
+    for ln in (
+        "By day, work the surface: till and plant, tend your beasts, chop",
+        "and forage, and turn the harvest into goods worth trading.",
+        "By dark, delve the dungeons below for ore, gems and coin — but",
+        "mind the depth; it tires you, and it bites.",
+        "Sell and gift it all back to the villages, and grow.",
+    ):
+        m.text(3, y, ln, fg=C.WHITE)
+        y += 1
+    y += 1
+    m.text(3, y, "The essentials", fg=gold)
+    y += 1
+    for k, v in (
+        ("Arrows / numpad", "move  (numpad 7 9 1 3 step diagonally)"),
+        ("Space", "use the held tool on the tile you face"),
+        ("g", "gather · harvest · open · interact"),
+        ("1–9, 0", "pick a tool or seed     ·   s   sleep, end the day"),
+        ("c  ·  b", "craft & build      ·   ship goods to sell"),
+        ("l · Shift+C · f", "look · talk & shop · give a gift"),
+        ("?", "the codex — full help, any time"),
+    ):
+        m.text(4, y, k, fg=key)
+        m.text(4 + 18, y, v, fg=C.DIM)
+        y += 1
+    m.footer("Press any key to step onto the farm")
+
+
+def render_storage(con: tcod.console.Console, state: GameState, side: str, sel: int) -> None:
+    """Two columns — your pack on the left, the home chest on the right — with
+    the active side's selection marked. Stored goods weigh nothing on your back."""
+    from ..game import skills
+    pack = state.player.inventory.slots
+    store = state.storage.slots
+    w = 66
+    body = min(C.SCREEN_H - 7, max(6, len(pack), len(store)))
+    m = ui.Modal(con, w, body + 5, "Storage Chest")
+    colw = (w - 5) // 2
+    x_pack, x_store = 2, 3 + colw
+    apack = side == "pack"
+    m.text(x_pack, 1, "YOUR PACK" + ("  ◂ on your back" if apack else ""),
+           fg=ui.HDR if apack else C.DIM)
+    m.text(x_store, 1, "CHEST" + ("  ◂ stored, weightless" if not apack else ""),
+           fg=ui.HDR if not apack else C.DIM)
+
+    def draw(slots, x0, active):
+        if not slots:
+            m.text(x0, 3, "(empty)", fg=C.DIM)
+            return
+        start, end = ui.window(sel, len(slots), body) if active else (0, min(len(slots), body))
+        for r, (it, q, ql) in enumerate(slots[start:end]):
+            selrow = active and (start + r) == sel
+            cnt = f"x{q}" + ((" " + skills.stars(ql)) if ql else "")
+            fg = C.WHITE if selrow else ((210, 208, 196) if active else C.DIM)
+            m.text(x0, 3 + r, (ui.cur(selrow) if active else "  ") + it.name[:colw - len(cnt) - 3],
+                   fg=fg)
+            m.text(x0 + colw - len(cnt), 3 + r, cnt, fg=fg)
+
+    draw(pack, x_pack, apack)
+    draw(store, x_store, not apack)
+    m.footer("↑↓ pick · ←→/Tab switch · Enter move · Space stow all · Esc close")
+
+
+def render_confirm(con: tcod.console.Console, state: GameState,
+                   title: str, prompt: str, detail: str = "") -> None:
+    """A small yes/no prompt for an action that can't easily be undone."""
+    lines = [prompt] + ([detail] if detail else [])
+    w = min(C.SCREEN_W - 4, max(40, max(len(s) for s in lines) + 6))
+    m = ui.Modal(con, w, 6 + (1 if detail else 0), title)
+    m.text(3, 2, prompt, fg=C.WHITE)
+    if detail:
+        m.text(3, 3, detail, fg=(232, 200, 120))
+    m.text(3, 4 + (1 if detail else 0), "[Y] / [Enter]  yes      [N] / [Esc]  no",
+           fg=(180, 230, 160))
 
 
 _HDR = ui.HDR
@@ -1690,8 +1991,13 @@ def render_inventory(con: tcod.console.Console, state: GameState, sel: int = 0) 
     w, h = 62, min(C.SCREEN_H - 2, max(9, len(rows) + 5))
     body = h - 4
     m = ui.Modal(con, w, h, "PACK")
+    from ..game import encumbrance as enc
     total = sum(q for _it, q, _ql in slots)
-    m.text(2, 1, f"Carrying {total} item(s)", fg=_CAP_FG)
+    etier = enc.tier(state)
+    lbl = f"  ({enc.TIER_LABEL[etier]})" if etier else ""
+    m.text(2, 1, f"Carrying {total} item(s)  ·  ⚖ {enc.carried_weight(state):.0f}/"
+                 f"{enc.capacity(state):.0f}{lbl}",
+           fg=(_CAP_FG, C.WARN_COLOR, C.DANGER_COLOR)[etier])
     gold = f"Gold: {state.player.gold}g"
     m.text(w - 2 - len(gold), 1, gold, fg=C.GOLD_COLOR)
 
@@ -2079,7 +2385,10 @@ def render_relationships(con: tcod.console.Console, state: GameState, scroll: in
         spot = village.scheduled_spot(n, hour, state.weather, state.season,
                                       state.day_of_season)
         where = _SPOT_LABEL.get(spot, "out and about")
-        lines.append((0, f" {n.glyph} {n.name:<14.14s}{hearts}   {where}", n.color))
+        prog = "" if n.hearts >= 10 else f" {n.friendship % 100:>2d}%"
+        tag = "  ✓ gift" if getattr(n, "gifted_today", False) else ""
+        lines.append((0, f" {n.glyph} {n.name:<13.13s}{hearts}{prog}{tag}   {where}"[:w - 2],
+                      n.color))
         lines.append((2, f"{n.village} · {n.bio}"[:w - 8], C.DIM))
         loves = ", ".join(it.name for it in n.loves) or "—"
         lines.append((2, f"loves: {loves}"[:w - 8], (220, 170, 170)))

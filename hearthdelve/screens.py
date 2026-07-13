@@ -168,7 +168,19 @@ class PlayScreen(Screen):
             ui.push(QuitScreen())
             return
         elif cmd == "move":
-            cmds.try_move(state, action[1], action[2])
+            dx, dy = action[1], action[2]
+            # First step off the western edge crosses into the lethal Westreach —
+            # confirm it once (state.west is still None), so a stray press at the
+            # map's edge can't drop a new farmer into volcano country.
+            if (state.west is None and state.world is state.surface
+                    and state.player.x + dx < 0):
+                ui.push(ConfirmScreen(
+                    "Cross into the Westreach?",
+                    "The pass leads to volcano country — hunted, and far from home.",
+                    lambda ui: cmds.try_move(ui.state, dx, dy),
+                    "The beasts there don't wait to be provoked."))
+            else:
+                cmds.try_move(state, dx, dy)
         elif cmd == "wait":
             turns.advance_time(state, C.MOVE_SECONDS)
         elif cmd == "slot":
@@ -208,7 +220,9 @@ class PlayScreen(Screen):
                                   "favours come and go.", C.DIM)
             else:
                 req = cmds.do_grab(state)
-                if isinstance(req, dict) and "load" in req:
+                if isinstance(req, dict) and "storage" in req:
+                    ui.push(StorageScreen())
+                elif isinstance(req, dict) and "load" in req:
                     ui.push(LoadMachineScreen({
                         "pos": req["load"], "options": req["options"],
                         "name": req["name"], "sel": 0,
@@ -467,11 +481,22 @@ class InventoryScreen(Screen):
             # Shift+D drops the whole stack (as the help page says).
             self.sel = min(self.sel, len(slots) - 1)
             it, q, ql = slots[self.sel]
-            state.player.inventory.remove(it, q, quality=ql)
-            state.log.add(f"You toss out {q} {it.name.lower()}." if q > 1
-                          else f"You toss out a {it.name.lower()}.", C.DIM)
-            if self.sel >= len(state.player.inventory.slots):
-                self.sel = max(0, len(state.player.inventory.slots) - 1)
+            if ql > 0 or getattr(it, "value", 0) >= 100:
+                ui.push(ConfirmScreen(
+                    "Toss it out?",
+                    f"Throw away {q} {it.name.lower()}?" if q > 1
+                    else f"Throw away the {it.name.lower()}?",
+                    lambda ui: self._do_drop(ui.state, it, q, ql),
+                    "It's starred or valuable — this can't be undone."))
+            else:
+                self._do_drop(state, it, q, ql)
+
+    def _do_drop(self, state, it, q, ql) -> None:
+        state.player.inventory.remove(it, q, quality=ql)
+        state.log.add(f"You toss out {q} {it.name.lower()}." if q > 1
+                      else f"You toss out a {it.name.lower()}.", C.DIM)
+        if self.sel >= len(state.player.inventory.slots):
+            self.sel = max(0, len(state.player.inventory.slots) - 1)
 
 
 class EquipmentScreen(Screen):
@@ -634,12 +659,66 @@ class ShipScreen(Screen):
         elif cmd == "move" and action[2] and sellable:
             self.sel = (self.sel + action[2]) % len(sellable)
         elif cmd == "use" and sellable:       # Space: empty the whole pack in
-            crafting.ship_all(state)
-            self.sel = 0
+            def _ship_all(ui):
+                crafting.ship_all(ui.state)
+                self.sel = 0
+            if any(e[2] > 0 or getattr(e[0], "value", 0) >= 200 for e in sellable):
+                ui.push(ConfirmScreen(
+                    "Ship everything?",
+                    f"Send all {len(sellable)} kinds of goods to the bin overnight?",
+                    _ship_all, "Some are starred or valuable — no taking them back."))
+            else:
+                _ship_all(ui)
         elif cmd == "confirm" and sellable:
             self.sel = min(self.sel, len(sellable) - 1)
             entry = sellable[self.sel]
             crafting.ship_item(state, entry[0], entry[2])
+
+
+class StorageScreen(Screen):
+    """The home chest: move stacks between your pack and storage. Stored goods
+    weigh nothing on your back (see game.encumbrance)."""
+
+    def __init__(self) -> None:
+        self.side = "pack"          # which column is active: "pack" | "store"
+        self.sel = 0
+
+    def _slots(self, ui: UI) -> list:
+        return (ui.state.player.inventory.slots if self.side == "pack"
+                else ui.state.storage.slots)
+
+    def render(self, ui: UI, con) -> None:
+        rendering.render_storage(con, ui.state, self.side, self.sel)
+
+    def handle(self, ui: UI, cmd: str, action: tuple) -> None:
+        state = ui.state
+        pack, store = state.player.inventory, state.storage
+        slots = self._slots(ui)
+        if cmd in ("cancel", "quit", "grab"):
+            ui.pop()
+        elif cmd == "swap" or (cmd == "move" and action[1]):      # Tab or ←/→ switch side
+            self.side = "store" if self.side == "pack" else "pack"
+            self.sel = 0
+        elif cmd == "move" and action[2] and slots:
+            self.sel = (self.sel + action[2]) % len(slots)
+        elif cmd == "confirm" and slots:
+            self.sel = min(self.sel, len(slots) - 1)
+            it, q, ql = slots[self.sel]
+            src, dst = (pack, store) if self.side == "pack" else (store, pack)
+            src.remove(it, q, quality=ql)
+            dst.add(it, q, quality=ql)
+            verb = "stow" if self.side == "pack" else "take out"
+            state.log.add(f"You {verb} {q} {it.name.lower()}." if q > 1
+                          else f"You {verb} the {it.name.lower()}.", C.DIM)
+            self.sel = min(self.sel, max(0, len(self._slots(ui)) - 1))
+        elif cmd == "use" and self.side == "pack":               # Space: stow the whole pack
+            n = sum(q for _it, q, _ql in pack.slots)
+            for it, q, ql in list(pack.slots):
+                pack.remove(it, q, quality=ql)
+                store.add(it, q, quality=ql)
+            if n:
+                state.log.add(f"You stow {n} goods in the chest.", C.DIM)
+            self.sel = 0
 
 
 class DialogueScreen(Screen):
@@ -730,8 +809,17 @@ class GiftScreen(Screen):
             self.sel = (self.sel + action[2]) % len(gifts)
         elif cmd == "confirm" and gifts:
             git, _gq, gql = gifts[min(self.sel, len(gifts) - 1)]
-            village.gift(state, self.npc, git, gql)
-            ui.close_overlays()
+
+            def _give(ui):
+                village.gift(ui.state, self.npc, git, gql)
+                ui.close_overlays()
+            if gql > 0 or getattr(git, "value", 0) >= 150:
+                ui.push(ConfirmScreen(
+                    "Give this gift?",
+                    f"Give {self.npc.name} your {git.name.lower()}?",
+                    _give, "It's starred or valuable."))
+            else:
+                _give(ui)
 
 
 class JournalScreen(Screen):
@@ -785,6 +873,53 @@ class LogScreen(Screen):
             ui.pop()
         elif cmd == "move" and action[2]:
             self.scroll = max(0, self.scroll - action[2])   # up = older
+
+
+class IntroScreen(Screen):
+    """The opening page for a new game — the premise and the core controls.
+    Any key steps onto the farm."""
+
+    def render(self, ui: UI, con) -> None:
+        rendering.render_intro(con, ui.state)
+
+    def on_raw(self, ui: UI, event) -> bool:
+        if isinstance(event, tcod.event.KeyDown):
+            ui.pop()
+            return True
+        return False
+
+
+class ConfirmScreen(Screen):
+    """A yes/no gate for an action that can't easily be undone. ``on_yes(ui)``
+    runs on confirm; either way the prompt closes."""
+
+    def __init__(self, title: str, prompt: str, on_yes, detail: str = "") -> None:
+        self.title, self.prompt, self.on_yes, self.detail = title, prompt, on_yes, detail
+
+    def render(self, ui: UI, con) -> None:
+        rendering.render_confirm(con, ui.state, self.title, self.prompt, self.detail)
+
+    def _yes(self, ui: UI) -> None:
+        ui.pop()
+        self.on_yes(ui)
+
+    def on_raw(self, ui: UI, event) -> bool:
+        if isinstance(event, tcod.event.KeyDown):
+            s = int(event.sym)
+            ch = chr(s).lower() if 0x20 <= s <= 0x7E else ""
+            if ch == "y":
+                self._yes(ui)
+                return True
+            if ch == "n":
+                ui.pop()
+                return True
+        return False
+
+    def handle(self, ui: UI, cmd: str, action: tuple) -> None:
+        if cmd == "confirm":
+            self._yes(ui)
+        elif cmd in ("cancel", "quit", "quitgame"):
+            ui.pop()
 
 
 class QuitScreen(Screen):

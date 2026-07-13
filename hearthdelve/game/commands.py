@@ -142,6 +142,27 @@ def _finish_busy(state: GameState, b: dict) -> None:
         land.penalize(state, b["tx"], b["ty"], "growth")
 
 
+def _apply_walk(state: GameState, on_road: bool) -> None:
+    """Spend the time and stamina of one step, scaled by how laden you are.
+
+    Time always advances (a heavy pack slows you everywhere, so monsters get
+    their turns). Stamina is spent only above ground — roads and a Brisk meal
+    still spare you the *base* footfall, but the weight of a real haul tells on
+    you even on a good road (see game.encumbrance)."""
+    from . import encumbrance as enc
+    ratio = enc.load_ratio(state)
+    base_time = C.ROAD_MOVE_SECONDS if on_road else C.MOVE_SECONDS
+    turns.advance_time(state, max(1, round(base_time * enc.time_mult(ratio))))
+    if state.world.is_dungeon:
+        return
+    brisk = skills.active_buff(state) == "brisk"
+    base = 0.0 if (on_road or brisk) else float(C.WALK_STAMINA)
+    load = enc.load_stamina(ratio) * (0.6 if on_road else 1.0)   # roads carry easier
+    cost = int(round(base + load))
+    if cost:
+        state.player.energy = max(0, state.player.energy - cost)
+
+
 def try_move(state: GameState, dx: int, dy: int) -> None:
     p = state.player
     p.facing = (dx, dy)
@@ -169,12 +190,8 @@ def try_move(state: GameState, dx: int, dy: int) -> None:
     if state.world.walkable(nx, ny):
         p.x, p.y = nx, ny
         _scoop_gold(state)                                      # scoop up a gold pile
-        on_road = _is_road(state, nx, ny)                       # roads/bridges/cobble: fast & effortless
-        turns.advance_time(state, C.ROAD_MOVE_SECONDS if on_road else C.MOVE_SECONDS)
-        # roads are effortless, you don't tire underground, and a Brisk meal
-        # keeps you fresh afoot
-        if not on_road and not state.world.is_dungeon and skills.active_buff(state) != "brisk":
-            p.energy = max(0, p.energy - C.WALK_STAMINA)
+        on_road = _is_road(state, nx, ny)                       # roads/bridges/cobble: fast & easy
+        _apply_walk(state, on_road)                             # time + stamina, scaled by load
         if state.world.is_dungeon:
             delve.update_fov(state)
             _dungeon_tile_fx(state)
@@ -1096,7 +1113,7 @@ def run_step(state: GameState, ctx: dict) -> bool:
             return False
         p.x, p.y = nx, ny
         ctx["d"] = ndir
-        turns.advance_time(state, C.ROAD_MOVE_SECONDS)
+        _apply_walk(state, True)
         ctx["steps"] += 1
         note = _notable_nearby(state, ctx["ack"])
         if ctx["steps"] >= RUN_MAX_TILES:
@@ -1119,9 +1136,7 @@ def run_step(state: GameState, ctx: dict) -> bool:
         ctx["stop"] = f"You stop — {_blocker_name(state, nx, ny)} is in the way."
         return False
     p.x, p.y = nx, ny
-    turns.advance_time(state, C.MOVE_SECONDS)
-    if not state.world.is_dungeon and skills.active_buff(state) != "brisk":
-        p.energy = max(0, p.energy - C.WALK_STAMINA)
+    _apply_walk(state, False)
     if state.world.is_dungeon:
         delve.update_fov(state)
         _scoop_gold(state)                             # grab gold we ran over

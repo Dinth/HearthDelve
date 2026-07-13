@@ -40,6 +40,7 @@ def new_game(seed: int = 1337) -> GameState:
     state.log.add("Space uses the active tool. ? for help, l to look, g to gather.", C.DIM)
     state.log.add("Visit Mossford (SE) & Cinderhope (SW): Shift+C to talk/shop, f to gift.", C.DIM)
     state.log.add("Villagers pin favours to the ‡ notice board on each square — g to read.", C.DIM)
+    state.intro_pending = True     # a fresh game opens on the intro page (see main)
     return state
 
 
@@ -108,6 +109,9 @@ def main() -> None:
         music.start()
 
         ui = screens.UI(state, music)
+        if getattr(state, "intro_pending", False):
+            state.intro_pending = False
+            ui.push(screens.IntroScreen())
         konami: list = []        # rolling buffer of recent keys
         start = time.perf_counter()
         while ui.running:

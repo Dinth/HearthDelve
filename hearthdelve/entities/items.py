@@ -19,6 +19,9 @@ class Item:
     value: int = 0       # base sell price (0 = not sellable)
     energy: int = 0      # stamina restored when eaten (food dishes)
     heal: int = 0        # HP restored when used (remedies like the sulphur salve)
+    weight: float = 0.0  # carried weight per unit; 0 = use the kind default
+                         # (see game.encumbrance.weight_of) — a haul of ore or
+                         # bars weighs you down, a pouch of seeds barely at all
     buff: str = ""       # a temporary boon granted on eating (see skills.BUFFS)
     family: str = ""     # groups per-source artisan goods (all jams share "jam")
                          # so NPC gift tastes & the like match any variant
@@ -176,6 +179,10 @@ SLIME_GEL     = Item("Slime Gel",     "*", "material", "Sticky residue from a ca
 BAT_WING      = Item("Bat Wing",      "~", "material", "A leathery wing from a cave bat.",         value=20)
 BOAR_HIDE     = Item("Boar Hide",     "u", "material", "Tough hide from a wild boar; tans into leather armour.", value=40)
 WOLF_PELT     = Item("Wolf Pelt",     "u", "material", "A thick grey pelt from an ash wolf; makes a fine hide cloak.", value=60)
+RAW_HIDE      = Item("Raw Hide",      "u", "material", "A raw skin from a wild beast; cure it on a tanning rack.", value=28)
+LEATHER       = Item("Leather",       "u", "material", "Supple tanned leather — for armour, satchels and tack.", value=60)
+ANTLER        = Item("Antler",        "Y", "material", "A handsome branched antler; prized for buttons and glue.", value=45)
+VENISON       = Item("Venison",       "▬", "material", "Lean deer meat; makes a rich pie or stew.", value=80, family="meat")
 # Alchemical minerals from dungeon deposits — powder, fertiliser & curing salt.
 SULPHUR     = Item("Sulphur",     "▪", "material", "Brimstone-yellow crystals from a hot seam.", value=30)
 SALTPETER   = Item("Saltpeter",   "▪", "material", "White nitre crust — powder, fertiliser or curing salt.", value=35)

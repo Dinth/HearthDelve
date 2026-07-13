@@ -576,6 +576,22 @@ def collapse(state: GameState, reason: str) -> None:
 
 def _announce_morning(state: GameState) -> None:
     state.log.add(f"{state.date_str()} — {state.weather}.", (236, 226, 180))
+    # A one-line dawn tally of what's ready, so a farm that sprawls across the
+    # map doesn't need a manual patrol to find finished goods and produce.
+    surf = state.surface
+    if surf is not None:
+        now = state.abs_minutes
+        done = sum(1 for mm in surf.machines.values()
+                   if mm.loaded_output is not None and now >= mm.ready_at)
+        from .husbandry import _is_adult
+        produce = sum(1 for a in surf.animals if a.produce_ready and _is_adult(a))
+        bits = []
+        if done:
+            bits.append(f"{done} machine{'s' if done != 1 else ''} finished")
+        if produce:
+            bits.append(f"{produce} animal{'s' if produce != 1 else ''} with produce")
+        if bits:
+            state.log.add("Ready around the farm: " + ", ".join(bits) + ".", (200, 220, 160))
     fest = content.festival_on(state.season, state.day_of_season)
     if fest is not None:
         state.log.add(f"Today is {fest[1]}! The village gathers in the square.",

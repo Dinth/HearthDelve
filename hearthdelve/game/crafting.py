@@ -257,6 +257,9 @@ def interact_machine(state: GameState, x: int, y: int) -> bool:
         state.log.add("The sprinkler waters the soil around it each morning.", C.DIM)
         return True
 
+    if m.kind == "chest":
+        return {"storage": True}          # a home store — the player opens the chest UI
+
     if m.kind == "jeweller":
         # The bench works instantly (like a workbench): always offer its choices.
         opts = machine_load_options(state, mdef)
@@ -309,6 +312,7 @@ def _needs_hint(mdef) -> str:
         "jewelcraft": "The jeweller's bench needs a metal bar + a cut gem, or gear + a cut gem to embed.",
         "mill":  "The mill grinds grain into flour, cane into sugar, or salt lumps into sea salt.",
         "smoke": "The smoker cures meat into jerky, or fish into smoked fish.",
+        "hide":  "The tanning rack cures raw hides, boar hides & wolf pelts into leather.",
         "fiber": "The spinning wheel needs wool, cotton, flax or spider silk.",
         "weave": "The loom needs yarn to weave into cloth, or cloth to tailor into garments.",
         "wood":  "The sawmill needs at least 2 wood.",
@@ -423,6 +427,11 @@ def machine_load_options(state: GameState, mdef) -> list:
             opts.append({"inputs": [(items.PORK, 1), (items.SALTPETER, 1)],
                          "output": items.CURED_HAM, "quality_from": items.PORK,
                          "minutes": 1440})              # a full day in the smoke
+    elif a == "hide":
+        for hide in (items.RAW_HIDE, items.BOAR_HIDE, items.WOLF_PELT):
+            if inv.count(hide) >= 1:
+                opts.append({"inputs": [(hide, 1)], "output": items.LEATHER,
+                             "quality_from": None, "label": f"{hide.name} → Leather"})
     elif a == "fiber":
         for src, out in content.SPIN_RECIPES.items():
             if inv.count(src) >= 1:

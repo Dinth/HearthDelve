@@ -19,6 +19,7 @@ import tcod.noise
 from . import tile
 from .gamemap import GameMap
 from ..engine import constants as C
+from ..entities.machine import Machine
 from ..data import content
 
 # The generic map-building mechanisms live in worldlib (shared with westgen
@@ -1116,6 +1117,12 @@ def _carve_homestead(gm: GameMap, seed: int) -> None:
     bed = (hx + 1, hy + 1)
     t[bed] = tile.BED
     gm.bed = bed
+
+    # A storage chest in the corner of the farmhouse — a place to stash a haul
+    # so you're not carrying your whole life (see game.encumbrance).
+    chest = (hx + hw - 2, hy + 1)
+    if gm.in_bounds(*chest) and t[chest] == tile.HOUSE_FLOOR:
+        gm.machines[chest] = Machine(kind="chest")
 
     # 3. shipping bin just outside the door, and a post box on the other side
     bin_pos = (door[0] + 1, door[1] + 1)

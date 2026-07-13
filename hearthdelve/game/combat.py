@@ -41,6 +41,13 @@ def _on_kill(state: GameState, m, award_combat: bool = True) -> None:
             from . import karma
             karma.adjust(state, -2)  # slaying a peaceful creature is unkind
         state.log.add(f"You put down the {m.name.lower()}.", (200, 180, 150))
+        drops = content.wildlife_drops(m.name, random)
+        for drop, qty in drops:
+            p.inventory.add(drop, qty)
+        if drops:
+            got = ", ".join(f"{q} {d.name.lower()}" if q > 1 else d.name.lower()
+                            for d, q in drops)
+            state.log.add(f"  You take {got}.", (200, 180, 150))
     else:
         state.bump("monsters_slain")
         if award_combat:
