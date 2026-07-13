@@ -98,6 +98,23 @@ def _hash01(a, b):
     return v - np.floor(v)
 
 
+def _glow_from(view: np.ndarray, ids: tuple, rad: int, sigma2: float) -> np.ndarray:
+    """A soft radial glow field (0..1) pooled around every tile in `ids` — the
+    warm light a lamp, hearth, brazier or lava throws onto what's near it."""
+    glow = np.zeros(view.shape, np.float32)
+    for lx, ly in np.argwhere(np.isin(view, ids)):
+        x0, x1 = max(0, lx - rad), min(view.shape[0], lx + rad + 1)
+        y0, y1 = max(0, ly - rad), min(view.shape[1], ly + rad + 1)
+        sx = (np.arange(x0, x1) - lx)[:, None].astype(np.float32)
+        sy = (np.arange(y0, y1) - ly)[None, :].astype(np.float32)
+        bump = np.exp(-(sx * sx + sy * sy) / sigma2)
+        glow[x0:x1, y0:y1] = np.maximum(glow[x0:x1, y0:y1], bump)
+    return glow
+
+
+_DUNGEON_WARM_IDS = (tile.LAMP, tile.CAMPFIRE, tile.HEARTH, tile.LAVA)
+
+
 def _blur5(f: np.ndarray) -> np.ndarray:
     """A gentle 4-neighbour blur (weights .5 centre, .125 each side) that rubs
     out the hard cell-grid edges so steam reads as cloud, not squares."""
@@ -509,12 +526,33 @@ def render_world(con: tcod.console.Console, state: GameState, anim_time: float =
             bg = np.where(halo[..., None], np.minimum(255.0, bg + warm), bg)
 
     if w.is_dungeon and w.visible is not None:
-        # Fog of war: lit where visible, dim where explored, black otherwise.
+        from ..world.dungeon import FOV_RADIUS
+        # Torchlight, not a flat floodlight: bright at your feet, guttering out
+        # toward the edge of sight, with a gentle flicker — and lava, braziers,
+        # hearths and luminous caps throw their own pools of light. Explored-but-
+        # unseen ground keeps a dim, cool "from memory" glow.
         vis = w.visible[ox:ox + C.VIEW_W, oy:oy + C.VIEW_H]
         exp = w.explored[ox:ox + C.VIEW_W, oy:oy + C.VIEW_H]
-        light = np.where(vis, 1.0, np.where(exp, 0.32, 0.0)).astype(np.float32)
+        px, py = state.player.x - ox, state.player.y - oy
+        X = np.arange(C.VIEW_W, dtype=np.float32)[:, None]
+        Y = np.arange(C.VIEW_H, dtype=np.float32)[None, :]
+        d = np.sqrt((X - px) ** 2 + (Y - py) ** 2)
+        torch = 0.32 + 0.68 * np.clip(1.0 - d / (FOV_RADIUS + 1.0), 0.0, 1.0)
+        flicker = 0.94 + 0.06 * np.sin(t * 6.0 + X * 0.7 + Y * 0.5)
+        warm = _glow_from(view, _DUNGEON_WARM_IDS, rad=5, sigma2=10.0)
+        cool = _glow_from(view, (tile.GLOWCAP, tile.GLOW_MOSS), rad=3, sigma2=6.0)
+        litv = np.clip(torch * flicker + 0.65 * warm + 0.45 * cool, 0.0, 1.15)
+        light = np.where(vis, litv, np.where(exp, 0.30, 0.0)).astype(np.float32)
         fg *= light[..., None]
         bg *= light[..., None]
+        # Warm the lit near-field (torch + fire), cool the remembered dark.
+        warmth = np.where(vis, np.clip(torch + 0.8 * warm, 0.0, 1.0), 0.0)
+        for ch_i, cut in ((1, 0.08), (2, 0.24)):
+            fg[..., ch_i] *= (1.0 - cut * warmth)
+            bg[..., ch_i] *= (1.0 - cut * warmth)
+        mem = (exp & ~vis).astype(np.float32)          # seen before, dark now
+        fg[..., 0] *= (1.0 - 0.20 * mem)
+        bg[..., 0] *= (1.0 - 0.20 * mem)
     else:
         # Day/night light tint over the whole viewport.
         dr, dg, db = daylight_mul(state.time_minutes)
@@ -524,7 +562,8 @@ def render_world(con: tcod.console.Console, state: GameState, anim_time: float =
         # Lamp posts (and the woodcutters' campfire) cast a warm glow after dark.
         night = max(0.0, 1.0 - (dr + dg + db) / 3.0)
         if night > 0.06:
-            lamps = np.argwhere((view == tile.LAMP) | (view == tile.CAMPFIRE))
+            lamps = np.argwhere((view == tile.LAMP) | (view == tile.CAMPFIRE)
+                                | (view == tile.HEARTH))
             if len(lamps):
                 glow = np.zeros((C.VIEW_W, C.VIEW_H), np.float32)
                 rad = 4
