@@ -445,6 +445,21 @@ def render_world(con: tcod.console.Console, state: GameState, anim_time: float =
     fg *= fg_mul[..., None]
     bg *= bg_mul[..., None]
 
+    # Coastal foam: where water laps against land, a bright line that surges and
+    # recedes along the shore, so coasts read as living edges, not flat colour.
+    if not w.is_dungeon and water.any():
+        notw = ~water
+        adj = np.zeros_like(water)
+        adj[1:, :] |= notw[:-1, :]; adj[:-1, :] |= notw[1:, :]
+        adj[:, 1:] |= notw[:, :-1]; adj[:, :-1] |= notw[:, 1:]
+        shore = water & adj
+        if shore.any():
+            surge = np.clip(0.30 + 0.70 * np.sin((xs * 0.7 - ys * 0.5) - t * 2.6), 0.0, 1.0)
+            f = (shore.astype(np.float32) * surge)[..., None]
+            foam = np.array([224.0, 238.0, 246.0], np.float32)
+            fg = fg * (1.0 - f * 0.72) + foam * (f * 0.72)
+            bg = bg * (1.0 - f * 0.45) + foam * (f * 0.45)
+
     # Planted crops overlay (sparse — just the farm plots in view). Crops sit
     # on a fixed dark soil background so the glyph always has contrast, no
     # matter the terrain tint (damp soil reads a touch cooler/darker).
