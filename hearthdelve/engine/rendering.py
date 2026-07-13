@@ -840,10 +840,56 @@ def render_weather(con: tcod.console.Console, state: GameState, t: float, occupi
             con.rgb["fg"][cx, cy] = color
 
 
+def render_ambient(con: tcod.console.Console, state: GameState, t: float, occupied) -> None:
+    """Drifting seasonal motes over the surface — petals in spring, lazy pollen
+    (and fireflies after dark) in summer, tumbling leaves in autumn. Purely
+    atmospheric; skipped underground and when the weather already fills the air.
+    Winter is left to the snow in render_weather."""
+    if state.world.is_dungeon or state.weather in ("Rain", "Storm", "Snow", "Fog"):
+        return
+    vw, vh = C.VIEW_W, C.VIEW_H
+    season = state.season
+    dr, dg, db = daylight_mul(state.time_minutes)
+    night = (dr + dg + db) / 3.0 < 0.62
+
+    if season == "Spring":
+        specs, palette, driftx, drifty, glyphs, sway = (24, [(236, 186, 206), (232, 200, 214),
+            (222, 170, 196)], 0.8, 1.3, "·,'", 2.4)
+    elif season == "Summer" and night:
+        specs, palette, driftx, drifty, glyphs, sway = (20, [(190, 240, 130), (220, 236, 150)],
+            0.5, 0.4, "*·", 3.0)
+    elif season == "Summer":
+        specs, palette, driftx, drifty, glyphs, sway = (20, [(236, 224, 150), (226, 214, 140)],
+            0.6, 0.5, "·", 1.6)
+    elif season == "Fall":
+        specs, palette, driftx, drifty, glyphs, sway = (28, [(214, 150, 70), (206, 108, 50),
+            (190, 84, 62), (224, 188, 96)], 0.7, 2.2, "'°*,", 3.2)
+    else:                                    # Winter clear day: quiet, no motes
+        return
+
+    fireflies = season == "Summer" and night
+    for i in range(specs):
+        h1 = ((i * 2654435761) % 1000) / 1000.0
+        h2 = ((i * 40503 + 977) % 1000) / 1000.0
+        x = int((h1 * vw + t * (driftx + h2) + sway * math.sin(t * 0.7 + i)) % vw)
+        y = int((h2 * vh + t * (drifty + 1.4 * h1)) % vh)
+        if (x, y) in occupied:
+            continue
+        col = palette[i % len(palette)]
+        if fireflies:                        # blink on their own phase
+            b = 0.25 + 0.75 * max(0.0, math.sin(t * 2.2 + i * 1.7))
+            col = (int(col[0] * b), int(col[1] * b), int(col[2] * b))
+        else:
+            col = (int(col[0] * dr), int(col[1] * dg), int(col[2] * db))
+        con.rgb["ch"][x, y] = ord(glyphs[i % len(glyphs)])
+        con.rgb["fg"][x, y] = col
+
+
 def render_all(con: tcod.console.Console, state: GameState, anim_time: float = 0.0) -> None:
     con.clear(bg=C.BLACK)
     occupied = render_world(con, state, anim_time)
     render_weather(con, state, anim_time, occupied)
+    render_ambient(con, state, anim_time, occupied)
     render_panel(con, state)
     render_log(con, state)
 
