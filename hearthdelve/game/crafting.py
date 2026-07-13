@@ -209,6 +209,35 @@ def _place_machine(state: GameState, kind: str) -> bool:
 
 
 # --- machine interaction (load / collect) -----------------------------------
+def _grant_machine_xp(state: GameState, mdef, out, qty: int) -> None:
+    """The skill XP (and stat bumps) a machine's output earns — shared by the
+    collect path (passive machines) and the immediate resolve (active ones)."""
+    from . import skills
+    if mdef.kind in ("spinner", "loom"):
+        skills.gain(state, "Farming", 7)             # spinning & weaving; cloth garments too
+        if out.kind == "artisan":
+            state.bump("artisan_made")
+    elif out.kind in ("weapon", "armor"):
+        skills.gain(state, "Smithing", 12)           # forging hones the smith
+    elif out.kind == "gem":
+        skills.gain(state, "Gemcutting", 32)         # gems are scarce — each cut teaches much
+    elif mdef.kind in ("furnace", "kiln"):
+        skills.gain(state, "Smithing", 8)            # smelting & fuel-making, too
+    elif mdef.kind in ("quern", "windmill"):
+        skills.gain(state, "Cooking", 6)             # milling is kitchen work
+    elif mdef.kind == "oven":
+        skills.gain(state, "Cooking", 10)            # a batch bake is real kitchen work
+        state.bump("dishes_cooked", qty)
+    elif out.kind == "artisan":
+        state.bump("artisan_made")
+        skills.gain(state, "Cooking", 8)             # processing hones the craft
+
+
+# Stamina a stint at an active (worked-in-person) machine costs. Smithing is
+# heavier than the close bench-work of gem-cutting; both draw on the day's bar.
+_ACTIVE_STAMINA = {"anvil": 5, "gemcut": 3}
+
+
 def interact_machine(state: GameState, x: int, y: int) -> bool:
     m = state.world.machines.get((x, y))
     if m is None:
@@ -251,24 +280,7 @@ def interact_machine(state: GameState, x: int, y: int) -> bool:
         qty = max(1, m.out_qty)
         state.player.inventory.add(out, qty, quality=q)
         star = (" " + skills.stars(q)) if q else ""
-        if m.kind in ("spinner", "loom"):
-            skills.gain(state, "Farming", 7)         # spinning & weaving; cloth garments too
-            if out.kind == "artisan":
-                state.bump("artisan_made")
-        elif out.kind in ("weapon", "armor"):
-            skills.gain(state, "Smithing", 12)       # forging hones the smith
-        elif out.kind == "gem":
-            skills.gain(state, "Gemcutting", 32)     # gems are scarce — each cut teaches much
-        elif m.kind in ("furnace", "kiln"):
-            skills.gain(state, "Smithing", 8)        # smelting & fuel-making, too
-        elif m.kind in ("quern", "windmill"):
-            skills.gain(state, "Cooking", 6)         # milling is kitchen work
-        elif m.kind == "oven":
-            skills.gain(state, "Cooking", 10)        # a batch bake is real kitchen work
-            state.bump("dishes_cooked", qty)
-        elif out.kind == "artisan":
-            state.bump("artisan_made")
-            skills.gain(state, "Cooking", 8)         # processing hones the craft
+        _grant_machine_xp(state, mdef, out, qty)
         got = f"{qty}x {out.name}" if qty > 1 else out.name
         state.log.add(f"You collect {got}{star} from the {mdef.name.lower()}.", (180, 230, 160))
         m.loaded_output = None
@@ -510,22 +522,41 @@ def load_machine_choice(state: GameState, m: Machine, mdef, opt) -> None:
         if pfx or sfx:
             output = content.make_gear(content._GEAR_BASE[output], output.material, pfx, sfx,
                                        gems=output.gems)
-    m.loaded_output = output
-    m.out_qty = opt.get("out_qty", 1)
+    out_qty = opt.get("out_qty", 1)
     minutes = round(opt.get("minutes", mdef.minutes) * (skills.smith_speed_mult(state)
                     if mdef.kind in ("furnace", "anvil", "kiln") else 1.0))
-    m.ready_at = state.abs_minutes + max(1, minutes)
+    minutes = max(1, minutes)
     # Cut gems take their quality from the cutter's Gemcutting; other processed
     # goods inherit the input's quality nudged by the cook's skill.
     if skills.has_quality(output):
-        m.out_quality = (skills.roll_quality(state, "Gemcutting") if output.kind == "gem"
-                         else skills.process_quality(in_quality, state, "Cooking"))
+        out_quality = (skills.roll_quality(state, "Gemcutting") if output.kind == "gem"
+                       else skills.process_quality(in_quality, state, "Cooking"))
         if mdef.kind == "quern":                       # the hand-mill grinds a touch coarse
-            m.out_quality = max(0, m.out_quality - 1)
+            out_quality = max(0, out_quality - 1)
         # the oven bakes a touch finer than the pan
-        m.out_quality = min(5, m.out_quality + opt.get("quality_bonus", 0))
+        out_quality = min(5, out_quality + opt.get("quality_bonus", 0))
     else:
-        m.out_quality = 0
+        out_quality = 0
+
+    if getattr(mdef, "active", False):
+        # Worked in person: the smith/cutter finishes the piece here and now,
+        # spending the day's own time and stamina rather than leaving a timer.
+        from . import turns
+        state.player.inventory.add(output, out_qty, quality=out_quality)
+        _grant_machine_xp(state, mdef, output, out_qty)
+        state.player.energy = max(0, state.player.energy
+                                  - _ACTIVE_STAMINA.get(mdef.kind, C.CRAFT_COST[0]))
+        turns.advance_time(state, minutes * 60)
+        star = (" " + skills.stars(out_quality)) if out_quality else ""
+        got = f"{out_qty}x {output.name}" if out_qty > 1 else output.name
+        state.log.add(f"You work the {mdef.name.lower()} — {got}{star}. "
+                      f"(took {_fmt_remaining(minutes)})", (180, 230, 160))
+        return
+
+    m.loaded_output = output
+    m.out_qty = out_qty
+    m.ready_at = state.abs_minutes + minutes
+    m.out_quality = out_quality
     state.log.add(f"You load the {mdef.name.lower()} ({output.name}). Ready in {_fmt_remaining(minutes)}.")
 
 

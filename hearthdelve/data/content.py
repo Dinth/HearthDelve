@@ -1014,6 +1014,9 @@ class MachineDef:
     capacity: int = 0             # animal housing: how many beasts it holds
     houses: str = ""              # animal housing: which species ("chicken"|"cow")
     footprint: tuple = ()         # carpenter outbuilding size (w, h); () = 1-tile
+    active: bool = False          # True = the player works it here and now (spends
+                                  # the day's time + stamina), instead of loading it
+                                  # and leaving a timer to finish on its own
 
 
 MACHINES: dict[str, MachineDef] = {
@@ -1046,11 +1049,13 @@ MACHINES: dict[str, MachineDef] = {
     "site":       MachineDef("site", "Building Site", "▦", (176, 148, 104), 0, "",
                              None, "The carpenter's work, still going up."),
     "anvil":      MachineDef("anvil", "Anvil", "⚒", (196, 170, 150), 30, "bars",
-                             None, "Forge metal bars into weapons & armour of that metal."),
+                             None, "Forge metal bars into weapons & armour of that metal — "
+                                   "hot, hard work done at the anvil.", active=True),
     "kiln":       MachineDef("kiln", "Kiln", "Ө", (208, 120, 60), 90, "fuel",
                              None, "Chars wood into charcoal, or bakes coal into hot-burning coke."),
     "gemcut":     MachineDef("gemcut", "Gemcutting Station", "◈", (150, 200, 224), 60, "gem",
-                             None, "Facets rough gems into cut stones; cracks open geodes."),
+                             None, "Facets rough gems into cut stones; cracks open geodes — "
+                                   "close work done at the wheel.", active=True),
     "jeweller":   MachineDef("jeweller", "Jeweller's Bench", "⊛", (224, 200, 120), 60, "jewelcraft",
                              None, "Sets cut gems into rings & amulets, or embeds them into gear."),
     "quern":      MachineDef("quern", "Quern", "○", (180, 176, 168), 300, "mill",
