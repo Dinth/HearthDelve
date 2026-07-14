@@ -142,6 +142,22 @@ def road_path(gm: GameMap, a: tuple[int, int], b: tuple[int, int], reuse: bool =
         # otherwise draw a dead-straight line) — added only to already-passable
         # cells so it never lifts a built feature's 0 (impassable) cost.
         cost = np.where(cost > 0, cost + jit, 0).astype(np.int16)
+    if reuse:
+        # Merge, don't run parallel: the ground just beside an existing road is
+        # cheapened into a funnel, so a new road is drawn to converge onto the
+        # network and share a trunk rather than lay its own line alongside. The
+        # road itself stays cheaper still (reuse = 1), so the planner rides ON
+        # it, not beside it. Falls off with distance so the pull is local.
+        r = _ROADKIND_BY_ID[gm.tiles]
+        if r.any():
+            near = r.copy()
+            for lvl in range(3):                     # dilate 3 tiles out
+                s = near.copy()
+                s[1:, :] |= near[:-1, :]; s[:-1, :] |= near[1:, :]
+                s[:, 1:] |= near[:, :-1]; s[:, :-1] |= near[:, 1:]
+                new = s & ~near & (cost > 1)          # this ring, on paveable ground
+                cost[new] = np.minimum(cost[new], 2 + lvl)   # 2,3,4 by distance
+                near = s
     cost[a[0], a[1]] = cost[b[0], b[1]] = 1   # endpoints must be reachable
     graph = tcod.path.SimpleGraph(cost=cost, cardinal=_CARD, diagonal=_DIAG)
     pf = tcod.path.Pathfinder(graph)
