@@ -39,6 +39,26 @@ _TREE_IDS = np.array([tile.TREE_OAK, tile.TREE_MAPLE, tile.TREE_BIRCH, tile.TREE
                       tile.TREE_WILLOW, tile.TREE_PINE, tile.TREE_SPRUCE, tile.FOLIAGE])
 _WATER_IDS = np.array([tile.WATER, tile.RIVER])
 _ORE_IDS = np.array([tile.ORE_VEIN])
+
+
+def _biome_group(t) -> int:
+    """Coarse terrain family, for feathering seams between them. -1 = built or
+    special (roads, houses, lava…): those keep crisp edges."""
+    if t.kind == "water":
+        return 2
+    if t.kind == "sand" or t.name == "sand":
+        return 1
+    if t.kind == "tree":
+        return 3
+    if t.kind == "wall" or t.name in ("rock", "scree", "cliff", "ruins_wall"):
+        return 4
+    if t.kind in ("terrain", "soil", "foliage", "shrub", "shrub_berry", "flower",
+                  "mushroom", "moor", "marsh", "reeds"):
+        return 0
+    return -1
+
+
+_BIOME_BY_ID = np.array([_biome_group(t) for t in tile.TILES], dtype=np.int8)
 # gem glitter colours: red, blue, orange, green, white
 _GEM_PALETTE = np.array([[226, 84, 84], [92, 132, 232], [236, 150, 68],
                          [92, 202, 112], [236, 236, 236]], dtype=np.float32)
@@ -527,6 +547,23 @@ def render_world(con: tcod.console.Console, state: GameState, anim_time: float =
             drop = np.array([196.0, 222.0, 244.0], np.float32)
             fg = fg * (1.0 - rm * 0.6) + drop * (rm * 0.6)
             bg = bg * (1.0 - rm * 0.35) + drop * (rm * 0.35)
+
+    # Biome-edge dither: soften the hard seam between terrain families (grass ↔
+    # sand ↔ water ↔ forest ↔ rock) by mixing a neighbour's colour into a
+    # dithered half of the boundary cells, so borders feather instead of drawing
+    # a hard line. Built tiles (group -1) keep crisp edges.
+    grp = _BIOME_BY_ID[view]
+    checker = ((xs.astype(np.int32) + ys.astype(np.int32)) % 2).astype(bool)
+    for (dx, dy), take in (((1, 0), checker), ((0, 1), ~checker)):
+        ng = np.full_like(grp, -1)
+        nb = bg.copy()
+        if dx:
+            ng[:-1, :] = grp[1:, :]; nb[:-1, :] = bg[1:, :]
+        else:
+            ng[:, :-1] = grp[:, 1:]; nb[:, :-1] = bg[:, 1:]
+        seam = (grp != ng) & (grp >= 0) & (ng >= 0) & take
+        m = (seam.astype(np.float32) * 0.38)[..., None]
+        bg = bg * (1.0 - m) + nb * m
 
     # Planted crops overlay (sparse — just the farm plots in view). Crops sit
     # on a fixed dark soil background so the glyph always has contrast, no
