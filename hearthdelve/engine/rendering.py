@@ -1020,12 +1020,54 @@ def render_fire(con: tcod.console.Console, state: GameState, t: float, occupied)
                     con.rgb["fg"][sx, sy] = (g, g, max(0, g - 12))
 
 
+def render_crossings(con: tcod.console.Console, state: GameState, t: float, occupied) -> None:
+    """Occasional life crossing the view: a small flock of birds sweeping over
+    by day, butterflies fluttering on clear spring & summer afternoons. Purely
+    atmospheric, on long drifting cycles so it feels happened-upon, not timed."""
+    if state.world.is_dungeon:
+        return
+    vw, vh = C.VIEW_W, C.VIEW_H
+    dr, dg, db = daylight_mul(state.time_minutes)
+    daytime = (dr + dg + db) / 3.0 > 0.72                 # excludes the blue of deep night
+
+    if daytime and state.weather != "Storm":              # birds shelter in storms
+        for f in range(2):
+            per = 34.0 + 14.0 * _h1(f, 2.0)               # a flyover every ~34–48s…
+            phase = t / per + _h1(f, 5.0)
+            cyc = math.floor(phase)
+            frac = phase - cyc
+            if frac > 0.40:                               # …on-screen only while crossing
+                continue
+            travel = frac / 0.40
+            rightward = _h1(f * 7 + cyc, 3.0) < 0.5
+            headx = int(-4 + travel * (vw + 8)) if rightward else int(vw + 4 - travel * (vw + 8))
+            row = int(2 + _h1(f * 7 + cyc, 9.0) * (vh * 0.45))
+            flap = "v" if int(t * 6) % 2 else "^"
+            for b in range(3 + int(_h1(f * 7 + cyc, 1.0) * 3)):   # a loose 3–5 bird V
+                bx = headx - (1 if rightward else -1) * b * 2
+                by = row + ((b + 1) // 2) * (-1 if b % 2 else 1)
+                by += int(round(0.5 * math.sin(t * 1.5 + b)))
+                if 0 <= bx < vw and 0 <= by < vh and (bx, by) not in occupied:
+                    con.rgb["ch"][bx, by] = ord(flap)
+                    con.rgb["fg"][bx, by] = (64, 60, 70)          # a dark silhouette
+
+    if state.season in ("Spring", "Summer") and state.weather == "Clear" and daytime:
+        for i in range(4):
+            bx = int((_h1(i, 3.0) * vw + 9 * math.sin(t * 0.7 + i) + t * 2.0 * (_h1(i, 4.0) - 0.5)) % vw)
+            by = int((_h1(i, 7.0) * vh + 6 * math.sin(t * 1.1 + i * 2.0)) % vh)
+            if (bx, by) in occupied:
+                continue
+            con.rgb["ch"][bx, by] = ord("*" if int(t * 4 + i) % 2 else "x")
+            con.rgb["fg"][bx, by] = (236, 228, 150) if i % 2 else (240, 200, 220)
+
+
 def render_all(con: tcod.console.Console, state: GameState, anim_time: float = 0.0) -> None:
     con.clear(bg=C.BLACK)
     occupied = render_world(con, state, anim_time)
     render_weather(con, state, anim_time, occupied)
     render_ambient(con, state, anim_time, occupied)
     render_fire(con, state, anim_time, occupied)
+    render_crossings(con, state, anim_time, occupied)
     render_panel(con, state)
     render_log(con, state)
 
