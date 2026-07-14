@@ -162,6 +162,22 @@ def daylight_mul(time_minutes: int) -> tuple[float, float, float]:
     return (1.0, 1.0, 1.0)
 
 
+def sun_shadow(time_minutes: int):
+    """The sun's cast-shadow this minute: (dir_x, dir_y, length, strength). The
+    sun rises in the east and sets in the west, so shadows sweep from west
+    (dawn) to east (dusk) and stretch long near the horizon, short at noon.
+    Returns None while the sun is down (night lighting takes over)."""
+    f = (time_minutes % 1440) / 1440.0
+    midday, span = 0.55, 0.30                 # ~13:12; daylight roughly 05:40–21:40
+    elev = 1.0 - abs(f - midday) / span
+    if elev <= 0.04:
+        return None
+    dir_x = max(-1.0, min(1.0, (f - midday) / span))   # -1 dawn (west) → +1 dusk (east)
+    length = int(round(1 + (1.0 - elev) * 4))          # 1 at noon … 5 near horizon
+    strength = 0.18 + 0.30 * (1.0 - elev)              # faint at noon, long & soft at the edges
+    return dir_x, 0.35, length, strength
+
+
 _WEATHER_ICON = {
     "Clear": ("☀", (245, 214, 110)),
     "Rain":  ("☂", (150, 180, 225)),
@@ -392,6 +408,23 @@ def render_world(con: tcod.console.Console, state: GameState, anim_time: float =
     shade = np.where(~_OCCLUDER_BY_ID[view], 1.0 - 0.34 * ao, 1.0).astype(np.float32)
     bg *= shade[..., None]
     fg *= (0.45 + 0.55 * shade)[..., None]              # glyphs dim less than their cell
+
+    # --- Directional sun shadow: walls, trees & buildings throw a soft shadow
+    # away from the sun — long and westward at dawn, short at noon, long and
+    # eastward at dusk — so the surface has a moving sense of time and relief.
+    if not w.is_dungeon:
+        sun = sun_shadow(state.time_minutes)
+        if sun is not None:
+            dxs, dys, slen, sstr = sun
+            cast = np.zeros_like(solid)
+            for k in range(1, slen + 1):
+                fade = 1.0 - (k - 1) / slen
+                cast = np.maximum(cast, _shift2d(solid, int(round(k * dxs)),
+                                                 int(round(k * dys))) * fade)
+            cast *= (~_OCCLUDER_BY_ID[view]).astype(np.float32)   # only ground takes shadow
+            sh = 1.0 - sstr * cast
+            bg *= sh[..., None]
+            fg *= (0.55 + 0.45 * sh)[..., None]
 
     fg_mul = np.ones((C.VIEW_W, C.VIEW_H), dtype=np.float32)
     bg_mul = np.ones((C.VIEW_W, C.VIEW_H), dtype=np.float32)
