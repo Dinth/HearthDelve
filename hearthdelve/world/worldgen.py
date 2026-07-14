@@ -60,7 +60,7 @@ REG_FOREST, REG_MARSH, REG_HILLS, REG_PLAINS = 0, 1, 2, 3
 # Peak extra cost the road-meander ripple adds to open ground. Small next to the
 # terrain spread (easy 4 → scree 12) so it nudges a road to wander without ever
 # overriding its instinct to hug gentle land and skirt crags.
-_ROAD_MEANDER = 2.2
+_ROAD_MEANDER = 0.6
 
 
 def _wildness(w: int, h: int, seed: int) -> np.ndarray:
