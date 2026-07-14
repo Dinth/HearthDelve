@@ -499,6 +499,35 @@ def render_world(con: tcod.console.Console, state: GameState, anim_time: float =
             fg = fg * (1.0 - f * 0.72) + foam * (f * 0.72)
             bg = bg * (1.0 - f * 0.45) + foam * (f * 0.45)
 
+    # Rain wets the world: cool, darkened puddles drift across open ground, and
+    # ripple rings spread where drops strike open water.
+    if not w.is_dungeon and state.weather in ("Rain", "Storm"):
+        wet = _hash01(np.floor(xs * 0.33 - t * 0.12), np.floor(ys * 0.33 + t * 0.09))
+        puddle = (wet > 0.60) & _TEX_BY_ID[view]                 # only open ground pools
+        if puddle.any():
+            for ci, mul in ((0, 0.70), (1, 0.80), (2, 0.98)):    # darker, cooler (blue kept)
+                fac = np.where(puddle, mul, 1.0)
+                fg[..., ci] *= fac
+                bg[..., ci] *= fac
+        if water.any():
+            X = np.arange(C.VIEW_W, dtype=np.float32)[:, None]
+            Y = np.arange(C.VIEW_H, dtype=np.float32)[None, :]
+            rings = np.zeros((C.VIEW_W, C.VIEW_H), np.float32)
+            drops = 10 if state.weather == "Storm" else 6
+            for i in range(drops):
+                per = 1.4 + _h1(i, 2.0)
+                phase = t / per + _h1(i, 5.0)
+                cyc = math.floor(phase)                          # a new drop each cycle
+                cx = _h1(i * 13 + cyc, 3.0) * C.VIEW_W
+                cy = _h1(i * 13 + cyc, 7.0) * C.VIEW_H
+                rr = (phase - cyc) * 6.0
+                ring = np.exp(-((np.sqrt((X - cx) ** 2 + (Y - cy) ** 2) - rr) ** 2) / 1.3)
+                rings = np.maximum(rings, ring * max(0.0, 1.0 - rr / 6.0))
+            rm = (water.astype(np.float32) * rings)[..., None]
+            drop = np.array([196.0, 222.0, 244.0], np.float32)
+            fg = fg * (1.0 - rm * 0.6) + drop * (rm * 0.6)
+            bg = bg * (1.0 - rm * 0.35) + drop * (rm * 0.35)
+
     # Planted crops overlay (sparse — just the farm plots in view). Crops sit
     # on a fixed dark soil background so the glyph always has contrast, no
     # matter the terrain tint (damp soil reads a touch cooler/darker).
