@@ -536,14 +536,15 @@ def render_world(con: tcod.console.Console, state: GameState, anim_time: float =
             X = np.arange(C.VIEW_W, dtype=np.float32)[:, None]
             Y = np.arange(C.VIEW_H, dtype=np.float32)[None, :]
             rings = np.zeros((C.VIEW_W, C.VIEW_H), np.float32)
-            for i in range(14 if state.weather == "Storm" else 8):
-                per = 1.3 + _h1(i, 2.0)
+            r_max = 1.8                                          # tiny drop-splash rings
+            for i in range(22 if state.weather == "Storm" else 14):
+                per = 1.1 + _h1(i, 2.0)
                 phase = t / per + _h1(i, 5.0)
                 cyc = math.floor(phase)
                 cx, cy = wc[int(_h1(i * 13 + cyc, 3.0) * len(wc)) % len(wc)]
-                rr = (phase - cyc) * 5.0
+                rr = (phase - cyc) * r_max
                 d = np.sqrt((X - cx) ** 2 + (Y - cy) ** 2)
-                rings = np.maximum(rings, np.exp(-((d - rr) ** 2) / 1.0) * max(0.0, 1.0 - rr / 5.0))
+                rings = np.maximum(rings, np.exp(-((d - rr) ** 2) / 0.5) * max(0.0, 1.0 - rr / r_max))
             rm = (water.astype(np.float32) * rings)[..., None]
             drop = np.array([206.0, 230.0, 250.0], np.float32)
             fg = fg * (1.0 - rm * 0.75) + drop * (rm * 0.75)
