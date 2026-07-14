@@ -151,12 +151,12 @@ def road_path(gm: GameMap, a: tuple[int, int], b: tuple[int, int], reuse: bool =
         r = _ROADKIND_BY_ID[gm.tiles]
         if r.any():
             near = r.copy()
-            for lvl in range(3):                     # dilate 3 tiles out
+            for lvl in range(3):                     # dilate ~3 tiles out
                 s = near.copy()
                 s[1:, :] |= near[:-1, :]; s[:-1, :] |= near[1:, :]
                 s[:, 1:] |= near[:, :-1]; s[:, :-1] |= near[:, 1:]
                 new = s & ~near & (cost > 1)          # this ring, on paveable ground
-                cost[new] = np.minimum(cost[new], 2 + lvl)   # 2,3,4 by distance
+                cost[new] = np.minimum(cost[new], 2 + lvl)   # 2,3,4,5,6,7 by distance
                 near = s
     cost[a[0], a[1]] = cost[b[0], b[1]] = 1   # endpoints must be reachable
     graph = tcod.path.SimpleGraph(cost=cost, cardinal=_CARD, diagonal=_DIAG)
@@ -206,6 +206,60 @@ def draw_road(gm: GameMap, a: tuple[int, int], b: tuple[int, int]) -> None:
     """Lay a connected road from a to b, reusing the existing network so the
     whole thing is one piece."""
     paint_road(gm, road_path(gm, a, b, reuse=True))
+
+
+def weld_road_gaps(gm: GameMap) -> int:
+    """Repair diagonal-only breaks so the network is cardinally connected (the
+    run-follower, and a spanning-tree of roads, need this — a single break cuts
+    a whole branch). Two road cells touching only at a corner get welded: pave
+    a flanking corner if it's open ground, else route a short cardinal detour
+    over nearby paving/ground — which is how a road threads past the stalls and
+    notice board packed around a village square. Returns how many it fixed."""
+    from collections import deque
+    t = gm.tiles
+    coords = [tuple(int(v) for v in c) for c in np.argwhere(_ROADKIND_BY_ID[t])]
+    rs = set(coords)
+    fixed = 0
+
+    def road(c):
+        return c in rs
+    for (x, y) in coords:
+        for dx, dy in ((1, 1), (-1, 1), (1, -1), (-1, -1)):
+            b = (x + dx, y + dy)
+            if b not in rs or (x + dx, y) in rs or (x, y + dy) in rs:
+                continue                                   # not a break / already linked
+            done = False
+            for c in ((x + dx, y), (x, y + dy)):           # pave an open flanking corner
+                if (gm.in_bounds(*c) and not _ROADKIND_BY_ID[t[c]]
+                        and tile.TILES[t[c]].name not in ROAD_BLOCK):
+                    _pave(gm, *c); rs.add(c); fixed += 1; done = True
+                    break
+            if done:
+                continue
+            # both corners blocked (stall / notice board / wall): short detour
+            seen = {(x, y)}; dq = deque([[(x, y)]]); found = None
+            while dq:
+                path = dq.popleft()
+                if path[-1] == b:
+                    found = path; break
+                if len(path) > 7:
+                    continue
+                cx, cy = path[-1]
+                for ax, ay in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                    nx, ny = cx + ax, cy + ay
+                    if (nx, ny) in seen or not gm.in_bounds(nx, ny):
+                        continue
+                    if abs(nx - x) > 4 or abs(ny - y) > 4:
+                        continue
+                    nm = tile.TILES[t[nx, ny]]
+                    if (nx, ny) in rs or (nm.name not in ROAD_BLOCK and nm.walkable):
+                        seen.add((nx, ny)); dq.append(path + [(nx, ny)])
+            if found:
+                for c in found[1:-1]:
+                    if not _ROADKIND_BY_ID[t[c]]:
+                        _pave(gm, *c); rs.add(c)
+                fixed += 1
+    return fixed
 
 
 def fill_road_gaps(gm: GameMap) -> None:

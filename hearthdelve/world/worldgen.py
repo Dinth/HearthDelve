@@ -33,6 +33,7 @@ from .worldlib import (  # noqa: F401  (some are used by siblings via this modul
     paint_road as _paint_road,
     draw_road as _draw_road,
     fill_road_gaps as _fill_road_gaps,
+    weld_road_gaps as _weld_road_gaps,
     thin_roads as _thin_roads,
     gate as _gate,
     branch_through as _branch_through,
@@ -360,20 +361,27 @@ def _populate_wildlife(gm: GameMap, rng: random.Random) -> None:
 def _draw_roads(gm: GameMap, centers: dict) -> None:
     hub = gm.spawn                       # the farm sits on the main road
     pts = list(centers.values())
-    # Trunk roads: each village plaza connects to the farm.
-    for c in pts:
-        _draw_road(gm, c, hub)
-    # Every pair of villages is linked. Prefer sharing the existing network, but
-    # if that forces a big detour (e.g. routing all the way via the farm when a
-    # short direct road — bridging a river — would do), carve the direct road.
-    for i in range(len(pts)):
-        for j in range(i + 1, len(pts)):
-            via = _road_path(gm, pts[i], pts[j], reuse=True)
-            direct = _road_path(gm, pts[i], pts[j], reuse=False)
-            if direct and (not via or len(direct) <= 0.8 * len(via)):
-                _paint_road(gm, direct)
-            else:
-                _paint_road(gm, via or direct)
+    # One shared network, not a mesh of parallel roads: connect the farm and
+    # villages with a minimum spanning tree (Prim's, rooted at the farm). Each
+    # place joins via the nearest node already on the network, so roads branch
+    # off shared trunks instead of each laying its own line — every village is
+    # still reachable, just without the redundant parallel routes a full
+    # every-pair mesh produced. Drawn tree-outward so each new road reuses (and
+    # merges onto) the roads already laid.
+    nodes = [hub] + pts
+    in_tree = [0]
+    while len(in_tree) < len(nodes):
+        best = None
+        for i in in_tree:
+            for j in range(len(nodes)):
+                if j in in_tree:
+                    continue
+                d = (nodes[i][0] - nodes[j][0]) ** 2 + (nodes[i][1] - nodes[j][1]) ** 2
+                if best is None or d < best[0]:
+                    best = (d, i, j)
+        _, i, j = best
+        _draw_road(gm, nodes[j], nodes[i])
+        in_tree.append(j)
     # Each dungeon is a spur off the nearest node (a village, or the farm) — one
     # road, so a dungeon tucked beside a village gets a short branch instead of a
     # second long road shadowing that village's trunk all the way to the farm.
@@ -388,6 +396,7 @@ def _draw_roads(gm: GameMap, centers: dict) -> None:
     if "Cinderhope" in centers:
         ccx, ccy = centers["Cinderhope"]
         _draw_road(gm, (ccx, ccy), _west_gap(gm, ccy))
+    _weld_road_gaps(gm)                  # reconnect diagonal breaks (esp. village squares)
     _fill_road_gaps(gm)
 
 
