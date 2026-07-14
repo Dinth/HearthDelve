@@ -126,6 +126,12 @@ def _blur5(f: np.ndarray) -> np.ndarray:
     return out
 
 
+def _h1(i: int, s: float) -> float:
+    """A stable scalar hash in [0, 1) — for per-source particle phases."""
+    v = math.sin(i * 12.9898 + s * 78.233) * 43758.5453
+    return v - math.floor(v)
+
+
 def _shift2d(a: np.ndarray, sx: int, sy: int) -> np.ndarray:
     """A copy of `a` translated by (sx, sy), vacated cells left at zero (no
     wrap). Used to stack a rising, drifting steam plume off the caldera."""
@@ -938,11 +944,59 @@ def render_ambient(con: tcod.console.Console, state: GameState, t: float, occupi
         con.rgb["fg"][x, y] = col
 
 
+def render_fire(con: tcod.console.Console, state: GameState, t: float, occupied) -> None:
+    """Living fire: embers rise and wink out above campfires, hearths and lava,
+    and hearths trail a thin chimney plume — so fires flicker with real motion
+    and villages read as lived-in."""
+    w = state.world
+    ox, oy = camera_origin(state)
+    vw, vh = C.VIEW_W, C.VIEW_H
+    view = w.tiles[ox:ox + vw, oy:oy + vh]
+
+    def lit(lx, ly):        # in a dungeon, only currently-seen fires spark
+        return not w.is_dungeon or (w.visible is not None and w.visible[lx + ox, ly + oy])
+
+    # Embers: (source id, spark count, spawn gate, max rise).
+    for src_id, n, gate, rise_h in ((tile.CAMPFIRE, 3, 1.0, 3.5),
+                                    (tile.HEARTH, 2, 1.0, 3.0),
+                                    (tile.LAVA, 1, 0.30, 2.5)):
+        for lx, ly in np.argwhere(view == src_id):
+            lx, ly = int(lx), int(ly)
+            if not lit(lx, ly):
+                continue
+            for i in range(n):
+                key = lx * 71 + ly * 131 + i
+                if gate < 1.0 and _h1(key, 9.0) > gate:
+                    continue
+                rise = ((t * 2.4 + _h1(key, 2.0) * rise_h) % rise_h)
+                ex = lx + int(round(1.1 * math.sin(t * 3.0 + i + lx * 0.5)))
+                ey = ly - 1 - int(rise)
+                if 0 <= ex < vw and 0 <= ey < vh and (ex, ey) not in occupied:
+                    heat = 1.0 - rise / rise_h
+                    con.rgb["ch"][ex, ey] = ord("*" if rise < rise_h * 0.4 else "·")
+                    con.rgb["fg"][ex, ey] = (255, int(140 + 90 * heat), int(28 + 40 * heat))
+
+    # Chimney smoke from hearths (surface only) — a thin plume leaning downwind.
+    if not w.is_dungeon:
+        for hx, hy in np.argwhere(view == tile.HEARTH):
+            hx, hy = int(hx), int(hy)
+            for j in range(3):
+                key = hx * 53 + hy * 97 + j
+                h = ((t * 1.3 + _h1(key, 5.0) * 6.0) % 6.0)
+                sx = hx + int(round(0.55 * h + math.sin(t * 0.8 + j)))
+                sy = hy - 1 - int(h)
+                if 0 <= sx < vw and 0 <= sy < vh and (sx, sy) not in occupied:
+                    g = int(70 + 130 * max(0.15, 1.0 - h / 6.0))
+                    con.rgb["ch"][sx, sy] = ord("°" if h < 3 else "·")
+                    con.rgb["fg"][sx, sy] = (g, g, max(0, g - 12))
+
+
 def render_all(con: tcod.console.Console, state: GameState, anim_time: float = 0.0) -> None:
     con.clear(bg=C.BLACK)
     occupied = render_world(con, state, anim_time)
     render_weather(con, state, anim_time, occupied)
     render_ambient(con, state, anim_time, occupied)
+    render_fire(con, state, anim_time, occupied)
     render_panel(con, state)
     render_log(con, state)
 
