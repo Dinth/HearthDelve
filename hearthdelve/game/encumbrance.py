@@ -52,7 +52,8 @@ def carried_weight(state: GameState) -> float:
 
 
 def capacity(state: GameState) -> float:
-    return CARRY_BASE + CARRY_PER_LEVEL * max(0, state.player.level - 1)
+    return (CARRY_BASE + CARRY_PER_LEVEL * max(0, state.player.level - 1)
+            + getattr(state, "pack_bonus", 0))   # crafted satchels raise the ceiling
 
 
 def load_ratio(state: GameState) -> float:

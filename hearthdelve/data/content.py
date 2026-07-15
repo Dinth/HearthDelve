@@ -1207,6 +1207,15 @@ class Recipe:
     desc: str = ""
 
 
+# Carry-capacity upgrades: recipe name -> (required current pack_bonus, new
+# pack_bonus). Each tier shows in the craft menu only when the prior is done,
+# and crafting it is the upgrade (see crafting.craft / visible_recipes).
+PACK_UPGRADES = {
+    "Leather Satchel": (0, 30),
+    "Trapper's Pack": (30, 65),
+}
+
+
 RECIPES: list[Recipe] = [
     Recipe("Furnace", "build", ((items.STONE, 5),), machine="furnace",
            desc="Smelts ore into bars."),
@@ -1242,6 +1251,12 @@ RECIPES: list[Recipe] = [
            machine="butcher", desc="Render a grown animal into cuts of meat for the larder."),
     Recipe("Tanning Rack", "build", ((items.WOOD, 8), (items.FIBER, 4)), machine="tanner",
            desc="Cure raw hides & pelts into leather over half a day."),
+    Recipe("Leather Satchel", "upgrade", ((items.LEATHER, 4), (items.FIBER, 3)),
+           output=items.LEATHER_SATCHEL,
+           desc="Stitch a roomy satchel — carry +30 before you're laden."),
+    Recipe("Trapper's Pack", "upgrade", ((items.LEATHER, 7), (items.ANTLER, 2)),
+           output=items.TRAPPERS_PACK,
+           desc="A great trapper's pack — carry +35 more still (needs the satchel first)."),
     Recipe("Storage Chest", "build", ((items.TIMBER_PLANK, 6),), machine="chest",
            desc="A chest for your goods — stash a haul at home instead of hauling it about."),
     Recipe("Spinning Wheel", "build", ((items.TIMBER_PLANK, 4), (items.WOOD, 4)), machine="spinner",

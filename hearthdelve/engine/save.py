@@ -96,6 +96,7 @@ def save(state: GameState, path: str = SAVE_PATH) -> None:
         },
         "ship_bin": [[it.name, q, ql] for it, q, ql in state.ship_bin.slots],
         "storage": [[it.name, q, ql] for it, q, ql in state.storage.slots],
+        "pack_bonus": state.pack_bonus,
         "stats": dict(state.stats),
         "pending_build": state.pending_build,
         "claims": [f"{x},{y}" for (x, y) in state.claims],
@@ -316,6 +317,7 @@ def load(path: str = SAVE_PATH) -> GameState:
                                       for rec in data["ship_bin"] if items.by_name(rec[0])])
     state.storage = Inventory(slots=[[items.by_name(rec[0]), rec[1], rec[2] if len(rec) > 2 else 0]
                                      for rec in data.get("storage", []) if items.by_name(rec[0])])
+    state.pack_bonus = data.get("pack_bonus", 0)
     state.stats = dict(data.get("stats", {}))
     state.quests_done = set(data.get("quests_done", []))
     kr = data.get("known_recipes")

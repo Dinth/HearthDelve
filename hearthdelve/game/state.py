@@ -51,6 +51,7 @@ class GameState:
     # goods queued in the shipping bin; sold overnight
     ship_bin: Inventory = field(default_factory=Inventory)
     storage: Inventory = field(default_factory=Inventory)   # home chest: stash goods off your back
+    pack_bonus: int = 0                                     # extra carry capacity from crafted satchels
 
     # delving: surface is the persistent farm; world is the active map
     surface: GameMap | None = None

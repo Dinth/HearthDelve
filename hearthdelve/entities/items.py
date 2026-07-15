@@ -183,6 +183,11 @@ RAW_HIDE      = Item("Raw Hide",      "u", "material", "A raw skin from a wild b
 LEATHER       = Item("Leather",       "u", "material", "Supple tanned leather — for armour, satchels and tack.", value=60)
 ANTLER        = Item("Antler",        "Y", "material", "A handsome branched antler; prized for buttons and glue.", value=45)
 VENISON       = Item("Venison",       "▬", "material", "Lean deer meat; makes a rich pie or stew.", value=80, family="meat")
+# Carry upgrades — crafted from hunting's leather; each raises how much you can
+# carry before you're laden (see game.encumbrance). Never held; the craft is the
+# upgrade itself (see crafting.craft "upgrade" kind).
+LEATHER_SATCHEL = Item("Leather Satchel", "¬", "gear", "A roomy stitched satchel — carry more before the weight tells.", stackable=False)
+TRAPPERS_PACK   = Item("Trapper's Pack",  "¬", "gear", "A big trapper's pack, leather and antler-toggled — carry a great deal more.", stackable=False)
 # Alchemical minerals from dungeon deposits — powder, fertiliser & curing salt.
 SULPHUR     = Item("Sulphur",     "▪", "material", "Brimstone-yellow crystals from a hot seam.", value=30)
 SALTPETER   = Item("Saltpeter",   "▪", "material", "White nitre crust — powder, fertiliser or curing salt.", value=35)

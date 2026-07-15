@@ -63,8 +63,14 @@ def _fmt_remaining(minutes: int) -> str:
 def visible_recipes(state: GameState) -> list:
     """The recipes the craft menu shows: everything buildable/craftable, plus
     only the cook recipes the player has actually learned (see game.requests)."""
-    return [r for r in content.RECIPES
-            if r.kind != "cook" or r.name in state.known_recipes]
+    def shown(r):
+        if r.kind == "cook":
+            return r.name in state.known_recipes
+        if r.kind == "upgrade":                    # only the next carry tier
+            req, _ = content.PACK_UPGRADES.get(r.name, (0, 0))
+            return getattr(state, "pack_bonus", 0) == req
+        return True
+    return [r for r in content.RECIPES if shown(r)]
 
 
 def craft(state: GameState, recipe: Recipe) -> bool:
@@ -97,6 +103,14 @@ def craft(state: GameState, recipe: Recipe) -> bool:
         state.log.add(f"You cook {recipe.name}{star}.", (180, 230, 160))
         from . import requests
         requests.check_level_recipes(state)   # practice may spark a new recipe
+    elif recipe.kind == "upgrade":
+        # A carry upgrade: the craft itself raises capacity (no item to hold).
+        _, new_bonus = content.PACK_UPGRADES[recipe.name]
+        state.pack_bonus = new_bonus
+        for it, qty in inputs:
+            state.player.inventory.remove(it, qty)
+        state.log.add(f"You stitch up the {recipe.output.name.lower()} — "
+                      "you can shoulder a good deal more now.", (200, 220, 160))
     elif recipe.kind == "item":
         state.player.inventory.add(recipe.output, recipe.out_qty)
         state.log.add(f"You craft {recipe.out_qty}x {recipe.output.name}.")
