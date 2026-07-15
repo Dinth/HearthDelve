@@ -1512,8 +1512,8 @@ MONSTERS: list[Monster] = [
 # Bosses appear on deep floors and are spawned by special logic (not the pool).
 BOSSES: list[Monster] = [
     Monster("Cave Troll", "T", (214, 120, 92), 44, 1, "charge", 4,
-            dv=6, pv=6, to_hit=5, dmg=(6, 12), boss=True,
-            desc="A hulking cave troll — slow, but it hits like a landslide."),
+            dv=6, pv=6, to_hit=5, dmg=(6, 12), boss=True, inflicts="bleed",
+            desc="A hulking cave troll — slow, but its raking claws open deep wounds."),
     Monster("Gloom Warden", "G", (156, 116, 176), 70, 2, "charge", 6,
             dv=10, pv=8, to_hit=8, dmg=(11, 20), boss=True,
             desc="Warden of the deep vaults — vast, armoured, and terribly strong."),
@@ -1562,6 +1562,7 @@ class Critter:
     dmg: tuple
     desc: str = ""
     seasons: tuple = ()    # active seasons ("" = all year round)
+    inflicts: str = ""     # a status a hit may leave: "poison" | "bleed" | "burn"
 
 
 _NO_WINTER = ("Spring", "Summer", "Fall")
@@ -1594,17 +1595,19 @@ BEAR = Critter("Bear", "B", (120, 88, 62), 42, 2, "defensive", "honey",
 # behaviour — they arm themselves when you stray into range; see wildlife._behave).
 WEST_WILDLIFE: list[Critter] = [
     Critter("Ash Wolf", "w", (150, 148, 152), 16, 3, "predator", "",
-            dv=10, pv=1, to_hit=5, dmg=(3, 6),
-            desc="A grey hunter of the ash slopes; it does not wait to be provoked."),
+            dv=10, pv=1, to_hit=5, dmg=(3, 6), inflicts="bleed",
+            desc="A grey hunter of the ash slopes; it does not wait to be provoked — "
+                 "and its fangs leave you bleeding."),
     Critter("Cinder Boar", "P", (176, 110, 88), 26, 2, "defensive", "crops",
             dv=6, pv=3, to_hit=4, dmg=(4, 8),
             desc="A scarred hill boar, half again the lowland kind."),
     Critter("Rock Viper", "s", (170, 168, 120), 8, 3, "predator", "",
-            dv=13, pv=0, to_hit=7, dmg=(2, 7),
+            dv=13, pv=0, to_hit=7, dmg=(2, 7), inflicts="poison",
             desc="A sand-still coil among the scree — fast, venom-toothed, ill-tempered."),
     Critter("Ember Drake", "D", (232, 130, 60), 34, 2, "predator", "",
-            dv=9, pv=4, to_hit=6, dmg=(4, 9),
-            desc="A dog-sized drake that suns itself on the caldera rock. Territorial is a kind word."),
+            dv=9, pv=4, to_hit=6, dmg=(4, 9), inflicts="burn",
+            desc="A dog-sized drake that suns itself on the caldera rock. Its searing "
+                 "bite sets you alight; territorial is a kind word."),
 ]
 
 

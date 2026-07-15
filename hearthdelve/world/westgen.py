@@ -141,7 +141,8 @@ def generate(seed: int) -> GameMap:
                                        critter.behavior, x, y, dv=critter.dv,
                                        pv=critter.pv, to_hit=critter.to_hit,
                                        dmg=critter.dmg, kind="wildlife",
-                                       diet=critter.diet, seasons=critter.seasons))
+                                       diet=critter.diet, seasons=critter.seasons,
+                                       inflicts=critter.inflicts))
                 break
 
     by_name = {c.name: c for c in content.WEST_WILDLIFE}

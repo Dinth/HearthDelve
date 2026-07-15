@@ -271,7 +271,8 @@ def respawn(state: GameState, rng: random.Random) -> None:
             c = rng.choice(content.WILDLIFE)
             surf.monsters.append(Mob(c.name, c.glyph, c.color, c.hp, c.hp, c.speed, c.behavior, x, y,
                                      dv=c.dv, pv=c.pv, to_hit=c.to_hit, dmg=c.dmg,
-                                     kind="wildlife", diet=c.diet, seasons=c.seasons))
+                                     kind="wildlife", diet=c.diet, seasons=c.seasons,
+                                     inflicts=c.inflicts))
             break
 
 
@@ -300,5 +301,5 @@ def respawn_west(state: GameState, rng: random.Random) -> None:
             west.monsters.append(Mob(c.name, c.glyph, c.color, c.hp, c.hp, c.speed,
                                      c.behavior, x, y, dv=c.dv, pv=c.pv, to_hit=c.to_hit,
                                      dmg=c.dmg, kind="wildlife", diet=c.diet,
-                                     seasons=c.seasons))
+                                     seasons=c.seasons, inflicts=c.inflicts))
             break

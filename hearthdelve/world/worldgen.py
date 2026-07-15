@@ -340,7 +340,8 @@ def _populate_wildlife(gm: GameMap, rng: random.Random) -> None:
         c = rng.choice(content.WILDLIFE)
         gm.monsters.append(Mob(c.name, c.glyph, c.color, c.hp, c.hp, c.speed, c.behavior, x, y,
                                dv=c.dv, pv=c.pv, to_hit=c.to_hit, dmg=c.dmg,
-                               kind="wildlife", diet=c.diet, seasons=c.seasons))
+                               kind="wildlife", diet=c.diet, seasons=c.seasons,
+                               inflicts=c.inflicts))
         placed += 1
 
     # A few rare bears, roaming far from the farmstead.
@@ -355,7 +356,8 @@ def _populate_wildlife(gm: GameMap, rng: random.Random) -> None:
         b = content.BEAR
         gm.monsters.append(Mob(b.name, b.glyph, b.color, b.hp, b.hp, b.speed, b.behavior, x, y,
                                dv=b.dv, pv=b.pv, to_hit=b.to_hit, dmg=b.dmg,
-                               kind="wildlife", diet=b.diet, seasons=b.seasons))
+                               kind="wildlife", diet=b.diet, seasons=b.seasons,
+                               inflicts=b.inflicts))
         bears += 1
 
 
