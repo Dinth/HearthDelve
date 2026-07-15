@@ -974,6 +974,15 @@ def render_weather(con: tcod.console.Console, state: GameState, t: float, occupi
             con.rgb["fg"][cx, cy] = color
 
 
+def _wet_tomorrow(state: GameState) -> bool:
+    """Is rain/storm forecast for tomorrow? (Drives the natural weather tells.)"""
+    try:
+        from ..game import farming
+        return farming.forecast(state) in ("Rain", "Storm")
+    except Exception:
+        return False
+
+
 def render_ambient(con: tcod.console.Console, state: GameState, t: float, occupied) -> None:
     """Drifting seasonal motes over the surface — petals in spring, lazy pollen
     (and fireflies after dark) in summer, tumbling leaves in autumn. Purely
@@ -985,6 +994,18 @@ def render_ambient(con: tcod.console.Console, state: GameState, t: float, occupi
     season = state.season
     dr, dg, db = daylight_mul(state.time_minutes)
     night = (dr + dg + db) / 3.0 < 0.62
+
+    # Nature's own forecast: on a calm day before rain, gnats rise and swarm in
+    # a low, restless cloud — read it, and you'll know the morning brings wet.
+    if season != "Winter" and _wet_tomorrow(state):
+        cx = vw * 0.5 + 10 * math.sin(t * 0.4)
+        cy = vh * 0.6 + 7 * math.cos(t * 0.33)
+        for i in range(13):
+            gx = int(cx + 5 * math.sin(t * 3.1 + i * 1.7) + (_h1(i, 3.0) * 6 - 3))
+            gy = int(cy + 4 * math.cos(t * 2.7 + i * 2.3) + (_h1(i, 7.0) * 5 - 2.5))
+            if 0 <= gx < vw and 0 <= gy < vh and (gx, gy) not in occupied:
+                con.rgb["ch"][gx, gy] = ord("·")
+                con.rgb["fg"][gx, gy] = (74, 72, 60)   # a dark midge cloud
 
     if season == "Spring":
         specs, palette, driftx, drifty, glyphs, sway = (24, [(236, 186, 206), (232, 200, 214),
@@ -1076,6 +1097,7 @@ def render_crossings(con: tcod.console.Console, state: GameState, t: float, occu
     dr, dg, db = daylight_mul(state.time_minutes)
     daytime = (dr + dg + db) / 3.0 > 0.72                 # excludes the blue of deep night
 
+    low_flight = _wet_tomorrow(state)                     # birds fly low before rain
     if daytime and state.weather != "Storm":              # birds shelter in storms
         for f in range(2):
             per = 34.0 + 14.0 * _h1(f, 2.0)               # a flyover every ~34–48s…
@@ -1087,7 +1109,9 @@ def render_crossings(con: tcod.console.Console, state: GameState, t: float, occu
             travel = frac / 0.40
             rightward = _h1(f * 7 + cyc, 3.0) < 0.5
             headx = int(-4 + travel * (vw + 8)) if rightward else int(vw + 4 - travel * (vw + 8))
-            row = int(2 + _h1(f * 7 + cyc, 9.0) * (vh * 0.45))
+            # high across the sky normally; skimming the low third when rain nears
+            row = (int(vh * 0.62 + _h1(f * 7 + cyc, 9.0) * (vh * 0.33)) if low_flight
+                   else int(2 + _h1(f * 7 + cyc, 9.0) * (vh * 0.45)))
             flap = "v" if int(t * 6) % 2 else "^"
             for b in range(3 + int(_h1(f * 7 + cyc, 1.0) * 3)):   # a loose 3–5 bird V
                 bx = headx - (1 if rightward else -1) * b * 2
