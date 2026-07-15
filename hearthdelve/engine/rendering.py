@@ -391,6 +391,25 @@ def _westreach_ambience(con, state: GameState, view, ox: int, oy: int, t: float)
                     con.rgb["fg"][sx, sy] = (255, int(120 + 120 * heat), int(50 * heat))
 
 
+# Precedence when a mob carries more than one affliction — the most vivid wins
+# the tile's background tint. Kept small; the log carries the detail.
+_STATUS_TINT_ORDER = ("burn", "bleed", "poison")
+
+
+def _status_bg(m, default):
+    """A dim background tint marking an afflicted mob (burning/bleeding/poisoned),
+    or ``default`` if it carries no damage-over-time."""
+    st = getattr(m, "status", None)
+    if not st:
+        return default
+    for kind in _STATUS_TINT_ORDER:
+        if kind in st:
+            from ..game.combat import STATUS
+            r, g, b = STATUS[kind]["color"]
+            return (r * 40 // 255 + 12, g * 40 // 255 + 8, b * 40 // 255 + 8)
+    return default
+
+
 def render_world(con: tcod.console.Console, state: GameState, anim_time: float = 0.0) -> None:
     w = state.world
     ox, oy = camera_origin(state)
@@ -762,7 +781,7 @@ def render_world(con: tcod.console.Console, state: GameState, anim_time: float =
                 continue
             sx, sy = m.x - ox, m.y - oy
             if 0 <= sx < C.VIEW_W and 0 <= sy < C.VIEW_H and w.visible[m.x, m.y]:
-                _draw(sx, sy, m.glyph, m.color, (36, 24, 24))
+                _draw(sx, sy, m.glyph, m.color, _status_bg(m, (36, 24, 24)))
         for npc in w.npcs:                           # underground folk (the dwarf town)
             sx, sy = npc.x - ox, npc.y - oy
             if 0 <= sx < C.VIEW_W and 0 <= sy < C.VIEW_H and w.visible[npc.x, npc.y]:
@@ -778,7 +797,11 @@ def render_world(con: tcod.console.Console, state: GameState, anim_time: float =
                 continue                             # out of season — not about
             sx, sy = m.x - ox, m.y - oy
             if 0 <= sx < C.VIEW_W and 0 <= sy < C.VIEW_H:
-                _draw(sx, sy, m.glyph, m.color)
+                bg = _status_bg(m, None)
+                if bg is None:
+                    _draw(sx, sy, m.glyph, m.color)
+                else:
+                    _draw(sx, sy, m.glyph, m.color, bg)
         # farm animals; young ones are paler, a ready-to-collect one glints.
         from ..game.husbandry import SPECIES
         for a in w.animals:

@@ -47,7 +47,7 @@ def _mob_to_rec(m) -> list:
     return [m.name, m.glyph, list(m.color), m.hp, m.max_hp, m.speed, m.behavior,
             m.x, m.y, m.dv, m.pv, m.to_hit, list(m.dmg), m.awake,
             m.kind, m.diet, m.hostile, list(m.seasons),
-            m.level, m.energy, m.boss, m.inflicts]
+            m.level, m.energy, m.boss, m.inflicts, dict(m.status)]
 
 
 def _mob_from_rec(rec: list, Mob) -> object:
@@ -62,7 +62,8 @@ def _mob_from_rec(rec: list, Mob) -> object:
                awake=g(13, False), kind=g(14, "monster"), diet=g(15, ""),
                hostile=g(16, False), seasons=tuple(g(17, ())),
                level=g(18, 1), energy=g(19, 0), boss=g(20, False),
-               inflicts=g(21, ""))
+               inflicts=g(21, ""),
+               status={str(k): int(v) for k, v in g(22, {}).items()})
 
 
 def exists(path: str = SAVE_PATH) -> bool:

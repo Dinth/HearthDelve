@@ -31,34 +31,49 @@ STATUS = {
 }
 
 
-def apply_status(state: GameState, kind: str, turns: int = 0) -> None:
-    """Lay a damage-over-time on the player (refreshing, never stacking beyond
-    its full duration)."""
+def apply_status(state: GameState, kind: str, turns: int = 0, target=None) -> None:
+    """Lay a damage-over-time on a holder (the player by default, or a mob when
+    ``target`` is given). Refreshing, never stacking beyond its full duration."""
     if kind not in STATUS:
         return
-    p = state.player
+    holder = state.player if target is None else target
     dur = turns or STATUS[kind]["turns"]
-    p.status[kind] = max(p.status.get(kind, 0), dur)
+    holder.status[kind] = max(holder.status.get(kind, 0), dur)
 
 
-def tick_player_status(state: GameState) -> None:
-    """One turn of every active DoT: it bites, then counts down. Damage shows in
-    the HP bar and status pips; only the onset and the end are logged, so it
-    doesn't spam. Called each action from turns.advance_time."""
-    p = state.player
-    st = getattr(p, "status", None)
+def _tick_status(holder) -> list:
+    """One turn of every DoT on a holder: each bites, then counts down. Returns
+    the list of (kind, info) that expired this turn (for the caller to log)."""
+    st = getattr(holder, "status", None)
     if not st:
-        return
+        return []
+    expired = []
     for kind in list(st.keys()):
         info = STATUS.get(kind)
         if info is None:
             del st[kind]
             continue
-        p.hp -= info["dmg"]
+        holder.hp -= info["dmg"]
         st[kind] -= 1
         if st[kind] <= 0:
             del st[kind]
-            state.log.add(info["off"], C.DIM)
+            expired.append((kind, info))
+    return expired
+
+
+def tick_player_status(state: GameState) -> None:
+    """Tick the player's DoTs. Damage shows in the HP bar and status pips; only
+    the onset and the end are logged, so it doesn't spam. Called each action from
+    turns.advance_time."""
+    for _kind, info in _tick_status(state.player):
+        state.log.add(info["off"], C.DIM)
+
+
+def weapon_inflict(state: GameState) -> str:
+    """A status the held weapon leaves on a struck foe: a ruby-set blade burns.
+    (Melee only — a burning blade, not a burning arrow.) Returns "" for none."""
+    gems = getattr(state.player.active_tool, "gems", ())
+    return "burn" if "ruby" in gems else ""
 
 
 def mob_at(state: GameState, x: int, y: int):
@@ -215,6 +230,11 @@ def player_attack(state: GameState, m) -> None:
     if m.hp <= 0:
         _on_kill(state, m)
         return
+    kind = weapon_inflict(state)                 # a ruby-set blade sets foes alight
+    if kind and kind not in m.status and random.random() < STATUS[kind]["chance"]:
+        apply_status(state, kind, target=m)
+        state.log.add(f"Your blade sears the {m.name.lower()} — it catches fire!",
+                      STATUS[kind]["color"])
     if wild and not m.hostile:
         state.log.add(f"You hit the {m.name.lower()} for {dmg} — it bolts!", C.DIM)
     else:
@@ -236,6 +256,15 @@ def monsters_act(state: GameState) -> None:
     for m in list(w.monsters):
         if not m.alive:
             continue
+        if m.status:                             # poison/bleed/burn gnaws each turn
+            expired = _tick_status(m)
+            if not m.alive:
+                if w.visible is not None and w.visible[m.x, m.y]:
+                    state.log.add(f"The {m.name.lower()} succumbs to its wounds.", C.DIM)
+                _on_kill(state, m)
+                continue
+            if expired and w.visible is not None and w.visible[m.x, m.y]:
+                state.log.add(f"The {m.name.lower()}'s wounds close.", C.DIM)
         if not m.awake and w.visible is not None and w.visible[m.x, m.y]:
             m.awake = True
         if not m.awake:

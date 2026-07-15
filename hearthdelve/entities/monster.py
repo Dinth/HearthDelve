@@ -6,7 +6,7 @@ noticed the player, and a speed accumulator).
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass
@@ -35,6 +35,7 @@ class Mob:
     hostile: bool = False   # a defensive critter roused into fighting back
     seasons: tuple = ()     # wildlife only: seasons it's active in ("" = all year)
     inflicts: str = ""      # a status a hit may leave on the player (poison/bleed/burn)
+    status: dict = field(default_factory=dict)  # active DoTs ON this mob {kind: turns}
 
     @property
     def alive(self) -> bool:
