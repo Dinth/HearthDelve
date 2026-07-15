@@ -978,16 +978,23 @@ def _is_friendly(state: GameState, m) -> bool:
     return (not state.world.is_dungeon and m.kind == "wildlife" and not m.hostile)
 
 
+def _notice_range(state: GameState) -> int:
+    """How far off you notice creatures & features. Fog closes it right in — a
+    beast is on top of you before you spot it, out on the frontier."""
+    return 3 if (not state.world.is_dungeon and state.weather == "Fog") else 6
+
+
 def _nearby_friendlies(state: GameState) -> set:
     """Identities of friendly creatures already within notice range — the ones a
     run should run *past* rather than stop dead beside every single tile."""
     p = state.player
+    rng = _notice_range(state)
     ack = set()
     for npc in state.world.npcs:
-        if max(abs(npc.x - p.x), abs(npc.y - p.y)) <= 6:
+        if max(abs(npc.x - p.x), abs(npc.y - p.y)) <= rng:
             ack.add(id(npc))
     for m in state.world.monsters:
-        if _is_friendly(state, m) and m.alive and max(abs(m.x - p.x), abs(m.y - p.y)) <= 6:
+        if _is_friendly(state, m) and m.alive and max(abs(m.x - p.x), abs(m.y - p.y)) <= rng:
             ack.add(id(m))
     return ack
 
@@ -998,15 +1005,16 @@ def _notable_nearby(state: GameState, ignore: frozenset = frozenset()) -> str:
     Friendly creatures whose id is in `ignore` are passed over: they were already
     beside us when the run began, so we don't want to halt at them each step."""
     p = state.player
+    rng = _notice_range(state)
     for npc in state.world.npcs:
         if id(npc) in ignore:
             continue                                   # already acknowledged
-        if max(abs(npc.x - p.x), abs(npc.y - p.y)) <= 6:
+        if max(abs(npc.x - p.x), abs(npc.y - p.y)) <= rng:
             return f"{npc.name} is nearby"
     for m in state.world.monsters:
         if m.seasons and state.season not in m.seasons:
             continue                                   # hibernating — not around
-        if not (m.alive and max(abs(m.x - p.x), abs(m.y - p.y)) <= 6):
+        if not (m.alive and max(abs(m.x - p.x), abs(m.y - p.y)) <= rng):
             continue
         if _is_friendly(state, m) and id(m) in ignore:
             continue                                   # a grazing beast we ran past

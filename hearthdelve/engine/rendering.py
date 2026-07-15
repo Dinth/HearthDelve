@@ -921,11 +921,18 @@ def render_weather(con: tcod.console.Console, state: GameState, t: float, occupi
         return
     w = state.weather
     if w == "Fog":
-        # A haze veil: blend the whole viewport toward soft grey so distance
-        # washes out, then drift a few motes over the top.
+        # Fog closes in: a clearish bubble around you fades to heavy grey toward
+        # the edges, so you genuinely can't see far — not just a flat haze.
         veil = np.array([150, 156, 164], dtype=np.float32)
-        for chan, k in (("bg", 0.18), ("fg", 0.11)):
+        ox, oy = camera_origin(state)
+        px, py = state.player.x - ox, state.player.y - oy
+        X = np.arange(C.VIEW_W, dtype=np.float32)[:, None]
+        Y = np.arange(C.VIEW_H, dtype=np.float32)[None, :]
+        d = np.sqrt((X - px) ** 2 + (Y - py) ** 2)
+        kbg = np.clip((d - 4.0) / 12.0, 0.12, 0.74)[..., None]     # near clear, far socked in
+        for chan, mul in (("bg", 1.0), ("fg", 0.7)):
             buf = con.rgb[chan][:C.VIEW_W, :C.VIEW_H].astype(np.float32)
+            k = kbg * mul
             con.rgb[chan][:C.VIEW_W, :C.VIEW_H] = (buf * (1 - k) + veil * k).astype(np.uint8)
     if w == "Storm":
         # Occasional lightning: a brief, near-white flash over the whole view on
