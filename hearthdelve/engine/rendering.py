@@ -453,16 +453,17 @@ def render_world(con: tcod.console.Console, state: GameState, anim_time: float =
             bg *= sh[..., None]
             fg *= (0.55 + 0.45 * sh)[..., None]
 
-    # --- Cloud shadows: on an overcast day, soft dark patches drift across the
-    # land on the wind, the sun breaking through here and there. Smooth low
-    # frequencies (not a floored hash) so the shadows are broad and organic.
+    # --- Cloudy: the whole scene sits a touch dimmer (overcast), and big soft
+    # cloud shadows drift across the land on the wind, with brighter gaps where
+    # the sun breaks through. Smooth low frequencies (not a floored hash) so the
+    # shadows read as broad passing clouds, not a grid.
     if not w.is_dungeon and state.weather == "Cloudy":
-        cs = (np.sin(xs * 0.085 - t * 0.55) + np.sin(ys * 0.062 + t * 0.32)
-              + 0.7 * np.sin((xs + ys) * 0.05 - t * 0.40))
-        cloud = np.clip((cs - 0.5) / 2.2, 0.0, 1.0)      # only the peaks = a passing cloud
-        k = (cloud * 0.34)[..., None]
-        fg *= (1 - k)
-        bg *= (1 - k)
+        cs = (np.sin(xs * 0.11 - t * 0.6) + np.sin(ys * 0.085 + t * 0.40)
+              + 0.6 * np.sin((xs - ys) * 0.07 + t * 0.5))   # several patches across the view
+        cloud = np.clip((cs + 0.2) / 1.4, 0.0, 1.0)      # broad coverage, soft edges
+        dim = (0.05 + 0.32 * cloud)[..., None]           # ~5% overcast .. ~37% under a cloud
+        fg *= (1 - dim)
+        bg *= (1 - dim)
 
     fg_mul = np.ones((C.VIEW_W, C.VIEW_H), dtype=np.float32)
     bg_mul = np.ones((C.VIEW_W, C.VIEW_H), dtype=np.float32)
