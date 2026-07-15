@@ -47,7 +47,7 @@ def _mob_to_rec(m) -> list:
     return [m.name, m.glyph, list(m.color), m.hp, m.max_hp, m.speed, m.behavior,
             m.x, m.y, m.dv, m.pv, m.to_hit, list(m.dmg), m.awake,
             m.kind, m.diet, m.hostile, list(m.seasons),
-            m.level, m.energy, m.boss]
+            m.level, m.energy, m.boss, m.inflicts]
 
 
 def _mob_from_rec(rec: list, Mob) -> object:
@@ -61,7 +61,8 @@ def _mob_from_rec(rec: list, Mob) -> object:
                dv=g(9, 0), pv=g(10, 0), to_hit=g(11, 0), dmg=tuple(g(12, (1, 3))),
                awake=g(13, False), kind=g(14, "monster"), diet=g(15, ""),
                hostile=g(16, False), seasons=tuple(g(17, ())),
-               level=g(18, 1), energy=g(19, 0), boss=g(20, False))
+               level=g(18, 1), energy=g(19, 0), boss=g(20, False),
+               inflicts=g(21, ""))
 
 
 def exists(path: str = SAVE_PATH) -> bool:
@@ -118,6 +119,7 @@ def save(state: GameState, path: str = SAVE_PATH) -> None:
             "tool_gem": {it.name: list(g) for it, g in p.tool_gem.items()},
             "active_seed": p.active_seed.name if p.active_seed else None,
             "skills": dict(p.skills),
+            "status": dict(p.status),
         },
         "ship_bin": [[it.name, q, ql] for it, q, ql in state.ship_bin.slots],
         "storage": [[it.name, q, ql] for it, q, ql in state.storage.slots],
@@ -321,6 +323,7 @@ def load(path: str = SAVE_PATH) -> GameState:
     player.tool_gem = {items.by_name(n): tuple(g) for n, g in pd.get("tool_gem", {}).items() if items.by_name(n)}
     player.active_seed = items.by_name(pd.get("active_seed") or "") or items.PARSNIP_SEEDS
     player.skills = dict(pd.get("skills", {}))
+    player.status = {k: int(v) for k, v in pd.get("status", {}).items()}
 
     state = GameState(world=world, player=player, log=MessageLog(), seed=data["seed"])
     state.surface = world

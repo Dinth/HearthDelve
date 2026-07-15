@@ -41,6 +41,9 @@ def advance_time(state: GameState, seconds: int) -> None:
     steps = max(1, min(round(seconds / C.MOVE_SECONDS), _MAX_STEPS))
     for _ in range(steps):
         _step_actors(state)
+    if state.player.status:                     # poison/bleed/burn bite as time passes
+        from .combat import tick_player_status
+        tick_player_status(state)
 
 
 def _announce_finished_machines(state: GameState, before: int, now: int) -> None:

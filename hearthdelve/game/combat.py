@@ -14,6 +14,53 @@ def _sign(n: int) -> int:
     return (n > 0) - (n < 0)
 
 
+# --- status effects (damage over time) ---------------------------------------
+# Each entry: per-turn damage, how many turns a fresh application lasts, the
+# chance a landing hit inflicts it, and the display/log wording. Ticked once per
+# action by turns.advance_time; cleared by a night's rest (farming.new_day).
+STATUS = {
+    "poison": {"dmg": 2, "turns": 5, "chance": 0.45, "color": (150, 210, 120),
+               "tag": "☠ Poisoned", "on": "The bite festers — you're poisoned!",
+               "off": "The poison finally passes."},
+    "bleed":  {"dmg": 2, "turns": 4, "chance": 0.40, "color": (220, 120, 120),
+               "tag": "≈ Bleeding", "on": "You're bleeding!",
+               "off": "The bleeding stops."},
+    "burn":   {"dmg": 3, "turns": 3, "chance": 0.50, "color": (240, 150, 80),
+               "tag": "♨ Burning", "on": "You're set alight — burning!",
+               "off": "The burns cool."},
+}
+
+
+def apply_status(state: GameState, kind: str, turns: int = 0) -> None:
+    """Lay a damage-over-time on the player (refreshing, never stacking beyond
+    its full duration)."""
+    if kind not in STATUS:
+        return
+    p = state.player
+    dur = turns or STATUS[kind]["turns"]
+    p.status[kind] = max(p.status.get(kind, 0), dur)
+
+
+def tick_player_status(state: GameState) -> None:
+    """One turn of every active DoT: it bites, then counts down. Damage shows in
+    the HP bar and status pips; only the onset and the end are logged, so it
+    doesn't spam. Called each action from turns.advance_time."""
+    p = state.player
+    st = getattr(p, "status", None)
+    if not st:
+        return
+    for kind in list(st.keys()):
+        info = STATUS.get(kind)
+        if info is None:
+            del st[kind]
+            continue
+        p.hp -= info["dmg"]
+        st[kind] -= 1
+        if st[kind] <= 0:
+            del st[kind]
+            state.log.add(info["off"], C.DIM)
+
+
 def mob_at(state: GameState, x: int, y: int):
     for m in state.world.monsters:
         if m.alive and m.x == x and m.y == y:
@@ -265,6 +312,11 @@ def _attack_player(state: GameState, m) -> None:
                       (210, 170, 140))
     else:
         state.log.add(f"The {m.name.lower()} hits you for {dmg}!", (224, 140, 120))
+    inflicts = getattr(m, "inflicts", "")
+    if inflicts in STATUS and inflicts not in state.player.status \
+            and random.random() < STATUS[inflicts]["chance"]:
+        apply_status(state, inflicts)
+        state.log.add(STATUS[inflicts]["on"], STATUS[inflicts]["color"])
 
 
 # --- the Bomb ability --------------------------------------------------------

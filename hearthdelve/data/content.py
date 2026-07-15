@@ -1490,6 +1490,7 @@ class Monster:
     dmg: tuple             # (min, max) damage it deals on a hit
     desc: str = ""
     boss: bool = False
+    inflicts: str = ""     # a status a hit may leave: "poison" | "bleed" | "burn"
 
 
 MONSTERS: list[Monster] = [
@@ -1500,7 +1501,8 @@ MONSTERS: list[Monster] = [
     Monster("Boar", "b", (200, 150, 112), 16, 2, "charge", 2,
             dv=8, pv=2, to_hit=3, dmg=(3, 6), desc="Tougher, lightly hided; charges once it's roused."),
     Monster("Cave Spider", "x", (170, 176, 200), 12, 3, "erratic", 3,
-            dv=16, pv=1, to_hit=4, dmg=(2, 5), desc="Quick and skittering — devilishly hard to pin down."),
+            dv=16, pv=1, to_hit=4, dmg=(2, 5), inflicts="poison",
+            desc="Quick and skittering — devilishly hard to pin down, and its bite festers."),
     Monster("Deep Lurker", "L", (150, 140, 172), 30, 1, "chase", 5,
             dv=7, pv=8, to_hit=5, dmg=(6, 12), desc="A slab of armoured muscle; only a real blade bites it."),
     Monster("Wraith", "W", (186, 204, 224), 22, 2, "erratic", 6,
@@ -1536,7 +1538,8 @@ def make_mob(template: Monster, x: int, y: int, depth: int, rng, boss: bool = Fa
     return Mob(template.name, template.glyph, template.color, hp, hp,
                template.speed, template.behavior, x, y,
                dv=template.dv + k // 3, pv=template.pv + k // 3,
-               to_hit=template.to_hit + k // 2, dmg=dmg, boss=boss, level=lvl)
+               to_hit=template.to_hit + k // 2, dmg=dmg, boss=boss, level=lvl,
+               inflicts=template.inflicts)
 
 
 # --- Surface wildlife --------------------------------------------------------

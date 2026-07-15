@@ -71,6 +71,7 @@ class Player:
     karma: int = 0                               # -100 villainous .. +100 saintly
     buff: str = ""                               # active food buff key (see skills.BUFFS)
     buff_until: int = 0                          # abs in-game minute the buff wears off
+    status: dict = field(default_factory=dict)   # active DoTs: {"poison": turns_left, ...}
 
     @property
     def active_tool(self) -> Item | None:

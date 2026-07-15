@@ -271,6 +271,7 @@ def new_day(state: GameState, rested: bool = True) -> None:
     state.day += 1
     state.clock = 0
     state.warned.clear()            # a fresh morning re-arms the day's warnings
+    state.player.status.clear()     # a night's rest sweats out poison, bleed & burn
     season = state.season
     if season != old_season:
         _seasonal_flora(state, old_season, season)

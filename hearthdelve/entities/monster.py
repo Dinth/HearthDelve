@@ -34,6 +34,7 @@ class Mob:
     diet: str = ""          # wildlife only: "" | "crops" | "berries"
     hostile: bool = False   # a defensive critter roused into fighting back
     seasons: tuple = ()     # wildlife only: seasons it's active in ("" = all year)
+    inflicts: str = ""      # a status a hit may leave on the player (poison/bleed/burn)
 
     @property
     def alive(self) -> bool:
