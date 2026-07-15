@@ -1432,6 +1432,11 @@ def describe(state: GameState, x: int, y: int) -> str:
         mdef = MACHINES[m.kind]
         if m.kind == "sprinkler":
             return "a sprinkler — waters nearby soil each morning."
+        if m.kind == "weathervane":
+            from ..game import farming
+            return f"a weathervane — it points to tomorrow: {farming.weather_saying(farming.forecast(state))}"
+        if m.kind == "chest":
+            return "your storage chest — stash goods here (g) to carry less."
         if m.kind == "beehive":
             if not m.has_queen:
                 return "a beehive — add a bee queen (g) to start a colony."

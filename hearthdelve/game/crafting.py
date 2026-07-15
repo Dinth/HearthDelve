@@ -274,6 +274,12 @@ def interact_machine(state: GameState, x: int, y: int) -> bool:
     if m.kind == "chest":
         return {"storage": True}          # a home store — the player opens the chest UI
 
+    if m.kind == "weathervane":
+        from . import farming
+        state.log.add(f"The weathervane reads the coming sky: {farming.weather_saying(farming.forecast(state))}",
+                      (200, 216, 232))
+        return True
+
     if m.kind == "jeweller":
         # The bench works instantly (like a workbench): always offer its choices.
         opts = machine_load_options(state, mdef)

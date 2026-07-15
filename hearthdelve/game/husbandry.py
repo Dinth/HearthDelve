@@ -359,6 +359,14 @@ def _finish_construction(state: GameState) -> None:
             projects.finish(state, x, y, m)
         elif m.build_kind in ("oven", "cellar"):
             _finish_house_machine(state, x, y, m)
+        elif m.build_kind == "weathervane":
+            # A post, not a walled building — just stand the vane on the ground.
+            surf.tiles[x, y] = tile.GRASS
+            surf.machines[(x, y)] = Machine(kind="weathervane")
+            from . import land
+            land.claim(state, [(x, y)])
+            state.log.add("Your weathervane is up — it'll point to tomorrow's sky.",
+                          (200, 230, 170))
         else:
             _raise_building(state, x, y, m.build_kind)
 

@@ -1068,6 +1068,9 @@ MACHINES: dict[str, MachineDef] = {
                              None, "Cures raw hides & pelts into leather over half a day."),
     "chest":      MachineDef("chest", "Storage Chest", "▤", (156, 120, 78), 0, "store",
                              None, "Stashes goods at home, off your back — no weight to carry."),
+    "weathervane": MachineDef("weathervane", "Weathervane", "Ϯ", (190, 186, 178), 0, "sky",
+                              None, "Points to tomorrow's sky — read it (g) for the coming weather.",
+                              footprint=(1, 1)),
     "spinner":    MachineDef("spinner", "Spinning Wheel", "Ø", (196, 176, 140), 120, "fiber",
                              None, "Spins wool, cotton, flax or spider silk into yarn & thread."),
     "loom":       MachineDef("loom", "Loom", "π", (176, 150, 110), 180, "weave",
@@ -2294,6 +2297,8 @@ CARPENTER_JOBS: list = [
      ((items.TIMBER_PLANK, 24), (items.STONE, 14), (items.IRON_BAR, 2))),
     ("Sheep Pen (raise sheep for wool)", "pen", 500,
      ((items.TIMBER_PLANK, 22), (items.STONE, 8))),
+    ("Weathervane (reads tomorrow's sky)", "weathervane", 350,
+     ((items.TIMBER_PLANK, 8), (items.COPPER_BAR, 1))),
 ]
 
 
