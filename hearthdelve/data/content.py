@@ -1491,33 +1491,71 @@ class Monster:
     desc: str = ""
     boss: bool = False
     inflicts: str = ""     # a status a hit may leave: "poison" | "bleed" | "burn"
+    kinds: tuple = ()      # dungeon kinds it haunts ("mine"/"grotto"/"barrow"/"tomb"/
+                           # "dwarfhold"); () = found in any dungeon
 
+
+# Dungeon kinds share flavour: barrows and Westreach tombs are both undead
+# haunts, so a roster themed to one covers the other.
+_UNDEAD = ("barrow", "tomb")
+_DAMP = ("grotto",)
+_ROCK = ("mine",)
 
 MONSTERS: list[Monster] = [
+    # Common everywhere — the baseline fauna of any dark (kinds=()).
     Monster("Cave Slime", "s", (120, 200, 130), 8, 1, "chase", 1,
             dv=6, pv=0, to_hit=1, dmg=(1, 3), desc="Slow but persistent — easy to outrun."),
     Monster("Bat", "w", (172, 150, 214), 5, 3, "erratic", 1,
             dv=15, pv=0, to_hit=2, dmg=(1, 2), desc="Flits about erratically; hard to swat, but frail."),
+    # Mines — rock-dwellers.
     Monster("Boar", "b", (200, 150, 112), 16, 2, "charge", 2,
-            dv=8, pv=2, to_hit=3, dmg=(3, 6), desc="Tougher, lightly hided; charges once it's roused."),
-    Monster("Cave Spider", "x", (170, 176, 200), 12, 3, "erratic", 3,
+            dv=8, pv=2, to_hit=3, dmg=(3, 6), kinds=_ROCK,
+            desc="Tougher, lightly hided; charges once it's roused."),
+    Monster("Rock Grub", "g", (176, 156, 122), 22, 1, "chase", 2,
+            dv=5, pv=5, to_hit=3, dmg=(2, 5), kinds=_ROCK,
+            desc="A blind, armoured grub that chews the ore-veins — slow, stubborn, hard to crack."),
+    Monster("Deep Lurker", "L", (150, 140, 172), 30, 1, "chase", 5, kinds=_ROCK + _DAMP,
+            dv=7, pv=8, to_hit=5, dmg=(6, 12), desc="A slab of armoured muscle; only a real blade bites it."),
+    # Grottoes — damp, fungal, many-legged.
+    Monster("Cave Spider", "x", (170, 176, 200), 12, 3, "erratic", 3, kinds=_DAMP + _UNDEAD,
             dv=16, pv=1, to_hit=4, dmg=(2, 5), inflicts="poison",
             desc="Quick and skittering — devilishly hard to pin down, and its bite festers."),
-    Monster("Deep Lurker", "L", (150, 140, 172), 30, 1, "chase", 5,
-            dv=7, pv=8, to_hit=5, dmg=(6, 12), desc="A slab of armoured muscle; only a real blade bites it."),
-    Monster("Wraith", "W", (186, 204, 224), 22, 2, "erratic", 6,
+    Monster("Fungal Crawler", "c", (150, 194, 140), 14, 2, "chase", 2, kinds=_DAMP,
+            dv=10, pv=0, to_hit=4, dmg=(2, 4), inflicts="poison",
+            desc="Scuttles from the fungal dark, flinging rot-spores that fester in a wound."),
+    # Barrows & tombs — the restless dead.
+    Monster("Skeleton", "k", (222, 216, 194), 16, 2, "chase", 3, kinds=_UNDEAD,
+            dv=9, pv=3, to_hit=4, dmg=(3, 6),
+            desc="Rattling bones knit with old malice; shatters to a solid blow, but keeps coming."),
+    Monster("Ghoul", "j", (172, 162, 132), 24, 2, "charge", 4, kinds=_UNDEAD, inflicts="poison",
+            dv=8, pv=2, to_hit=5, dmg=(4, 8),
+            desc="A gaunt corpse-eater; its filthy claws leave the wound festering."),
+    Monster("Wraith", "W", (186, 204, 224), 22, 2, "erratic", 6, kinds=_UNDEAD,
             dv=18, pv=2, to_hit=6, dmg=(4, 11), desc="A cold, half-there shade you can barely lay a hand on."),
 ]
 
 # Bosses appear on deep floors and are spawned by special logic (not the pool).
 BOSSES: list[Monster] = [
-    Monster("Cave Troll", "T", (214, 120, 92), 44, 1, "charge", 4,
+    Monster("Cave Troll", "T", (214, 120, 92), 44, 1, "charge", 4, kinds=_ROCK + _DAMP,
             dv=6, pv=6, to_hit=5, dmg=(6, 12), boss=True, inflicts="bleed",
             desc="A hulking cave troll — slow, but its raking claws open deep wounds."),
-    Monster("Gloom Warden", "G", (156, 116, 176), 70, 2, "charge", 6,
+    Monster("Gloom Warden", "G", (156, 116, 176), 70, 2, "charge", 6, kinds=_UNDEAD,
             dv=10, pv=8, to_hit=8, dmg=(11, 20), boss=True,
             desc="Warden of the deep vaults — vast, armoured, and terribly strong."),
 ]
+
+
+def monsters_for(kind: str, depth: int) -> list[Monster]:
+    """The spawn pool for a dungeon kind at a depth: monsters at/above their
+    intro floor that either haunt this kind or roam anywhere. Falls back to the
+    depth-appropriate anywhere-mobs if a kind has nothing themed yet, so no
+    floor is ever left empty."""
+    pool = [m for m in MONSTERS if m.min_depth <= depth and (not m.kinds or kind in m.kinds)]
+    return pool or [m for m in MONSTERS if m.min_depth <= depth and not m.kinds]
+
+
+def bosses_for(kind: str, depth: int) -> list[Monster]:
+    return [b for b in BOSSES if b.min_depth <= depth and (not b.kinds or kind in b.kinds)]
 
 
 # Rare elite variants: a common mob that turns up with a nasty modifier — a

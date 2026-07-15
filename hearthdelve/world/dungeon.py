@@ -215,7 +215,7 @@ def generate(seed: int, kind: str, depth: int) -> GameMap:
     # Track occupied tiles (seeded with the stairs) so no two mobs share a spot.
     from ..data import content
     occupied = {up, down}
-    pool = [m for m in content.MONSTERS if m.min_depth <= depth]
+    pool = content.monsters_for(kind, depth)
     n_mon = rng.randint(2, 3 + depth)
     for _ in range(n_mon):
         if len(rooms) < 2 or not pool:
@@ -230,7 +230,7 @@ def generate(seed: int, kind: str, depth: int) -> GameMap:
         gm.monsters.append(content.make_mob(t, mx, my, depth, rng))
 
     # A boss lurks on deep floors (near the down-stairs).
-    bosses = [b for b in content.BOSSES if b.min_depth <= depth]
+    bosses = content.bosses_for(kind, depth)
     if bosses and rng.random() < 0.6:
         b = rng.choice(bosses)
         room = rooms[-1]
