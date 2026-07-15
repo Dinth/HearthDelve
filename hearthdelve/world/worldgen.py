@@ -240,6 +240,7 @@ def generate(seed: int = 1337) -> GameMap:
     gm.mushroom_spots = mushroom_spots
     gm.flower_spots = flower_spots
     coast = _carve_sea(gm, seed)
+    gm.coast = coast                     # per-column first sea row (salt vs fresh water)
     _carve_homestead(gm, seed)
     centers = _carve_villages(gm, seed, coast)
     _place_dungeons(gm, wild, flora, region, centers)

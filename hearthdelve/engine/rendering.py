@@ -1009,9 +1009,29 @@ def render_ambient(con: tcod.console.Console, state: GameState, t: float, occupi
     # morning brings wet. They keep out of doors: never inside a building.
     if season != "Winter" and _wet_tomorrow(state):
         ox, oy = camera_origin(state)
+        # Density tracks nearby FRESH water — mosquitoes breed in still rivers,
+        # ponds and bogs, not the salt sea. Big cloud by a river, a thin scatter
+        # out on dry ground.
+        gm = state.world
+        px, py = state.player.x, state.player.y
+        r = 11
+        x0, x1 = max(0, px - r), min(gm.width, px + r + 1)
+        y0, y1 = max(0, py - r), min(gm.height, py + r + 1)
+        sub = gm.tiles[x0:x1, y0:y1]
+        fresh = int((sub == tile.RIVER).sum())
+        water = sub == tile.WATER
+        if water.any():
+            coast = getattr(gm, "coast", None)
+            if coast is None:
+                fresh += int(water.sum())            # no sea here (e.g. Westreach)
+            else:
+                cols = coast[x0:x1][:, None]
+                ys = np.arange(y0, y1)[None, :]
+                fresh += int((water & (ys < cols)).sum())   # inland (above coast) = fresh
+        n_gnats = int(3 + 10 * min(1.0, fresh / 22.0))       # 3 far .. 13 by a river
         cx = vw * 0.5 + 10 * math.sin(t * 0.4)
         cy = vh * 0.6 + 7 * math.cos(t * 0.33)
-        for i in range(13):
+        for i in range(n_gnats):
             gx = int(cx + 5 * math.sin(t * 3.1 + i * 1.7) + (_h1(i, 3.0) * 6 - 3))
             gy = int(cy + 4 * math.cos(t * 2.7 + i * 2.3) + (_h1(i, 7.0) * 5 - 2.5))
             if not (0 <= gx < vw and 0 <= gy < vh) or (gx, gy) in occupied:
