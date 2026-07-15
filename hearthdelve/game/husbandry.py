@@ -29,6 +29,7 @@ BUILD_DAYS = 2                  # mornings the carpenter takes to finish an outb
 PET_BONUS = 12                  # happiness gained from a daily pet
 NEGLECT_DRIFT = 6               # happiness lost on a day with no attention (floor 20)
 HUNGER_DRIFT = 12               # happiness lost on a day with nothing to eat (floor 10)
+STORM_STRESS = 8                # happiness lost when a storm rattles the animals
 FARM_RADIUS = 50                # how far from the homestead an outbuilding may be raised
 PASTURE_RADIUS = 6              # a beast grazes if grass lies this close to its home
 
@@ -272,6 +273,7 @@ def new_day(state: GameState) -> None:
     _finish_construction(state)
     surf = state.surface
     season = state.season
+    storm = state.weather == "Storm"
     hungry = 0
     for a in surf.animals:
         was_adult = _is_adult(a)
@@ -279,6 +281,8 @@ def new_day(state: GameState) -> None:
         if not a.petted_today:
             a.happiness = max(20, a.happiness - NEGLECT_DRIFT)
         a.petted_today = False
+        if storm:
+            a.happiness = max(20, a.happiness - STORM_STRESS)   # thunder rattles them
         fed = _feed_animal(state, a, season)
         if not fed:
             a.happiness = max(10, a.happiness - HUNGER_DRIFT)
@@ -296,6 +300,9 @@ def new_day(state: GameState) -> None:
     if hungry:
         state.log.add(f"{hungry} of your animals went hungry — fork straw into the trough (g)!",
                       (228, 150, 110))
+    if storm and surf.animals:
+        state.log.add("The storm left the animals unsettled — a little extra care today.",
+                      (180, 190, 210))
     _spring_births(state)
 
 
