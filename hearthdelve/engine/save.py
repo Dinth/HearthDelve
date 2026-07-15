@@ -39,6 +39,31 @@ class IncompatibleSaveError(Exception):
 _PLAYER_BUILT_KINDS = ("coop_small", "coop_big", "barn", "greenhouse", "windmill", "pen")
 
 
+def _mob_to_rec(m) -> list:
+    """Serialize a surface/west critter as a positional record. Append-only: to
+    persist a new Mob field, add it to the END here and read it with a guarded
+    default in _mob_from_rec — old and new saves then both keep loading, with no
+    SAVE_VERSION bump."""
+    return [m.name, m.glyph, list(m.color), m.hp, m.max_hp, m.speed, m.behavior,
+            m.x, m.y, m.dv, m.pv, m.to_hit, list(m.dmg), m.awake,
+            m.kind, m.diet, m.hostile, list(m.seasons),
+            m.level, m.energy, m.boss]
+
+
+def _mob_from_rec(rec: list, Mob) -> object:
+    """Deserialize a critter defensively: each field is read positionally with a
+    default, so a record shorter than this build expects (an older save) or
+    longer (a newer one) loads cleanly instead of raising on a length mismatch."""
+    def g(i, d):
+        return rec[i] if len(rec) > i else d
+    return Mob(g(0, "?"), g(1, "?"), tuple(g(2, (200, 200, 200))),
+               g(3, 1), g(4, 1), g(5, 1), g(6, "skittish"), g(7, 0), g(8, 0),
+               dv=g(9, 0), pv=g(10, 0), to_hit=g(11, 0), dmg=tuple(g(12, (1, 3))),
+               awake=g(13, False), kind=g(14, "monster"), diet=g(15, ""),
+               hostile=g(16, False), seasons=tuple(g(17, ())),
+               level=g(18, 1), energy=g(19, 0), boss=g(20, False))
+
+
 def exists(path: str = SAVE_PATH) -> bool:
     return os.path.isfile(path)
 
@@ -111,10 +136,7 @@ def save(state: GameState, path: str = SAVE_PATH) -> None:
         # surface's. (Regenerated from seed on load, then overlaid.)
         "west": None if state.west is None else {
             "tiles": base64.b64encode(np.ascontiguousarray(state.west.tiles).tobytes()).decode("ascii"),
-            "wildlife": [[m.name, m.glyph, list(m.color), m.hp, m.max_hp, m.speed, m.behavior,
-                          m.x, m.y, m.dv, m.pv, m.to_hit, list(m.dmg), m.awake,
-                          m.kind, m.diet, m.hostile, list(m.seasons)]
-                         for m in state.west.monsters],
+            "wildlife": [_mob_to_rec(m) for m in state.west.monsters],
         },
         "on_west": ((state.world is state.west and state.west is not None)
                     or (state.depth > 0 and state.return_west)),
@@ -144,10 +166,7 @@ def save(state: GameState, path: str = SAVE_PATH) -> None:
                     for a in surf.animals],
         # Surface wildlife is persistent (a boar you put down stays down, and
         # its karma cost sticks) rather than re-scattered from the seed on load.
-        "wildlife": [[m.name, m.glyph, list(m.color), m.hp, m.max_hp, m.speed, m.behavior,
-                      m.x, m.y, m.dv, m.pv, m.to_hit, list(m.dmg), m.awake,
-                      m.kind, m.diet, m.hostile, list(m.seasons)]
-                     for m in surf.monsters],
+        "wildlife": [_mob_to_rec(m) for m in surf.monsters],
         # Player-raised outbuildings (worldgen doesn't recreate these).
         "buildings": [b for b in surf.buildings
                       if b.get("kind") in _PLAYER_BUILT_KINDS and not b.get("village")],
@@ -255,13 +274,7 @@ def load(path: str = SAVE_PATH) -> GameState:
     # seed-scattered set) so kills and roused states carry across a reload.
     if "wildlife" in data:
         from ..entities.monster import Mob
-        world.monsters = []
-        for rec in data["wildlife"]:
-            (nm, glyph, color, hp, mhp, spd, behavior, mx, my,
-             dv, pv, th, dmg, awake, mkind, diet, hostile, seasons) = rec
-            world.monsters.append(Mob(nm, glyph, tuple(color), hp, mhp, spd, behavior, mx, my,
-                                      dv=dv, pv=pv, to_hit=th, dmg=tuple(dmg), awake=awake,
-                                      kind=mkind, diet=diet, hostile=hostile, seasons=tuple(seasons)))
+        world.monsters = [_mob_from_rec(rec, Mob) for rec in data["wildlife"]]
 
     # Re-register player-raised outbuildings (their tiles + housing machine are
     # restored above; this puts back the record the look tool names them by).
@@ -340,14 +353,7 @@ def load(path: str = SAVE_PATH) -> GameState:
         wmap = westgen.generate(data["seed"])
         wmap.tiles = np.frombuffer(base64.b64decode(raw_west["tiles"]),
                                    dtype=np.uint8).reshape(westgen.W, westgen.H).copy()
-        wmap.monsters = []
-        for rec in raw_west.get("wildlife", []):
-            (nm, glyph, color, hp, mhp, spd, behavior, mx, my,
-             dv, pv, th, dmg, awake, mkind, diet, hostile, seasons) = rec
-            wmap.monsters.append(_Mob(nm, glyph, tuple(color), hp, mhp, spd, behavior, mx, my,
-                                      dv=dv, pv=pv, to_hit=th, dmg=tuple(dmg), awake=awake,
-                                      kind=mkind, diet=diet, hostile=hostile,
-                                      seasons=tuple(seasons)))
+        wmap.monsters = [_mob_from_rec(rec, _Mob) for rec in raw_west.get("wildlife", [])]
         state.west = wmap
         if data.get("on_west"):
             state.world = wmap        # the player saved out in the Westreach
