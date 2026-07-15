@@ -44,6 +44,32 @@ def is_wet_weather(weather: str) -> bool:
     return weather in ("Rain", "Storm")
 
 
+def forecast(state: GameState) -> str:
+    """Tomorrow's weather — deterministic from the seed (it mirrors what new_day
+    will roll), so a weatherwise villager, a weathervane, or the low-flying birds
+    can all foretell it without any magic."""
+    d = state.day + 1
+    season = C.SEASONS[(d // C.SEASON_LEN) % len(C.SEASONS)]
+    w = roll_weather(season, random.Random(state.seed * 100003 + d))
+    fest = content.festival_on(season, d % C.SEASON_LEN + 1)
+    if fest is not None and len(fest) > 4:
+        w = fest[4]
+    return w
+
+
+_WEATHER_SAYING = {
+    "Clear": "Clear skies tomorrow — fine drying weather.",
+    "Rain": "Rain by morning, mark me — see how low the swallows fly.",
+    "Storm": "There's thunder brewing; it'll storm tomorrow. Mind your beasts.",
+    "Fog": "Grey and close tomorrow — fog'll come up off the low ground.",
+    "Snow": "Snow tomorrow, sure as the ache in my knees.",
+}
+
+
+def weather_saying(w: str) -> str:
+    return _WEATHER_SAYING.get(w, f"Tomorrow looks to turn {w.lower()}.")
+
+
 def init_weather(state: GameState) -> None:
     """Set the opening day's weather."""
     state.weather = roll_weather(state.season, random.Random(state.seed * 100003 + state.day))

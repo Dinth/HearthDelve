@@ -166,6 +166,11 @@ def talk(state: GameState, npc: NPC) -> str:
         taught = _teach_recipe(state, npc)   # a friend shares their favourite dish
         if taught:
             return taught
+    # The outdoors folk read the sky: talk to a fisher, forager, forester or the
+    # village elder and they'll foretell tomorrow's weather in folk lore.
+    if npc.role in ("fisher", "forager", "forester", "elder"):
+        from . import farming
+        return farming.weather_saying(farming.forecast(state))
     return npc.speak()
 
 
