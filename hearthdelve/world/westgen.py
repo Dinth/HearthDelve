@@ -43,6 +43,20 @@ def generate(seed: int) -> GameMap:
         if tiles[x, y] in (tile.GRASS, tile.MOOR, tile.HILL):
             tiles[x, y] = tile.TREE_PINE if detail[x, y] > 0.5 else tile.TREE_SPRUCE
 
+    # The same sea that fringes the Vale laps this southern edge too — water
+    # can't just stop at a map border. A wandering coast with a sandy strand;
+    # its coastline is stored so foam breaks on it and midges know it's salt.
+    wob = _noise_field(seed + 9210, W, 1, scale=0.05, octaves=3).reshape(-1)
+    base = int(H * 0.86)
+    coast = np.empty(W, dtype=np.int32)
+    for x in range(W):
+        cy = max(4, min(H - 4, base + int((wob[x] - 0.5) * 42)))
+        coast[x] = cy
+        tiles[x, cy:H] = tile.WATER
+        for y in range(cy - 2, cy):
+            if 0 <= y < H and tiles[x, y] != tile.WATER:
+                tiles[x, y] = tile.SAND
+
     # --- the volcano -----------------------------------------------------------
     vx, vy = int(W * 0.30), H // 2 + rng.randint(-24, 24)
     ph = [rng.uniform(0, 6.28) for _ in range(3)]
@@ -84,6 +98,7 @@ def generate(seed: int) -> GameMap:
 
     gm = GameMap(width=W, height=H, tiles=tiles)
     gm.spawn = (W - 3, H // 2)
+    gm.coast = coast                     # per-column first sea row (salt vs fresh)
 
     # --- the delvings ------------------------------------------------------------
     # An old tomb in the eastern hills, and the mouth of the dwarven mine on the
