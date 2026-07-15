@@ -22,10 +22,10 @@ from . import turns
 
 # --- Weather -----------------------------------------------------------------
 _WEATHER_BY_SEASON = {
-    "Spring": [("Clear", 0.50), ("Rain", 0.35), ("Fog", 0.15)],
-    "Summer": [("Clear", 0.60), ("Rain", 0.18), ("Storm", 0.12), ("Fog", 0.10)],
-    "Fall":   [("Clear", 0.50), ("Rain", 0.30), ("Fog", 0.20)],
-    "Winter": [("Snow", 0.60), ("Clear", 0.30), ("Fog", 0.10)],
+    "Spring": [("Cloudy", 0.32), ("Rain", 0.35), ("Clear", 0.18), ("Fog", 0.15)],
+    "Summer": [("Cloudy", 0.35), ("Clear", 0.25), ("Rain", 0.18), ("Storm", 0.12), ("Fog", 0.10)],
+    "Fall":   [("Cloudy", 0.32), ("Rain", 0.30), ("Clear", 0.18), ("Fog", 0.20)],
+    "Winter": [("Snow", 0.60), ("Cloudy", 0.18), ("Clear", 0.12), ("Fog", 0.10)],
 }
 
 
