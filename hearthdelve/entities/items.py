@@ -193,7 +193,7 @@ SULPHUR     = Item("Sulphur",     "▪", "material", "Brimstone-yellow crystals 
 SALTPETER   = Item("Saltpeter",   "▪", "material", "White nitre crust — powder, fertiliser or curing salt.", value=35)
 GUNPOWDER   = Item("Gunpowder",   "▪", "material", "Milled black powder. Handle gently.", value=90)
 FERTILISER  = Item("Fertiliser",  "≈", "material", "Nitre-rich meal — fertilised soil grows finer crops (g at a growing crop).", value=25)
-SALVE       = Item("Sulphur Salve", "!", "material", "A pungent wound-salve of brimstone, honey and wax (use it from the eat menu, x).", value=85, heal=30)
+SALVE       = Item("Sulphur Salve", "!", "material", "A pungent wound-salve of brimstone, honey and wax; heals and draws out poison, bleeding and burns (use it from the eat menu, x).", value=85, heal=30)
 DRAKE_SCALE = Item("Drake Scale",   "u", "material", "A heat-shimmering scale from an ember drake — collectors pay dearly.", value=130)
 
 # Meat is TYPED — the cut carries its animal the way a jam carries its fruit

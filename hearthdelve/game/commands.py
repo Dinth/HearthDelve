@@ -904,8 +904,12 @@ def _eat(state: GameState, item, quality: int) -> None:
     p.inventory.remove(item, 1, quality=quality)
     if item.heal and not item.energy:                    # a remedy, not a meal
         p.hp = min(p.max_hp, p.hp + item.heal)
-        state.log.add(f"You dress your wounds with the {item.name.lower()}. (+{item.heal} HP)",
-                      (180, 230, 160))
+        cured = bool(p.status)
+        p.status.clear()                                 # brimstone draws out poison, staunches bleeding, cools burns
+        msg = f"You dress your wounds with the {item.name.lower()}. (+{item.heal} HP)"
+        if cured:
+            msg += " The sting eases — your afflictions clear."
+        state.log.add(msg, (180, 230, 160))
         turns.advance_time(state, C.USE_SECONDS)
         return
     gain = round(item.energy * (1 + 0.12 * quality))     # tastier food goes further
