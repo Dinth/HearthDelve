@@ -251,10 +251,17 @@ def _dry_cut_grass(state: GameState) -> None:
         state.log.add(f"Your cut grass dried into {n} straw.", (220, 210, 150))
 
 
+# How many consecutive unwatered days a crop endures before it withers, by the
+# weather that dried it. Clear sun bakes it out in a day; cloud is gentle. Rain
+# and storm water it, so they never dry a crop (999 = never).
+_WITHER_DAYS = {"Clear": 1, "Cloudy": 3, "Fog": 3, "Snow": 3}
+
+
 def new_day(state: GameState, rested: bool = True) -> None:
     """Advance to the next morning: sell shipment, grow crops, roll weather."""
     from . import crafting
     crafting.sell_shipment(state)
+    prev_weather = state.weather        # the day now ending — it's what dried the crops
 
     # A fair day (that's now ending) dries any cut grass into straw; snow/rain
     # ruins the drying, so hay is a fine-weather job — stock up before winter.
@@ -282,9 +289,20 @@ def new_day(state: GameState, rested: bool = True) -> None:
     # being swallowed by this same dawn's tick (which cost diligent players a
     # day). Greenhouse crops always count as in-season (never wither, keep
     # growing) — they use their own season instead of the calendar's.
+    wither_days = _WITHER_DAYS.get(prev_weather, 999)   # dry crops wither by yesterday's sun
+    withered = 0
     for (cx, cy), plot in state.world.crops.items():
-        grow_season = plot.crop.season if in_greenhouse(state.world, cx, cy) else season
-        advance_growth(plot, grow_season)
+        if plot.dead:
+            continue
+        gh = in_greenhouse(state.world, cx, cy)          # under glass: sheltered, never withers
+        grow_season = plot.crop.season if gh else season
+        growing = not plot.mature and plot.crop.season == grow_season
+        advance_growth(plot, grow_season, 999 if gh else wither_days)
+        if growing and plot.dead:
+            withered += 1
+    if withered:
+        state.log.add(f"{withered} crop{'s' if withered != 1 else ''} withered for want of water — "
+                      "water them (2), catch the rain, or set a sprinkler.", (216, 170, 110))
     for tree in state.world.trees.values():
         advance_tree(tree, season)
 

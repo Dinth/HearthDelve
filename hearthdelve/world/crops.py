@@ -23,6 +23,7 @@ class CropPlot:
     watered: bool = False
     dead: bool = False
     fertilized: bool = False   # nitre-fed soil: the harvest comes up a star finer
+    thirst: int = 0            # consecutive unwatered days; a crop withers at the limit
 
     @property
     def mature(self) -> bool:
@@ -53,15 +54,25 @@ class CropPlot:
         return SEEDLING_FG if self.stage == 0 else SPROUT_FG
 
 
-def advance_growth(plot: CropPlot, season: str) -> None:
-    """Tick one day. Out-of-season crops wither; watered crops advance."""
+def advance_growth(plot: CropPlot, season: str, wither_days: int = 999) -> None:
+    """Tick one day. Out-of-season crops wither at once; a watered crop advances
+    and its thirst resets; an unwatered growing crop goes thirsty and withers
+    once its dry spell reaches ``wither_days`` (short under clear sun, longer
+    under cloud). A mature crop just waits to be picked — it won't die of thirst.
+    A paddy floods itself, so rice never goes dry."""
     if plot.dead:
         return
     if plot.crop.season != season:
         plot.dead = True
         return
-    if not plot.mature and (plot.watered or plot.crop.paddy):   # a paddy floods itself
-        plot.days_grown += 1
+    if plot.watered or plot.crop.paddy:
+        if not plot.mature:
+            plot.days_grown += 1
+        plot.thirst = 0
+    elif not plot.mature:
+        plot.thirst += 1
+        if plot.thirst >= wither_days:
+            plot.dead = True
     plot.watered = False
 
 

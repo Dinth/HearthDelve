@@ -151,7 +151,7 @@ def save(state: GameState, path: str = SAVE_PATH) -> None:
                  for m in state.mail],
         "tiles_shape": [surf.width, surf.height],
         "tiles": base64.b64encode(np.ascontiguousarray(surf.tiles).tobytes()).decode("ascii"),
-        "crops": {f"{x},{y}": [pl.crop.name, pl.days_grown, pl.watered, pl.dead, pl.fertilized]
+        "crops": {f"{x},{y}": [pl.crop.name, pl.days_grown, pl.watered, pl.dead, pl.fertilized, pl.thirst]
                   for (x, y), pl in surf.crops.items()},
         "trees": {f"{x},{y}": [t.name, t.age, t.has_fruit, t.refruit_in]
                   for (x, y), t in surf.trees.items()},
@@ -216,11 +216,12 @@ def load(path: str = SAVE_PATH) -> GameState:
     for key, rec in data["crops"].items():
         cname, days, watered, dead = rec[:4]
         fert = rec[4] if len(rec) > 4 else False
+        thirst = rec[5] if len(rec) > 5 else 0
         x, y = map(int, key.split(","))
         crop = content.CROP_BY_NAME.get(cname)
         if crop:
             world.crops[(x, y)] = CropPlot(crop=crop, days_grown=days, watered=watered,
-                                           dead=dead, fertilized=fert)
+                                           dead=dead, fertilized=fert, thirst=thirst)
 
     world.trees = {}
     for key, rec in data.get("trees", {}).items():
