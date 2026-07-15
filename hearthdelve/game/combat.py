@@ -18,17 +18,27 @@ def _sign(n: int) -> int:
 # Each entry: per-turn damage, how many turns a fresh application lasts, the
 # chance a landing hit inflicts it, and the display/log wording. Ticked once per
 # action by turns.advance_time; cleared by a night's rest (farming.new_day).
+# Per-turn damage is the larger of a flat ``dmg`` and ``pct`` of the victim's
+# max HP — so a status is unchanged for a fragile newcomer (the flat value wins)
+# yet keeps its teeth against a 160-HP veteran or a scaled deep monster (the
+# percentage wins), instead of fading to a rounding error as HP grows.
 STATUS = {
-    "poison": {"dmg": 2, "turns": 5, "chance": 0.45, "color": (150, 210, 120),
+    "poison": {"dmg": 2, "pct": 0.018, "turns": 5, "chance": 0.45, "color": (150, 210, 120),
                "tag": "☠ Poisoned", "on": "The bite festers — you're poisoned!",
                "off": "The poison finally passes."},
-    "bleed":  {"dmg": 2, "turns": 4, "chance": 0.40, "color": (220, 120, 120),
+    "bleed":  {"dmg": 2, "pct": 0.018, "turns": 4, "chance": 0.40, "color": (220, 120, 120),
                "tag": "≈ Bleeding", "on": "You're bleeding!",
                "off": "The bleeding stops."},
-    "burn":   {"dmg": 3, "turns": 3, "chance": 0.50, "color": (240, 150, 80),
+    "burn":   {"dmg": 3, "pct": 0.022, "turns": 3, "chance": 0.50, "color": (240, 150, 80),
                "tag": "♨ Burning", "on": "You're set alight — burning!",
                "off": "The burns cool."},
 }
+
+
+def _status_damage(holder, info: dict) -> int:
+    """A DoT tick's damage on a holder: a flat floor, scaled up toward a small
+    fraction of the victim's max HP so it stays relevant as HP grows."""
+    return max(info["dmg"], round(getattr(holder, "max_hp", 0) * info.get("pct", 0.0)))
 
 
 def apply_status(state: GameState, kind: str, turns: int = 0, target=None) -> None:
@@ -53,7 +63,7 @@ def _tick_status(holder) -> list:
         if info is None:
             del st[kind]
             continue
-        holder.hp -= info["dmg"]
+        holder.hp -= _status_damage(holder, info)
         st[kind] -= 1
         if st[kind] <= 0:
             del st[kind]
