@@ -656,11 +656,22 @@ class AmmoStat:
     family: str            # "arrow" | "stone" — which launchers can loose it
     dmg: int = 0           # damage added on top of the launcher's roll
     to_hit: int = 0        # to-hit added on top of the launcher's aim
+    inflicts: str = ""     # a status a landing shot may leave (poison/bleed/burn)
 
 
 AMMO: dict[Item, AmmoStat] = {
     items.ARROW:       AmmoStat("arrow", 0, -1),   # plain wooden: weak & a bit wobbly
     items.SLING_STONE: AmmoStat("stone", 0, 0),
+    # Tipped for effect, not raw punch — readied deliberately in the ammo slot.
+    items.FIRE_ARROW:  AmmoStat("arrow", 1, 0, inflicts="burn"),
+    items.VENOM_ARROW: AmmoStat("arrow", 1, 0, inflicts="poison"),
+}
+
+# Special arrows fletched from a reagent (Wood + reagent -> 5), themed to a
+# status rather than a metal tip. Shown in the fletch chooser when held.
+STATUS_ARROWS: dict[Item, Item] = {
+    items.SULPHUR:     items.FIRE_ARROW,
+    items.VENOM_GLAND: items.VENOM_ARROW,
 }
 
 # ore -> (tip name, +dmg, +to-hit, value each) for the metal-tipped arrow it makes.
@@ -1710,7 +1721,7 @@ WILDLIFE_DROPS: dict[str, list] = {
     "Bear":        [(items.MEAT, 1.0, (2, 4)), (items.RAW_HIDE, 1.0, (1, 2))],
     "Ash Wolf":    [(items.MEAT, 0.5, (1, 1)), (items.WOLF_PELT, 0.9, (1, 1))],
     "Cinder Boar": [(items.MEAT, 1.0, (1, 3)), (items.BOAR_HIDE, 1.0, (1, 1))],
-    "Rock Viper":  [(items.RAW_HIDE, 0.4, (1, 1))],
+    "Rock Viper":  [(items.RAW_HIDE, 0.4, (1, 1)), (items.VENOM_GLAND, 0.6, (1, 1))],
     "Ember Drake": [(items.MEAT, 0.5, (1, 1)), (items.DRAKE_SCALE, 0.8, (1, 2))],
 }
 
@@ -2529,7 +2540,7 @@ MONSTER_DROPS: dict[str, list] = {
     "Cinder Boar":  [(items.BOAR_HIDE, 0.6), (items.PORK, 0.9)],
     "Rock Viper":   [(items.SULPHUR, 0.3)],
     "Ember Drake":  [(items.DRAKE_SCALE, 0.8), (items.SULPHUR, 0.6)],
-    "Cave Spider":  [(items.SPIDER_SILK, 0.6)],
+    "Cave Spider":  [(items.SPIDER_SILK, 0.6), (items.VENOM_GLAND, 0.4)],
     "Deep Lurker":  [(items.LURKER_SCALE, 0.6)],
     "Wraith":       [(items.WRAITH_ESSENCE, 0.5)],
     "Cave Troll":   [(items.BOAR_HIDE, 1.0), (items.COAL, 1.0)],

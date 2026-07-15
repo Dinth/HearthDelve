@@ -641,6 +641,12 @@ def _resolve_shot(state: GameState, stat, ammo, astat, tx: int, ty: int) -> None
     if m.hp <= 0:
         _on_kill(state, m)
         return
+    kind = getattr(astat, "inflicts", "")        # a fire/venom-tipped arrow
+    if kind in STATUS and kind not in m.status and random.random() < STATUS[kind]["chance"]:
+        apply_status(state, kind, target=m)
+        verb = {"burn": "bursts into flame", "poison": "is envenomed",
+                "bleed": "is torn open"}.get(kind, "is afflicted")
+        state.log.add(f"The {m.name.lower()} {verb}!", STATUS[kind]["color"])
     if wild and not m.hostile:
         state.log.add(f"You hit the {m.name.lower()} for {dmg} — it bolts!", C.DIM)
     else:

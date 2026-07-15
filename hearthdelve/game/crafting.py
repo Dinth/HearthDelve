@@ -137,6 +137,9 @@ def arrow_choice_options(state: GameState) -> list:
     for ore, arrow in content.ARROW_FROM_ORE.items():
         if inv.count(ore) >= 1:
             opts.append({"inputs": [(items.WOOD, 1), (ore, 1)], "output": arrow, "out_qty": 5})
+    for reagent, arrow in content.STATUS_ARROWS.items():   # brimstone/venom-tipped
+        if inv.count(reagent) >= 1:
+            opts.append({"inputs": [(items.WOOD, 1), (reagent, 1)], "output": arrow, "out_qty": 5})
     return opts
 
 

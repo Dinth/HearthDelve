@@ -206,6 +206,7 @@ DUCK_MEAT     = Item("Duck Meat",     "▬", "material", "A rich, dark duck brea
 MUTTON        = Item("Mutton",        "▬", "material", "A hearty cut of mutton.",   value=70, family="meat")
 GOAT_MEAT     = Item("Goat Meat",     "▬", "material", "A lean cut of goat.",       value=65, family="meat")
 SPIDER_SILK   = Item("Spider Silk",   "~", "material", "Strong, fine silk from a cave spider.",    value=35)
+VENOM_GLAND   = Item("Venom Gland",   "○", "material", "The dripping poison-sac of a spider or viper — smear it on an arrow-tip.", value=40)
 LURKER_SCALE  = Item("Lurker Scale",  "u", "material", "A thick armoured scale from a deep lurker.", value=55)
 WRAITH_ESSENCE= Item("Wraith Essence","*", "material", "Cold, half-real essence bled from a wraith.", value=75)
 GLOWCAP       = Item("Glowcap",       "î", "material", "A luminous cave fungus from the Glimmerwood — prized by cooks.", value=65)
@@ -397,6 +398,8 @@ LONG_BOW    = Item("Long Bow",    "}", "ranged", "A tall war bow — longer reac
 SLING       = Item("Sling",       "?", "ranged", "A leather sling; hurls stones cheaply.", value=35, stackable=False, material="leather")
 ARROW       = Item("Arrow",       "/", "ammo",   "Fletched arrows for a bow.", value=3)
 SLING_STONE = Item("Sling Stone", ".", "ammo",   "Smooth stones for a sling.", value=1)
+FIRE_ARROW  = Item("Fire Arrow",  "/", "ammo",   "A brimstone-tipped arrow that sets its mark ablaze.", value=14)
+VENOM_ARROW = Item("Venom Arrow", "/", "ammo",   "A gland-smeared arrow whose wound festers with poison.", value=14)
 
 # --- Consumables -------------------------------------------------------------
 BOMB        = Item("Bomb",        "*", "bomb",     "Aim & throw (t): harms monsters and shatters rock/ore.", value=0)
