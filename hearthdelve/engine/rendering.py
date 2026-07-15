@@ -974,6 +974,15 @@ def render_weather(con: tcod.console.Console, state: GameState, t: float, occupi
             con.rgb["fg"][cx, cy] = color
 
 
+# Tile kinds a gnat cloud won't hang over: indoors, built features, and walls.
+_GNAT_SKIP = frozenset((
+    "house_wall", "house_floor", "door", "bed", "hearth", "table", "counter",
+    "barrel", "stall", "well", "statue", "altar", "grave", "tent",
+    "shipping_bin", "bin", "post_box", "notice_board", "lamp", "wall", "chest",
+    "coop", "coop_small", "coop_big", "barn", "pen",
+))
+
+
 def _wet_tomorrow(state: GameState) -> bool:
     """Is rain/storm forecast for tomorrow? (Drives the natural weather tells.)"""
     try:
@@ -996,16 +1005,22 @@ def render_ambient(con: tcod.console.Console, state: GameState, t: float, occupi
     night = (dr + dg + db) / 3.0 < 0.62
 
     # Nature's own forecast: on a calm day before rain, gnats rise and swarm in
-    # a low, restless cloud — read it, and you'll know the morning brings wet.
+    # a low, restless cloud over open ground — read it and you'll know the
+    # morning brings wet. They keep out of doors: never inside a building.
     if season != "Winter" and _wet_tomorrow(state):
+        ox, oy = camera_origin(state)
         cx = vw * 0.5 + 10 * math.sin(t * 0.4)
         cy = vh * 0.6 + 7 * math.cos(t * 0.33)
         for i in range(13):
             gx = int(cx + 5 * math.sin(t * 3.1 + i * 1.7) + (_h1(i, 3.0) * 6 - 3))
             gy = int(cy + 4 * math.cos(t * 2.7 + i * 2.3) + (_h1(i, 7.0) * 5 - 2.5))
-            if 0 <= gx < vw and 0 <= gy < vh and (gx, gy) not in occupied:
-                con.rgb["ch"][gx, gy] = ord("·")
-                con.rgb["fg"][gx, gy] = (74, 72, 60)   # a dark midge cloud
+            if not (0 <= gx < vw and 0 <= gy < vh) or (gx, gy) in occupied:
+                continue
+            k = state.world.tile_at(ox + gx, oy + gy).kind
+            if k in _GNAT_SKIP:                       # not indoors, not through walls
+                continue
+            con.rgb["ch"][gx, gy] = ord("·")
+            con.rgb["fg"][gx, gy] = (74, 72, 60)       # a dark midge cloud
 
     if season == "Spring":
         specs, palette, driftx, drifty, glyphs, sway = (24, [(236, 186, 206), (232, 200, 214),
