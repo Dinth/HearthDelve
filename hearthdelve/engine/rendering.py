@@ -1459,6 +1459,15 @@ def _wrap(text: str, width: int) -> list[str]:
     return lines
 
 
+_STATUS_ADJ = {"burn": "burning", "poison": "poisoned", "bleed": "bleeding"}
+
+
+def _afflictions(m) -> str:
+    """A readable list of the DoTs currently on a mob (''  if none)."""
+    st = getattr(m, "status", None)
+    return ", ".join(_STATUS_ADJ.get(k, k) for k in st) if st else ""
+
+
 def describe(state: GameState, x: int, y: int) -> str:
     if (x, y) == (state.player.x, state.player.y):
         return "yourself, the new farmer of Hollowmere Vale."
@@ -1466,16 +1475,21 @@ def describe(state: GameState, x: int, y: int) -> str:
         return "the edge of the known Vale."
     for m in state.world.monsters:
         if m.alive and (m.x, m.y) == (x, y):
+            aff = _afflictions(m)
+            afftail = f" Currently {aff}." if aff else ""
+            infl = (f" Its hits can leave you {_STATUS_ADJ.get(m.inflicts, m.inflicts)}."
+                    if getattr(m, "inflicts", "") else "")
             if getattr(m, "kind", "monster") == "wildlife":
                 if m.hostile:
-                    return f"a {m.name.lower()}, riled up and coming for you!"
+                    return f"a {m.name.lower()}, riled up and coming for you!{infl}{afftail}"
                 trait = ("minds its own business — but fights back if struck"
                          if m.behavior == "defensive"
                          else "skittish; it bolts if you get too close")
-                return f"a {m.name.lower()} — {trait}."
+                return f"a {m.name.lower()} — {trait}.{infl}{afftail}"
             tier = f" (level {m.level})" if getattr(m, "level", 1) > 1 else ""
-            return (f"a {m.name.lower()}{tier} — HP {m.hp}/{m.max_hp}, DV {m.dv}, PV {m.pv}. "
-                    "Bump it to attack.")
+            elite = " An elite: tougher, and a richer kill." if getattr(m, "elite", "") else ""
+            return (f"a {m.name.lower()}{tier} — HP {m.hp}/{m.max_hp}, DV {m.dv}, PV {m.pv}."
+                    f"{elite}{infl}{afftail} Bump it to attack.")
     for npc in state.world.npcs:
         if (npc.x, npc.y) == (x, y):
             role = {"general": "shopkeeper", "blacksmith": "blacksmith"}.get(npc.shop, "villager")
@@ -2250,13 +2264,30 @@ def build_codex_pages(state: GameState):
     pages.append(("Terrain & Features", terrain))
 
     # --- Page: Monsters ------------------------------------------------------
+    _KIND_NAME = {"mine": "Mines", "grotto": "Grottoes", "barrow": "Barrows",
+                  "tomb": "Tombs", "dwarfhold": "Dwarfhold"}
+
+    def _haunt(kinds):
+        return ", ".join(_KIND_NAME.get(k, k) for k in kinds) if kinds else "any dungeon"
+
+    def _mon_lines(m, into):
+        tags = _haunt(m.kinds)
+        if m.inflicts:
+            tags += f"  ·  inflicts {m.inflicts}"
+        into.append((f" {m.glyph}  {m.name}   HP {m.hp}  DV {m.dv} PV {m.pv}  "
+                     f"dmg {m.dmg[0]}-{m.dmg[1]}  from floor {m.min_depth}", _KEY))
+        into.append((f"      {m.behavior}, {tags}. {m.desc}", C.DIM))
+
     mon = [("Monsters", _HDR), ("", C.WHITE)]
     for m in content.MONSTERS:
-        mon.append((f" {m.glyph}  {m.name}   HP {m.hp}  DV {m.dv} PV {m.pv}  "
-                    f"dmg {m.dmg[0]}-{m.dmg[1]}  from floor {m.min_depth}", _KEY))
-        mon.append((f"      {m.behavior}, from floor {m.min_depth}. {m.desc}", C.DIM))
+        _mon_lines(m, mon)
+    mon.append(("", C.WHITE))
+    mon.append((" Bosses — lurking on the deep floors:", _HDR))
+    for b in content.BOSSES:
+        _mon_lines(b, mon)
     mon.append(("", C.WHITE))
     mon.append(("Bump to attack. Aim & throw a Bomb (t) to hit several at once.", C.DIM))
+    mon.append(("Deeper down, elites appear — prefixed, brighter, tougher, and worth more.", C.DIM))
     mon.append(("Slain cave beasts may drop reagents (gel, wing, hide).", C.DIM))
     mon.append(("Faint in the dark → hauled home, minus loose loot & 10% gold.", C.DIM))
     mon.append(("", C.WHITE))
