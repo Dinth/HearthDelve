@@ -453,6 +453,17 @@ def render_world(con: tcod.console.Console, state: GameState, anim_time: float =
             bg *= sh[..., None]
             fg *= (0.55 + 0.45 * sh)[..., None]
 
+    # --- Cloud shadows: on an overcast day, soft dark patches drift across the
+    # land on the wind, the sun breaking through here and there. Smooth low
+    # frequencies (not a floored hash) so the shadows are broad and organic.
+    if not w.is_dungeon and state.weather == "Cloudy":
+        cs = (np.sin(xs * 0.085 - t * 0.55) + np.sin(ys * 0.062 + t * 0.32)
+              + 0.7 * np.sin((xs + ys) * 0.05 - t * 0.40))
+        cloud = np.clip((cs - 0.5) / 2.2, 0.0, 1.0)      # only the peaks = a passing cloud
+        k = (cloud * 0.34)[..., None]
+        fg *= (1 - k)
+        bg *= (1 - k)
+
     fg_mul = np.ones((C.VIEW_W, C.VIEW_H), dtype=np.float32)
     bg_mul = np.ones((C.VIEW_W, C.VIEW_H), dtype=np.float32)
 
