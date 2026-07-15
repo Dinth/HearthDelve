@@ -1520,6 +1520,31 @@ BOSSES: list[Monster] = [
 ]
 
 
+# Rare elite variants: a common mob that turns up with a nasty modifier — a
+# name prefix, boosted stats, brighter colour, and often a status it inflicts.
+# An elite is a windfall (level +2 → more XP and better loot) and a real threat.
+# Each entry may set: hp/dmg multipliers, flat dv/pv/speed/to_hit bumps, an
+# inflicted status, and a colour to blend the glyph toward.
+ELITE_AFFIXES: dict[str, dict] = {
+    "Dire":      {"hp": 1.7, "dmg": 1.4, "to_hit": 2, "tint": (240, 120, 110)},
+    "Swift":     {"hp": 1.2, "speed": 1, "to_hit": 2, "tint": (190, 220, 255)},
+    "Ironhide":  {"hp": 1.4, "pv": 4, "dv": 3, "tint": (200, 200, 214)},
+    "Venomous":  {"hp": 1.2, "inflicts": "poison", "tint": (150, 210, 120)},
+    "Rending":   {"hp": 1.3, "dmg": 1.2, "inflicts": "bleed", "tint": (220, 120, 120)},
+    "Searing":   {"hp": 1.25, "inflicts": "burn", "tint": (240, 150, 80)},
+}
+
+
+def _elite_chance(depth: int) -> float:
+    """How often a spawn is elite: none on the first floor, climbing with depth
+    to about one in five deep down."""
+    return min(0.22, max(0.0, 0.03 * (depth - 1)))
+
+
+def _blend(base: tuple, tint: tuple, f: float = 0.5) -> tuple:
+    return tuple(int(round(b * (1 - f) + t * f)) for b, t in zip(base, tint))
+
+
 def make_mob(template: Monster, x: int, y: int, depth: int, rng, boss: bool = False):
     """Spawn a live :class:`Mob` from a template, scaled to the floor.
 
@@ -1527,7 +1552,11 @@ def make_mob(template: Monster, x: int, y: int, depth: int, rng, boss: bool = Fa
     kind on one floor differ. Stats scale with the levels the mob stands *above*
     its introduction depth (``min_depth``): a monster met on the floor it first
     appears reads exactly as authored, and only grows tougher when it turns up
-    deeper. Level also feeds :func:`monster_drops` — a harder kill pays better."""
+    deeper. Level also feeds :func:`monster_drops` — a harder kill pays better.
+
+    Deeper down, a non-boss spawn may roll an *elite* variant (see
+    ``ELITE_AFFIXES``): a prefixed, brighter, tougher mob that hits harder or
+    leaves a nasty status, worth extra XP and loot."""
     from ..entities.monster import Mob
     lvl = max(template.min_depth, depth + rng.choice((-1, 0, 0, 1)))
     k = lvl - template.min_depth                     # levels above baseline
@@ -1535,11 +1564,29 @@ def make_mob(template: Monster, x: int, y: int, depth: int, rng, boss: bool = Fa
     lo, hi = template.dmg
     scale = 1 + 0.12 * k
     dmg = (max(1, round(lo * scale)), max(1, round(hi * scale)))
-    return Mob(template.name, template.glyph, template.color, hp, hp,
-               template.speed, template.behavior, x, y,
-               dv=template.dv + k // 3, pv=template.pv + k // 3,
-               to_hit=template.to_hit + k // 2, dmg=dmg, boss=boss, level=lvl,
-               inflicts=template.inflicts)
+    name, glyph, color = template.name, template.glyph, template.color
+    dv, pv = template.dv + k // 3, template.pv + k // 3
+    to_hit = template.to_hit + k // 2
+    speed = template.speed
+    inflicts = template.inflicts
+    elite = ""
+    if not boss and rng.random() < _elite_chance(depth):
+        elite = rng.choice(list(ELITE_AFFIXES))
+        a = ELITE_AFFIXES[elite]
+        name = f"{elite} {name}"
+        hp = max(1, round(hp * a.get("hp", 1.0)))
+        dmg = (max(1, round(dmg[0] * a.get("dmg", 1.0))),
+               max(1, round(dmg[1] * a.get("dmg", 1.0))))
+        dv += a.get("dv", 0)
+        pv += a.get("pv", 0)
+        to_hit += a.get("to_hit", 0)
+        speed += a.get("speed", 0)
+        inflicts = a.get("inflicts", inflicts)       # an affix status wins over the template's
+        color = _blend(color, a["tint"], 0.55)
+        lvl += 2                                      # a harder kill: more XP, richer loot
+    return Mob(name, glyph, color, hp, hp, speed, template.behavior, x, y,
+               dv=dv, pv=pv, to_hit=to_hit, dmg=dmg, boss=boss, level=lvl,
+               inflicts=inflicts, elite=elite)
 
 
 # --- Surface wildlife --------------------------------------------------------

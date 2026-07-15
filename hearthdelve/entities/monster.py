@@ -36,6 +36,7 @@ class Mob:
     seasons: tuple = ()     # wildlife only: seasons it's active in ("" = all year)
     inflicts: str = ""      # a status a hit may leave on the player (poison/bleed/burn)
     status: dict = field(default_factory=dict)  # active DoTs ON this mob {kind: turns}
+    elite: str = ""         # an elite affix ("Dire", "Venomous", ...) or "" for a common mob
 
     @property
     def alive(self) -> bool:

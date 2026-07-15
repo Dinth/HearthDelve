@@ -119,7 +119,9 @@ def _on_kill(state: GameState, m, award_combat: bool = True) -> None:
             xp = 12 + 6 * lvl + (60 if getattr(m, "boss", False) else 0)
             skills.gain(state, "Combat", xp)
         state.log.add(f"You strike down the {m.name.lower()}!", (200, 220, 160))
-        for drop in content.monster_drops(m.name, random, getattr(m, "level", 1)):
+        # an elite carries an affix prefix ("Dire Boar"); drops key on the base name
+        base = m.name.split(" ", 1)[1] if getattr(m, "elite", "") else m.name
+        for drop in content.monster_drops(base, random, getattr(m, "level", 1)):
             p.inventory.add(drop, 1)
             state.log.add(f"  It drops {drop.name.lower()}.", C.DIM)
 
