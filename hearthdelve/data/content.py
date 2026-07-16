@@ -1099,7 +1099,17 @@ MACHINES: dict[str, MachineDef] = {
     "butcher":    MachineDef("butcher", "Butcher's Block", "Ъ", (196, 140, 130), 0, "butcher",
                              None, "Renders a grown animal into its cuts — a somber trade "
                                    "of a friend for a full larder."),
+    "apothecary": MachineDef("apothecary", "Apothecary", "φ", (150, 200, 168), 480, "brew",
+                             None, "Steeps herbs into remedies — a double batch, a touch "
+                                   "stronger than a hand-brew, and distils potions beyond it."),
 }
+
+# Potions only the apothecary can distil (never a hand-brew) — gated by the
+# herbalist's skill. (inputs, output, out_qty, herbalism level, steep minutes).
+APOTHECARY_POTIONS: list = [
+    (((items.COMFREY, 2), (items.MANDRAKE, 1)), items.GREATER_HEALING, 1, 5, 600),
+    (((items.MANDRAKE, 1), (items.SAGE, 1), (items.COMFREY, 1)), items.PANACEA, 1, 8, 720),
+]
 
 # Farmhouse fittings Tomas installs for a price — sited automatically (the oven
 # indoors, the cellar dug by the back wall), no placing needed.
@@ -1249,6 +1259,9 @@ RECIPES: list[Recipe] = [
            desc="A one-tile hutch; settle up to 2 chicks with 'g'."),
     Recipe("Churn", "build", ((items.TIMBER_PLANK, 5), (items.COPPER_BAR, 1)), machine="churn",
            desc="Churns milk into cheese."),
+    Recipe("Apothecary", "build", ((items.TIMBER_PLANK, 6), (items.STONE, 4), (items.COPPER_BAR, 1)),
+           machine="apothecary",
+           desc="A bench of jars & a still: steeps herbs into remedies and distils potions."),
     Recipe("Anvil", "build", ((items.IRON_BAR, 3), (items.STONE, 5)), machine="anvil",
            desc="Forge metal bars into weapons & armour of that metal."),
     Recipe("Kiln", "build", ((items.STONE, 10),), machine="kiln",

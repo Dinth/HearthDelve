@@ -150,7 +150,12 @@ def extra_yield_chance(state: GameState, skill: str) -> float:
 # --- quality (0-5 stars) -----------------------------------------------------
 STAR = "★"
 _QUALITY_KINDS = ("crop", "fish", "artisan", "food", "animal", "gem", "jewelry")
-_QUALITY_NAMES = ("Honey", "Flour", "Rice Flour", "Sugar", "Sea Salt")   # tiered items that aren't one of the kinds
+# Tiered items that aren't one of the kinds: pantry staples, and the herbalist's
+# stock — herbs and remedies carry a potency (higher Herbalism = better).
+_QUALITY_NAMES = ("Honey", "Flour", "Rice Flour", "Sugar", "Sea Salt",
+                  "Chamomile", "Yarrow", "Comfrey", "Lavender", "Sage", "Mandrake Root",
+                  "Sulphur Salve", "Antidote", "Yarrow Poultice", "Burn Balm",
+                  "Comfrey Draught", "Mandrake Elixir", "Greater Healing Potion", "Panacea")
 
 
 # --- crafting-skill bonuses --------------------------------------------------

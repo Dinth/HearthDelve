@@ -253,6 +253,8 @@ def _grant_machine_xp(state: GameState, mdef, out, qty: int) -> None:
         skills.gain(state, "Smithing", 8)            # smelting & fuel-making, too
     elif mdef.kind in ("quern", "windmill"):
         skills.gain(state, "Cooking", 6)             # milling is kitchen work
+    elif mdef.kind == "apothecary":
+        skills.gain(state, "Herbalism", 12)          # steeping & distilling deepen the craft
     elif mdef.kind == "oven":
         skills.gain(state, "Cooking", 10)            # a batch bake is real kitchen work
         state.bump("dishes_cooked", qty)
@@ -357,6 +359,8 @@ def _needs_hint(mdef) -> str:
         "bake":  "The oven bakes double batches of baked recipes you know — "
                  "you need twice the ingredients.",
         "age":   "The cellar ages wine, mead or cheese — bring a bottle or a wheel.",
+        "brew":  "The apothecary steeps herbs into remedies you know — bring twice "
+                 "the herbs for a batch — and distils potions at higher skill.",
         "butcher": "The block waits for a grown animal — you have none ready.",
     }.get(mdef.accepts, f"The {mdef.name.lower()} has nothing to work with.")
 
@@ -525,6 +529,28 @@ def machine_load_options(state: GameState, mdef) -> list:
                 qf = max(doubled, key=lambda e: e[0].value)[0]
                 opts.append({"inputs": doubled, "output": r.output, "out_qty": 2,
                              "quality_from": qf, "quality_bonus": 1, "label": r.name})
+    elif a == "brew":
+        # A double batch of any REMEDY the herbalist knows — twice the herbs in,
+        # two out, +1 quality over a hand-brew, steeped over hours. Hand-brewing
+        # is untouched (efficiency, not permission); the bench is bigger & finer.
+        for r in content.RECIPES:
+            if r.kind != "remedy" or r.name not in state.known_recipes:
+                continue
+            doubled = resolve_inputs(inv, [(it, q * 2) for it, q in r.inputs])
+            if doubled is not None and all(inv.count(it) >= q for it, q in doubled):
+                qf = max(doubled, key=lambda e: e[0].value)[0]
+                opts.append({"inputs": doubled, "output": r.output, "out_qty": r.out_qty * 2,
+                             "quality_from": qf, "quality_bonus": 1, "group": "Remedies",
+                             "label": r.name})
+        # Station-only potions, distilled beyond a hand-brew's reach (skill-gated).
+        from . import skills
+        hlvl = skills.skill_level(state, "Herbalism")
+        for inputs, out, oq, need, mins in content.APOTHECARY_POTIONS:
+            if hlvl >= need and all(inv.count(it) >= q for it, q in inputs):
+                qf = max(inputs, key=lambda e: e[0].value)[0]
+                opts.append({"inputs": list(inputs), "output": out, "out_qty": oq,
+                             "quality_from": qf, "minutes": mins, "group": "Potions",
+                             "label": out.name})
     elif a == "age":
         for src, out in content.AGED_DRINK.items():
             if inv.count(src) >= 1:
@@ -572,8 +598,9 @@ def load_machine_choice(state: GameState, m: Machine, mdef, opt) -> None:
     # Cut gems take their quality from the cutter's Gemcutting; other processed
     # goods inherit the input's quality nudged by the cook's skill.
     if skills.has_quality(output):
+        _qskill = "Herbalism" if mdef.kind == "apothecary" else "Cooking"
         out_quality = (skills.roll_quality(state, "Gemcutting") if output.kind == "gem"
-                       else skills.process_quality(in_quality, state, "Cooking"))
+                       else skills.process_quality(in_quality, state, _qskill))
         if mdef.kind == "quern":                       # the hand-mill grinds a touch coarse
             out_quality = max(0, out_quality - 1)
         # the oven bakes a touch finer than the pan

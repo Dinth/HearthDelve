@@ -225,6 +225,9 @@ COMFREY_DRAUGHT= Item("Comfrey Draught","!", "material", "Knitbone tonic — clo
 HERBAL_TONIC   = Item("Herbal Tonic",   "!", "food",     "A restorative chamomile infusion that revives tired limbs.", value=45, energy=60)
 WARDING_TEA    = Item("Warding Tea",    "!", "food",     "Steeped sage and lavender; steadies the nerves and wards off festering wounds a while.", value=50, energy=15, buff="warded")
 MANDRAKE_ELIXIR= Item("Mandrake Elixir","!", "material", "The physician's masterwork — mends deep and purges every affliction.", value=200, heal=70, cures="all")
+# Station-only potions — distilled at the apothecary, beyond a hand-brew's reach.
+GREATER_HEALING= Item("Greater Healing Potion","!", "material", "A distilled comfrey-and-mandrake draught that closes even grievous wounds.", value=170, heal=100)
+PANACEA        = Item("Panacea",        "!", "material", "The apothecary's crowning distillate — mends deep and purges every ill at once.", value=300, heal=80, cures="all")
 LURKER_SCALE  = Item("Lurker Scale",  "u", "material", "A thick armoured scale from a deep lurker.", value=55)
 WRAITH_ESSENCE= Item("Wraith Essence","*", "material", "Cold, half-real essence bled from a wraith.", value=75)
 GLOWCAP       = Item("Glowcap",       "î", "material", "A luminous cave fungus from the Glimmerwood — prized by cooks.", value=65)
