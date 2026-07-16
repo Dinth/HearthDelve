@@ -486,6 +486,10 @@ def machine_load_options(state: GameState, mdef) -> list:
         for it in {e[0] for e in inv.slots if e[0].kind == "crop" and content.is_fruit(e[0])}:
             out = content.FRUIT_WINE.get(it, items.WINE)      # wine inherits the fruit's value
             opts.append({"inputs": [(it, 1)], "output": out, "quality_from": it})
+        for src, need in content.MASH_SOURCES.items():        # ferment grain/potato -> mash (step 1 of vodka)
+            if inv.count(src) >= need:
+                opts.append({"inputs": [(src, need)], "output": items.GRAIN_MASH,
+                             "quality_from": src, "label": f"Grain Mash ({src.name})"})
     elif a == "bars":
         # Forge a piece of any base from the metal bars you carry (deeper metals
         # make finer gear). One entry per (metal, base) you can currently afford.
@@ -536,6 +540,11 @@ def machine_load_options(state: GameState, mdef) -> list:
                 opts.append({"inputs": doubled, "output": r.output, "out_qty": r.out_qty * 2,
                              "quality_from": qf, "quality_bonus": 1, "group": "Remedies",
                              "label": r.name})
+        # Distil a fermented mash into vodka (step 2 of the vodka chain).
+        if inv.count(items.GRAIN_MASH) >= 1:
+            opts.append({"inputs": [(items.GRAIN_MASH, 1)], "output": items.VODKA, "out_qty": 1,
+                         "quality_from": items.GRAIN_MASH, "minutes": 600, "group": "Spirits",
+                         "label": "Vodka"})
         # Station-only potions, distilled beyond a hand-brew's reach (skill-gated).
         from . import skills
         hlvl = skills.skill_level(state, "Herbalism")

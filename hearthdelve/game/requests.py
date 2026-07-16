@@ -80,7 +80,7 @@ def _request_pool(state: GameState, role: str) -> list:
     crops = [c.produce for c in content.CROPS if c.season == season]
     it = items
     drinks = sorted(set(content.FRUIT_WINE.values()), key=lambda i: i.name) + \
-        [it.CIDER, it.PERRY, it.MEAD]
+        [it.CIDER, it.PERRY, it.MEAD, it.VODKA]
     preserves = sorted(set(content.FRUIT_JAM.values()) | set(content.VEG_PICKLE.values()),
                        key=lambda i: i.name)
     mushrooms = [it.BUTTON_MUSHROOM, it.BOLETE, it.CHANTERELLE, it.PARASOL_MUSHROOM,

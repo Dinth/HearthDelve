@@ -1107,9 +1107,14 @@ MACHINES: dict[str, MachineDef] = {
 # Potions only the apothecary can distil (never a hand-brew) — gated by the
 # herbalist's skill. (inputs, output, out_qty, herbalism level, steep minutes).
 APOTHECARY_POTIONS: list = [
-    (((items.COMFREY, 2), (items.MANDRAKE, 1)), items.GREATER_HEALING, 1, 5, 600),
-    (((items.MANDRAKE, 1), (items.SAGE, 1), (items.COMFREY, 1)), items.PANACEA, 1, 8, 720),
+    (((items.COMFREY, 2), (items.MANDRAKE, 1), (items.VODKA, 1)), items.GREATER_HEALING, 1, 5, 600),
+    (((items.MANDRAKE, 1), (items.SAGE, 1), (items.COMFREY, 1), (items.VODKA, 1)),
+     items.PANACEA, 1, 8, 720),
 ]
+
+# The vodka chain. The keg ferments a grain or potato into a mash; the apothecary
+# still then distils the mash into vodka. (source item -> how many per mash.)
+MASH_SOURCES: dict = {items.POTATO: 1, items.BARLEY: 2, items.WHEAT: 2}
 
 # Farmhouse fittings Tomas installs for a price — sited automatically (the oven
 # indoors, the cellar dug by the back wall), no placing needed.
@@ -1316,8 +1321,8 @@ RECIPES: list[Recipe] = [
            output=items.POULTICE, out_qty=1, desc="Staunches bleeding and mends a little (x)."),
     Recipe("Warding Tea", "remedy", ((items.SAGE, 1), (items.LAVENDER, 1), (items.CHAMOMILE, 1)),
            output=items.WARDING_TEA, out_qty=2, desc="Steadies you: foes' hits rarely fester for a while."),
-    Recipe("Antidote", "remedy", ((items.SAGE, 1), (items.COMFREY, 1)),
-           output=items.ANTIDOTE, out_qty=1, desc="Draws poison out of the blood (x)."),
+    Recipe("Antidote", "remedy", ((items.CHARCOAL, 1), (items.SAGE, 1)),
+           output=items.ANTIDOTE, out_qty=1, desc="Charcoal binds the venom, sage soothes — draws poison out (x)."),
     Recipe("Comfrey Draught", "remedy", ((items.COMFREY, 2), (items.SAGE, 1)),
            output=items.COMFREY_DRAUGHT, out_qty=1, desc="Closes deep wounds fast — a strong heal (x)."),
     Recipe("Burn Balm", "remedy", ((items.LAVENDER, 2),),
@@ -1806,7 +1811,7 @@ def village_npcs() -> dict[str, list[NPC]]:
                               (6, "A traveller hears everything, eventually — and forgets\n"
                                   "most of it on purpose. Your secrets are safe here.")),
                 loves=(items.WINE, items.GRAPE_WINE, items.JELLIED_EEL, items.MEAT_PIE,
-                       items.TRUFFLE, items.TRUFFLE_PASTA),
+                       items.TRUFFLE, items.TRUFFLE_PASTA, items.VODKA),
                 likes=(items.JAM, items.PICKLES), dislikes=(items.STONE,),
                 gifts=(items.WINE, items.MEAD, items.JAM, items.PICKLES),
                 bio="Keeps the Mossford inn; a settled wanderer, full of stories."),
