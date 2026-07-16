@@ -208,4 +208,15 @@ CRYPT_FLOOR   = _add(TileType("crypt_floor", ".", (116, 122, 134),(21, 23, 29), 
 CAVERN_WALL   = _add(TileType("cavern_wall", "#", (158, 146, 122),(34, 30, 23), walkable=False, kind="wall"))
 CAVERN_FLOOR  = _add(TileType("cavern_floor","." , (168, 156, 132),(36, 32, 25), kind="terrain"))
 
+# --- Per-kind dungeon décor -------------------------------------------------
+# Scattered so each kind reads at a glance. Walkable atmosphere (bones, crystals)
+# and blocking features (spires, pillars, braziers, pit-props) placed with a
+# connectivity check so they never seal a floor off.
+BONES         = _add(TileType("bones",       "%", (206, 198, 178),(24, 22, 19), kind="bones"))
+CRYSTAL       = _add(TileType("crystal",     "◊", (140, 220, 235),(24, 32, 36), kind="crystal"))
+STALAGMITE    = _add(TileType("stalagmite",  "▲", (150, 152, 158),(20, 24, 26), walkable=False, kind="wall"))
+PILLAR        = _add(TileType("pillar",      "║", (176, 170, 158),(28, 27, 24), walkable=False, kind="wall"))
+BRAZIER       = _add(TileType("brazier",     "Ω", (244, 180, 90), (36, 26, 16), walkable=False, kind="brazier"))
+MINE_TIMBER   = _add(TileType("mine_timber", "Π", (156, 122, 84), (32, 26, 19), walkable=False, kind="wall"))
+
 TILE_COUNT = len(TILES)

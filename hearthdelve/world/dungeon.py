@@ -31,6 +31,21 @@ _THEME = {
 }
 
 
+# Per-kind décor: "walk" tiles sprinkle freely on the floor; "block" tiles are
+# placed in room interiors and reverted if they'd seal the floor off. Each entry
+# is (tile name, probability per candidate cell).
+_DECOR = {
+    "mine":      {"block": (("mine_timber", 0.010),)},                     # pit-props
+    "grotto":    {"block": (("stalagmite", 0.012),)},                      # dripstone spires
+    "sea cave":  {"block": (("stalagmite", 0.010),)},
+    "cavern":    {"walk": (("crystal", 0.020),), "block": (("stalagmite", 0.014),)},
+    "barrow":    {"walk": (("bones", 0.045),)},                            # scattered bones
+    "crypt":     {"walk": (("bones", 0.050),), "block": (("pillar", 0.012), ("brazier", 0.004))},
+    "tomb":      {"walk": (("bones", 0.030),), "block": (("pillar", 0.014), ("brazier", 0.004))},
+    "dwarfhold": {"block": (("pillar", 0.010), ("brazier", 0.005))},       # worked hall
+}
+
+
 def _apply_theme(gm, kind: str) -> None:
     """Re-skin the finished floor's generic walls/floors to the kind's palette
     and record which tiles those are (so runtime code can restore matching floor
@@ -214,6 +229,36 @@ def generate(seed: int, kind: str, depth: int) -> GameMap:
         my = rng.randint(room.y + 1, room.y + room.h - 2)
         if tiles[mx, my] == tile.DUNGEON_FLOOR and (mx, my) not in (up, down):
             tiles[mx, my] = tile.MUSHROOM
+
+    # Per-kind décor — the biggest tell that one site isn't another. Walkable
+    # atmosphere sprinkles anywhere; blocking features go in room interiors and
+    # revert if they'd cut the floor (reusing the lake connectivity check).
+    spec = _DECOR.get(kind, {})
+    for name, dens in spec.get("walk", ()):
+        deco = tile.tid(name)
+        for x, y in floor_cells():
+            if (tiles[x, y] == tile.DUNGEON_FLOOR and not in_entry(x, y)
+                    and rng.random() < dens):
+                tiles[x, y] = deco
+    room_centers = {r.center for r in rooms}
+    need = {down} | room_centers
+    for name, dens in spec.get("block", ()):
+        deco = tile.tid(name)
+        interior = [(x, y) for r in rooms[1:]
+                    for x in range(r.x + 1, r.x + r.w - 1)
+                    for y in range(r.y + 1, r.y + r.h - 1)
+                    if tiles[x, y] == tile.DUNGEON_FLOOR
+                    and (x, y) not in room_centers and (x, y) not in (up, down)]
+        rng.shuffle(interior)
+        budget = max(1, int(len(interior) * dens)) + rng.randint(0, 2)
+        for x, y in interior:
+            if budget <= 0:
+                break
+            tiles[x, y] = deco
+            if need.issubset(_connected(up)):       # still all reachable?
+                budget -= 1
+            else:
+                tiles[x, y] = tile.DUNGEON_FLOOR     # would seal a room off — undo
 
     # Hidden traps — never in the entry room; more on deeper floors. Recorded as
     # coordinates (not a distinct tile) so the per-kind floor re-skin below can't
