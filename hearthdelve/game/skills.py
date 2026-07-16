@@ -155,7 +155,8 @@ _QUALITY_KINDS = ("crop", "fish", "artisan", "food", "animal", "gem", "jewelry")
 _QUALITY_NAMES = ("Honey", "Flour", "Rice Flour", "Sugar", "Sea Salt",
                   "Chamomile", "Yarrow", "Comfrey", "Lavender", "Sage", "Mandrake Root",
                   "Sulphur Salve", "Antidote", "Yarrow Poultice", "Burn Balm",
-                  "Comfrey Draught", "Mandrake Elixir", "Greater Healing Potion", "Panacea")
+                  "Comfrey Draught", "Mandrake Elixir", "Greater Healing Potion", "Panacea",
+                  "Charcoal Tincture")
 
 
 # --- crafting-skill bonuses --------------------------------------------------

@@ -219,12 +219,13 @@ MANDRAKE   = Item("Mandrake Root", "ψ", "material", "A rare forked root of old 
 
 # --- Herbal remedies (brewed from herbs; use from the eat menu, x) -----------
 ANTIDOTE       = Item("Antidote",       "!", "material", "A bitter draught that draws the venom out of a wound.", value=90, heal=10, cures="poison")
+CHARCOAL_TINCTURE= Item("Charcoal Tincture","!", "material", "Activated charcoal steeped in spirit — settles a sick stomach and purges a fever the salve can't touch.", value=250, heal=15, cures="sick")
 POULTICE       = Item("Yarrow Poultice","!", "material", "A pressed yarrow dressing that staunches bleeding.", value=85, heal=10, cures="bleed")
 BURN_BALM      = Item("Burn Balm",      "!", "material", "A cooling lavender-and-wax balm for scorched skin.", value=90, heal=10, cures="burn")
 COMFREY_DRAUGHT= Item("Comfrey Draught","!", "material", "Knitbone tonic — closes deep wounds fast.", value=110, heal=55)
 HERBAL_TONIC   = Item("Herbal Tonic",   "!", "food",     "A restorative chamomile infusion that revives tired limbs.", value=45, energy=60)
 WARDING_TEA    = Item("Warding Tea",    "!", "food",     "Steeped sage and lavender; steadies the nerves and wards off festering wounds a while.", value=50, energy=15, buff="warded")
-MANDRAKE_ELIXIR= Item("Mandrake Elixir","!", "material", "The physician's masterwork — mends deep and purges every affliction.", value=200, heal=70, cures="all")
+MANDRAKE_ELIXIR= Item("Mandrake Elixir","!", "material", "The physician's masterwork — mends deep and purges every affliction, sickness and all.", value=200, heal=70, cures="everything")
 # The vodka chain: ferment grain/potato into a mash (keg), then distil the mash
 # into spirit (apothecary still). Vodka is a fine drink and the alcohol base every
 # strong tincture extracts into.
@@ -232,7 +233,7 @@ GRAIN_MASH     = Item("Grain Mash",     "ū", "material", "Grain or potato ferme
 VODKA          = Item("Vodka",          "ø", "artisan",  "A clear spirit distilled from a grain mash — drunk, gifted, or the base of any strong tincture.", value=180, family="vodka")
 # Station-only potions — tinctures distilled into spirit, beyond a hand-brew's reach.
 GREATER_HEALING= Item("Greater Healing Potion","!", "material", "A comfrey-and-mandrake tincture in spirit that closes even grievous wounds.", value=360, heal=100)
-PANACEA        = Item("Panacea",        "!", "material", "The apothecary's crowning tincture — mends deep and purges every ill at once.", value=440, heal=80, cures="all")
+PANACEA        = Item("Panacea",        "!", "material", "The apothecary's crowning tincture — mends deep and purges every ill at once.", value=440, heal=80, cures="everything")
 LURKER_SCALE  = Item("Lurker Scale",  "u", "material", "A thick armoured scale from a deep lurker.", value=55)
 WRAITH_ESSENCE= Item("Wraith Essence","*", "material", "Cold, half-real essence bled from a wraith.", value=75)
 GLOWCAP       = Item("Glowcap",       "î", "material", "A luminous cave fungus from the Glimmerwood — prized by cooks.", value=65)

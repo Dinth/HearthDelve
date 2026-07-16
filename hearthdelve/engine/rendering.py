@@ -1466,7 +1466,7 @@ def _wrap(text: str, width: int) -> list[str]:
     return lines
 
 
-_STATUS_ADJ = {"burn": "burning", "poison": "poisoned", "bleed": "bleeding"}
+_STATUS_ADJ = {"burn": "burning", "poison": "poisoned", "bleed": "bleeding", "sick": "sick"}
 
 
 def _afflictions(m) -> str:

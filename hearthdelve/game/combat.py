@@ -32,6 +32,12 @@ STATUS = {
     "burn":   {"dmg": 3, "pct": 0.022, "turns": 3, "chance": 0.50, "color": (240, 150, 80),
                "tag": "♨ Burning", "on": "You're set alight — burning!",
                "off": "The burns cool."},
+    # A lingering illness (not a wound): weak but long, and it saps your stamina.
+    # The brimstone salve won't touch it — only a charcoal tincture or a panacea.
+    "sick":   {"dmg": 1, "pct": 0.012, "turns": 8, "chance": 0.5, "stam": 4,
+               "color": (170, 192, 120), "tag": "☣ Sick",
+               "on": "A cold sweat takes you — you've caught something.",
+               "off": "The sickness finally lifts."},
 }
 
 
@@ -64,6 +70,9 @@ def _tick_status(holder) -> list:
             del st[kind]
             continue
         holder.hp -= _status_damage(holder, info)
+        stam = info.get("stam", 0)                       # illness also drags at stamina (player only)
+        if stam and getattr(holder, "max_energy", None) is not None:
+            holder.energy = max(0, holder.energy - stam)
         st[kind] -= 1
         if st[kind] <= 0:
             del st[kind]

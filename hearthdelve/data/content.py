@@ -1323,6 +1323,9 @@ RECIPES: list[Recipe] = [
            output=items.WARDING_TEA, out_qty=2, desc="Steadies you: foes' hits rarely fester for a while."),
     Recipe("Antidote", "remedy", ((items.CHARCOAL, 1), (items.SAGE, 1)),
            output=items.ANTIDOTE, out_qty=1, desc="Charcoal binds the venom, sage soothes — draws poison out (x)."),
+    Recipe("Charcoal Tincture", "remedy", ((items.CHARCOAL, 1), (items.VODKA, 1)),
+           output=items.CHARCOAL_TINCTURE, out_qty=1,
+           desc="Charcoal steeped in spirit — the one cure for a wasting sickness (x)."),
     Recipe("Comfrey Draught", "remedy", ((items.COMFREY, 2), (items.SAGE, 1)),
            output=items.COMFREY_DRAUGHT, out_qty=1, desc="Closes deep wounds fast — a strong heal (x)."),
     Recipe("Burn Balm", "remedy", ((items.LAVENDER, 2),),
@@ -1470,7 +1473,7 @@ COOKING_LEVEL_RECIPES: dict[int, str] = {
 # Remedies come to the herbalist as their skill deepens (mirrors cooking levels).
 HERBALISM_LEVEL_RECIPES: dict[int, str] = {
     1: "Herbal Tonic", 2: "Yarrow Poultice", 3: "Warding Tea", 4: "Antidote",
-    5: "Comfrey Draught", 6: "Burn Balm", 8: "Mandrake Elixir",
+    5: "Comfrey Draught", 6: "Burn Balm", 7: "Charcoal Tincture", 8: "Mandrake Elixir",
 }
 
 
@@ -1580,9 +1583,9 @@ MONSTERS: list[Monster] = [
     Monster("Skeleton", "k", (222, 216, 194), 16, 2, "chase", 3, kinds=_UNDEAD,
             dv=9, pv=3, to_hit=4, dmg=(3, 6),
             desc="Rattling bones knit with old malice; shatters to a solid blow, but keeps coming."),
-    Monster("Ghoul", "j", (172, 162, 132), 24, 2, "charge", 4, kinds=_UNDEAD, inflicts="poison",
+    Monster("Ghoul", "j", (172, 162, 132), 24, 2, "charge", 4, kinds=_UNDEAD, inflicts="sick",
             dv=8, pv=2, to_hit=5, dmg=(4, 8),
-            desc="A gaunt corpse-eater; its filthy claws leave the wound festering."),
+            desc="A gaunt corpse-eater; its filthy claws breed a wasting sickness."),
     Monster("Wraith", "W", (186, 204, 224), 22, 2, "erratic", 6, kinds=_UNDEAD,
             dv=18, pv=2, to_hit=6, dmg=(4, 11), desc="A cold, half-there shade you can barely lay a hand on."),
 ]

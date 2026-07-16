@@ -935,15 +935,26 @@ def collect_letter(state: GameState, letter) -> None:
         state.log.add("  Enclosed: " + ", ".join(got) + ".", (180, 230, 160))
 
 
+# Wound statuses the brimstone salve draws out — a disease ("sick") is not one
+# of them, so it takes a charcoal tincture or a panacea instead.
+_WOUND_STATUS = ("poison", "bleed", "burn")
+
+
 def _cure_status(state: GameState, spec: str) -> list:
-    """Purge the affliction(s) a remedy targets. ``spec`` is a status kind, or
-    "all" for a broad-spectrum cure. Returns the kinds actually cleared."""
+    """Purge the affliction(s) a remedy targets. ``spec`` is a status kind,
+    "all" (the wound statuses — not disease), or "everything". Returns the kinds
+    actually cleared."""
     st = state.player.status
     if not spec or not st:
         return []
-    if spec == "all":
+    if spec == "everything":
         cured = list(st.keys())
         st.clear()
+        return cured
+    if spec == "all":
+        cured = [k for k in _WOUND_STATUS if k in st]
+        for k in cured:
+            del st[k]
         return cured
     return [spec] if st.pop(spec, None) is not None else []
 
@@ -961,7 +972,7 @@ def _eat(state: GameState, item, quality: int) -> None:
         msg = f"You dose yourself with the {item.name.lower()}. (+{heal} HP)"
         if cured:
             _adj = {"poison": "poison drains away", "bleed": "bleeding stops",
-                    "burn": "burns cool"}
+                    "burn": "burns cool", "sick": "sickness lifts"}
             msg += (" Every affliction clears." if len(cured) > 1
                     else f" The {_adj.get(cured[0], cured[0])}.")
         state.log.add(msg, (180, 230, 160))
