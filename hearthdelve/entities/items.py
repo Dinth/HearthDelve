@@ -207,6 +207,14 @@ MUTTON        = Item("Mutton",        "▬", "material", "A hearty cut of mutton
 GOAT_MEAT     = Item("Goat Meat",     "▬", "material", "A lean cut of goat.",       value=65, family="meat")
 SPIDER_SILK   = Item("Spider Silk",   "~", "material", "Strong, fine silk from a cave spider.",    value=35)
 VENOM_GLAND   = Item("Venom Gland",   "○", "material", "The dripping poison-sac of a spider or viper — smear it on an arrow-tip.", value=40)
+
+# --- Wild herbs (foraged; the raw stock of the apothecary) -------------------
+CHAMOMILE  = Item("Chamomile",     "ψ", "material", "A soothing daisy-like herb; steeps into a calming tea.", value=20)
+YARROW     = Item("Yarrow",        "ψ", "material", "A feathery wound-herb; staunches bleeding in a poultice.", value=22)
+COMFREY    = Item("Comfrey",       "ψ", "material", "Knitbone — a fen-edge herb prized for healing salves.", value=24)
+LAVENDER   = Item("Lavender",      "ψ", "material", "Fragrant purple spikes; calming, and loved as a gift.", value=26)
+SAGE       = Item("Sage",          "ψ", "material", "A grey-green herb of the kitchen and the sickroom.", value=22)
+MANDRAKE   = Item("Mandrake Root", "ψ", "material", "A rare forked root of old physic — the heart of the strongest remedies.", value=60)
 LURKER_SCALE  = Item("Lurker Scale",  "u", "material", "A thick armoured scale from a deep lurker.", value=55)
 WRAITH_ESSENCE= Item("Wraith Essence","*", "material", "Cold, half-real essence bled from a wraith.", value=75)
 GLOWCAP       = Item("Glowcap",       "î", "material", "A luminous cave fungus from the Glimmerwood — prized by cooks.", value=65)

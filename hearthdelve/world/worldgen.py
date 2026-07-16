@@ -191,6 +191,23 @@ def generate(seed: int = 1337) -> GameMap:
         col = _flower_cols[min(3, int(variety[x, y] * 4))]
         flower_spots.append((x, y, int(col), int(tiles[x, y])))
 
+    # Wild herbs, threaded through the meadows, the fen edge and the wood shade.
+    # Recorded like mushrooms; the day cycle sprouts them spring-fall. Kept to
+    # natural ground so picking (and the drift regrow) always leaves clean turf.
+    meadow_h = ((tiles == tile.MEADOW) | (tiles == tile.GRASS)) & plains \
+        & (flora < 0.5) & (detail > 0.508) & (detail < 0.520)
+    fen_h = ((tiles == tile.MOOR) | (tiles == tile.FOG_GRASS)) & (detail > 0.336) & (detail < 0.340)
+    wood_h = (tiles == tile.GRASS) & forest & (flora > 0.55) & (detail > 0.564) & (detail < 0.569)
+    herb_spots = []
+    for mask, species in ((meadow_h, (tile.HERB_CHAMOMILE, tile.HERB_YARROW,
+                                      tile.HERB_SAGE, tile.HERB_LAVENDER)),
+                          (fen_h, (tile.HERB_COMFREY,)),
+                          (wood_h, (tile.HERB_MANDRAKE,))):
+        hx, hy = np.where(mask)
+        for x, y in zip(hx.tolist(), hy.tolist()):
+            sp = species[min(len(species) - 1, int(variety[x, y] * len(species)))]
+            herb_spots.append((x, y, int(sp), int(tiles[x, y])))
+
     # Ore: short veins through the hill crags (where ROCK is abundant), plus a
     # scatter of lone gems. Richer than before, matching the larger, hillier map.
     _grow_veins(tiles, w, h, tile.ROCK, ore_veins=34, max_len=7, gems=16,
@@ -239,6 +256,7 @@ def generate(seed: int = 1337) -> GameMap:
     gm = GameMap(width=w, height=h, tiles=tiles)
     gm.mushroom_spots = mushroom_spots
     gm.flower_spots = flower_spots
+    gm.herb_spots = herb_spots
     coast = _carve_sea(gm, seed)
     gm.coast = coast                     # per-column first sea row (salt vs fresh water)
     _carve_homestead(gm, seed)

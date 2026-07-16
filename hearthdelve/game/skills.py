@@ -10,7 +10,7 @@ import random
 from .state import GameState
 
 SKILLS = ("Farming", "Foraging", "Mining", "Fishing", "Combat", "Cooking",
-          "Smithing", "Jewelcrafting", "Gemcutting")
+          "Smithing", "Jewelcrafting", "Gemcutting", "Herbalism")
 XP_PER_LEVEL = 120
 MAX_LEVEL = 10
 

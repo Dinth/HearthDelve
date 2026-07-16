@@ -212,6 +212,14 @@ CAVERN_FLOOR  = _add(TileType("cavern_floor","." , (168, 156, 132),(36, 32, 25),
 # Scattered so each kind reads at a glance. Walkable atmosphere (bones, crystals)
 # and blocking features (spires, pillars, braziers, pit-props) placed with a
 # connectivity check so they never seal a floor off.
+# Wild herbs — walkable meadow/fen plants, gathered for the apothecary (g).
+HERB_CHAMOMILE = _add(TileType("chamomile", "ψ", (226, 224, 168),(28, 48, 30), kind="herb"))
+HERB_YARROW    = _add(TileType("yarrow",    "ψ", (206, 214, 188),(28, 48, 30), kind="herb"))
+HERB_COMFREY   = _add(TileType("comfrey",   "ψ", (150, 150, 202),(26, 44, 30), kind="herb"))
+HERB_LAVENDER  = _add(TileType("lavender",  "ψ", (176, 140, 214),(28, 48, 30), kind="herb"))
+HERB_SAGE      = _add(TileType("sage",      "ψ", (150, 178, 150),(28, 48, 30), kind="herb"))
+HERB_MANDRAKE  = _add(TileType("mandrake",  "ψ", (120, 152, 108),(24, 42, 28), kind="herb"))
+
 BONES         = _add(TileType("bones",       "%", (206, 198, 178),(24, 22, 19), kind="bones"))
 CRYSTAL       = _add(TileType("crystal",     "◊", (140, 220, 235),(24, 32, 36), kind="crystal"))
 STALAGMITE    = _add(TileType("stalagmite",  "▲", (150, 152, 158),(20, 24, 26), walkable=False, kind="wall"))

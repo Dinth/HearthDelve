@@ -75,6 +75,16 @@ _MUSHROOM_ITEM = {
     tile.CHANTERELLE: items.CHANTERELLE,
 }
 
+# which herb item each wild-herb tile yields when foraged
+_HERB_ITEM = {
+    tile.HERB_CHAMOMILE: items.CHAMOMILE,
+    tile.HERB_YARROW: items.YARROW,
+    tile.HERB_COMFREY: items.COMFREY,
+    tile.HERB_LAVENDER: items.LAVENDER,
+    tile.HERB_SAGE: items.SAGE,
+    tile.HERB_MANDRAKE: items.MANDRAKE,
+}
+
 
 def _npc_at(state: GameState, x: int, y: int):
     """A villager standing on (x, y), if any (surface only)."""
@@ -691,7 +701,7 @@ def do_grab(state: GameState) -> None:
         # Taking crops/fruit/berries/fungus off another's land is theft: warn
         # once, then it's allowed at the cost of karma and the owner's regard.
         stealing = False
-        if tk in ("mushroom", "glowcap", "shrub_berry") or (gx, gy) in state.world.crops \
+        if tk in ("mushroom", "glowcap", "shrub_berry", "herb") or (gx, gy) in state.world.crops \
                 or (gx, gy) in state.world.trees:
             if land.owned_by_other(state, gx, gy):
                 gate = land.check_take(state, gx, gy, "harvest")
@@ -720,6 +730,21 @@ def do_grab(state: GameState) -> None:
             skills.gain(state, "Foraging", 12 if tk == "glowcap" else 8)
             star = (" " + skills.stars(q)) if q else ""
             state.log.add(f"You gather a {item.name.lower()}{star}.", col)
+            turns.advance_time(state, C.HARVEST_COST[1])
+            if stealing:
+                land.penalize(state, gx, gy, "harvest")
+            return
+        if tk == "herb":                                 # forage a wild herb (Herbalism)
+            item = _HERB_ITEM.get(state.world.tiles[gx, gy], items.SAGE)
+            base = next((b for (hx, hy, sp, b) in state.world.herb_spots
+                         if (hx, hy) == (gx, gy)), tile.GRASS)
+            state.world.tiles[gx, gy] = base
+            from . import skills
+            q = skills.roll_quality(state, "Herbalism")
+            p.inventory.add(item, 1, quality=q)
+            skills.gain(state, "Herbalism", 10)
+            star = (" " + skills.stars(q)) if q else ""
+            state.log.add(f"You gather {item.name.lower()}{star}.", (150, 196, 140))
             turns.advance_time(state, C.HARVEST_COST[1])
             if stealing:
                 land.penalize(state, gx, gy, "harvest")

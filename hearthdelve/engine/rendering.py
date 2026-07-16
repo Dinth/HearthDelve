@@ -1334,6 +1334,7 @@ _TILE_DESC = {
     "chest": "a treasure chest — press g to pry it open.",
     "rubble": "loose rubble — slow going underfoot.",
     "trap": "a sprung-looking trap in the floor — best stepped around.",
+    "herb": "a wild medicinal herb — gather it for the apothecary (g).",
     "bones": "a scatter of old bones.",
     "crystal": "a cluster of crystals, glinting in the dark.",
     "stalagmite": "a stone spire — you'll have to go around.",

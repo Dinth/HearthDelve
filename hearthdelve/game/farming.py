@@ -385,6 +385,7 @@ _NATURAL_GROUND = {tile.GRASS, tile.MEADOW, tile.FOG_GRASS, tile.MOOR}
 _FLORA = {
     "mushroom_spots": (("Summer", "Fall"),           0.5,    0.16,   7919),
     "flower_spots":   (("Spring", "Summer"),         0.55,   0.12,   6271),
+    "herb_spots":     (("Spring", "Summer", "Fall"), 0.5,    0.14,   5417),
 }
 
 
