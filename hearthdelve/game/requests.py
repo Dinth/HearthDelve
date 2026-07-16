@@ -84,6 +84,8 @@ def _request_pool(state: GameState, role: str) -> list:
                        key=lambda i: i.name)
     mushrooms = [it.BUTTON_MUSHROOM, it.BOLETE, it.CHANTERELLE, it.PARASOL_MUSHROOM,
                  it.CAVE_MUSHROOM, it.GLOWCAP]
+    herbs = [it.CHAMOMILE, it.YARROW, it.COMFREY, it.LAVENDER, it.SAGE, it.MANDRAKE]
+    calming = [it.CHAMOMILE, it.LAVENDER, it.SAGE]
     parts = [it.SLIME_GEL, it.BAT_WING, it.LURKER_SCALE, it.WRAITH_ESSENCE]
     pools = {
         "innkeeper":  _known_dishes(state) + drinks + _fish_pool(state)
@@ -95,8 +97,8 @@ def _request_pool(state: GameState, role: str) -> list:
                        it.GUNPOWDER],
         "carpenter":  [it.WOOD, it.TIMBER_PLANK, it.STONE],
         "forester":   [it.WOOD, it.TIMBER_PLANK] + mushrooms,
-        "forager":    mushrooms + parts + [it.HONEY, it.ASTER] + crops,
-        "priest":     [it.ASTER, it.TULIP, it.HONEY] + preserves + parts,
+        "forager":    mushrooms + herbs + parts + [it.HONEY, it.ASTER] + crops,
+        "priest":     [it.ASTER, it.TULIP, it.HONEY] + calming + preserves + parts,
         "farmer":     crops + [it.EGG, it.MILK, it.DUCK_EGG, it.GOAT_MILK, it.FERTILISER],
         "fisher":     _fish_pool(state),
         "child":      [d for d in _known_dishes(state)

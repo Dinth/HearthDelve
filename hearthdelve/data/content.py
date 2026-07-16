@@ -1807,7 +1807,8 @@ def village_npcs() -> dict[str, list[NPC]]:
                               (6, "I tend the graves as well as the shrine, you know.\n"
                                   "Someone should remember the names. I'm glad of you.")),
                 loves=(items.WINE, items.JAM, items.DIAMOND, items.ASTER, items.CANDIED_FRUIT),
-                likes=(items.STRAWBERRY, items.BLUEBERRY), dislikes=(items.COAL,),
+                likes=(items.STRAWBERRY, items.BLUEBERRY, items.LAVENDER, items.CHAMOMILE),
+                dislikes=(items.COAL,),
                 gifts=(items.AMETHYST, items.TOPAZ, items.JAM),
                 bio="Tends the shrine and churchyard of Mossford; serene and watchful."),
             NPC("Gilda", "G", (210, 176, 120), shop=None, role="farmer",
@@ -1845,8 +1846,9 @@ def village_npcs() -> dict[str, list[NPC]]:
                                   "She taught me the names of things. All of them."),
                               (6, "She's gone now, the old woman. But gathering in the\n"
                                   "fog-grass, I still feel her at my shoulder. Kindly.")),
-                loves=(items.RASPBERRY, items.GOOSEBERRY, items.CURRANT, items.FRUIT_PARFAIT),
-                likes=(items.FIBER, items.CAULIFLOWER), dislikes=(items.STONE,),
+                loves=(items.RASPBERRY, items.GOOSEBERRY, items.CURRANT, items.FRUIT_PARFAIT,
+                       items.CHAMOMILE, items.LAVENDER, items.SAGE),
+                likes=(items.FIBER, items.CAULIFLOWER, items.YARROW), dislikes=(items.STONE,),
                 gifts=(items.STRAWBERRY_SEEDS, items.BLUEBERRY_SEEDS, items.ASTER_SEEDS, items.RASPBERRY),
                 bio="Mossford's herbalist; dreamy, wise in green things."),
             NPC("Pip", "p", (236, 214, 150), shop=None, role="child",
@@ -2098,9 +2100,9 @@ def village_npcs() -> dict[str, list[NPC]]:
                               (6, "Bring me the strange ones you find out in the wet.\n"
                                   "Between us, I think we could physic the whole Vale.")),
                 loves=(items.CAVE_MUSHROOM, items.CHANTERELLE, items.HONEY,
-                       items.MUSHROOM_STEW, items.BAT_WING),
+                       items.MUSHROOM_STEW, items.BAT_WING, items.MANDRAKE, items.COMFREY),
                 likes=(items.BOLETE, items.PARASOL_MUSHROOM, items.FIBER, items.SLIME_GEL,
-                       items.TRUFFLE, items.SALVE),
+                       items.TRUFFLE, items.SALVE, items.YARROW, items.ANTIDOTE),
                 dislikes=(items.COAL, items.STONE),
                 gifts=(items.ASTER_SEEDS, items.STRAWBERRY_SEEDS, items.CAVE_MUSHROOM),
                 bio="Fenwick's herbalist; reads the marsh like a book of remedies."),
