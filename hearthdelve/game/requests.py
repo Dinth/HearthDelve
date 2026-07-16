@@ -51,7 +51,8 @@ def check_level_recipes(state: GameState) -> None:
     for need, name in content.HERBALISM_LEVEL_RECIPES.items():
         if hlvl >= need and name not in state.known_recipes:
             state.known_recipes.add(name)
-            state.log.add(f"You puzzle out a new remedy — {name}!", (200, 224, 150))
+            state.log.add(f"You puzzle out a new remedy — {name} (brew it at an apothecary)!",
+                          (200, 224, 150))
 
 
 def unknown_recipes(state: GameState) -> list[str]:

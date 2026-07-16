@@ -64,7 +64,9 @@ def visible_recipes(state: GameState) -> list:
     """The recipes the craft menu shows: everything buildable/craftable, plus
     only the cook recipes the player has actually learned (see game.requests)."""
     def shown(r):
-        if r.kind in ("cook", "remedy"):           # learned dishes / remedies only
+        if r.kind == "remedy":                     # remedies are brewed at the apothecary, not by hand
+            return False
+        if r.kind == "cook":                       # learned dishes only
             return r.name in state.known_recipes
         if r.kind == "upgrade":                    # only the next carry tier
             req, _ = content.PACK_UPGRADES.get(r.name, (0, 0))
@@ -75,7 +77,10 @@ def visible_recipes(state: GameState) -> list:
 
 def craft(state: GameState, recipe: Recipe) -> bool:
     """Execute a recipe. Returns True if it happened."""
-    if recipe.kind in ("cook", "remedy") and recipe.name not in state.known_recipes:
+    if recipe.kind == "remedy":
+        state.log.add("Remedies are brewed at an apothecary bench, not by hand.", C.DIM)
+        return False
+    if recipe.kind == "cook" and recipe.name not in state.known_recipes:
         state.log.add("You don't know that recipe yet.", C.DIM)
         return False
     if not has_inputs(state, recipe):
@@ -111,17 +116,6 @@ def craft(state: GameState, recipe: Recipe) -> bool:
             state.player.inventory.remove(it, qty)
         state.log.add(f"You stitch up the {recipe.output.name.lower()} — "
                       "you can shoulder a good deal more now.", (200, 220, 160))
-    elif recipe.kind == "remedy":
-        # Compounded from herbs; potency (quality) follows Herbalism, like cooking.
-        inv = state.player.inventory
-        qs = [inv.pop_quality(it, qty) for it, qty in inputs]
-        rq = skills.process_quality(sum(qs) / len(qs) if qs else 0, state, "Herbalism")
-        inv.add(recipe.output, recipe.out_qty, quality=rq)
-        skills.gain(state, "Herbalism", 14)
-        star = (" " + skills.stars(rq)) if rq else ""
-        state.log.add(f"You compound {recipe.out_qty}x {recipe.output.name}{star}.", (180, 230, 160))
-        from . import requests
-        requests.check_level_recipes(state)
     elif recipe.kind == "item":
         state.player.inventory.add(recipe.output, recipe.out_qty)
         state.log.add(f"You craft {recipe.out_qty}x {recipe.output.name}.")
@@ -530,9 +524,9 @@ def machine_load_options(state: GameState, mdef) -> list:
                 opts.append({"inputs": doubled, "output": r.output, "out_qty": 2,
                              "quality_from": qf, "quality_bonus": 1, "label": r.name})
     elif a == "brew":
-        # A double batch of any REMEDY the herbalist knows — twice the herbs in,
-        # two out, +1 quality over a hand-brew, steeped over hours. Hand-brewing
-        # is untouched (efficiency, not permission); the bench is bigger & finer.
+        # Remedies are brewed only here (they can't be made by hand). A double
+        # batch of any remedy the herbalist knows — twice the herbs in, two out,
+        # +1 quality, steeped over hours while you get on with the day.
         for r in content.RECIPES:
             if r.kind != "remedy" or r.name not in state.known_recipes:
                 continue

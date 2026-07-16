@@ -1100,8 +1100,8 @@ MACHINES: dict[str, MachineDef] = {
                              None, "Renders a grown animal into its cuts — a somber trade "
                                    "of a friend for a full larder."),
     "apothecary": MachineDef("apothecary", "Apothecary", "φ", (150, 200, 168), 480, "brew",
-                             None, "Steeps herbs into remedies — a double batch, a touch "
-                                   "stronger than a hand-brew, and distils potions beyond it."),
+                             None, "The only place to brew: steeps herbs into remedies "
+                                   "by the batch and distils stronger potions."),
 }
 
 # Potions only the apothecary can distil (never a hand-brew) — gated by the
