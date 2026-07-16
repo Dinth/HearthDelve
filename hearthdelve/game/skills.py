@@ -72,6 +72,7 @@ BUFFS = {
     "tiller":  "Green Thumb",         # richer farm harvests
     "forager": "Keen Forager",        # richer foraging
     "brisk":   "Brisk",               # tireless on foot
+    "warded":  "Warded",              # herbal ward: foes' hits rarely inflict a status
 }
 
 

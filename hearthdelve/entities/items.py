@@ -23,6 +23,7 @@ class Item:
                          # (see game.encumbrance.weight_of) — a haul of ore or
                          # bars weighs you down, a pouch of seeds barely at all
     buff: str = ""       # a temporary boon granted on eating (see skills.BUFFS)
+    cures: str = ""      # a status a remedy purges: "poison"|"bleed"|"burn"|"all"
     family: str = ""     # groups per-source artisan goods (all jams share "jam")
                          # so NPC gift tastes & the like match any variant
     source: object = None  # the fruit/veg this good was made from (artisan goods);
@@ -193,7 +194,7 @@ SULPHUR     = Item("Sulphur",     "▪", "material", "Brimstone-yellow crystals 
 SALTPETER   = Item("Saltpeter",   "▪", "material", "White nitre crust — powder, fertiliser or curing salt.", value=35)
 GUNPOWDER   = Item("Gunpowder",   "▪", "material", "Milled black powder. Handle gently.", value=90)
 FERTILISER  = Item("Fertiliser",  "≈", "material", "Nitre-rich meal — fertilised soil grows finer crops (g at a growing crop).", value=25)
-SALVE       = Item("Sulphur Salve", "!", "material", "A pungent wound-salve of brimstone, honey and wax; heals and draws out poison, bleeding and burns (use it from the eat menu, x).", value=85, heal=30)
+SALVE       = Item("Sulphur Salve", "!", "material", "A pungent wound-salve of brimstone, honey and wax; heals and draws out poison, bleeding and burns (use it from the eat menu, x).", value=85, heal=30, cures="all")
 DRAKE_SCALE = Item("Drake Scale",   "u", "material", "A heat-shimmering scale from an ember drake — collectors pay dearly.", value=130)
 
 # Meat is TYPED — the cut carries its animal the way a jam carries its fruit
@@ -215,6 +216,15 @@ COMFREY    = Item("Comfrey",       "ψ", "material", "Knitbone — a fen-edge he
 LAVENDER   = Item("Lavender",      "ψ", "material", "Fragrant purple spikes; calming, and loved as a gift.", value=26)
 SAGE       = Item("Sage",          "ψ", "material", "A grey-green herb of the kitchen and the sickroom.", value=22)
 MANDRAKE   = Item("Mandrake Root", "ψ", "material", "A rare forked root of old physic — the heart of the strongest remedies.", value=60)
+
+# --- Herbal remedies (brewed from herbs; use from the eat menu, x) -----------
+ANTIDOTE       = Item("Antidote",       "!", "material", "A bitter draught that draws the venom out of a wound.", value=90, heal=10, cures="poison")
+POULTICE       = Item("Yarrow Poultice","!", "material", "A pressed yarrow dressing that staunches bleeding.", value=85, heal=10, cures="bleed")
+BURN_BALM      = Item("Burn Balm",      "!", "material", "A cooling lavender-and-wax balm for scorched skin.", value=90, heal=10, cures="burn")
+COMFREY_DRAUGHT= Item("Comfrey Draught","!", "material", "Knitbone tonic — closes deep wounds fast.", value=110, heal=55)
+HERBAL_TONIC   = Item("Herbal Tonic",   "!", "food",     "A restorative chamomile infusion that revives tired limbs.", value=45, energy=60)
+WARDING_TEA    = Item("Warding Tea",    "!", "food",     "Steeped sage and lavender; steadies the nerves and wards off festering wounds a while.", value=50, energy=15, buff="warded")
+MANDRAKE_ELIXIR= Item("Mandrake Elixir","!", "material", "The physician's masterwork — mends deep and purges every affliction.", value=200, heal=70, cures="all")
 LURKER_SCALE  = Item("Lurker Scale",  "u", "material", "A thick armoured scale from a deep lurker.", value=55)
 WRAITH_ESSENCE= Item("Wraith Essence","*", "material", "Cold, half-real essence bled from a wraith.", value=75)
 GLOWCAP       = Item("Glowcap",       "î", "material", "A luminous cave fungus from the Glimmerwood — prized by cooks.", value=65)

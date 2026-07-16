@@ -1294,6 +1294,23 @@ RECIPES: list[Recipe] = [
     Recipe("Sulphur Salve", "item", ((items.SULPHUR, 1), (items.HONEY, 1), (items.BEESWAX, 1)),
            output=items.SALVE, out_qty=2,
            desc="A pungent wound-dressing — restores health without a meal (x)."),
+    # Herbal remedies — brewed from foraged herbs (kind "remedy": learned by
+    # Herbalism level, quality set by that skill). Each purges an affliction or
+    # mends/steadies — the apothecary's answer to the delve's poison and fire.
+    Recipe("Herbal Tonic", "remedy", ((items.CHAMOMILE, 2),),
+           output=items.HERBAL_TONIC, out_qty=2, desc="A reviving chamomile infusion (restores stamina)."),
+    Recipe("Yarrow Poultice", "remedy", ((items.YARROW, 2),),
+           output=items.POULTICE, out_qty=1, desc="Staunches bleeding and mends a little (x)."),
+    Recipe("Warding Tea", "remedy", ((items.SAGE, 1), (items.LAVENDER, 1), (items.CHAMOMILE, 1)),
+           output=items.WARDING_TEA, out_qty=2, desc="Steadies you: foes' hits rarely fester for a while."),
+    Recipe("Antidote", "remedy", ((items.SAGE, 1), (items.COMFREY, 1)),
+           output=items.ANTIDOTE, out_qty=1, desc="Draws poison out of the blood (x)."),
+    Recipe("Comfrey Draught", "remedy", ((items.COMFREY, 2), (items.SAGE, 1)),
+           output=items.COMFREY_DRAUGHT, out_qty=1, desc="Closes deep wounds fast — a strong heal (x)."),
+    Recipe("Burn Balm", "remedy", ((items.LAVENDER, 2),),
+           output=items.BURN_BALM, out_qty=1, desc="Cools and soothes a burn (x)."),
+    Recipe("Mandrake Elixir", "remedy", ((items.MANDRAKE, 1), (items.COMFREY, 1)),
+           output=items.MANDRAKE_ELIXIR, out_qty=1, desc="Mends deep and purges every affliction (x)."),
     Recipe("Leather Armor", "item", ((items.BOAR_HIDE, 3), (items.FIBER, 4)),
            output=items.LEATHER_ARMOR, out_qty=1, desc="Tanned boar-hide body armour (+2 Protection)."),
     Recipe("Hide Cloak", "item", ((items.WOLF_PELT, 2), (items.FIBER, 2)),
@@ -1430,6 +1447,12 @@ TAVERN_RECIPES: tuple[tuple[str, int], ...] = (
 # Recipes that come with practice at the stove: Cooking level -> recipe name.
 COOKING_LEVEL_RECIPES: dict[int, str] = {
     2: "Mayonnaise", 3: "Ketchup", 4: "Coleslaw", 6: "Glowcap Broth", 8: "Yogurt Pie",
+}
+
+# Remedies come to the herbalist as their skill deepens (mirrors cooking levels).
+HERBALISM_LEVEL_RECIPES: dict[int, str] = {
+    1: "Herbal Tonic", 2: "Yarrow Poultice", 3: "Warding Tea", 4: "Antidote",
+    5: "Comfrey Draught", 6: "Burn Balm", 8: "Mandrake Elixir",
 }
 
 

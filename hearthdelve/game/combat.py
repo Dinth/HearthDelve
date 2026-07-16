@@ -354,10 +354,14 @@ def _attack_player(state: GameState, m) -> None:
     else:
         state.log.add(f"The {m.name.lower()} hits you for {dmg}!", (224, 140, 120))
     inflicts = getattr(m, "inflicts", "")
-    if inflicts in STATUS and inflicts not in state.player.status \
-            and random.random() < STATUS[inflicts]["chance"]:
-        apply_status(state, inflicts)
-        state.log.add(STATUS[inflicts]["on"], STATUS[inflicts]["color"])
+    if inflicts in STATUS and inflicts not in state.player.status:
+        from . import skills
+        chance = STATUS[inflicts]["chance"]
+        if skills.active_buff(state) == "warded":     # herbal ward turns most aside
+            chance *= 0.4
+        if random.random() < chance:
+            apply_status(state, inflicts)
+            state.log.add(STATUS[inflicts]["on"], STATUS[inflicts]["color"])
 
 
 # --- the Bomb ability --------------------------------------------------------

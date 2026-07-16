@@ -64,7 +64,7 @@ def visible_recipes(state: GameState) -> list:
     """The recipes the craft menu shows: everything buildable/craftable, plus
     only the cook recipes the player has actually learned (see game.requests)."""
     def shown(r):
-        if r.kind == "cook":
+        if r.kind in ("cook", "remedy"):           # learned dishes / remedies only
             return r.name in state.known_recipes
         if r.kind == "upgrade":                    # only the next carry tier
             req, _ = content.PACK_UPGRADES.get(r.name, (0, 0))
@@ -75,7 +75,7 @@ def visible_recipes(state: GameState) -> list:
 
 def craft(state: GameState, recipe: Recipe) -> bool:
     """Execute a recipe. Returns True if it happened."""
-    if recipe.kind == "cook" and recipe.name not in state.known_recipes:
+    if recipe.kind in ("cook", "remedy") and recipe.name not in state.known_recipes:
         state.log.add("You don't know that recipe yet.", C.DIM)
         return False
     if not has_inputs(state, recipe):
@@ -111,6 +111,17 @@ def craft(state: GameState, recipe: Recipe) -> bool:
             state.player.inventory.remove(it, qty)
         state.log.add(f"You stitch up the {recipe.output.name.lower()} — "
                       "you can shoulder a good deal more now.", (200, 220, 160))
+    elif recipe.kind == "remedy":
+        # Compounded from herbs; potency (quality) follows Herbalism, like cooking.
+        inv = state.player.inventory
+        qs = [inv.pop_quality(it, qty) for it, qty in inputs]
+        rq = skills.process_quality(sum(qs) / len(qs) if qs else 0, state, "Herbalism")
+        inv.add(recipe.output, recipe.out_qty, quality=rq)
+        skills.gain(state, "Herbalism", 14)
+        star = (" " + skills.stars(rq)) if rq else ""
+        state.log.add(f"You compound {recipe.out_qty}x {recipe.output.name}{star}.", (180, 230, 160))
+        from . import requests
+        requests.check_level_recipes(state)
     elif recipe.kind == "item":
         state.player.inventory.add(recipe.output, recipe.out_qty)
         state.log.add(f"You craft {recipe.out_qty}x {recipe.output.name}.")

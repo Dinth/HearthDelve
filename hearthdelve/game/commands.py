@@ -743,6 +743,8 @@ def do_grab(state: GameState) -> None:
             q = skills.roll_quality(state, "Herbalism")
             p.inventory.add(item, 1, quality=q)
             skills.gain(state, "Herbalism", 10)
+            from . import requests
+            requests.check_level_recipes(state)          # a new remedy may come to you
             star = (" " + skills.stars(q)) if q else ""
             state.log.add(f"You gather {item.name.lower()}{star}.", (150, 196, 140))
             turns.advance_time(state, C.HARVEST_COST[1])
@@ -933,6 +935,19 @@ def collect_letter(state: GameState, letter) -> None:
         state.log.add("  Enclosed: " + ", ".join(got) + ".", (180, 230, 160))
 
 
+def _cure_status(state: GameState, spec: str) -> list:
+    """Purge the affliction(s) a remedy targets. ``spec`` is a status kind, or
+    "all" for a broad-spectrum cure. Returns the kinds actually cleared."""
+    st = state.player.status
+    if not spec or not st:
+        return []
+    if spec == "all":
+        cured = list(st.keys())
+        st.clear()
+        return cured
+    return [spec] if st.pop(spec, None) is not None else []
+
+
 def _eat(state: GameState, item, quality: int) -> None:
     from . import skills
     p = state.player
@@ -940,12 +955,15 @@ def _eat(state: GameState, item, quality: int) -> None:
         return
     p.inventory.remove(item, 1, quality=quality)
     if item.heal and not item.energy:                    # a remedy, not a meal
-        p.hp = min(p.max_hp, p.hp + item.heal)
-        cured = bool(p.status)
-        p.status.clear()                                 # brimstone draws out poison, staunches bleeding, cools burns
-        msg = f"You dress your wounds with the {item.name.lower()}. (+{item.heal} HP)"
+        heal = int(round(item.heal * (1 + 0.10 * quality)))   # potency rises with quality
+        p.hp = min(p.max_hp, p.hp + heal)
+        cured = _cure_status(state, getattr(item, "cures", ""))
+        msg = f"You dose yourself with the {item.name.lower()}. (+{heal} HP)"
         if cured:
-            msg += " The sting eases — your afflictions clear."
+            _adj = {"poison": "poison drains away", "bleed": "bleeding stops",
+                    "burn": "burns cool"}
+            msg += (" Every affliction clears." if len(cured) > 1
+                    else f" The {_adj.get(cured[0], cured[0])}.")
         state.log.add(msg, (180, 230, 160))
         turns.advance_time(state, C.USE_SECONDS)
         return

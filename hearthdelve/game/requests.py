@@ -38,7 +38,8 @@ def learn_recipe(state: GameState, name: str, teacher: str = "") -> bool:
 
 
 def check_level_recipes(state: GameState) -> None:
-    """Practice pays: some recipes simply come to a cook at a Cooking level."""
+    """Practice pays: some recipes simply come to a cook at a Cooking level, and
+    to a herbalist at a Herbalism level."""
     from . import skills
     lvl = skills.skill_level(state, "Cooking")
     for need, name in content.COOKING_LEVEL_RECIPES.items():
@@ -46,6 +47,11 @@ def check_level_recipes(state: GameState) -> None:
             state.known_recipes.add(name)
             state.log.add(f"It comes to you at the stove — you work out {name}!",
                           (232, 200, 120))
+    hlvl = skills.skill_level(state, "Herbalism")
+    for need, name in content.HERBALISM_LEVEL_RECIPES.items():
+        if hlvl >= need and name not in state.known_recipes:
+            state.known_recipes.add(name)
+            state.log.add(f"You puzzle out a new remedy — {name}!", (200, 224, 150))
 
 
 def unknown_recipes(state: GameState) -> list[str]:
