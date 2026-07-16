@@ -29,6 +29,11 @@ class GameMap:
     is_dungeon: bool = False
     depth: int = 0
     kind: str = ""
+    # this floor's re-skinned wall/floor tiles (per-kind palette) and the tiles
+    # that hide a trap — kept off the grid so a themed floor can't give them away
+    floor_tile: int = 0
+    wall_tile: int = 0
+    hidden_traps: set = field(default_factory=set)
     stairs_up: tuple[int, int] | None = None
     stairs_down: tuple[int, int] | None = None
     visible: object = None       # np.bool array (dungeon FOV), or None on surface

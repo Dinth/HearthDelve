@@ -193,4 +193,15 @@ NITRE_DEPOSIT   = _add(TileType("nitre_deposit",   "▓", (226, 222, 206), (40, 
 LAVA = _add(TileType("lava", "≈", (255, 140, 40), (120, 30, 10), walkable=False, kind="lava"))
 ASH  = _add(TileType("ash",  ".", (150, 140, 134), (38, 35, 33)))
 
+# --- Per-kind dungeon palettes ----------------------------------------------
+# The generator carves in generic DUNGEON_WALL/FLOOR, then re-skins to one of
+# these so each site reads at a glance. Mines keep the brown DUNGEON_* look;
+# tombs reuse the pale RUINS_* stone. (Append-only — tile ids are positional.)
+CAVE_WALL     = _add(TileType("cave_wall",   "#", (96, 122, 128), (16, 30, 34), walkable=False, kind="wall"))
+CAVE_FLOOR    = _add(TileType("cave_floor",  ".", (108, 132, 130),(18, 32, 34), kind="terrain"))
+BARROW_WALL   = _add(TileType("barrow_wall", "#", (116, 96, 74),  (26, 22, 17), walkable=False, kind="wall"))
+BARROW_FLOOR  = _add(TileType("barrow_floor","." , (124, 106, 82),(24, 20, 15), kind="terrain"))
+DWARF_WALL    = _add(TileType("dwarf_wall",  "#", (146, 144, 152),(32, 31, 35), walkable=False, kind="wall"))
+DWARF_FLOOR   = _add(TileType("dwarf_floor", ".", (152, 150, 156),(34, 33, 37), kind="terrain"))
+
 TILE_COUNT = len(TILES)

@@ -104,7 +104,7 @@ def _scoop_gold(state: GameState) -> None:
     if state.world.tile_at(p.x, p.y).kind == "gold":
         amt = random.randint(20, 60) + state.world.depth * 10
         p.gold += amt
-        state.world.tiles[p.x, p.y] = tile.DUNGEON_FLOOR
+        state.world.tiles[p.x, p.y] = _floor_of(state.world)
         state.log.add(f"You scoop up {amt}g!", (244, 216, 110))
 
 
@@ -223,10 +223,16 @@ def try_move(state: GameState, dx: int, dy: int) -> None:
             state.log.add(msg, C.DIM)
 
 
+def _floor_of(w) -> int:
+    """This dungeon's re-skinned floor tile (so a mined vein or sprung trap heals
+    to the kind's palette, not a bright generic scar). Falls back to the default."""
+    return getattr(w, "floor_tile", 0) or tile.DUNGEON_FLOOR
+
+
 def _spring_trap(state: GameState) -> None:
     """Trigger the trap under the player and disarm the tile."""
     p, w = state.player, state.world
-    w.tiles[p.x, p.y] = tile.DUNGEON_FLOOR
+    w.tiles[p.x, p.y] = _floor_of(w)
     roll = random.random()
     if roll < 0.34:
         dmg = random.randint(2, 4) + w.depth
@@ -252,17 +258,23 @@ def _dungeon_tile_fx(state: GameState) -> bool:
         return False
     p = state.player
     sprang = False
+    pos = (p.x, p.y)
     kind = w.tile_at(p.x, p.y).kind
-    if kind == "trap":                    # hidden or already-spotted — both fire
+    if pos in w.hidden_traps:              # an unspotted trap underfoot
+        w.hidden_traps.discard(pos)
+        _spring_trap(state)
+        sprang = True
+    elif kind == "trap":                   # an already-spotted trap, stepped on anyway
         _spring_trap(state)
         sprang = True
     elif kind == "rubble":
         turns.advance_time(state, C.MOVE_SECONDS)   # loose footing, slow going
     for ddx in (-1, 0, 1):                 # notice adjacent hidden traps
         for ddy in (-1, 0, 1):
-            x, y = p.x + ddx, p.y + ddy
-            if w.in_bounds(x, y) and w.tiles[x, y] == tile.TRAP_HIDDEN and random.random() < 0.4:
-                w.tiles[x, y] = tile.TRAP
+            xy = (p.x + ddx, p.y + ddy)
+            if xy in w.hidden_traps and random.random() < 0.4:
+                w.hidden_traps.discard(xy)
+                w.tiles[xy] = tile.TRAP
     return sprang
 
 
@@ -394,7 +406,7 @@ def use_tool(state: GameState) -> None:
     if state.world.is_dungeon:
         stamina += state.world.depth // 3
     if new_tile is not None and state.world.is_dungeon and new_tile == tile.GRASS:
-        new_tile = tile.DUNGEON_FLOOR         # mined rock/ore leaves dungeon floor
+        new_tile = _floor_of(state.world)     # mined rock/ore heals to the kind's floor
 
     # Long tasks (felling a tree, breaking rock) play out over a few seconds so
     # the world moves around you — and a menacing creature can break them off.
@@ -697,7 +709,7 @@ def do_grab(state: GameState) -> None:
             if tk == "glowcap":
                 item, floor, col = items.GLOWCAP, tile.GLOW_MOSS, (150, 236, 222)
             elif state.world.is_dungeon:
-                item, floor, col = items.CAVE_MUSHROOM, tile.DUNGEON_FLOOR, (206, 160, 190)
+                item, floor, col = items.CAVE_MUSHROOM, _floor_of(state.world), (206, 160, 190)
             else:                                        # a named wild species
                 item = _MUSHROOM_ITEM.get(state.world.tiles[gx, gy], items.BUTTON_MUSHROOM)
                 floor, col = tile.GRASS, (206, 176, 130)
@@ -928,7 +940,7 @@ def _eat(state: GameState, item, quality: int) -> None:
 def _open_chest(state: GameState, x: int, y: int) -> None:
     from ..data import content
     p = state.player
-    state.world.tiles[x, y] = tile.DUNGEON_FLOOR
+    state.world.tiles[x, y] = _floor_of(state.world)
     gold, loot = content.chest_loot(state.world.depth, random)
     p.gold += gold
     got = [f"{gold}g"]

@@ -37,7 +37,7 @@ def _feeling(gm) -> str:
         extra.append("A loamy, mushroomy smell hangs in the air.")
     if (gm.tiles == tile.WISPWOOD).any():
         extra.append("A strange living glow drifts on the air — something grows down here.")
-    if (gm.tiles == tile.TRAP_HIDDEN).any():
+    if gm.hidden_traps:
         extra.append("Something about the floor makes you uneasy.")
     if any(getattr(m, "boss", False) for m in gm.monsters):
         extra.append("You sense an imminent danger.")

@@ -15,6 +15,31 @@ from .gamemap import GameMap
 DUN_W, DUN_H = 72, 46
 FOV_RADIUS = 8
 
+# Per-kind wall/floor palette. The floor is carved generically and re-skinned to
+# these at the end, so every gen-time ``== DUNGEON_FLOOR`` check still holds while
+# each site ends up reading distinctly. Mines keep the default brown rock; tombs
+# take the pale ruins stone; the rest get their own new tiles.
+_THEME = {
+    "grotto":    ("cave_wall", "cave_floor"),        # damp blue-green cavern
+    "barrow":    ("barrow_wall", "barrow_floor"),    # dark earthen burrow
+    "tomb":      ("ruins_wall", "ruins_floor"),      # pale worked stone
+    "dwarfhold": ("dwarf_wall", "dwarf_floor"),      # grey dwarven masonry
+    # "mine" (and any unlisted kind) keeps DUNGEON_WALL/FLOOR.
+}
+
+
+def _apply_theme(gm, kind: str) -> None:
+    """Re-skin the finished floor's generic walls/floors to the kind's palette
+    and record which tiles those are (so runtime code can restore matching floor
+    when a vein is mined or a trap sprung)."""
+    wall_name, floor_name = _THEME.get(kind, ("dungeon_wall", "dungeon_floor"))
+    wall, floor = tile.tid(wall_name), tile.tid(floor_name)
+    gm.wall_tile, gm.floor_tile = wall, floor
+    if floor != tile.DUNGEON_FLOOR:
+        gm.tiles[gm.tiles == tile.DUNGEON_FLOOR] = floor
+    if wall != tile.DUNGEON_WALL:
+        gm.tiles[gm.tiles == tile.DUNGEON_WALL] = wall
+
 
 class _Room:
     def __init__(self, x, y, w, h):
@@ -187,12 +212,15 @@ def generate(seed: int, kind: str, depth: int) -> GameMap:
         if tiles[mx, my] == tile.DUNGEON_FLOOR and (mx, my) not in (up, down):
             tiles[mx, my] = tile.MUSHROOM
 
-    # Hidden traps — never in the entry room; more on deeper floors.
+    # Hidden traps — never in the entry room; more on deeper floors. Recorded as
+    # coordinates (not a distinct tile) so the per-kind floor re-skin below can't
+    # betray them; the tile stays ordinary floor until spotted or sprung.
+    hidden_traps = []
     cells = [(x, y) for (x, y) in floor_cells() if not in_entry(x, y)]
     rng.shuffle(cells)
     for x, y in cells[:rng.randint(2, 3 + depth)]:
         if tiles[x, y] == tile.DUNGEON_FLOOR:
-            tiles[x, y] = tile.TRAP_HIDDEN
+            hidden_traps.append((x, y))
 
     # Treasure chests — a few, tucked in non-entry rooms.
     n_chest = rng.randint(1, 2 + (1 if depth >= 3 else 0))
@@ -357,4 +385,9 @@ def generate(seed: int, kind: str, depth: int) -> GameMap:
             if tiles[gx, y] == tile.DUNGEON_WALL or not tile.TILES[tiles[gx, y]].walkable:
                 if (gx, y) not in (up, down):
                     tiles[gx, y] = tile.DUNGEON_FLOOR
+
+    # Hidden traps only survive on tiles that are still plain floor (a vein or a
+    # repair corridor may have overwritten one), then re-skin to the kind palette.
+    gm.hidden_traps = {(x, y) for (x, y) in hidden_traps if tiles[x, y] == tile.DUNGEON_FLOOR}
+    _apply_theme(gm, kind)
     return gm

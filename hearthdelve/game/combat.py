@@ -682,5 +682,6 @@ def _shatter(state: GameState, x: int, y: int, t) -> None:
         inv.add(items.SALTPETER, 1)
     elif t.name in ("rock", "ruins_wall"):
         inv.add(items.STONE, 1)
-    floor = tile.DUNGEON_FLOOR if state.world.is_dungeon else tile.GRASS
+    floor = (getattr(state.world, "floor_tile", 0) or tile.DUNGEON_FLOOR) \
+        if state.world.is_dungeon else tile.GRASS
     state.world.tiles[x, y] = floor
