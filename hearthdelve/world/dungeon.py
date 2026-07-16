@@ -21,9 +21,12 @@ FOV_RADIUS = 8
 # take the pale ruins stone; the rest get their own new tiles.
 _THEME = {
     "grotto":    ("cave_wall", "cave_floor"),        # damp blue-green cavern
+    "sea cave":  ("cave_wall", "cave_floor"),        # briny sea-cut cave (damp look)
     "barrow":    ("barrow_wall", "barrow_floor"),    # dark earthen burrow
     "tomb":      ("ruins_wall", "ruins_floor"),      # pale worked stone
     "dwarfhold": ("dwarf_wall", "dwarf_floor"),      # grey dwarven masonry
+    "crypt":     ("crypt_wall", "crypt_floor"),      # cold blue-grey crypt stone
+    "cavern":    ("cavern_wall", "cavern_floor"),    # pale limestone
     # "mine" (and any unlisted kind) keeps DUNGEON_WALL/FLOOR.
 }
 

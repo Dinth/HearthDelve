@@ -1196,6 +1196,8 @@ def _place_dungeons(gm: GameMap, wild: np.ndarray, flora: np.ndarray,
     t = gm.tiles
     cx, cy = C.WORLD_CENTER
 
+    _SPREAD = 14        # keep two dungeon mouths from crowding each other
+
     def _drop(mask, kind, anchor, min_d):
         xs, ys = np.where(mask)          # (w,h) array -> (x_index, y_index)
         if len(xs) == 0:
@@ -1206,6 +1208,8 @@ def _place_dungeons(gm: GameMap, wild: np.ndarray, flora: np.ndarray,
             x, y = int(xs[i]), int(ys[i])
             if d[i] < (min_d ** 2):      # a stand-off from the anchor
                 continue
+            if any(abs(x - ex) + abs(y - ey) < _SPREAD for ex, ey in gm.dungeons):
+                continue                 # don't crowd an existing mouth
             if any(gm.walkable(x + dx, y + dy) for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1))):
                 _carve_dungeon_site(gm, x, y, kind)
                 gm.dungeons.append((x, y))
@@ -1216,11 +1220,24 @@ def _place_dungeons(gm: GameMap, wild: np.ndarray, flora: np.ndarray,
     deep_wood = (region == REG_FOREST) & (wild >= C.TIER2_MAX)       # far in the wildwood
     fen = (region == REG_MARSH) & (wild >= C.TIER2_MAX) \
         & ((t == tile.MARSH) | (t == tile.MOOR) | (t == tile.FOG_GRASS))
+    shore = (t == tile.SAND)                                         # the southern beach
 
     cinder = centers.get("Cinderhope", (cx, cy))
-    _drop(stony, "mine", cinder, min_d=30)                           # in the hills by the village
+    moss = centers.get("Mossford", (cx, cy))
+    salt = centers.get("Saltmere", (cx, cy))
+    fenw = centers.get("Fenwick", (cx, cy))
+    # More mouths, spread across the Vale — several of each biome's kinds, plus a
+    # limestone cavern in the hills, a sunken crypt in the fen, and a sea cave on
+    # the shore. Each _drop finds the nearest fitting, uncrowded tile to its
+    # anchor; any that can't place simply doesn't (graceful on odd maps).
+    _drop(stony, "mine", cinder, min_d=28)                           # the Cinderhope shafts
+    _drop(stony, "mine", moss, min_d=34)                             # a second working
+    _drop(stony, "cavern", salt, min_d=30)                           # a natural limestone cave
     _drop(deep_wood, "grotto", (cx, cy), min_d=int(0.30 * gm.width))
-    _drop(fen, "barrow", (cx, cy), min_d=int(0.30 * gm.width))
+    _drop(deep_wood, "grotto", moss, min_d=26)                       # a second grotto
+    _drop(fen, "barrow", (cx, cy), min_d=int(0.28 * gm.width))
+    _drop(fen, "crypt", fenw, min_d=22)                              # a sunken crypt
+    _drop(shore, "sea cave", salt, min_d=18)                         # a briny mouth on the coast
 
 
 def _carve_dungeon_site(gm: GameMap, ex: int, ey: int, kind: str) -> None:

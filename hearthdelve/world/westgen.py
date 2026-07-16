@@ -118,6 +118,8 @@ def generate(seed: int) -> GameMap:
 
     _entrance(vx + 60 + rng.randint(-8, 8), vy + rng.randint(-40, 40), "tomb")
     _entrance(vx + 18, vy - 18, "dwarfhold", r0=1, r1=18)
+    _entrance(vx + 40 + rng.randint(-6, 6), vy - 30 + rng.randint(-6, 6), "tomb")   # a second barrow-tomb
+    _entrance(vx - 34 + rng.randint(-8, 8), vy + 20 + rng.randint(-10, 10), "cavern")  # a lava-country cave
 
     # The beasts: wolves and vipers range everywhere, cinder boars root the
     # slopes, and ember drakes sun themselves near the caldera.

@@ -203,5 +203,9 @@ BARROW_WALL   = _add(TileType("barrow_wall", "#", (116, 96, 74),  (26, 22, 17), 
 BARROW_FLOOR  = _add(TileType("barrow_floor","." , (124, 106, 82),(24, 20, 15), kind="terrain"))
 DWARF_WALL    = _add(TileType("dwarf_wall",  "#", (146, 144, 152),(32, 31, 35), walkable=False, kind="wall"))
 DWARF_FLOOR   = _add(TileType("dwarf_floor", ".", (152, 150, 156),(34, 33, 37), kind="terrain"))
+CRYPT_WALL    = _add(TileType("crypt_wall",  "#", (104, 112, 126),(19, 21, 27), walkable=False, kind="wall"))
+CRYPT_FLOOR   = _add(TileType("crypt_floor", ".", (116, 122, 134),(21, 23, 29), kind="terrain"))
+CAVERN_WALL   = _add(TileType("cavern_wall", "#", (158, 146, 122),(34, 30, 23), walkable=False, kind="wall"))
+CAVERN_FLOOR  = _add(TileType("cavern_floor","." , (168, 156, 132),(36, 32, 25), kind="terrain"))
 
 TILE_COUNT = len(TILES)

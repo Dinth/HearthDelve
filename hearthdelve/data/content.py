@@ -1506,11 +1506,12 @@ class Monster:
                            # "dwarfhold"); () = found in any dungeon
 
 
-# Dungeon kinds share flavour: barrows and Westreach tombs are both undead
-# haunts, so a roster themed to one covers the other.
-_UNDEAD = ("barrow", "tomb")
-_DAMP = ("grotto",)
-_ROCK = ("mine",)
+# Dungeon kinds share flavour, so one roster covers several sites: barrows,
+# Westreach tombs and stone crypts are all undead haunts; caverns are part rock,
+# part damp; sea caves are damp. New kinds join these groups to inherit a roster.
+_UNDEAD = ("barrow", "tomb", "crypt")
+_DAMP = ("grotto", "sea cave", "cavern")
+_ROCK = ("mine", "cavern")
 
 MONSTERS: list[Monster] = [
     # Common everywhere — the baseline fauna of any dark (kinds=()).
