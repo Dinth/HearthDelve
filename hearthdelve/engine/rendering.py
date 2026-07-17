@@ -132,7 +132,7 @@ def _glow_from(view: np.ndarray, ids: tuple, rad: int, sigma2: float) -> np.ndar
     return glow
 
 
-_DUNGEON_WARM_IDS = (tile.LAMP, tile.CAMPFIRE, tile.HEARTH, tile.LAVA)
+_DUNGEON_WARM_IDS = (tile.LAMP, tile.CAMPFIRE, tile.HEARTH, tile.LAVA, tile.BRAZIER)
 
 
 def _blur5(f: np.ndarray) -> np.ndarray:
