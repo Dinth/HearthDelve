@@ -74,6 +74,8 @@ class GameState:
     # cook recipes the player has learned (recipe names): plain fare to start,
     # the rest gathered around the Vale (friends, taverns, practice, favours)
     known_recipes: set = field(default_factory=_starter_recipes)
+    # item names donated to the Hall of Wonders (first-of-each specimen)
+    donated: set = field(default_factory=set)
     # open request-board favours: [{npc, item, qty, gold, expires, flavor}]
     requests: list = field(default_factory=list)
     # the market's current craving: {"kind", "mult", "until"} — {} in a lull

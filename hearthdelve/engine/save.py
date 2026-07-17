@@ -132,6 +132,7 @@ def save(state: GameState, path: str = SAVE_PATH) -> None:
         "last_tax_day": state.last_tax_day,
         "quests_done": list(state.quests_done),
         "known_recipes": sorted(state.known_recipes),
+        "donated": sorted(state.donated),
         "requests": [dict(r) for r in state.requests],
         "demand": dict(state.demand),
         "projects": [dict(p) for p in state.projects],
@@ -342,6 +343,7 @@ def load(path: str = SAVE_PATH) -> GameState:
     # A save from before recipe discovery knew every recipe — keep it that way.
     state.known_recipes = (set(kr) if kr is not None else
                            {r.name for r in content.RECIPES if r.kind == "cook"})
+    state.donated = set(data.get("donated", []))
     state.requests = [dict(r) for r in data.get("requests", [])]
     state.demand = dict(data.get("demand") or {})
     from ..game import projects as _projects

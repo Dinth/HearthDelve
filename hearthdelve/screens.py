@@ -220,7 +220,9 @@ class PlayScreen(Screen):
                                   "favours come and go.", C.DIM)
             else:
                 req = cmds.do_grab(state)
-                if isinstance(req, dict) and "storage" in req:
+                if isinstance(req, dict) and "donate" in req:
+                    ui.push(DonateScreen())
+                elif isinstance(req, dict) and "storage" in req:
                     ui.push(StorageScreen())
                 elif isinstance(req, dict) and "load" in req:
                     ui.push(LoadMachineScreen({
@@ -820,6 +822,31 @@ class GiftScreen(Screen):
                     _give, "It's starred or valuable."))
             else:
                 _give(ui)
+
+
+class DonateScreen(Screen):
+    """The Hall of Wonders: present carried finds to the curator, one by one."""
+    def __init__(self) -> None:
+        self.sel = 0
+
+    def render(self, ui: UI, con) -> None:
+        rendering.render_donate(con, ui.state, self.sel)
+
+    def handle(self, ui: UI, cmd: str, action: tuple) -> None:
+        from .game import collection
+        state = ui.state
+        items_ = collection.donatable(state)
+        if cmd in ("cancel", "gift", "quit") or not items_:
+            ui.pop()
+        elif cmd == "move" and action[2]:
+            self.sel = (self.sel + action[2]) % len(items_)
+        elif cmd == "confirm":
+            it, _ql = items_[min(self.sel, len(items_) - 1)]
+            collection.donate(state, it)
+            if not collection.donatable(state):
+                ui.pop()
+            else:
+                self.sel = min(self.sel, len(collection.donatable(state)) - 1)
 
 
 class JournalScreen(Screen):

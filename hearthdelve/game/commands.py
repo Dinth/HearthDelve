@@ -803,6 +803,8 @@ def do_grab(state: GameState) -> None:
         if tk == "chest":
             _open_chest(state, gx, gy)
             return
+        if tk == "exhibit":                                  # a Hall of Wonders display case
+            return {"donate": True}
         if tk == "hive":
             _rob_hive(state, gx, gy)
             return

@@ -384,10 +384,20 @@ def _stamp_market(state, rect) -> None:
         ((2, 2), tile.COUNTER), ((w - 3, 2), tile.COUNTER), ((w // 2, h // 2), tile.BARREL)))
 
 
+def _stamp_hall_of_wonders(state, rect) -> None:
+    """A grand hall lined with glass display cases (present finds at any, g)."""
+    x0, y0, w, h = rect
+    inter = [((dx, 1), tile.EXHIBIT) for dx in range(2, w - 2, 2)]      # cases along the back wall
+    inter += [((2, h - 3), tile.EXHIBIT), ((w - 3, h - 3), tile.EXHIBIT)]
+    inter.append(((w // 2, h // 2), tile.LAMP))                          # a lamp to show them by
+    _stamp_hall(state, rect, interior=tuple(inter))
+
+
 _STAMPS = {"grange_hall": _stamp_grange, "deep_forge": _stamp_forge,
            "lighthouse": _stamp_lighthouse, "causeway": _stamp_causeway,
            "shrine": _stamp_shrine, "scriptorium": _stamp_scriptorium,
-           "bathhouse": _stamp_bathhouse, "market_cross": _stamp_market}
+           "bathhouse": _stamp_bathhouse, "market_cross": _stamp_market,
+           "hall_of_wonders": _stamp_hall_of_wonders}
 
 
 def register_buildings(world, projects: list) -> None:

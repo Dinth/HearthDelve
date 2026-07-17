@@ -1322,6 +1322,7 @@ _TILE_DESC = {
     "altar": "a shrine altar — bump it to pray (a daily blessing once the shrine is raised).",
     "lectern": "a scriptorium lectern — bump it to study out a new recipe (once a day).",
     "bath": "a bathhouse basin — bump it to soak: sweat off sickness and restore stamina (takes a while).",
+    "exhibit": "a glass display case — present your finds to the curator (g) for the collection.",
     "fence": "a wooden fence around the plot.",
     "tilled": "tilled soil, ready for seeds.",
     "dungeon_down": "a stairway leading down. Press > to descend.",
@@ -3005,6 +3006,30 @@ def render_contest(con: tcod.console.Console, state: GameState, sel: int) -> Non
 
     m.list(3, body, len(goods), sel, row, arrow_top=3, arrow_bottom=h - 3)
     m.footer("↑↓ select   Enter show it   Esc back")
+
+
+def render_donate(con: tcod.console.Console, state: GameState, sel: int) -> None:
+    from ..game import collection, skills
+    items_ = collection.donatable(state)
+    have, tot = collection.total_progress(state)
+    w, h = 54, min(C.SCREEN_H - 4, max(9, len(items_) + 6))
+    body = h - 5
+    m = ui.Modal(con, w, h, f"Hall of Wonders  —  {have}/{tot} catalogued")
+    if not items_:
+        m.text(2, 2, "Nothing new to present. Bring finds: fish, gems,", fg=C.DIM)
+        m.text(2, 3, "herbs, crops and delved relics.", fg=C.DIM)
+
+    def row(i, dy, selected, bg):
+        it, ql = items_[i]
+        wing = collection.wing_of(it.name) or ""
+        star = (" " + skills.stars(ql)) if ql else ""
+        m.text(2, dy, ui.cur(selected) + f"{it.name}{star}  · {wing}", fg=C.WHITE, bg=bg)
+
+    m.list(2, body, len(items_), sel, row, arrow_top=2, arrow_bottom=h - 4)
+    prog = collection.wing_progress(state)
+    parts = [f"{wing.split()[0]} {d}/{t}" for wing, (d, t) in prog.items()]
+    m.text(2, h - 3, "   ".join(parts), fg=(190, 180, 140))
+    m.footer("↑↓ select   Enter present   Esc close")
 
 
 def render_gift(con: tcod.console.Console, state: GameState, npc, sel: int) -> None:

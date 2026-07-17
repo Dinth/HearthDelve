@@ -2517,7 +2517,41 @@ PROJECTS: dict[str, ProjectDef] = {p.id: p for p in (
                (5, 5), 4,
                "Traders throng the quay — shipped goods fetch +10%.",
                "A proper market cross would draw the coast trade to Saltmere's quay."),
+    # The flagship: a cabinet of curiosities. Once raised, present first-of-each
+    # specimen to the curator (see game/collection.py) for lore, wing perks and a
+    # capstone. Expensive and grand — the culmination of Mossford's works.
+    ProjectDef("hall_of_wonders", "Mossford Hall of Wonders", "Mossford", 7000,
+               ((items.STONE, 160), (items.TIMBER_PLANK, 120), (items.SILK_CLOTH, 8)),
+               (11, 7), 7,
+               "Present finds to the curator (g at a display case) — a cabinet of the Vale's wonders.",
+               "A hall to gather the Vale's wonders — every fish, gem, herb and delved relic, "
+               "catalogued and kept. Mossford has dreamt of it for generations."),
 )}
+
+
+# --- The Hall of Wonders collection catalogue --------------------------------
+# What may be catalogued, by wing. Derived from the living content so it always
+# covers everything the world can produce. See game/collection.py for the loop.
+def _collection_catalogue() -> dict:
+    def uniq(seq):
+        return tuple(dict.fromkeys(seq))     # de-dupe, keep first-seen order
+    herbarium = uniq([c.produce for c in CROPS]
+                     + [items.CHAMOMILE, items.YARROW, items.COMFREY, items.LAVENDER,
+                        items.SAGE, items.MANDRAKE, items.BUTTON_MUSHROOM,
+                        items.PARASOL_MUSHROOM, items.BOLETE, items.CHANTERELLE,
+                        items.CAVE_MUSHROOM, items.GLOWCAP, items.TRUFFLE])
+    anglers = uniq([f.item for f in FISH])
+    lapidary = (items.AMETHYST, items.TOPAZ, items.EMERALD, items.RUBY,
+                items.SAPPHIRE, items.DIAMOND)
+    reliquary = (items.SLIME_GEL, items.BAT_WING, items.BOAR_HIDE, items.WOLF_PELT,
+                 items.ANTLER, items.RAW_HIDE, items.SPIDER_SILK, items.VENOM_GLAND,
+                 items.LURKER_SCALE, items.WRAITH_ESSENCE, items.DRAKE_SCALE)
+    return {"Herbarium": herbarium, "Angler's Cabinet": anglers,
+            "Lapidary": lapidary, "Reliquary": reliquary}
+
+
+COLLECTION: dict[str, tuple] = _collection_catalogue()
+COLLECTED_NAMES = {it.name for wing in COLLECTION.values() for it in wing}
 
 
 # tool tier -> the bar needed to reach the NEXT tier (index = current tier)
