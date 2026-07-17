@@ -362,9 +362,32 @@ def _stamp_shrine(state, rect) -> None:
         ((w // 2 - 2, 1), tile.LAMP), ((w // 2 + 2, 1), tile.LAMP)))
 
 
+def _stamp_scriptorium(state, rect) -> None:
+    """A reading hall: a lectern to study at, desks, and a warm hearth."""
+    x0, y0, w, h = rect
+    _stamp_hall(state, rect, interior=(
+        ((w // 2, 1), tile.LECTERN),
+        ((2, 2), tile.TABLE), ((w - 3, 2), tile.TABLE), ((1, h - 3), tile.HEARTH)))
+
+
+def _stamp_bathhouse(state, rect) -> None:
+    """A stone bathhouse: a corner basin to soak in, warmed by a hearth."""
+    x0, y0, w, h = rect
+    _stamp_hall(state, rect, interior=(
+        ((2, 2), tile.BATH), ((3, 2), tile.BATH), ((1, h - 3), tile.HEARTH)))
+
+
+def _stamp_market(state, rect) -> None:
+    """A covered market: stall counters and a goods barrel."""
+    x0, y0, w, h = rect
+    _stamp_hall(state, rect, interior=(
+        ((2, 2), tile.COUNTER), ((w - 3, 2), tile.COUNTER), ((w // 2, h // 2), tile.BARREL)))
+
+
 _STAMPS = {"grange_hall": _stamp_grange, "deep_forge": _stamp_forge,
            "lighthouse": _stamp_lighthouse, "causeway": _stamp_causeway,
-           "shrine": _stamp_shrine}
+           "shrine": _stamp_shrine, "scriptorium": _stamp_scriptorium,
+           "bathhouse": _stamp_bathhouse, "market_cross": _stamp_market}
 
 
 def register_buildings(world, projects: list) -> None:

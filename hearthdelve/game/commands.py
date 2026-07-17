@@ -198,6 +198,46 @@ def _pray(state: GameState) -> None:
     karma.adjust(state, 1)
 
 
+def _study(state: GameState) -> None:
+    """Study at the Scriptorium's lectern: once a day, puzzle out a recipe you
+    don't yet know (a cook dish or a herbal remedy) — practice's bookish cousin."""
+    from . import projects
+    from ..data import content
+    if not projects.done(state, "scriptorium"):
+        state.log.add("Crates of half-copied records. Fine reading, once it's restored.", C.DIM)
+        return
+    if state.stats.get("studied_day") == state.day:
+        state.log.add("You've studied enough for one day — the letters swim.", C.DIM)
+        return
+    pool = [r.name for r in content.RECIPES
+            if r.kind in ("cook", "remedy") and r.name not in state.known_recipes]
+    if not pool:
+        state.log.add("You've mastered every recipe in the library already.", C.DIM)
+        return
+    state.stats["studied_day"] = state.day
+    name = pool[state.day % len(pool)]          # deterministic, drifts day to day
+    state.known_recipes.add(name)
+    state.log.add(f"You pore over the books and work out {name}!", (232, 216, 150))
+
+
+def _bathe(state: GameState) -> None:
+    """Soak in the Bathhouse basin: sweat off any sickness and restore a good
+    deal of stamina, at the cost of a couple of hours (the time self-limits it)."""
+    from . import projects
+    p = state.player
+    if not projects.done(state, "bathhouse"):
+        state.log.add("An empty basin and cold flagstones. A proper bath would be a mercy.", C.DIM)
+        return
+    cured = "sick" in p.status
+    p.status.pop("sick", None)
+    p.energy = min(p.max_energy, p.energy + 120)
+    msg = "You soak in the warm bath — the weariness melts away (+stamina)"
+    if cured:
+        msg += ", and the marsh-sickness sweats out of you"
+    state.log.add(msg + ".", (180, 224, 224))
+    turns.advance_time(state, 2 * 3600)         # a good long soak — two hours (advance_time is in seconds)
+
+
 def try_move(state: GameState, dx: int, dy: int) -> None:
     p = state.player
     p.facing = (dx, dy)
@@ -222,11 +262,14 @@ def try_move(state: GameState, dx: int, dy: int) -> None:
     if n is not None:
         state.log.add(f"You greet {n.name}. (Shift+C to talk, f to give a gift)", C.DIM)
         return
-    # bump a shrine altar to pray (a moment of quiet — a daily blessing once the
-    # Shrine of the Seasons stands)
-    if not state.world.is_dungeon and state.world.tile_at(nx, ny).kind == "altar":
-        _pray(state)
-        return
+    # bump a civic landmark's fitting to use it: pray at an altar, study at a
+    # lectern, soak in a bathhouse basin (each grants its restored project's perk)
+    if not state.world.is_dungeon:
+        _fx = {"altar": _pray, "lectern": _study, "bath": _bathe}.get(
+            state.world.tile_at(nx, ny).kind)
+        if _fx is not None:
+            _fx(state)
+            return
     if state.world.walkable(nx, ny):
         p.x, p.y = nx, ny
         _scoop_gold(state)                                      # scoop up a gold pile

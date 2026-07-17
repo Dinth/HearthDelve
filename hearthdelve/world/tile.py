@@ -130,6 +130,8 @@ TABLE   = _add(TileType("table",    "π", (176, 140, 100), (44, 36, 28), walkabl
 COUNTER = _add(TileType("counter",  "=", (188, 152, 104), (46, 38, 28), walkable=False, kind="counter"))
 BARREL  = _add(TileType("barrel",   "θ", (168, 128, 84),  (44, 36, 28), walkable=False, kind="barrel"))
 ALTAR   = _add(TileType("altar",    "♦", (240, 224, 150), (48, 44, 34), walkable=False, kind="altar"))
+LECTERN = _add(TileType("lectern",  "Γ", (206, 186, 140), (44, 38, 28), walkable=False, kind="lectern"))
+BATH    = _add(TileType("bath",     "○", (150, 202, 220), (30, 54, 70),  walkable=False, kind="bath"))
 
 # --- Graveyard ---------------------------------------------------------------
 GRAVE   = _add(TileType("grave",    "†", (176, 178, 184), (34, 44, 34), walkable=False, kind="grave"))

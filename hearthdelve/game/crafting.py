@@ -879,10 +879,14 @@ def ship_all(state: GameState) -> int:
 
 
 def bin_value(state: GameState, item, quality: int) -> int:
-    """What one unit fetches at the bin right now: quality-scaled, and marked up
-    while the market craves this kind of goods (see requests.demand_mult)."""
-    from . import requests
-    return round(slot_value(item, quality) * requests.demand_mult(state, item))
+    """What one unit fetches at the bin right now: quality-scaled, marked up while
+    the market craves this kind of goods (requests.demand_mult), and again once
+    Saltmere's Market Cross draws the coast trade in."""
+    from . import requests, projects
+    v = slot_value(item, quality) * requests.demand_mult(state, item)
+    if projects.done(state, "market_cross"):
+        v *= 1.10
+    return round(v)
 
 
 def sell_shipment(state: GameState) -> None:

@@ -2502,6 +2502,21 @@ PROJECTS: dict[str, ProjectDef] = {p.id: p for p in (
                (7, 5), 5,
                "Pray at the shrine altar (bump it) for a daily blessing.",
                "Sister Ivy's shrine is a humble thing; the faithful long to raise it grand."),
+    ProjectDef("scriptorium", "Cinderhope Scriptorium", "Cinderhope", 4000,
+               ((items.TIMBER_PLANK, 100), (items.STONE, 50), (items.WOOLEN_CLOTH, 6)),
+               (7, 6), 5,
+               "Study at the lectern (bump it) to work out a new recipe now and then.",
+               "Father Ansel keeps the Vale's records in crates; a scriptorium would house them proper."),
+    ProjectDef("bathhouse", "Fenwick Bathhouse", "Fenwick", 3500,
+               ((items.STONE, 140), (items.TIMBER_PLANK, 40), (items.COPPER_BAR, 4)),
+               (6, 5), 4,
+               "Bathe (bump the basin) to sweat off sickness and restore stamina, at the cost of time.",
+               "The fen's damp gets in the bones; a bathhouse would sweat out the marsh-fever."),
+    ProjectDef("market_cross", "Saltmere Market Cross", "Saltmere", 4000,
+               ((items.STONE, 120), (items.TIMBER_PLANK, 50), (items.COPPER_BAR, 4)),
+               (5, 5), 4,
+               "Traders throng the quay — shipped goods fetch +10%.",
+               "A proper market cross would draw the coast trade to Saltmere's quay."),
 )}
 
 
