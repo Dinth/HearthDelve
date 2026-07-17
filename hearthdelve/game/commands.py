@@ -205,6 +205,8 @@ def try_move(state: GameState, dx: int, dy: int) -> None:
         if state.world.is_dungeon:
             delve.update_fov(state)
             _dungeon_tile_fx(state)
+        else:
+            _surface_tile_fx(state)
     else:
         if not state.world.in_bounds(nx, ny):
             # Walking off the western edge crosses into the Westreach (and the
@@ -257,6 +259,22 @@ def _spring_trap(state: GameState) -> None:
         for m in w.monsters:
             m.awake = True
         state.log.add("An alarm trap clatters — the whole floor stirs!", (228, 208, 120))
+
+
+def _surface_tile_fx(state: GameState) -> None:
+    """React to stepping onto a surface tile. The deep fen breathes a miasma:
+    lingering in the wet marsh can breed a wasting sickness — a low, drifting
+    chance, warded off by herbal tea and never while you're already ill."""
+    p, w = state.player, state.world
+    if w.tiles[p.x, p.y] not in (tile.MARSH, tile.FOG_GRASS):
+        return
+    from . import skills, combat
+    if "sick" in p.status or skills.active_buff(state) == "warded":
+        return
+    if random.random() < 0.008:
+        combat.apply_status(state, "sick")
+        state.log.add("A foul miasma rises off the bog — it settles cold in your chest.",
+                      combat.STATUS["sick"]["color"])
 
 
 def _dungeon_tile_fx(state: GameState) -> bool:
