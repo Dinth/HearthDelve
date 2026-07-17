@@ -225,7 +225,7 @@ BURN_BALM      = Item("Burn Balm",      "!", "material", "A cooling lavender-and
 COMFREY_DRAUGHT= Item("Comfrey Draught","!", "material", "Knitbone tonic — closes deep wounds fast.", value=110, heal=55)
 HERBAL_TONIC   = Item("Herbal Tonic",   "!", "food",     "A restorative chamomile infusion that revives tired limbs.", value=45, energy=60)
 WARDING_TEA    = Item("Warding Tea",    "!", "food",     "Steeped sage and lavender; steadies the nerves and wards off festering wounds a while.", value=50, energy=15, buff="warded")
-MANDRAKE_ELIXIR= Item("Mandrake Elixir","!", "material", "The physician's masterwork — mends deep and purges every affliction, sickness and all.", value=200, heal=70, cures="everything")
+MANDRAKE_ELIXIR= Item("Mandrake Elixir","!", "material", "A potent mandrake draught — mends deep and draws out poison, bleeding and burns (a sickness needs a charcoal tincture or a panacea).", value=150, heal=70, cures="all")
 # The vodka chain: ferment grain/potato into a mash (keg), then distil the mash
 # into spirit (apothecary still). Vodka is a fine drink and the alcohol base every
 # strong tincture extracts into.
