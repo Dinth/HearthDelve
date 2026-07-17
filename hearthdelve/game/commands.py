@@ -173,6 +173,31 @@ def _apply_walk(state: GameState, on_road: bool) -> None:
         state.player.energy = max(0, state.player.energy - cost)
 
 
+_BLESSINGS = ("hearty", "tiller", "forager", "brisk", "warded")
+
+
+def _pray(state: GameState) -> None:
+    """Bow at an altar. Once the Shrine of the Seasons is raised, a prayer draws
+    down a daily blessing (a random boon lasting the day); otherwise it's a quiet
+    moment worth a little karma."""
+    from . import projects, karma, skills
+    if not projects.done(state, "shrine"):
+        state.log.add("You bow your head at the altar a while. It is quiet, and kind, here.", C.DIM)
+        if state.stats.get("prayed_day") != state.day:
+            state.stats["prayed_day"] = state.day
+            karma.adjust(state, 1)
+        return
+    if state.stats.get("blessed_day") == state.day:
+        state.log.add("The season's blessing is already upon you today.", C.DIM)
+        return
+    state.stats["blessed_day"] = state.day
+    blessing = _BLESSINGS[state.day % len(_BLESSINGS)]     # drifts day to day, no RNG needed
+    skills.apply_buff(state, blessing, minutes=720)
+    state.log.add(f"You pray at the shrine — a blessing settles over your day: "
+                  f"{skills.BUFFS[blessing]}.", (232, 216, 150))
+    karma.adjust(state, 1)
+
+
 def try_move(state: GameState, dx: int, dy: int) -> None:
     p = state.player
     p.facing = (dx, dy)
@@ -196,6 +221,11 @@ def try_move(state: GameState, dx: int, dy: int) -> None:
     n = _npc_at(state, nx, ny)
     if n is not None:
         state.log.add(f"You greet {n.name}. (Shift+C to talk, f to give a gift)", C.DIM)
+        return
+    # bump a shrine altar to pray (a moment of quiet — a daily blessing once the
+    # Shrine of the Seasons stands)
+    if not state.world.is_dungeon and state.world.tile_at(nx, ny).kind == "altar":
+        _pray(state)
         return
     if state.world.walkable(nx, ny):
         p.x, p.y = nx, ny

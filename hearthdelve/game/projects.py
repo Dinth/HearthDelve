@@ -57,7 +57,13 @@ def get(state: GameState, pid: str) -> dict | None:
 
 
 def for_village(state: GameState, village: str) -> dict | None:
-    return next((p for p in state.projects if p["village"] == village), None)
+    """The great work the village is currently rallying around: an open one to
+    fund first, else one being built, else None once all are raised. This lets a
+    village host several projects over the game's life — finish one and the next
+    steps up at the notice board."""
+    ps = [p for p in state.projects if p["village"] == village]
+    return (next((p for p in ps if p["state"] == "open"), None)
+            or next((p for p in ps if p["state"] == "building"), None))
 
 
 def done(state: GameState, pid: str) -> bool:
@@ -348,8 +354,17 @@ def _stamp_causeway(state: GameState, rect) -> None:
                             break
 
 
+def _stamp_shrine(state, rect) -> None:
+    """A walled shrine: an altar at the far wall, flanked by candle-lamps."""
+    x0, y0, w, h = rect
+    _stamp_hall(state, rect, interior=(
+        ((w // 2, 1), tile.ALTAR),
+        ((w // 2 - 2, 1), tile.LAMP), ((w // 2 + 2, 1), tile.LAMP)))
+
+
 _STAMPS = {"grange_hall": _stamp_grange, "deep_forge": _stamp_forge,
-           "lighthouse": _stamp_lighthouse, "causeway": _stamp_causeway}
+           "lighthouse": _stamp_lighthouse, "causeway": _stamp_causeway,
+           "shrine": _stamp_shrine}
 
 
 def register_buildings(world, projects: list) -> None:

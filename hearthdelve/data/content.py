@@ -2496,6 +2496,12 @@ PROJECTS: dict[str, ProjectDef] = {p.id: p for p in (
                (3, 3), 4,
                "Willa's wagon opens for trade; the fen road is paved and lit.",
                "One road in, and it floods twice a year. Pave it, and the world reaches Fenwick."),
+    # A second wave — a village can host more than one great work over time.
+    ProjectDef("shrine", "Mossford Shrine of the Seasons", "Mossford", 4500,
+               ((items.STONE, 120), (items.TIMBER_PLANK, 40), (items.ASTER, 12)),
+               (7, 5), 5,
+               "Pray at the shrine altar (bump it) for a daily blessing.",
+               "Sister Ivy's shrine is a humble thing; the faithful long to raise it grand."),
 )}
 
 
