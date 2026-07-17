@@ -83,6 +83,22 @@ _LAYOUT = {
     "mine": "mine",
 }
 
+# What each kind is rich or poor in, so where you delve changes the reward:
+# ore veins, extra gems, trap frequency (x the base roll), underground pools, and
+# extra chests. Mines & dwarfholds run to metal; caverns glitter with gems; sea
+# caves flood; crypts & tombs are trap-riddled and full of grave-goods.
+_BIAS = {
+    "mine":      dict(ore=5, gem=1, trap=0.8, lakes=1, chest=0),
+    "dwarfhold": dict(ore=4, gem=1, trap=1.0, lakes=0, chest=1),
+    "cavern":    dict(ore=4, gem=2, trap=1.0, lakes=2, chest=0),
+    "grotto":    dict(ore=2, gem=0, trap=1.0, lakes=2, chest=0),
+    "sea cave":  dict(ore=1, gem=0, trap=1.0, lakes=3, chest=1),
+    "barrow":    dict(ore=1, gem=0, trap=1.4, lakes=0, chest=1),
+    "tomb":      dict(ore=1, gem=1, trap=1.8, lakes=0, chest=2),
+    "crypt":     dict(ore=0, gem=0, trap=1.9, lakes=0, chest=2),
+}
+_BIAS_DEFAULT = dict(ore=2, gem=0, trap=1.0, lakes=1, chest=0)
+
 
 def _tunnel(tiles, a, b, rng):
     (x1, y1), (x2, y2) = a, b
@@ -196,7 +212,8 @@ def generate(seed: int, kind: str, depth: int) -> GameMap:
 
     # Deeper floors run richer, but loosely — a little random drift, not a fixed
     # count per depth.
-    ore_veins = (5 if kind == "mine" else 2) + rng.randint(0, 1 + depth // 2)
+    bias = _BIAS.get(kind, _BIAS_DEFAULT)
+    ore_veins = bias["ore"] + rng.randint(0, 1 + depth // 2)
     max_len = (5 if kind == "mine" else 3)
     for _ in range(ore_veins):
         cands = [p for p in walls if tiles[p] == tile.DUNGEON_WALL]
@@ -214,7 +231,7 @@ def generate(seed: int, kind: str, depth: int) -> GameMap:
                 break
             x, y = rng.choice(nbrs)
 
-    gem_count = (1 if kind == "mine" else 0) + (1 if rng.random() < 0.18 * depth else 0)
+    gem_count = bias["gem"] + (1 if rng.random() < 0.18 * depth else 0)
     for _ in range(gem_count):
         cands = [p for p in walls if tiles[p] == tile.DUNGEON_WALL]
         if not cands:
@@ -256,7 +273,7 @@ def generate(seed: int, kind: str, depth: int) -> GameMap:
     # Only rooms roomy enough to hold a pool with a wall margin (small mine
     # chambers are skipped, which also keeps the randint ranges non-empty).
     lake_rooms = [r for r in rooms[1:-1] if r.w >= 6 and r.h >= 6] if len(rooms) > 2 else []
-    for room in rng.sample(lake_rooms, min(2, len(lake_rooms))):
+    for room in rng.sample(lake_rooms, min(bias["lakes"], len(lake_rooms))):
         lw, lh = rng.randint(2, room.w - 3), rng.randint(2, room.h - 3)
         lx = rng.randint(room.x + 1, room.x + room.w - lw - 1)
         ly = rng.randint(room.y + 1, room.y + room.h - lh - 1)
@@ -331,12 +348,12 @@ def generate(seed: int, kind: str, depth: int) -> GameMap:
     hidden_traps = []
     cells = [(x, y) for (x, y) in floor_cells() if not in_entry(x, y)]
     rng.shuffle(cells)
-    for x, y in cells[:rng.randint(2, 3 + depth)]:
+    for x, y in cells[:max(0, round(rng.randint(2, 3 + depth) * bias["trap"]))]:
         if tiles[x, y] == tile.DUNGEON_FLOOR:
             hidden_traps.append((x, y))
 
     # Treasure chests — a few, tucked in non-entry rooms.
-    n_chest = rng.randint(1, 2 + (1 if depth >= 3 else 0))
+    n_chest = rng.randint(1, 2 + (1 if depth >= 3 else 0)) + bias["chest"]
     picks = rng.sample(rooms[1:], min(len(rooms) - 1, n_chest)) if len(rooms) > 1 else []
     for room in picks:
         cx2 = rng.randint(room.x + 1, room.x + room.w - 2)
