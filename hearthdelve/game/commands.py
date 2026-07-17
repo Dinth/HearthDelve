@@ -173,6 +173,15 @@ def _apply_walk(state: GameState, on_road: bool) -> None:
         state.player.energy = max(0, state.player.energy - cost)
 
 
+def _herbarium_bonus(state: GameState, item, q: int) -> None:
+    """Hall of Wonders perk: a completed Herbarium makes the Vale's green bounty
+    come freely — a chance at a second specimen when foraging herbs & fungi."""
+    from . import collection
+    if collection.wing_done(state, "Herbarium") and random.random() < 0.30:
+        state.player.inventory.add(item, 1, quality=q)
+        state.log.add("  The green comes freely to your hand — a second.", C.DIM)
+
+
 _BLESSINGS = ("hearty", "tiller", "forager", "brisk", "warded")
 
 
@@ -820,6 +829,7 @@ def do_grab(state: GameState) -> None:
             from . import skills
             q = skills.roll_quality(state, "Foraging")
             p.inventory.add(item, 1, quality=q)
+            _herbarium_bonus(state, item, q)
             skills.gain(state, "Foraging", 12 if tk == "glowcap" else 8)
             star = (" " + skills.stars(q)) if q else ""
             state.log.add(f"You gather a {item.name.lower()}{star}.", col)
@@ -835,6 +845,7 @@ def do_grab(state: GameState) -> None:
             from . import skills
             q = skills.roll_quality(state, "Herbalism")
             p.inventory.add(item, 1, quality=q)
+            _herbarium_bonus(state, item, q)
             skills.gain(state, "Herbalism", 10)
             from . import requests
             requests.check_level_recipes(state)          # a new remedy may come to you

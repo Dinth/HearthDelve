@@ -606,6 +606,10 @@ def load_machine_choice(state: GameState, m: Machine, mdef, opt) -> None:
                        else skills.process_quality(in_quality, state, _qskill))
         if mdef.kind == "quern":                       # the hand-mill grinds a touch coarse
             out_quality = max(0, out_quality - 1)
+        if output.kind == "gem":                       # Hall of Wonders — completed Lapidary
+            from . import collection
+            if collection.wing_done(state, "Lapidary"):
+                out_quality += 1
         # the oven bakes a touch finer than the pan
         out_quality = min(5, out_quality + opt.get("quality_bonus", 0))
     else:
