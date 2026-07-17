@@ -2679,7 +2679,7 @@ def render_ship(con: tcod.console.Console, state: GameState, sel: int) -> None:
     m.footer("↑↓ select · Enter stack · Space all · Esc close")
 
 
-_JOURNAL_TABS = ("Goals", "Favours", "Market", "Homestead", "Projects")
+_JOURNAL_TABS = ("Goals", "Favours", "Market", "Homestead", "Projects", "Collection")
 
 
 def render_journal(con: tcod.console.Console, state: GameState, tab: int = 0) -> None:
@@ -2752,6 +2752,24 @@ def render_journal(con: tcod.console.Console, state: GameState, tab: int = 0) ->
                 rows.append((2, d.perk, C.DIM))
             rows.append((0, "", C.WHITE))
         rows.append((0, "Contribute at that village's notice board (g).", C.DIM))
+    elif tab == 5:
+        from ..game import collection as coll
+        from ..data import content as _cc
+        have, total = coll.total_progress(state)
+        rows.append((0, f"Catalogued: {have}/{total} of the Vale's wonders", _HDR))
+        if not coll.is_open(state):
+            rows.append((2, "The Hall of Wonders isn't raised yet — fund it at Mossford.", C.DIM))
+        rows.append((0, "", C.WHITE))
+        for wing, (d, t) in coll.wing_progress(state).items():
+            full = d == t
+            rows.append((0, f" {'✔' if full else '○'} {wing}   {d}/{t}",
+                         (150, 205, 150) if full else C.WHITE))
+            if not full:
+                miss = [it.name for it in _cc.COLLECTION[wing] if it.name not in state.donated]
+                rows.append((2, "still seeking: " + ", ".join(miss[:5])
+                             + ("…" if len(miss) > 5 else ""), C.DIM))
+        rows.append((0, "", C.WHITE))
+        rows.append((0, "Present finds (g) at a display case in the Hall of Wonders.", C.DIM))
     else:
         surf = state.surface
         now = state.abs_minutes
@@ -2811,7 +2829,7 @@ def render_journal(con: tcod.console.Console, state: GameState, tab: int = 0) ->
     done, total = quests.progress(state)
     title = (f"Journal — Goals ({done}/{total})" if tab == 0
              else f"Journal — {_JOURNAL_TABS[tab]}")
-    w = 62
+    w = 76
     h = min(C.SCREEN_H - 4, max(10, len(rows) + 6))
     m = ui.Modal(con, w, h, title)
     tabs = "   ".join((f"[{n}]" if i == tab else f" {n} ") for i, n in enumerate(_JOURNAL_TABS))
