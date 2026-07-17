@@ -75,6 +75,15 @@ class _Room:
                 and self.y <= o.y + o.h and self.y + self.h >= o.y)
 
 
+# How each kind is carved: organic blobby caverns, clean rectilinear halls, or
+# a mine of small chambers strung on long tunnels.
+_LAYOUT = {
+    "grotto": "cave", "cavern": "cave", "sea cave": "cave",
+    "crypt": "halls", "tomb": "halls", "dwarfhold": "halls",
+    "mine": "mine",
+}
+
+
 def _tunnel(tiles, a, b, rng):
     (x1, y1), (x2, y2) = a, b
     if rng.random() < 0.5:
@@ -88,22 +97,76 @@ def _tunnel(tiles, a, b, rng):
             tiles[ex, y] = tile.DUNGEON_FLOOR
 
 
+def _carve_room(tiles, room, style, rng) -> None:
+    """Carve a room's floor. Halls/mines fill the rectangle; caves fill a
+    jittered ellipse so the chamber reads as an organic cavern."""
+    W, H = tiles.shape
+    if style != "cave":
+        ix, iy = room.inner()
+        tiles[ix, iy] = tile.DUNGEON_FLOOR
+        return
+    cx, cy = room.x + room.w / 2.0, room.y + room.h / 2.0
+    rx, ry = max(1.0, room.w / 2.0 - 0.5), max(1.0, room.h / 2.0 - 0.5)
+    for x in range(room.x, room.x + room.w):
+        for y in range(room.y, room.y + room.h):
+            nx, ny = (x + 0.5 - cx) / rx, (y + 0.5 - cy) / ry
+            if nx * nx + ny * ny <= 1.0 + rng.uniform(-0.18, 0.12) and 1 <= x < W - 1 and 1 <= y < H - 1:
+                tiles[x, y] = tile.DUNGEON_FLOOR
+
+
+def _carve_tunnel(tiles, a, b, style, rng) -> None:
+    """Join two rooms. Halls/mines get a clean 1-wide L; caves get the same L
+    thickened and roughened into a winding passage (the base L always connects,
+    so widening only ever adds floor — connectivity is never at risk)."""
+    if style != "cave":
+        _tunnel(tiles, a, b, rng)
+        return
+    W, H = tiles.shape
+    (x1, y1), (x2, y2) = a, b
+    corner = (x2, y1) if rng.random() < 0.5 else (x1, y2)
+
+    def paint(x, y):
+        if 1 <= x < W - 1 and 1 <= y < H - 1:
+            tiles[x, y] = tile.DUNGEON_FLOOR
+
+    for (sx, sy), (ex, ey) in (((x1, y1), corner), (corner, (x2, y2))):
+        for x in range(min(sx, ex), max(sx, ex) + 1):
+            paint(x, sy)
+            paint(x, sy + 1)
+            if rng.random() < 0.4:
+                paint(x, sy - 1)
+        for y in range(min(sy, ey), max(sy, ey) + 1):
+            paint(ex, y)
+            paint(ex + 1, y)
+            if rng.random() < 0.4:
+                paint(ex - 1, y)
+
+
 def generate(seed: int, kind: str, depth: int) -> GameMap:
     rng = random.Random(seed)
     w, h = DUN_W, DUN_H
     tiles = np.full((w, h), tile.DUNGEON_WALL, dtype=np.uint8)
 
+    style = _LAYOUT.get(kind, "halls")
+    # Per-style shape: caves are fewer, rounder chambers; mines are many small
+    # chambers on long tunnels; halls are the middling rectangular rooms.
+    if style == "cave":
+        n_rooms, rw_rng, rh_rng = rng.randint(6, 9), (6, 12), (5, 9)
+    elif style == "mine":
+        n_rooms, rw_rng, rh_rng = rng.randint(9, 14), (4, 7), (3, 6)
+    else:
+        n_rooms, rw_rng, rh_rng = rng.randint(8, 13), (5, 11), (4, 8)
+
     rooms: list[_Room] = []
-    for _ in range(rng.randint(8, 13)):
-        rw, rh = rng.randint(5, 11), rng.randint(4, 8)
+    for _ in range(n_rooms):
+        rw, rh = rng.randint(*rw_rng), rng.randint(*rh_rng)
         rx, ry = rng.randint(1, w - rw - 2), rng.randint(1, h - rh - 2)
         room = _Room(rx, ry, rw, rh)
         if any(room.intersects(o) for o in rooms):
             continue
-        ix, iy = room.inner()
-        tiles[ix, iy] = tile.DUNGEON_FLOOR
+        _carve_room(tiles, room, style, rng)
         if rooms:
-            _tunnel(tiles, rooms[-1].center, room.center, rng)
+            _carve_tunnel(tiles, rooms[-1].center, room.center, style, rng)
         rooms.append(room)
 
     # stairs: up in the first room, down in the last. If collisions left us with
@@ -190,9 +253,11 @@ def generate(seed: int, kind: str, depth: int) -> GameMap:
                     stack.append((nx, ny))
         return seen
 
-    lake_rooms = rooms[1:-1] if len(rooms) > 2 else []
+    # Only rooms roomy enough to hold a pool with a wall margin (small mine
+    # chambers are skipped, which also keeps the randint ranges non-empty).
+    lake_rooms = [r for r in rooms[1:-1] if r.w >= 6 and r.h >= 6] if len(rooms) > 2 else []
     for room in rng.sample(lake_rooms, min(2, len(lake_rooms))):
-        lw, lh = rng.randint(2, max(2, room.w - 3)), rng.randint(2, max(2, room.h - 3))
+        lw, lh = rng.randint(2, room.w - 3), rng.randint(2, room.h - 3)
         lx = rng.randint(room.x + 1, room.x + room.w - lw - 1)
         ly = rng.randint(room.y + 1, room.y + room.h - lh - 1)
         pool = [(x, y) for x in range(lx, lx + lw) for y in range(ly, ly + lh)
