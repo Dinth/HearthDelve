@@ -89,8 +89,12 @@ def tick_player_status(state: GameState) -> None:
 
 
 def weapon_inflict(state: GameState) -> str:
-    """A status the held weapon leaves on a struck foe: a ruby-set blade burns.
-    (Melee only — a burning blade, not a burning arrow.) Returns "" for none."""
+    """A status the held weapon leaves on a struck foe: a ruby-set blade burns,
+    and so does any weapon while a Firebrand Elixir is in the blood. (Melee only —
+    a burning blade, not a burning arrow.) Returns "" for none."""
+    from . import skills
+    if skills.active_buff(state) == "firebrand":
+        return "burn"
     gems = getattr(state.player.active_tool, "gems", ())
     return "burn" if "ruby" in gems else ""
 
@@ -178,12 +182,14 @@ def player_dv(state: GameState) -> int:
     # letting it add its full level here made a trained player near-unhittable.
     return (BASE_DV + skills.skill_level(state, "Combat") // 2   # Dodge
             + prof.dv + wdv + skills.mastery_parry(lvl)
-            + round(jewelry.combat_bonus(state)["dv"]))
+            + round(jewelry.combat_bonus(state)["dv"])
+            + (3 if skills.active_buff(state) == "swift" else 0))   # Swiftness Tonic
 
 
 def player_pv(state: GameState) -> int:
-    from . import jewelry
-    return _worn(state)[1] + round(jewelry.combat_bonus(state)["pv"])
+    from . import jewelry, skills
+    return (_worn(state)[1] + round(jewelry.combat_bonus(state)["pv"])
+            + (3 if skills.active_buff(state) == "stoneskin" else 0))   # Stoneskin Draught
 
 
 def player_to_hit(state: GameState) -> int:
@@ -192,8 +198,11 @@ def player_to_hit(state: GameState) -> int:
     lvl = skills.mastery_level(state, prof.category)
     bonus = prof.to_hit + skills.skill_level(state, "Combat") // 2 + skills.mastery_to_hit(lvl)
     bonus += round(jewelry.combat_bonus(state)["to_hit"])
-    if skills.active_buff(state) == "hearty":
+    buff = skills.active_buff(state)
+    if buff == "hearty":
         bonus += 2
+    elif buff == "clarity":
+        bonus += 2                       # Clarity Draught: keener aim
     return bonus
 
 
@@ -201,7 +210,8 @@ def player_crit(state: GameState) -> float:
     from . import skills, jewelry
     lvl = skills.mastery_level(state, held_profile(state).category)
     return (0.03 + skills.skill_level(state, "Combat") * 0.01 + skills.mastery_crit(lvl)
-            + jewelry.combat_bonus(state)["crit"])
+            + jewelry.combat_bonus(state)["crit"]
+            + (0.10 if skills.active_buff(state) == "clarity" else 0.0))   # Clarity Draught
 
 
 def _resolve(to_hit: int, dmg_range, dmg_bonus: int, crit_chance: float,

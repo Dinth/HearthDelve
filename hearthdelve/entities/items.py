@@ -234,6 +234,11 @@ VODKA          = Item("Vodka",          "ø", "artisan",  "A clear spirit distil
 # Station-only potions — tinctures distilled into spirit, beyond a hand-brew's reach.
 GREATER_HEALING= Item("Greater Healing Potion","!", "material", "A comfrey-and-mandrake tincture in spirit that closes even grievous wounds.", value=360, heal=100)
 PANACEA        = Item("Panacea",        "!", "material", "The apothecary's crowning tincture — mends deep and purges every ill at once.", value=440, heal=80, cures="everything")
+# Combat draughts — delve-prep tinctures that grant a temporary boon when drunk.
+STONESKIN_DRAUGHT= Item("Stoneskin Draught","!", "food", "Drink before a delve: your skin turns stony and hard to wound for a while.", value=300, energy=20, buff="stoneskin")
+SWIFTNESS_TONIC = Item("Swiftness Tonic","!", "food", "A quickening tonic: light on your feet and hard to land a blow on for a while.", value=300, energy=20, buff="swift")
+FIREBRAND_ELIXIR= Item("Firebrand Elixir","!", "food", "Brimstone in the blood: your blows set foes alight for a while.", value=360, energy=20, buff="firebrand")
+CLARITY_DRAUGHT = Item("Clarity Draught","!", "food", "A clear-headed focus: keener aim and a deadlier eye for the opening, for a while.", value=300, energy=20, buff="clarity")
 LURKER_SCALE  = Item("Lurker Scale",  "u", "material", "A thick armoured scale from a deep lurker.", value=55)
 WRAITH_ESSENCE= Item("Wraith Essence","*", "material", "Cold, half-real essence bled from a wraith.", value=75)
 GLOWCAP       = Item("Glowcap",       "î", "material", "A luminous cave fungus from the Glimmerwood — prized by cooks.", value=65)

@@ -73,6 +73,10 @@ BUFFS = {
     "forager": "Keen Forager",        # richer foraging
     "brisk":   "Brisk",               # tireless on foot
     "warded":  "Warded",              # herbal ward: foes' hits rarely inflict a status
+    "stoneskin": "Stoneskin",         # +Protection
+    "swift":   "Swift",               # +Dodge (harder to hit)
+    "firebrand": "Firebrand",         # your blows set foes alight
+    "clarity": "Clarity",             # +to-hit and +crit
 }
 
 

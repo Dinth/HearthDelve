@@ -1110,6 +1110,11 @@ APOTHECARY_POTIONS: list = [
     (((items.COMFREY, 2), (items.MANDRAKE, 1), (items.VODKA, 1)), items.GREATER_HEALING, 1, 5, 600),
     (((items.MANDRAKE, 1), (items.SAGE, 1), (items.COMFREY, 1), (items.VODKA, 1)),
      items.PANACEA, 1, 8, 720),
+    # Combat draughts — delve-prep boons, extracted into a spirit base.
+    (((items.COMFREY, 2), (items.VODKA, 1)), items.STONESKIN_DRAUGHT, 1, 5, 600),
+    (((items.YARROW, 1), (items.LAVENDER, 1), (items.VODKA, 1)), items.SWIFTNESS_TONIC, 1, 5, 600),
+    (((items.SULPHUR, 1), (items.MANDRAKE, 1), (items.VODKA, 1)), items.FIREBRAND_ELIXIR, 1, 6, 720),
+    (((items.SAGE, 1), (items.CHAMOMILE, 1), (items.VODKA, 1)), items.CLARITY_DRAUGHT, 1, 6, 600),
 ]
 
 # The vodka chain. The keg ferments a grain or potato into a mash; the apothecary
