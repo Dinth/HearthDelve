@@ -76,6 +76,8 @@ class GameState:
     known_recipes: set = field(default_factory=_starter_recipes)
     # item names donated to the Hall of Wonders (first-of-each specimen)
     donated: set = field(default_factory=set)
+    # heart events already witnessed, keyed "NPC:hearts" (one scene per tier)
+    seen_events: set = field(default_factory=set)
     # open request-board favours: [{npc, item, qty, gold, expires, flavor}]
     requests: list = field(default_factory=list)
     # the market's current craving: {"kind", "mult", "until"} — {} in a lull

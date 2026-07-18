@@ -157,6 +157,10 @@ def talk(state: GameState, npc: NPC) -> str:
         npc.talked_today = True
         gain = karma.scale(state.player.karma, 10)
         npc.friendship = min(MAX_HEARTS * 100, npc.friendship + gain)
+    scene = _heart_event(state, npc)         # a once-per-tier scripted moment
+    if scene:
+        return scene
+    if first:
         treat = _festival_treat(state, npc)  # a nibble at the fair
         if treat:
             return treat
@@ -172,6 +176,20 @@ def talk(state: GameState, npc: NPC) -> str:
         from . import farming
         return farming.weather_saying(farming.forecast(state))
     return npc.speak()
+
+
+def _heart_event(state: GameState, npc: NPC):
+    """A one-time scripted scene at a friendship tier — a real moment that pays
+    off the villager's story, shown once when you've grown close enough. Each
+    seals a little closer (a bond of friendship and a nudge of karma)."""
+    for hearts, text in getattr(npc, "heart_events", ()):
+        key = f"{npc.name}:{hearts}"
+        if npc.hearts >= hearts and key not in state.seen_events:
+            state.seen_events.add(key)
+            npc.friendship = min(MAX_HEARTS * 100, npc.friendship + 50)
+            karma.adjust(state, 1)
+            return text
+    return None
 
 
 def _teach_recipe(state: GameState, npc: NPC):

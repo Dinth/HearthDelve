@@ -1804,6 +1804,15 @@ def village_npcs() -> dict[str, list[NPC]]:
                                   "Three generations of Mossford's news, all under one roof."),
                               (6, "My Edwin went down the Cinderhope shafts and never\n"
                                   "came up. I keep a lamp in the window still. ...Tea?")),
+                heart_events=(
+                    (4, "Marda pulls a dusty ledger from beneath the counter and turns\n"
+                        "it to face you. \"Three generations of Mossford's debts and\n"
+                        "kindnesses, all in here. I've started a fresh page — your name\n"
+                        "at the top. All kindnesses, so far. Let's keep it that way, eh?\""),
+                    (8, "She lights the lamp in the window, though it's barely afternoon.\n"
+                        "\"I know he's not climbing up those shafts. Known it a long while.\n"
+                        "But you go down into the dark, and you come back to us. So I'll\n"
+                        "keep it burning — for you now. Mind you come home, every time.\"")),
                 loves=(items.JAM, items.PICKLES, items.WINE, items.BERRY_PIE),
                 likes=(items.PARSNIP, items.POTATO, items.CAULIFLOWER, items.STRAWBERRY),
                 dislikes=(items.WOOD, items.STONE, items.COAL),
@@ -1818,6 +1827,16 @@ def village_npcs() -> dict[str, list[NPC]]:
                                   "One night I just stopped. Best thing I ever did."),
                               (6, "A traveller hears everything, eventually — and forgets\n"
                                   "most of it on purpose. Your secrets are safe here.")),
+                heart_events=(
+                    (4, "Hollis rolls up a sleeve — a long white scar runs the forearm.\n"
+                        "\"Bandit road, east of here. The lad beside me didn't earn a scar;\n"
+                        "he earned a grave. That was the night I started counting the\n"
+                        "ways a man might stop. Took me years to find the courage.\""),
+                    (8, "He sets down two cups and, for once, fills one for himself.\n"
+                        "\"Twenty years guarding other men's goods. One night I laid down\n"
+                        "the spear, walked into this taproom, and never walked out. Best\n"
+                        "desertion of my life. Sit — you're the nearest thing to family\n"
+                        "the long road ever gave me.\"")),
                 loves=(items.WINE, items.GRAPE_WINE, items.JELLIED_EEL, items.MEAT_PIE,
                        items.TRUFFLE, items.TRUFFLE_PASTA, items.VODKA),
                 likes=(items.JAM, items.PICKLES), dislikes=(items.STONE,),
@@ -1832,6 +1851,15 @@ def village_npcs() -> dict[str, list[NPC]]:
                                   "The quiet of this place gave it somewhere to rest."),
                               (6, "I tend the graves as well as the shrine, you know.\n"
                                   "Someone should remember the names. I'm glad of you.")),
+                heart_events=(
+                    (4, "You find Ivy kneeling at a nameless grave, clearing the moss.\n"
+                        "\"I tend the ones no one else remembers. Everyone deserves a\n"
+                        "hand at the end. Would you help me a while? ...Thank you.\n"
+                        "It's lighter work, with company. Most things are.\""),
+                    (8, "She stops before the smallest, oldest stone, and her voice drops.\n"
+                        "\"I came to Mossford carrying a grief I could never name aloud.\n"
+                        "The quiet of this place gave it somewhere to rest, at last.\n"
+                        "You did too, friend — more than you know. Bless you for it.\"")),
                 loves=(items.WINE, items.JAM, items.DIAMOND, items.ASTER, items.CANDIED_FRUIT),
                 likes=(items.STRAWBERRY, items.BLUEBERRY, items.LAVENDER, items.CHAMOMILE),
                 dislikes=(items.COAL,),
@@ -1872,6 +1900,16 @@ def village_npcs() -> dict[str, list[NPC]]:
                                   "She taught me the names of things. All of them."),
                               (6, "She's gone now, the old woman. But gathering in the\n"
                                   "fog-grass, I still feel her at my shoulder. Kindly.")),
+                heart_events=(
+                    (4, "Wrenna presses a sprig of something silver-green into your palm.\n"
+                        "\"Moonwort. The old woman on the moor taught me — a plant will\n"
+                        "tell you its use, if you're quiet enough to listen. So be quiet\n"
+                        "enough, now and then. It's worth more than any coin.\""),
+                    (8, "She leads you to a hollow in the fog-grass where a hut once stood.\n"
+                        "\"Nothing left of her but the herbs she planted — and they still\n"
+                        "come up, every spring, without fail. I think that's what she\n"
+                        "was, in the end: something that comes back. I'm glad you know\n"
+                        "this place now. Someone else to remember the way.\"")),
                 loves=(items.RASPBERRY, items.GOOSEBERRY, items.CURRANT, items.FRUIT_PARFAIT,
                        items.CHAMOMILE, items.LAVENDER, items.SAGE),
                 likes=(items.FIBER, items.CAULIFLOWER, items.YARROW), dislikes=(items.STONE,),
@@ -1917,6 +1955,16 @@ def village_npcs() -> dict[str, list[NPC]]:
                                   "Almost gave it up. The anvil wouldn't let me."),
                               (6, "A bit of me goes into every tool I make.\n"
                                   "So mind you use mine well, friend. That's an order.")),
+                heart_events=(
+                    (4, "Bron holds a cooling blade to the light, squints, and grunts.\n"
+                        "\"See that line in the steel? A flaw. Mine, not the metal's.\n"
+                        "I keep it nailed to the wall to remember: the hammer's honest\n"
+                        "even on the days I'm not. Don't ever waste an honest tool.\""),
+                    (8, "He clasps your forearm in a grip like a smith's vice, beaming.\n"
+                        "\"West past the world's edge — the dwarf-forges. I'll never see\n"
+                        "them; too old, too fond of my own noisy street. But you might.\n"
+                        "You go for the both of us, hear? And bring me back one story\n"
+                        "worth hammering into steel.\"")),
                 loves=(items.COPPER_BAR, items.COAL, items.SAUSAGE_ROLL),
                 likes=(items.COPPER_ORE, items.STONE), dislikes=(items.WINE,),
                 gifts=(items.IRON_BAR, items.COPPER_BAR, items.COAL),
@@ -2125,6 +2173,15 @@ def village_npcs() -> dict[str, list[NPC]]:
                                   "The fen taught me more in a season than the guild in ten years."),
                               (6, "Bring me the strange ones you find out in the wet.\n"
                                   "Between us, I think we could physic the whole Vale.")),
+                heart_events=(
+                    (4, "Sedge grinds something bitter in a mortar, not looking up.\n"
+                        "\"The guild struck me off for treating folk who couldn't pay.\n"
+                        "Felt like the end of the world. Was the making of me. The fen\n"
+                        "doesn't care what's in your purse — and neither, now, do I.\""),
+                    (8, "He presses a small clouded vial into your hand, stoppered with wax.\n"
+                        "\"My own recipe. Won't tell you what's in it — trade secret, even\n"
+                        "between friends. But if you're ever truly in the dark down there,\n"
+                        "and truly out of hope: this. Don't waste it on a scratch.\"")),
                 loves=(items.CAVE_MUSHROOM, items.CHANTERELLE, items.HONEY,
                        items.MUSHROOM_STEW, items.BAT_WING, items.MANDRAKE, items.COMFREY),
                 likes=(items.BOLETE, items.PARASOL_MUSHROOM, items.FIBER, items.SLIME_GEL,

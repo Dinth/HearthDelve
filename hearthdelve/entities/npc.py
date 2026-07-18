@@ -24,6 +24,9 @@ class NPC:
     # friendship-gated lines: (min_hearts, text) — revealed as you grow closer,
     # so backstory unfolds the more you befriend them.
     heart_blurbs: tuple = ()
+    # one-time scripted scenes at friendship tiers: (min_hearts, scene_text).
+    # Shown once when you talk having reached that tier (see village._heart_event).
+    heart_events: tuple = ()
     loves: tuple[Item, ...] = ()
     likes: tuple[Item, ...] = ()
     dislikes: tuple[Item, ...] = ()
