@@ -1941,6 +1941,42 @@ def village_npcs() -> dict[str, list[NPC]]:
                 likes=(items.TULIP, items.STRAWBERRY), dislikes=(items.COAL,),
                 gifts=(items.TULIP, items.BLUEBERRY, items.ASTER_SEEDS),
                 bio="A Mossford child; Pip's rival and inseparable friend."),
+            NPC("Perrin", "R", (200, 156, 108), shop=None, role="woodcarver",
+                blurbs=("Give me a good bit of maple and a quiet afternoon and I want\n"
+                        "for nothing. Well — that, and someone to show it to.",
+                        "Every log has a shape hiding in it. My trade is just cutting\n"
+                        "away everything that isn't the shape."),
+                heart_blurbs=((3, "No one taught me this. I watched the grain long enough\n"
+                                  "that it started teaching me. Patient teacher, wood."),
+                              (6, "Those little animals the children find on their sills?\n"
+                                  "...I know nothing about that. Nothing at all. *whittles*")),
+                heart_events=(
+                    (7, "Perrin turns over a carving he's kept hidden — the whole valley in\n"
+                        "miniature: the villages, the river, a thumb-sized farmhouse with your\n"
+                        "mark on the door. \"Been carving it a piece at a time since you came.\n"
+                        "Felt like the place finally had all its pieces. This one's yours.\"")),
+                loves=(items.WOOD, items.CAKE, items.WINE),
+                likes=(items.HONEY, items.JAM), dislikes=(items.COAL,),
+                gifts=(items.WOOD, items.HONEY),
+                bio="Mossford's woodcarver; shy, patient, kinder than he lets on."),
+            NPC("Lark", "L", (214, 176, 220), shop=None, role="bard",
+                blurbs=("Every valley has its songs — I'm the fool who writes them down\n"
+                        "before they're forgotten. Got one about you brewing, mind.",
+                        "A coin's nice. A good story's better. Bring me the second\n"
+                        "and I'll owe you the first."),
+                heart_blurbs=((3, "I've played grander halls than any barn in this valley.\n"
+                                  "None of them ever sang back. This one does."),
+                              (6, "Truth is I ran out of road. Sat down to rest my feet one\n"
+                                  "spring, and the songs just... started coming again.")),
+                heart_events=(
+                    (7, "Lark plays you something new — soft, unshowy, true. \"It's about\n"
+                        "someone who walked into a tired little valley and made it worth\n"
+                        "singing about. I'll not name names. But I'll play it in every hall\n"
+                        "from here to the sea, and they'll all wonder who you were.\"")),
+                loves=(items.WINE, items.MEAD, items.CAKE),
+                likes=(items.JAM, items.HONEY), dislikes=(items.STONE,),
+                gifts=(items.WINE, items.HONEY),
+                bio="A wandering bard settled in Mossford; warm, wry, homesick for the road."),
         ],
         "Cinderhope": [
             NPC("Bron", "B", (224, 150, 110), shop="blacksmith", role="blacksmith",
@@ -2069,6 +2105,25 @@ def village_npcs() -> dict[str, list[NPC]]:
                 likes=(items.TULIP, items.AMETHYST), dislikes=(items.STONE,),
                 gifts=(items.TULIP, items.CURRANT, items.AMETHYST),
                 bio="A Cinderhope child; a magpie for shiny stones."),
+            NPC("Kesk", "K", (198, 190, 176), shop=None, role="mason",
+                blurbs=("Bron works the metal; I work the stone. Slower trade, mine —\n"
+                        "but a wall I raise'll outlast every blade he ever forged.",
+                        "Cut a stone wrong and it tells you for a hundred years. Cut it\n"
+                        "right and it never says a word. I like the quiet ones."),
+                heart_blurbs=((3, "My father dug the Cinderhope shafts. I'd sooner build up\n"
+                                  "than dig down. He never quite forgave me for it."),
+                              (6, "Every village project you fund — someone squares the stone\n"
+                                  "at dawn before the crews arrive. That's me. My hands are\n"
+                                  "in half the walls you lean on.")),
+                heart_events=(
+                    (7, "Kesk sets a small, perfect keystone in your palm, cool from the yard.\n"
+                        "\"First stone of anything I build, I cut a spare, for luck. This one's\n"
+                        "off the Deep Forge. Reckoned you'd want a piece of what you paid for.\n"
+                        "Whatever you raise next — I'll square its stone. Gladly.\"")),
+                loves=(items.STONE, items.BEEF, items.SAUSAGE_ROLL),
+                likes=(items.CHEESE, items.BREAD), dislikes=(items.WINE,),
+                gifts=(items.STONE,),
+                bio="Cinderhope's stonemason; steady, plainspoken, prouder than he admits."),
         ],
         "Saltmere": [
             NPC("Coralie", "C", (150, 200, 210), shop="tavern", role="innkeeper",
@@ -2149,6 +2204,24 @@ def village_npcs() -> dict[str, list[NPC]]:
                 likes=(items.TULIP, items.BLUEBERRY), dislikes=(items.STONE,),
                 gifts=(items.MINNOW, items.TULIP, items.STRAWBERRY),
                 bio="A Saltmere child; a would-be sailor, brave as he can manage."),
+            NPC("Neri", "N", (120, 196, 200), shop=None, role="diver",
+                blurbs=("Most folk fear the deep water. I go looking for it. Whole quiet\n"
+                        "world down there, and it keeps the best secrets.",
+                        "Found a pearl this morning the size of my thumbnail. Sold it by\n"
+                        "noon, spent it by dusk. Wouldn't have it any other way!"),
+                heart_blurbs=((3, "The old fishers say I'll drown chasing shine one day.\n"
+                                  "Maybe. But I'll have seen things they never dared to."),
+                              (6, "There's a wreck past the point, deeper than the light goes.\n"
+                                  "One day I'll reach the bottom of it. One day soon.")),
+                heart_events=(
+                    (7, "Neri surfaces grinning and presses a pearl into your hand, flawless\n"
+                        "and warm from her fist. \"Deepest I've ever gone for that one — nearly\n"
+                        "didn't come up. Then I thought of who I'd give it to, and kicked for\n"
+                        "the light. Don't you dare sell it. That's the only rule.\"")),
+                loves=(items.WINE, items.FRIED_FISH, items.SAPPHIRE),
+                likes=(items.STRAWBERRY, items.HONEY), dislikes=(items.COAL,),
+                gifts=(items.SAPPHIRE, items.HONEY),
+                bio="A young pearl-diver at Saltmere; fearless, quicksilver, chasing the deep."),
         ],
         "Fenwick": [
             NPC("Maren", "M", (150, 176, 150), shop="tavern", role="innkeeper",
@@ -2239,6 +2312,25 @@ def village_npcs() -> dict[str, list[NPC]]:
                 likes=(items.MINNOW, items.STRAWBERRY), dislikes=(items.STONE,),
                 gifts=(items.MINNOW, items.HONEY),
                 bio="A Fenwick child; fearless of the bog, forever muddy to the ears."),
+            NPC("Tolly", "Y", (156, 170, 130), shop=None, role="trapper",
+                blurbs=("The fen feeds them as knows its paths, and swallows them as\n"
+                        "don't. I know its paths. Stick close, and mind where I step.",
+                        "Quiet's a skill, same as any. Took me years to make no sound\n"
+                        "at all. ...You're not very good at it yet. No offence."),
+                heart_blurbs=((3, "Grew up half-wild out here after the fever took my folk.\n"
+                                  "The marsh raised me the rest of the way. Fair job it did."),
+                              (6, "Sedge patched me up more than once when I was small. I leave\n"
+                                  "the best of my catch on his step. Don't tell — he'd only\n"
+                                  "argue the price.")),
+                heart_events=(
+                    (7, "Tolly leads you to a hidden bank where the fog thins to gold at dusk.\n"
+                        "\"Never showed a soul this. Best spot in the whole fen, and the\n"
+                        "quietest — I come here to think.\" A long pause. \"Figured it was time\n"
+                        "it had two chairs. You're easy to be quiet with, you know.\"")),
+                loves=(items.JERKY, items.MEAT_PIE, items.MEAD),
+                likes=(items.MEAT, items.CHEESE), dislikes=(items.WINE,),
+                gifts=(items.MEAT, items.RAW_HIDE),
+                bio="A young fen-trapper at Fenwick; wary, soft-spoken, at home in the marsh."),
         ],
     }
 
