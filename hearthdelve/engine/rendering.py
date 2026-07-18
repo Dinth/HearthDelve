@@ -2078,7 +2078,8 @@ def build_codex_pages(state: GameState):
         ("  s                sleep in bed -> next day", C.WHITE),
         ("  i                inventory  (a-z select; Shift+D drops the stack)", C.WHITE),
         ("  e                equipment", C.WHITE),
-        ("  m                message log (scrollback)", C.WHITE),
+        ("  m                world map (the whole region at a glance)", C.WHITE),
+        ("  h                message log (scrollback)", C.WHITE),
         ("  v                character sheet (level & skills)", C.WHITE),
         ("  j                journal (goals)", C.WHITE),
         ("  r                relationships", C.WHITE),
@@ -3024,6 +3025,94 @@ def render_contest(con: tcod.console.Console, state: GameState, sel: int) -> Non
 
     m.list(3, body, len(goods), sel, row, arrow_top=3, arrow_bottom=h - 3)
     m.footer("↑↓ select   Enter show it   Esc back")
+
+
+# Dungeon-mouth marker colours on the world map, by site kind.
+_MAP_DELVE_FG = {
+    "mine": (214, 170, 110), "grotto": (110, 190, 190), "sea cave": (120, 200, 220),
+    "cavern": (206, 186, 140), "barrow": (150, 122, 84), "crypt": (140, 150, 190),
+    "tomb": (196, 186, 160), "dwarfhold": (176, 176, 188),
+}
+
+
+def render_world_map(con: tcod.console.Console, state: GameState) -> None:
+    """The full-screen world map (m): the whole region downsampled to one view,
+    with villages named, every known dungeon mouth marked by kind, the farm and
+    your own position. Underground it shows the land above your head."""
+    from ..world import tile as _t
+    below = state.world.is_dungeon
+    if below:
+        base = state.west if getattr(state, "return_west", False) and state.west is not None \
+            else state.surface
+        px, py = state.return_pos
+    else:
+        base = state.world
+        px, py = state.player.x, state.player.y
+    if base is None:
+        return
+    W, H = base.width, base.height
+    MW, MH = 76, 44
+    x0, y0 = 2, 3                                    # map origin inside the frame
+
+    title = "The Westreach" if base is state.west else "Hollowmere Vale"
+    if below:
+        title += "  —  (you are in the dark below)"
+    m = ui.Modal(con, C.SCREEN_W, C.SCREEN_H, title)
+
+    # Downsample: one sample per cell, plus offsets so thin water/roads still
+    # register (priority: water > road > sampled ground).
+    lut = np.array([t.bg for t in _t.TILES], dtype=np.uint8)
+    kinds = [t.kind for t in _t.TILES]
+    water_ids = np.array([i for i, k in enumerate(kinds) if k in ("water", "lava")])
+    road_ids = np.array([i for i, k in enumerate(kinds) if k in ("road", "bridge")])
+    xs = ((np.arange(MW) + 0.5) * W / MW).astype(int)
+    ys = ((np.arange(MH) + 0.5) * H / MH).astype(int)
+    grid = base.tiles[np.ix_(xs, ys)]
+    water = np.isin(grid, water_ids)
+    road = np.isin(grid, road_ids)
+    for ox, oy in ((-1, -1), (1, 1), (-1, 1)):       # extra taps catch thin features
+        gx = np.clip(xs + ox * max(1, W // (MW * 3)), 0, W - 1)
+        gy = np.clip(ys + oy * max(1, H // (MH * 3)), 0, H - 1)
+        g2 = base.tiles[np.ix_(gx, gy)]
+        water |= np.isin(g2, water_ids)
+        road |= np.isin(g2, road_ids)
+    bg = lut[grid].astype(np.uint8)
+    bg[water] = (24, 52, 88)
+    con.rgb["ch"][x0:x0 + MW, y0:y0 + MH] = ord(" ")
+    con.rgb["bg"][x0:x0 + MW, y0:y0 + MH] = bg
+    rd = road & ~water
+    con.rgb["ch"][x0:x0 + MW, y0:y0 + MH][rd] = ord("·")
+    con.rgb["fg"][x0:x0 + MW, y0:y0 + MH][rd] = (188, 160, 116)
+
+    def cell(wx, wy):
+        return min(MW - 1, wx * MW // W), min(MH - 1, wy * MH // H)
+
+    def mark(wx, wy, glyph, fg):
+        cx, cy = cell(wx, wy)
+        con.rgb["ch"][x0 + cx, y0 + cy] = ord(glyph)
+        con.rgb["fg"][x0 + cx, y0 + cy] = fg
+
+    # dungeon mouths, coloured by kind
+    for (dx, dy) in getattr(base, "dungeons", ()):
+        kind = base.dungeon_kind.get((dx, dy), "")
+        mark(dx, dy, "▼", _MAP_DELVE_FG.get(kind, (200, 190, 170)))
+    # villages: a block marker + the name beside it
+    for name, (vx, vy) in getattr(base, "village_centers", {}).items():
+        cx, cy = cell(vx, vy)
+        mark(vx, vy, "■", (240, 214, 140))
+        label = f" {name}"
+        lx = cx + 1 if cx + 1 + len(label) <= MW else cx - len(label)
+        m.text(x0 + lx, y0 + cy, label, fg=(240, 214, 140))
+    # the farmstead
+    bed = getattr(base, "bed", None)
+    if bed:
+        mark(bed[0], bed[1], "⌂", (150, 220, 150))
+    # you
+    mark(px, py, "@", (255, 255, 255))
+
+    m.text(x0, y0 + MH + 1, "@ you   ⌂ farm   ■ village   ▼ delve (by kind)   · road",
+           fg=C.DIM)
+    m.footer("m / Esc close")
 
 
 def render_donate(con: tcod.console.Console, state: GameState, sel: int) -> None:

@@ -37,10 +37,10 @@ _WAIT = {K.KP_5, K.PERIOD}
 _LETTER_CMD = {
     "l": ("look",), "g": ("grab",), "p": ("place",), "s": ("sleep",),
     "c": ("craft",), "b": ("ship",), "t": ("target",), "f": ("gift",),
-    "w": ("runprefix",), "i": ("inventory",), "m": ("messages",),
-    "d": ("drop",), "e": ("equipment",), "j": ("journal",),
-    "r": ("relations",), "v": ("character",), "q": ("quitgame",),
-    "x": ("eat",),
+    "w": ("runprefix",), "i": ("inventory",), "m": ("worldmap",),
+    "h": ("messages",), "d": ("drop",), "e": ("equipment",),
+    "j": ("journal",), "r": ("relations",), "v": ("character",),
+    "q": ("quitgame",), "x": ("eat",),
 }
 
 

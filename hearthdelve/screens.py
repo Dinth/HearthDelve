@@ -316,9 +316,22 @@ class PlayScreen(Screen):
             ui.push(EquipmentScreen())
         elif cmd == "messages":
             ui.push(LogScreen())
+        elif cmd == "worldmap":
+            ui.push(WorldMapScreen())
         if cmd in ("move", "wait"):
             cmds.check_faint(state)
         quests.check(state)              # re-check goals on any action
+
+
+class WorldMapScreen(Screen):
+    """The full-screen region map (m): terrain at a glance, villages named,
+    dungeon mouths marked, the farm and your own position."""
+    def render(self, ui: UI, con) -> None:
+        rendering.render_world_map(con, ui.state)
+
+    def handle(self, ui: UI, cmd: str, action: tuple) -> None:
+        if cmd in ("cancel", "worldmap", "quit", "confirm"):
+            ui.pop()
 
 
 class LookScreen(Screen):
