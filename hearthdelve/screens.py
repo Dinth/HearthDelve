@@ -460,12 +460,27 @@ class HelpScreen(Screen):
                 self.scroll = max(0, self.scroll + action[2])
 
 
+_EQUIP_KINDS = ("weapon", "armor", "jewelry", "ranged", "ammo", "bomb")
+
+
 class InventoryScreen(Screen):
     def __init__(self) -> None:
         self.sel = 0
+        self.filt: str | None = None      # Tab-cycled category filter (None = all)
 
     def render(self, ui: UI, con) -> None:
-        rendering.render_inventory(con, ui.state, self.sel)
+        rendering.render_inventory(con, ui.state, self.sel, self.filt)
+
+    def _visible(self, state):
+        return rendering.inv_visible(state, self.filt)
+
+    def _picked(self, state):
+        """The (item, qty, quality) under the cursor, or None."""
+        vis = self._visible(state)
+        if not vis:
+            return None
+        self.sel = min(self.sel, len(vis) - 1)
+        return state.player.inventory.slots[vis[self.sel]]
 
     def on_raw(self, ui: UI, event) -> bool:
         # ADOM-style: a bare letter picks an item directly — even keys that
@@ -476,26 +491,40 @@ class InventoryScreen(Screen):
         ch = chr(s) if ord("a") <= s <= ord("z") else ""
         if not ch or ch in ("i", "e"):
             return False
-        n = len(ui.state.player.inventory.slots)
-        if ord(ch) - ord("a") < n:
+        if ord(ch) - ord("a") < len(self._visible(ui.state)):
             self.sel = ord(ch) - ord("a")
         return True
 
     def handle(self, ui: UI, cmd: str, action: tuple) -> None:
         state = ui.state
-        slots = state.player.inventory.slots
+        vis = self._visible(state)
         if cmd == "equipment":
             ui.replace(EquipmentScreen())
         elif cmd in ("cancel", "inventory", "quit"):
             ui.pop()
         elif cmd == "slot":
             cmds.select_slot(state, action[1])
-        elif cmd == "move" and action[2] and slots:
-            self.sel = (self.sel + action[2]) % len(slots)
-        elif cmd == "drop" and slots:
+        elif cmd == "swap":                      # Tab: cycle the category filter
+            cats = rendering.inv_categories(state)
+            cycle = [None] + cats
+            self.filt = cycle[(cycle.index(self.filt) + 1) % len(cycle)] \
+                if self.filt in cycle else None
+            self.sel = 0
+        elif cmd == "move" and action[2] and vis:
+            self.sel = (self.sel + action[2]) % len(vis)
+        elif cmd == "confirm" and vis:           # Enter: eat a food/remedy, don gear
+            it, _q, ql = self._picked(state)
+            if it.energy > 0 or it.heal > 0:
+                cmds._eat(state, it, ql)
+            elif it.kind in _EQUIP_KINDS:
+                cmds._equip(state, it)
+            else:
+                state.log.add(f"The {it.name.lower()} isn't something to use from the pack.",
+                              C.DIM)
+            self.sel = min(self.sel, max(0, len(self._visible(state)) - 1))
+        elif cmd == "drop" and vis:
             # Shift+D drops the whole stack (as the help page says).
-            self.sel = min(self.sel, len(slots) - 1)
-            it, q, ql = slots[self.sel]
+            it, q, ql = self._picked(state)
             if ql > 0 or getattr(it, "value", 0) >= 100:
                 ui.push(ConfirmScreen(
                     "Toss it out?",
@@ -510,8 +539,7 @@ class InventoryScreen(Screen):
         state.player.inventory.remove(it, q, quality=ql)
         state.log.add(f"You toss out {q} {it.name.lower()}." if q > 1
                       else f"You toss out a {it.name.lower()}.", C.DIM)
-        if self.sel >= len(state.player.inventory.slots):
-            self.sel = max(0, len(state.player.inventory.slots) - 1)
+        self.sel = min(self.sel, max(0, len(self._visible(state)) - 1))
 
 
 class EquipmentScreen(Screen):

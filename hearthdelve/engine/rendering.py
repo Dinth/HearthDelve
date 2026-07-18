@@ -2076,7 +2076,8 @@ def build_codex_pages(state: GameState):
         ("                   & perk (j → Projects shows them anywhere)", C.DIM),
         ("  > / <            descend / climb a dungeon (on stairs)", C.WHITE),
         ("  s                sleep in bed -> next day", C.WHITE),
-        ("  i                inventory  (a-z select; Shift+D drops the stack)", C.WHITE),
+        ("  i                inventory  (a-z select; Enter eats/equips;", C.WHITE),
+        ("                   Tab filters by category; Shift+D drops the stack)", C.DIM),
         ("  e                equipment", C.WHITE),
         ("  m                world map (the whole region at a glance)", C.WHITE),
         ("  h                message log (scrollback)", C.WHITE),
@@ -2390,7 +2391,8 @@ def render_codex(con: tcod.console.Console, state: GameState, page: int, scroll:
 
 
 # Inventory categories, in the order they're listed (ADOM-style grouping).
-_INV_ORDER = ("Cooked Food", "Animal Produce", "Artisan Goods", "Fruit", "Vegetables",
+_INV_ORDER = ("Weapons", "Armour", "Jewellery", "Ammunition", "Gems",
+              "Cooked Food", "Animal Produce", "Artisan Goods", "Fruit", "Vegetables",
               "Flowers", "Fish", "Materials", "Seeds & Saplings", "Livestock",
               "Consumables", "Misc")
 
@@ -2400,7 +2402,9 @@ def _inv_category(item) -> str:
     k = item.kind
     simple = {"food": "Cooked Food", "animal": "Animal Produce", "artisan": "Artisan Goods",
               "fish": "Fish", "material": "Materials", "livestock": "Livestock",
-              "bomb": "Consumables"}
+              "bomb": "Consumables", "weapon": "Weapons", "ranged": "Weapons",
+              "armor": "Armour", "jewelry": "Jewellery", "ammo": "Ammunition",
+              "gem": "Gems"}
     if k in simple:
         return simple[k]
     if k in ("seed", "sapling", "pouch"):
@@ -2433,25 +2437,46 @@ def inv_letter(i: int) -> str:
     return _INV_LETTERS[i] if i < len(_INV_LETTERS) else " "
 
 
-def render_inventory(con: tcod.console.Console, state: GameState, sel: int = 0) -> None:
-    from ..game import skills
+def inv_visible(state: GameState, filt: str | None = None) -> list[int]:
+    """Slot indices the inventory screen currently shows (all, or one
+    category when Tab-filtered)."""
     slots = state.player.inventory.slots
+    return [i for i, (it, _q, _ql) in enumerate(slots)
+            if filt is None or _inv_category(it) == filt]
+
+
+def inv_categories(state: GameState) -> list[str]:
+    """The categories present in the pack, in display order (for Tab cycling)."""
+    seen: list[str] = []
+    for it, _q, _ql in state.player.inventory.slots:
+        cat = _inv_category(it)
+        if cat not in seen:
+            seen.append(cat)
+    return seen
+
+
+def render_inventory(con: tcod.console.Console, state: GameState, sel: int = 0,
+                     filt: str | None = None) -> None:
+    from ..game import skills
+    from ..game import encumbrance as enc
+    slots = state.player.inventory.slots
+    visible = inv_visible(state, filt)
 
     # Build the display list ADOM-style: a category header (with the group's
     # glyph in quotes) before each run of items, then the items themselves.
-    rows: list = []                                  # ("head", cat, glyph) | ("item", slot_index)
+    rows: list = []                                  # ("head", cat, glyph) | ("item", vis_index)
     prev = None
-    for i, (it, _q, _ql) in enumerate(slots):
+    for v, i in enumerate(visible):
+        it = slots[i][0]
         cat = _inv_category(it)
         if cat != prev:
             rows.append(("head", cat, it.glyph))
             prev = cat
-        rows.append(("item", i))
+        rows.append(("item", v))
 
     w, h = 62, min(C.SCREEN_H - 2, max(9, len(rows) + 5))
     body = h - 4
-    m = ui.Modal(con, w, h, "PACK")
-    from ..game import encumbrance as enc
+    m = ui.Modal(con, w, h, "PACK" + (f" — {filt}" if filt else ""))
     total = sum(q for _it, q, _ql in slots)
     etier = enc.tier(state)
     lbl = f"  ({enc.TIER_LABEL[etier]})" if etier else ""
@@ -2463,8 +2488,10 @@ def render_inventory(con: tcod.console.Console, state: GameState, sel: int = 0) 
 
     if not slots:
         m.text(2, 3, "(empty — grow and forage to fill it)", fg=C.DIM)
+    elif not visible:
+        m.text(2, 3, f"(nothing under {filt} — Tab cycles the filter)", fg=C.DIM)
     else:
-        sel = max(0, min(sel, len(slots) - 1))
+        sel = max(0, min(sel, len(visible) - 1))
         sel_row = next((r for r, rw in enumerate(rows) if rw[0] == "item" and rw[1] == sel), 0)
         start, end = ui.window(sel_row, len(rows), body)
         for r in range(start, end):
@@ -2473,19 +2500,21 @@ def render_inventory(con: tcod.console.Console, state: GameState, sel: int = 0) 
             if rw[0] == "head":
                 m.text(2, dy, f"{rw[1]}  ('{rw[2]}')", fg=_SECTION_FG)
                 continue
-            i = rw[1]
-            it, qty, ql = slots[i]
-            picked = (i == sel)
+            v = rw[1]
+            it, qty, ql = slots[visible[v]]
+            picked = (v == sel)
             bg = ui.SEL_BG if picked else ui.BASE_BG
             if picked:
                 m.highlight(dy)
-            m.text(3, dy, f"{inv_letter(i)} -", fg=_LETTER_FG, bg=bg)
+            m.text(3, dy, f"{inv_letter(v)} -", fg=_LETTER_FG, bg=bg)
             star = ("  " + skills.stars(ql)) if ql else ""
             m.text(8, dy, f"{it.glyph} {it.name}{star}", fg=C.WHITE, bg=bg)
-            qs = f"[x{qty}]"
+            # ADOM-style right column: the stack count and its carried weight.
+            qs = f"[x{qty} · {enc.weight_of(it) * qty:.0f}⚖]"
             m.text(w - 2 - len(qs), dy, qs, fg=_BRACKET_FG, bg=bg)
         m.arrows(start > 0, end < len(rows), 2, h - 3, dx=-3, glyphs=("↑", "↓"))
-    m.footer("[a-z] pick  [⇧D] drop  [e] equipment  [Esc] close", fg=_FOOT_FG)
+    m.footer("[a-z] pick  [Enter] use/equip  [⇧D] drop  [Tab] filter  [e] equipment",
+             fg=_FOOT_FG)
 
 
 _SLOT_LABEL = {"head": "Head", "body": "Body", "cloak": "Cloak", "hands": "Gauntlets",
