@@ -1951,6 +1951,10 @@ def village_npcs() -> dict[str, list[NPC]]:
                               (6, "Those little animals the children find on their sills?\n"
                                   "...I know nothing about that. Nothing at all. *whittles*")),
                 heart_events=(
+                    (4, "Perrin presses a small whittled bird into your hand, still smelling\n"
+                        "of fresh-cut wood. \"First thing I ever carved that didn't come out\n"
+                        "wrong. Kept it for years. ...You have it. I can make another now —\n"
+                        "I couldn't, back then. Funny what having a friend will do.\""),
                     (7, "Perrin turns over a carving he's kept hidden — the whole valley in\n"
                         "miniature: the villages, the river, a thumb-sized farmhouse with your\n"
                         "mark on the door. \"Been carving it a piece at a time since you came.\n"
@@ -1969,6 +1973,10 @@ def village_npcs() -> dict[str, list[NPC]]:
                               (6, "Truth is I ran out of road. Sat down to rest my feet one\n"
                                   "spring, and the songs just... started coming again.")),
                 heart_events=(
+                    (4, "Lark tunes a string that plainly doesn't need it, not looking up.\n"
+                        "\"Most folk want the loud songs — battles, heartbreaks, the roar of\n"
+                        "a crowd. You sat still for the quiet one. I don't play that for just\n"
+                        "anyone, you know. ...Glad you were here to hear it.\""),
                     (7, "Lark plays you something new — soft, unshowy, true. \"It's about\n"
                         "someone who walked into a tired little valley and made it worth\n"
                         "singing about. I'll not name names. But I'll play it in every hall\n"
@@ -2116,6 +2124,10 @@ def village_npcs() -> dict[str, list[NPC]]:
                                   "at dawn before the crews arrive. That's me. My hands are\n"
                                   "in half the walls you lean on.")),
                 heart_events=(
+                    (4, "Kesk thumps a freshly-set wall and listens to it like a physician.\n"
+                        "\"Hear that? Dead solid. No song in it — and that's the whole point.\"\n"
+                        "He almost smiles. \"Most folk walk straight past my walls. You're\n"
+                        "the first in years to stop and ask who set them. Means something.\""),
                     (7, "Kesk sets a small, perfect keystone in your palm, cool from the yard.\n"
                         "\"First stone of anything I build, I cut a spare, for luck. This one's\n"
                         "off the Deep Forge. Reckoned you'd want a piece of what you paid for.\n"
@@ -2214,6 +2226,10 @@ def village_npcs() -> dict[str, list[NPC]]:
                               (6, "There's a wreck past the point, deeper than the light goes.\n"
                                   "One day I'll reach the bottom of it. One day soon.")),
                 heart_events=(
+                    (4, "Neri shakes the seawater from her hair and drops a smooth blue\n"
+                        "stone in your palm. \"Not worth a copper — just pretty. Saw it on\n"
+                        "the bottom and thought of you, is all. Don't go reading into it.\"\n"
+                        "A beat. \"...Read into it a little.\""),
                     (7, "Neri surfaces grinning and presses a pearl into your hand, flawless\n"
                         "and warm from her fist. \"Deepest I've ever gone for that one — nearly\n"
                         "didn't come up. Then I thought of who I'd give it to, and kicked for\n"
@@ -2323,6 +2339,10 @@ def village_npcs() -> dict[str, list[NPC]]:
                                   "the best of my catch on his step. Don't tell — he'd only\n"
                                   "argue the price.")),
                 heart_events=(
+                    (4, "Tolly stops dead and points — a heron, still as a reed, that you'd\n"
+                        "never have spotted. \"Most folk crash through the fen and wonder why\n"
+                        "it's empty. You went quiet when I did. The marsh notices that.\"\n"
+                        "A pause, almost shy. \"...So do I.\""),
                     (7, "Tolly leads you to a hidden bank where the fog thins to gold at dusk.\n"
                         "\"Never showed a soul this. Best spot in the whole fen, and the\n"
                         "quietest — I come here to think.\" A long pause. \"Figured it was time\n"

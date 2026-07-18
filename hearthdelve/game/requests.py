@@ -108,6 +108,13 @@ def _request_pool(state: GameState, role: str) -> list:
                       + [c for c in crops if content.is_fruit(c)],
         "trader":     preserves + drinks + [it.WOOLEN_CLOTH, it.COTTON_CLOTH,
                                             it.LINEN_CLOTH, it.DRAKE_SCALE] + parts,
+        # The working-age newcomers, each by their craft.
+        "woodcarver": [it.WOOD, it.TIMBER_PLANK, it.HONEY, it.CAKE] + preserves,
+        "bard":       _known_dishes(state) + drinks + [it.HONEY, it.CANDIED_FRUIT],
+        "mason":      [it.STONE, it.TIMBER_PLANK, it.COAL, it.BEEF, it.BREAD,
+                       it.SAUSAGE_ROLL, it.CHEESE],
+        "diver":      _fish_pool(state) + [it.AMETHYST, it.TOPAZ, it.SAPPHIRE, it.WINE],
+        "trapper":    [it.MEAT, it.RAW_HIDE, it.BOAR_HIDE, it.WOLF_PELT, it.JERKY] + mushrooms,
     }
     default = crops + preserves + _known_dishes(state) + [it.EGG, it.MILK, it.CHEESE]
     pool = pools.get(role, default) or default
@@ -127,6 +134,11 @@ _FLAVOR = {
     "fisher":     "My nets came up empty — {want} would save my week.",
     "child":      "Please please PLEASE — {want}! I've been saving my pennies!",
     "trader":     "A buyer out east is after {want}. Quietly, mind.",
+    "woodcarver": "I've a piece half-carved and no good wood left — {want} would finish it.",
+    "bard":       "I'm putting on a night of song; {want} would make it a feast to remember.",
+    "mason":      "A wall won't raise itself — {want}, and I'll see it well set.",
+    "diver":      "I'll dive for coin, but {want}'s quicker. Bring it and I'll pay from the haul.",
+    "trapper":    "The fen's owed me a lean week. {want} would tide me over, no questions.",
 }
 _FLAVOR_DEFAULT = "I'd be glad of {want}, and I'll pay well for the favour."
 
