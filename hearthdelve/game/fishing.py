@@ -62,9 +62,10 @@ def begin(state: GameState, tx: int, ty: int):
     else:
         table = content.fish_in_season(state.season)
     chance = content.FISH_CATCH_CHANCE + skills.fishing_catch_bonus(state)
-    from . import collection                               # Hall of Wonders — completed Angler's Cabinet
+    from . import collection, events                       # Hall of Wonders — completed Angler's Cabinet
     if collection.wing_done(state, "Angler's Cabinet"):
         chance += 0.05
+    chance += events.fishing_bonus(state)                  # a shoal run: the sea boils
     # The Saltmere lighthouse: the beam steadies the boats and draws the far
     # shoals in — sea casts bite more often, and moonfish rise to the light.
     if table is content.SEA_FISH:

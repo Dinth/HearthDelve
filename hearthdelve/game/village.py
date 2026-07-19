@@ -155,7 +155,8 @@ def talk(state: GameState, npc: NPC) -> str:
     npc.met = True
     if first:
         npc.talked_today = True
-        gain = karma.scale(state.player.karma, 10)
+        from . import events
+        gain = karma.scale(state.player.karma, 10) * events.friendship_mult(state)
         npc.friendship = min(MAX_HEARTS * 100, npc.friendship + gain)
     scene = _heart_event(state, npc)         # a once-per-tier scripted moment
     if scene:
@@ -283,6 +284,9 @@ def gift(state: GameState, npc: NPC, item, quality: int = 0) -> None:
     if points > 0:
         points += quality
     points = karma.scale(state.player.karma, points)
+    if points > 0:                       # a fete-day warms a kind gift double
+        from . import events
+        points *= events.friendship_mult(state)
     npc.friendship = max(0, min(MAX_HEARTS * 100, npc.friendship + points))
     npc.gifted_today = True
     if points > 0:

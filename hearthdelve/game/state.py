@@ -78,6 +78,8 @@ class GameState:
     donated: set = field(default_factory=set)
     # heart events already witnessed, keyed "NPC:hearts" (one scene per tier)
     seen_events: set = field(default_factory=set)
+    # today's world event, or {} on an ordinary day: {"id", ...} (see game/events.py)
+    event: dict = field(default_factory=dict)
     # open request-board favours: [{npc, item, qty, gold, expires, flavor}]
     requests: list = field(default_factory=list)
     # the market's current craving: {"kind", "mult", "until"} — {} in a lull

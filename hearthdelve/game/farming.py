@@ -291,6 +291,10 @@ def new_day(state: GameState, rested: bool = True) -> None:
         state.weather = fest[4]
     raining = is_wet_weather(state.weather)
 
+    # A rare world event may colour the day (caravan, shoal run, starfall, ...)
+    from . import events
+    events.new_day(state)
+
     # Growth tick FIRST — crops advance on the care they were given *yesterday*
     # (manual watering, or yesterday's rain/sprinklers). Consuming and clearing
     # the watered flag here, before today's weather is applied below, is what

@@ -134,6 +134,7 @@ def save(state: GameState, path: str = SAVE_PATH) -> None:
         "known_recipes": sorted(state.known_recipes),
         "donated": sorted(state.donated),
         "seen_events": sorted(state.seen_events),
+        "event": dict(state.event),
         "requests": [dict(r) for r in state.requests],
         "demand": dict(state.demand),
         "projects": [dict(p) for p in state.projects],
@@ -354,6 +355,7 @@ def load(path: str = SAVE_PATH) -> GameState:
                            {r.name for r in content.RECIPES if r.kind == "cook"})
     state.donated = set(data.get("donated", []))
     state.seen_events = set(data.get("seen_events", []))
+    state.event = dict(data.get("event") or {})
     state.requests = [dict(r) for r in data.get("requests", [])]
     state.demand = dict(data.get("demand") or {})
     from ..game import projects as _projects
