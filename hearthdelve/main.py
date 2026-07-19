@@ -59,8 +59,12 @@ def load_or_new() -> GameState:
         return new_game()
     if save.exists():
         try:
-            state = save.load()
+            state, restored = save.load_or_backup()
             state.log.add("Welcome back to Hollowmere Vale.", (236, 226, 180))
+            if restored:
+                state.log.add("Your save file couldn't be read, so yesterday morning's "
+                              "backup was restored — the broken file is kept beside it.",
+                              (240, 180, 120))
             state.log.add(f"{state.date_str()}, {state.weather.lower()}. (auto-saves each morning)", C.DIM)
             return state
         except save.IncompatibleSaveError:

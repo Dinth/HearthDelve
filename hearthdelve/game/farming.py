@@ -382,8 +382,10 @@ def new_day(state: GameState, rested: bool = True) -> None:
     try:
         from ..engine import save
         save.save(state)
-    except Exception:  # noqa: BLE001 - never let a save error break the day
-        pass
+    except Exception as e:  # noqa: BLE001 - never let a save error break the day…
+        # …but never hide it either: a full disk shouldn't mean silent loss.
+        state.log.add(f"⚠ The morning auto-save FAILED ({e}) — your progress isn't "
+                      "being kept! Check disk space.", (240, 140, 120))
 
 
 # Seasonal, drifting flora (mushrooms & wildflowers). Each is a pool of spots

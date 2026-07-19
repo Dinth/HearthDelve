@@ -94,5 +94,60 @@ class TestSaveRoundTrip(unittest.TestCase):
         self.assertEqual((plot.thirst, plot.fertilized), (0, False))
 
 
+class TestBackupRecovery(unittest.TestCase):
+    def setUp(self):
+        self.path = os.path.join(tempfile.gettempdir(), "hd_test_recover.json")
+
+    def tearDown(self):
+        for suffix in ("", ".bak", ".broken", ".tmp"):
+            try:
+                os.remove(self.path + suffix)
+            except OSError:
+                pass
+
+    def test_rolling_backup_holds_the_previous_save(self):
+        from hearthdelve.engine import save
+        st = fresh_state(5)
+        st.player.gold = 111
+        save.save(st, self.path)                 # first write: no backup yet
+        self.assertFalse(os.path.isfile(self.path + ".bak"))
+        st.player.gold = 222
+        save.save(st, self.path)                 # second write: .bak = the 111 save
+        self.assertEqual(save.load(self.path).player.gold, 222)
+        self.assertEqual(save.load(self.path + ".bak").player.gold, 111)
+
+    def test_corrupt_main_restores_the_backup(self):
+        from hearthdelve.engine import save
+        st = fresh_state(5)
+        st.player.gold = 111
+        save.save(st, self.path)
+        st.player.gold = 222
+        save.save(st, self.path)
+        with open(self.path, "w") as f:
+            f.write("{ this is not json")        # the main save corrupts
+        st2, restored = save.load_or_backup(self.path)
+        self.assertTrue(restored)
+        self.assertEqual(st2.player.gold, 111)   # yesterday morning survives
+        self.assertTrue(os.path.isfile(self.path + ".broken"))
+        # and the promoted main is a normal, loadable save again
+        self.assertEqual(save.load(self.path).player.gold, 111)
+
+    def test_healthy_save_never_touches_the_backup(self):
+        from hearthdelve.engine import save
+        st = fresh_state(5)
+        st.player.gold = 333
+        save.save(st, self.path)
+        st2, restored = save.load_or_backup(self.path)
+        self.assertFalse(restored)
+        self.assertEqual(st2.player.gold, 333)
+
+    def test_corrupt_with_no_backup_still_raises(self):
+        from hearthdelve.engine import save
+        with open(self.path, "w") as f:
+            f.write("not a save at all")
+        with self.assertRaises(Exception):
+            save.load_or_backup(self.path)
+
+
 if __name__ == "__main__":
     unittest.main()

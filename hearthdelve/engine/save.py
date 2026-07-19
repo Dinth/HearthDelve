@@ -78,16 +78,37 @@ def delete(path: str = SAVE_PATH) -> None:
 
 
 def backup(path: str = SAVE_PATH) -> str | None:
-    """Copy an existing save aside (e.g. before abandoning an unreadable one so
-    a version mismatch never silently destroys it). Returns the backup path."""
+    """Copy an unreadable/incompatible save aside as ``.broken`` before it's
+    abandoned — never silently destroyed, and never clobbering the rolling
+    ``.bak`` (which holds the previous GOOD save; see :func:`save`)."""
     if not os.path.isfile(path):
         return None
-    bak = path + ".bak"
+    bak = path + ".broken"
     try:
         shutil.copy2(path, bak)
         return bak
     except OSError:
         return None
+
+
+def load_or_backup(path: str = SAVE_PATH):
+    """Load the save; if the main file is corrupt but the previous morning's
+    rolling ``.bak`` reads fine, set the broken file aside, promote the backup
+    to main, and load that instead. Returns ``(state, restored)``.
+
+    A version mismatch (IncompatibleSaveError) propagates untouched — the
+    backup is from the same build, so it can't help there."""
+    try:
+        return load(path), False
+    except IncompatibleSaveError:
+        raise
+    except Exception:
+        bak = path + ".bak"
+        if not os.path.isfile(bak):
+            raise
+        backup(path)                      # keep the broken one for post-mortems
+        os.replace(bak, path)             # promote the last good morning
+        return load(path), True
 
 
 # --- save --------------------------------------------------------------------
@@ -181,6 +202,13 @@ def save(state: GameState, path: str = SAVE_PATH) -> None:
         "npcs": {n.name: [n.friendship, n.gifted_today, n.talked_today, n._blurb_i, n.met]
                  for n in surf.npcs},
     }
+    # Keep the previous good save as a rolling .bak (recovery if this write's
+    # result ever proves unreadable — see load_or_backup), then write atomically.
+    if os.path.isfile(path):
+        try:
+            shutil.copy2(path, path + ".bak")
+        except OSError:
+            pass                          # a failed backup must never block the save
     tmp = path + ".tmp"
     with open(tmp, "w") as f:
         json.dump(data, f)
