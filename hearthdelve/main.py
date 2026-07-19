@@ -115,9 +115,9 @@ def main() -> None:
         ui = screens.UI(state, music)
         if getattr(state, "intro_pending", False):
             state.intro_pending = False
-            # A fresh life: the intro reads first, then the midwives ask your stars
-            # (the zodiac sits under the intro on the stack).
-            ui.push(screens.ZodiacScreen())
+            # A fresh life: the intro reads first, then the midwives roll your
+            # stars and attributes (chargen sits under the intro on the stack).
+            ui.push(screens.CharGenScreen())
             ui.push(screens.IntroScreen())
         konami: list = []        # rolling buffer of recent keys
         start = time.perf_counter()

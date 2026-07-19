@@ -379,10 +379,12 @@ def _dungeon_tile_fx(state: GameState) -> bool:
         sprang = True
     elif kind == "rubble":
         turns.advance_time(state, C.MOVE_SECONDS)   # loose footing, slow going
+    from . import attrs
+    spot = min(0.9, 0.4 + 0.03 * attrs.mod(state, "Pe"))   # keen eyes spot the seams
     for ddx in (-1, 0, 1):                 # notice adjacent hidden traps
         for ddy in (-1, 0, 1):
             xy = (p.x + ddx, p.y + ddy)
-            if xy in w.hidden_traps and random.random() < 0.4:
+            if xy in w.hidden_traps and random.random() < spot:
                 w.hidden_traps.discard(xy)
                 w.tiles[xy] = tile.TRAP
     return sprang

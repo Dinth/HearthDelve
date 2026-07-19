@@ -52,8 +52,10 @@ def carried_weight(state: GameState) -> float:
 
 
 def capacity(state: GameState) -> float:
+    from . import attrs
     return (CARRY_BASE + CARRY_PER_LEVEL * max(0, state.player.level - 1)
             + getattr(state, "pack_bonus", 0)    # crafted satchels raise the ceiling
+            + attrs.mod(state, "St")             # born strong carries more
             + (6 if state.player.sign == "mule" else 0))   # born broad-backed
 
 

@@ -28,6 +28,8 @@ def gain(state: GameState, skill: str, xp: int) -> None:
     the character's own experience. Character XP is an independent track: every deed
     feeds it and it keeps growing even after a skill has maxed, so character level is
     no longer bounded by (nor derived from) the skills."""
+    from . import attrs
+    xp = max(1, round(xp * (1 + 0.02 * attrs.mod(state, "Le"))))   # a quick study
     p = state.player
     cap = MAX_LEVEL * XP_PER_LEVEL
     cur = p.skills.get(skill, 0)

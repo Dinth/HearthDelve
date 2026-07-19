@@ -73,6 +73,7 @@ class Player:
     buff_until: int = 0                          # abs in-game minute the buff wears off
     status: dict = field(default_factory=dict)   # active DoTs: {"poison": turns_left, ...}
     sign: str = ""                               # birth sign id (content.ZODIAC); "" = unsigned
+    attrs: dict = field(default_factory=dict)    # birth attributes {St..Pe}; absent key reads 10
 
     @property
     def active_tool(self) -> Item | None:

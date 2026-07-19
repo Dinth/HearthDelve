@@ -143,6 +143,7 @@ def save(state: GameState, path: str = SAVE_PATH) -> None:
             "skills": dict(p.skills),
             "status": dict(p.status),
             "sign": p.sign,
+            "attrs": dict(p.attrs),
         },
         "ship_bin": [[it.name, q, ql] for it, q, ql in state.ship_bin.slots],
         "storage": [[it.name, q, ql] for it, q, ql in state.storage.slots],
@@ -366,6 +367,7 @@ def load(path: str = SAVE_PATH) -> GameState:
     player.skills = dict(pd.get("skills", {}))
     player.status = {k: int(v) for k, v in pd.get("status", {}).items()}
     player.sign = pd.get("sign", "")
+    player.attrs = {k: int(v) for k, v in pd.get("attrs", {}).items()}
 
     state = GameState(world=world, player=player, log=MessageLog(), seed=data["seed"])
     state.surface = world

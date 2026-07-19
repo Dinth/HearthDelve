@@ -48,8 +48,10 @@ def update_fov(state: GameState) -> None:
     w = state.world
     if not w.is_dungeon:
         return
+    from . import attrs
+    radius = max(4, dungeon.FOV_RADIUS + attrs.mod(state, "Pe") // 3)   # keen eyes see farther
     w.visible = tcod.map.compute_fov(
-        w.transparency(), (state.player.x, state.player.y), radius=dungeon.FOV_RADIUS
+        w.transparency(), (state.player.x, state.player.y), radius=radius
     )
     w.explored |= w.visible
 

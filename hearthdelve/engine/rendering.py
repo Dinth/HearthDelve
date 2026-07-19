@@ -2937,8 +2937,9 @@ def render_relationships(con: tcod.console.Console, state: GameState, scroll: in
 
 def render_character(con: tcod.console.Console, state: GameState) -> None:
     from ..game import skills, karma
+    from ..game import attrs as A
     p = state.player
-    w, h = 50, 12 + len(skills.SKILLS)          # skills list from row 10; grow to fit all of them
+    w, h = 50, 15 + len(skills.SKILLS)          # stats, attributes, then the skills list
     m = ui.Modal(con, w, h, f"Character — Level {p.level}")
     nxt = skills.xp_to_next(p.level)
     xpbar = "█" * int(10 * p.xp / nxt) + "·" * (10 - int(10 * p.xp / nxt))
@@ -2955,7 +2956,12 @@ def render_character(con: tcod.console.Console, state: GameState) -> None:
         z = next((z for z in ZODIAC if z[0] == p.sign), None)
         if z:
             m.text(2, 8, f"✶ Sign    {z[1]} — {z[4]}"[:w - 4], fg=(210, 200, 160))
-    m.text(2, 9, "Skills", fg=_HDR)
+    if p.attrs:                                 # birth attributes, ADOM-compact
+        row1 = "   ".join(f"{k} {A.get(state, k):>2}" for k in A.ATTRS[:4])
+        row2 = "   ".join(f"{k} {A.get(state, k):>2}" for k in A.ATTRS[4:])
+        m.text(2, 9, row1, fg=(200, 195, 170))
+        m.text(2, 10, row2, fg=(200, 195, 170))
+    m.text(2, 12, "Skills", fg=_HDR)
     for i, s in enumerate(skills.SKILLS):
         lvl = skills.skill_level(state, s)
         xp = p.skills.get(s, 0)
@@ -2965,7 +2971,7 @@ def render_character(con: tcod.console.Console, state: GameState) -> None:
             into = xp - lvl * skills.XP_PER_LEVEL
             filled = int(10 * into / skills.XP_PER_LEVEL)
             bar = "█" * filled + "·" * (10 - filled)
-        m.text(2, 10 + i, f"{s:<9} L{lvl:<2} {bar}", fg=C.WHITE if lvl else C.DIM)
+        m.text(2, 13 + i, f"{s:<9} L{lvl:<2} {bar}", fg=C.WHITE if lvl else C.DIM)
     m.footer("v / Esc to close")
 
 
@@ -3167,24 +3173,29 @@ def render_world_map(con: tcod.console.Console, state: GameState) -> None:
     m.footer("m / Esc close")
 
 
-def render_zodiac(con: tcod.console.Console, state: GameState, sel: int) -> None:
-    """New-life onboarding: name the sign you were born under (a small passive
-    boon, chosen once). The midwives' wheel of stars."""
+def render_chargen(con: tcod.console.Console, state: GameState, ctx: dict) -> None:
+    """Character generation, ADOM-fashion: the midwives roll your stars and
+    your eight attributes; roll another life at will, then begin for keeps."""
     from ..data.content import ZODIAC
-    w, h = 66, len(ZODIAC) * 2 + 9
-    m = ui.Modal(con, w, h, "Under what stars were you born?")
-    m.text(2, 2, "The midwives of the Vale read a child's stars at birth.", fg=C.DIM)
-    m.text(2, 3, "Choose your sign — a small gift that walks with you always.", fg=C.DIM)
-    for i, (sid, name, glyph, told, boon) in enumerate(ZODIAC):
-        dy = 5 + i * 2
-        picked = i == sel
-        bg = ui.SEL_BG if picked else ui.BASE_BG
-        if picked:
-            m.highlight(dy)
-            m.highlight(dy + 1)
-        m.text(2, dy, f"{inv_letter(i)} - {glyph}  {name:<18} {told}", fg=C.WHITE, bg=bg)
-        m.text(7, dy + 1, f"· {boon}", fg=(190, 180, 140), bg=bg)
-    m.footer("↑↓ / a-i choose   Enter be born   (this is for keeps)")
+    from ..game import attrs as A
+    sign = next(z for z in ZODIAC if z[0] == ctx["sign"])
+    rolled = ctx["attrs"]
+    w, h = 66, 13 + len(A.ATTRS)
+    m = ui.Modal(con, w, h, "Your birth, as the midwives tell it")
+    m.text(2, 2, "The night you were born, the midwives read the sky", fg=C.DIM)
+    m.text(2, 3, "and felt your grip — and this is what they wrote:", fg=C.DIM)
+    m.text(2, 5, f"✶ Born under {sign[1]} — {sign[3]}.", fg=(232, 216, 150))
+    m.text(4, 6, f"· {sign[4]}", fg=(190, 180, 140))
+    total = sum(rolled.values())
+    m.text(2, 8, f"Attributes  (3d6 apiece — {total} in all)", fg=_HDR)
+    for i, key in enumerate(A.ATTRS):
+        val = rolled[key]
+        bar = "█" * round(10 * val / 18) + "·" * (10 - round(10 * val / 18))
+        good = val >= 13
+        poor = val <= 7
+        fg = (170, 220, 170) if good else (220, 160, 140) if poor else C.WHITE
+        m.text(2, 9 + i, f"{A.NAMES[key]:<11} {val:>2}  {bar}  {A.EFFECTS[key]}", fg=fg)
+    m.footer("[r] roll another life   [Enter] begin — for keeps")
 
 
 def render_donate(con: tcod.console.Console, state: GameState, sel: int) -> None:

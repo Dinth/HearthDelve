@@ -185,9 +185,11 @@ def player_dv(state: GameState) -> int:
     lvl = skills.mastery_level(state, prof.category)
     # Combat lends only half its level to Dodge (it also feeds to-hit & crit);
     # letting it add its full level here made a trained player near-unhittable.
+    from . import attrs
     return (BASE_DV + skills.skill_level(state, "Combat") // 2   # Dodge
             + prof.dv + wdv + skills.mastery_parry(lvl)
             + round(jewelry.combat_bonus(state)["dv"])
+            + attrs.mod(state, "Dx") // 3                           # born nimble
             + (3 if skills.active_buff(state) == "swift" else 0))   # Swiftness Tonic
 
 
@@ -247,8 +249,9 @@ def player_attack(state: GameState, m) -> None:
     prof = held_profile(state)
     # deep-floor fatigue: fighting in the airless dark costs more the further down
     p.energy = max(0, p.energy - C.ATTACK_COST[0] - state.world.depth // 3)
+    from . import attrs
     dmg_bonus = skills.mastery_dmg(skills.mastery_level(state, prof.category))
-    dmg_bonus += round(jewelry.combat_bonus(state)["dmg"])
+    dmg_bonus += round(jewelry.combat_bonus(state)["dmg"]) + attrs.mod(state, "St") // 3
     res = _resolve(player_to_hit(state), prof.dmg, dmg_bonus, player_crit(state), m.dv, m.pv, min_dmg=1)
     wild = getattr(m, "kind", "monster") == "wildlife"
 
@@ -381,10 +384,11 @@ def _attack_player(state: GameState, m) -> None:
         state.log.add(f"The {m.name.lower()} hits you for {dmg}!", (224, 140, 120))
     inflicts = getattr(m, "inflicts", "")
     if inflicts in STATUS and inflicts not in state.player.status:
-        from . import skills
+        from . import skills, attrs
         chance = STATUS[inflicts]["chance"]
         if skills.active_buff(state) == "warded":     # herbal ward turns most aside
             chance *= 0.4
+        chance *= max(0.2, 1.0 - 0.03 * attrs.mod(state, "Wi"))   # iron will resists
         if random.random() < chance:
             apply_status(state, inflicts)
             state.log.add(STATUS[inflicts]["on"], STATUS[inflicts]["color"])
@@ -612,9 +616,10 @@ def aim_start(state: GameState) -> tuple[int, int]:
 
 
 def _ranged_to_hit(state: GameState, stat) -> int:
-    from . import skills
+    from . import skills, attrs
     lvl = skills.mastery_level(state, stat.category)
-    bonus = stat.to_hit + skills.skill_level(state, "Combat") // 2 + skills.mastery_to_hit(lvl)
+    bonus = (stat.to_hit + skills.skill_level(state, "Combat") // 2
+             + skills.mastery_to_hit(lvl) + attrs.mod(state, "Dx") // 3)
     if skills.active_buff(state) == "hearty":
         bonus += 2
     return bonus

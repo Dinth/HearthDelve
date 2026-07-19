@@ -943,43 +943,58 @@ class LogScreen(Screen):
             self.scroll = max(0, self.scroll - action[2])   # up = older
 
 
-class ZodiacScreen(Screen):
-    """New-life onboarding: pick the sign you were born under. No escape — a
-    birth is not a menu you can back out of."""
+class CharGenScreen(Screen):
+    """Character generation: the midwives roll your birth sign and your eight
+    attributes (3d6 apiece). Roll another life at will; no escape — a birth is
+    not a menu you can back out of."""
     def __init__(self) -> None:
-        self.sel = 0
+        self.ctx = self._roll()
+
+    @staticmethod
+    def _roll() -> dict:
+        import random as _r
+        from .data.content import ZODIAC
+        from .game import attrs as A
+        return {"sign": _r.choice(ZODIAC)[0], "attrs": A.roll(_r)}
 
     def render(self, ui: UI, con) -> None:
-        rendering.render_zodiac(con, ui.state, self.sel)
+        rendering.render_chargen(con, ui.state, self.ctx)
 
     def on_raw(self, ui: UI, event) -> bool:
-        from .data.content import ZODIAC
+        # r rerolls the whole life (sign and attributes together)
         if not isinstance(event, tcod.event.KeyDown) or (event.mod & tcod.event.Modifier.SHIFT):
             return False
         s = int(event.sym)
-        ch = chr(s) if ord("a") <= s <= ord("z") else ""
-        if ch and ord(ch) - ord("a") < len(ZODIAC):
-            self.sel = ord(ch) - ord("a")
+        ch = chr(s) if 0x20 <= s <= 0x7E else ""
+        if ch == "r":
+            self.ctx = self._roll()
             return True
         return False
 
     def handle(self, ui: UI, cmd: str, action: tuple) -> None:
         from .data.content import ZODIAC
         state = ui.state
-        if cmd == "move" and action[2]:
-            self.sel = (self.sel + action[2]) % len(ZODIAC)
-        elif cmd == "confirm":
-            sid, name, _g, told, boon = ZODIAC[self.sel]
-            state.player.sign = sid
-            if sid == "star":                  # the one-time constitutions
-                state.player.max_energy += 12
-                state.player.energy += 12
-            elif sid == "oak":
-                state.player.max_hp += 6
-                state.player.hp += 6
-            state.log.add(f"You were born under {name} — {told}. ({boon})",
-                          (232, 216, 150))
+        if cmd == "confirm":
+            self._accept(state)
             ui.pop()
+
+    def _accept(self, state) -> None:
+        from .data.content import ZODIAC
+        p = state.player
+        p.sign = self.ctx["sign"]
+        p.attrs = dict(self.ctx["attrs"])
+        # the one-time constitutions: Toughness, and the sturdy/starlit signs
+        to_mod = p.attrs.get("To", 10) - 10
+        p.max_hp = max(20, p.max_hp + to_mod)
+        p.hp = p.max_hp
+        if p.sign == "star":
+            p.max_energy += 12
+            p.energy += 12
+        elif p.sign == "oak":
+            p.max_hp += 6
+            p.hp += 6
+        sid, name, _g, told, boon = next(z for z in ZODIAC if z[0] == p.sign)
+        state.log.add(f"You were born under {name} — {told}. ({boon})", (232, 216, 150))
 
 
 class IntroScreen(Screen):

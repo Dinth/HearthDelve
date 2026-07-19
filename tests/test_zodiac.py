@@ -44,6 +44,7 @@ class TestZodiacBoons(unittest.TestCase):
 
     def test_star_and_oak_apply_once_at_birth(self):
         from hearthdelve import screens
+        from hearthdelve.game import attrs as A
         st = fresh_state(12)
         hp0, en0 = st.player.max_hp, st.player.max_energy
 
@@ -51,13 +52,13 @@ class TestZodiacBoons(unittest.TestCase):
             state = st
             def pop(self):
                 pass
-        scr = screens.ZodiacScreen()
-        from hearthdelve.data.content import ZODIAC
-        scr.sel = next(i for i, z in enumerate(ZODIAC) if z[0] == "oak")
+        scr = screens.CharGenScreen()
+        scr.ctx = {"sign": "oak", "attrs": {k: 10 for k in A.ATTRS}}
         scr.handle(FakeUI(), "confirm", ("confirm",))
         self.assertEqual(st.player.sign, "oak")
-        self.assertEqual(st.player.max_hp, hp0 + 6)
+        self.assertEqual(st.player.max_hp, hp0 + 6)      # oak only; To 10 adds nothing
         self.assertEqual(st.player.max_energy, en0)
+        self.assertEqual(st.player.attrs["St"], 10)
 
 
 class TestZodiacPersistence(unittest.TestCase):
@@ -85,13 +86,22 @@ class TestZodiacPersistence(unittest.TestCase):
                 pass
 
 
-class TestZodiacScreen(unittest.TestCase):
-    def test_chooser_renders(self):
+class TestCharGenScreen(unittest.TestCase):
+    def test_chargen_renders_and_rerolls(self):
         import tcod.console
+        from hearthdelve import screens
         from hearthdelve.engine import rendering
+        from hearthdelve.game import attrs as A
         st = fresh_state(12)
-        rendering.render_zodiac(tcod.console.Console(80, 50, order="F"), st, 0)
+        scr = screens.CharGenScreen()
+        self.assertIn(scr.ctx["sign"], {z[0] for z in
+                                        __import__("hearthdelve.data.content",
+                                                   fromlist=["ZODIAC"]).ZODIAC})
+        for k in A.ATTRS:
+            self.assertTrue(3 <= scr.ctx["attrs"][k] <= 18)
+        rendering.render_chargen(tcod.console.Console(80, 50, order="F"), st, scr.ctx)
         st.player.sign = "wolf"
+        st.player.attrs = {k: 12 for k in A.ATTRS}
         rendering.render_character(tcod.console.Console(80, 50, order="F"), st)
 
 
