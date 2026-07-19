@@ -30,6 +30,8 @@ PET_BONUS = 12                  # happiness gained from a daily pet
 NEGLECT_DRIFT = 6               # happiness lost on a day with no attention (floor 20)
 HUNGER_DRIFT = 12               # happiness lost on a day with nothing to eat (floor 10)
 STORM_STRESS = 8                # happiness lost when a storm rattles the animals
+SICK_DRIFT = 8                  # happiness lost each day an animal lies ill
+SICK_RECOVER_DAYS = 7           # an untreated illness runs its course in about a week
 FARM_RADIUS = 50                # how far from the homestead an outbuilding may be raised
 PASTURE_RADIUS = 6              # a beast grazes if grass lies this close to its home
 
@@ -202,6 +204,21 @@ def interact_animal(state: GameState, a: Animal) -> None:
     spec = SPECIES[a.kind]
     p = state.player
 
+    if a.sick:
+        # An ill beast wants physic, not fuss: dose it with a carried Herbal
+        # Tonic to cure it on the spot — else it must sweat the week out.
+        if p.inventory.count(items.HERBAL_TONIC) > 0:
+            p.inventory.remove(items.HERBAL_TONIC, 1)
+            a.sick = 0
+            a.happiness = min(100, a.happiness + PET_BONUS)
+            a.petted_today = True
+            state.log.add(f"You dose {a.name} with a herbal tonic — its eyes "
+                          "brighten almost at once.", (180, 230, 160))
+        else:
+            state.log.add(f"{a.name} looks poorly — off its feed and shivering. "
+                          "A Herbal Tonic would set it right.", (224, 170, 120))
+        return
+
     if a.produce_ready and _is_adult(a):
         q = _produce_quality(state, a)
         p.inventory.add(spec.produce, 1, quality=q)
@@ -287,12 +304,28 @@ def new_day(state: GameState) -> None:
         if not fed:
             a.happiness = max(10, a.happiness - HUNGER_DRIFT)
             hungry += 1
+        # Illness: a small, drifting chance — likelier for a hungry, unhappy or
+        # storm-rattled beast. An ill animal gives nothing and mopes until it's
+        # dosed with a Herbal Tonic, or shakes it off in about a week.
+        if a.sick:
+            a.sick += 1
+            a.happiness = max(10, a.happiness - SICK_DRIFT)
+            if a.sick > SICK_RECOVER_DAYS:
+                a.sick = 0
+                state.log.add(f"{a.name} has shaken off the sickness at last.", (200, 220, 160))
+        else:
+            chance = (0.005 + (0.02 if not fed else 0.0)
+                      + (0.015 if a.happiness < 40 else 0.0) + (0.01 if storm else 0.0))
+            if random.random() < chance:
+                a.sick = 1
+                state.log.add(f"{a.name} is off its feed and shivering — it's fallen ill. "
+                              "(dose it with a Herbal Tonic)", (224, 170, 120))
         if _is_adult(a):
             # A fed adult leaves produce (some, like truffle-pigs, only on a
-            # good day); a hungry one gives nothing — but don't wipe an
+            # good day); a hungry or ill one gives nothing — but don't wipe an
             # egg/milk you simply hadn't collected yet.
             spec = SPECIES[a.kind]
-            lucky = fed and random.random() < spec.produce_chance
+            lucky = fed and not a.sick and random.random() < spec.produce_chance
             a.produce_ready = a.produce_ready or lucky
             if not was_adult:              # just grew up — announce it even on a hungry morning
                 state.log.add(f"{a.name} the {spec.young_name} has grown into a {spec.grown_name}.",
@@ -321,7 +354,7 @@ def _spring_births(state: GameState) -> None:
         if len(flock) >= cap:
             continue
         for kind in allowed:
-            adults = [a for a in flock if a.kind == kind and _is_adult(a)]
+            adults = [a for a in flock if a.kind == kind and _is_adult(a) and not a.sick]
             if len(adults) < 2:
                 continue
             avg_happy = sum(a.happiness for a in adults) / len(adults)

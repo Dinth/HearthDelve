@@ -1519,6 +1519,9 @@ def describe(state: GameState, x: int, y: int) -> str:
     if a is not None:
         spec = SPECIES[a.kind]
         role = spec.grown_name if _is_adult(a) else spec.young_name
+        if a.sick:
+            return (f"{a.name}, your {role} — looks poorly: off its feed and shivering. "
+                    "Dose it with a Herbal Tonic (bump), or it'll be a week mending.")
         mood = ("content" if a.happiness >= 80 else "happy" if a.happiness >= 55
                 else "a little glum" if a.happiness >= 35 else "unhappy")
         tail = " — has produce ready (bump to collect)" if a.produce_ready and _is_adult(a) else ""
@@ -2863,10 +2866,13 @@ def render_journal(con: tcod.console.Console, state: GameState, tab: int = 0) ->
                 rows.append((2, f"{fruiting} of {len(surf.trees)} trees bearing fruit", C.WHITE))
             if surf.animals:
                 waiting = sum(1 for a in surf.animals if a.produce_ready)
+                ill = sum(1 for a in surf.animals if a.sick)
                 rows.append((0, "", C.WHITE))
                 rows.append((0, "Animals", _HDR))
                 rows.append((2, f"{len(surf.animals)} in your care · {waiting} with produce waiting",
                              C.WHITE))
+                if ill:
+                    rows.append((2, f"{ill} ill — dose with a Herbal Tonic!", (228, 150, 110)))
 
     done, total = quests.progress(state)
     title = (f"Journal — Goals ({done}/{total})" if tab == 0

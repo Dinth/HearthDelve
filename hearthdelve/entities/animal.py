@@ -24,4 +24,5 @@ class Animal:
     age_days: int = 0              # grows up; only adults produce
     petted_today: bool = False
     produce_ready: bool = False
+    sick: int = 0                  # days ill (0 = well); an ill beast gives nothing
     energy: int = 0                # roam-speed accumulator (transient)

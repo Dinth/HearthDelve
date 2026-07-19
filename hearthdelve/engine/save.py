@@ -168,7 +168,7 @@ def save(state: GameState, path: str = SAVE_PATH) -> None:
                                    m.out_qty]
                      for (x, y), m in surf.machines.items()},
         "animals": [[a.kind, a.name, a.x, a.y, list(a.home),
-                     a.happiness, a.age_days, a.produce_ready, a.petted_today]
+                     a.happiness, a.age_days, a.produce_ready, a.petted_today, a.sick]
                     for a in surf.animals],
         # Surface wildlife is persistent (a boar you put down stays down, and
         # its karma cost sticks) rather than re-scattered from the seed on load.
@@ -275,12 +275,14 @@ def load(path: str = SAVE_PATH) -> GameState:
     for rec in data.get("animals", []):
         kind, name, ax, ay, home, happ, age, ready = rec[:8]
         petted = rec[8] if len(rec) > 8 else False
+        sick = rec[9] if len(rec) > 9 else 0
         spec = SPECIES.get(kind)
         if not spec:
             continue
         world.animals.append(Animal(kind=kind, name=name, glyph=spec.glyph, color=spec.color,
                                     x=ax, y=ay, home=tuple(home), happiness=happ,
-                                    age_days=age, produce_ready=ready, petted_today=petted))
+                                    age_days=age, produce_ready=ready, petted_today=petted,
+                                    sick=sick))
 
     # Restore persistent surface wildlife exactly (replacing the freshly
     # seed-scattered set) so kills and roused states carry across a reload.
