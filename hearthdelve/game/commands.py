@@ -937,7 +937,8 @@ def _rob_hive(state: GameState, x: int, y: int) -> None:
     p.inventory.add(items.HONEY, honey, quality=skills.roll_quality(state, "Foraging"))
     p.inventory.add(items.BEESWAX, wax)
     got = f"{honey} honey and {wax} beeswax"
-    if random.random() < 0.03:                       # a very rare prize
+    from . import events
+    if random.random() < events.hive_queen_chance(state):   # rare — short odds on a swarm day
         p.inventory.add(items.BEE_QUEEN, 1)
         got += ", and a BEE QUEEN"
     state.world.tiles[x, y] = tile.GRASS

@@ -102,6 +102,53 @@ class TestEventEffects(unittest.TestCase):
         self.assertGreater(after, before)
 
 
+class TestOmensAndNewEvents(unittest.TestCase):
+    def test_omens_tell_true(self):
+        """peek_tomorrow must predict exactly what the next dawn brings."""
+        from hearthdelve.game import events
+        st = fresh_state(9)
+        for d in range(1, 41):
+            st.day = d
+            events.new_day(st)
+            predicted = events.peek_tomorrow(st)
+            om = events.omen(st)
+            st.day = d + 1
+            events.new_day(st)
+            actual = st.event.get("id", "")
+            self.assertEqual(predicted, actual, f"omen lied on day {d}")
+            if actual:
+                self.assertTrue(om, f"event {actual} has no omen line")
+            st.day = d           # restore scan position (loop sets d+1 next)
+
+    def test_boar_sounder_arrives_and_leaves(self):
+        import random
+        from hearthdelve.game import events
+        st = fresh_state(9)
+        st.event = {"id": "boars"}
+        events._apply_boars(st, random.Random(5))
+        boars = [m for m in st.surface.monsters if m.name == "Cinder Boar"]
+        self.assertGreaterEqual(len(boars), 3)
+        st.day += 1
+        st.stats["last_event_day"] = st.day
+        events.new_day(st)
+        self.assertFalse(any(m.name == "Cinder Boar" for m in st.surface.monsters))
+
+    def test_swarm_settles_lasting_hives(self):
+        import random
+        import numpy as np
+        from hearthdelve.game import events
+        from hearthdelve.world import tile
+        st = fresh_state(9)
+        before = int((st.surface.tiles == tile.WILD_HIVE).sum())
+        st.event = {"id": "swarm"}
+        events._apply_swarm(st, random.Random(5))
+        after = int((st.surface.tiles == tile.WILD_HIVE).sum())
+        self.assertGreaterEqual(after - before, 2)
+        self.assertEqual(events.hive_queen_chance(st), 0.25)
+        st.event = {}
+        self.assertEqual(events.hive_queen_chance(st), 0.03)
+
+
 class TestEventPersistence(unittest.TestCase):
     def test_round_trip_and_old_save(self):
         import json

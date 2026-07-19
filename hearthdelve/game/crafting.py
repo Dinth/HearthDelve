@@ -344,9 +344,12 @@ def interact_machine(state: GameState, x: int, y: int) -> bool:
         return _buy_treat(state)
 
     if m.kind == "weathervane":
-        from . import farming
+        from . import farming, events
         state.log.add(f"The weathervane reads the coming sky: {farming.weather_saying(farming.forecast(state))}",
                       (200, 216, 232))
+        om = events.omen(state)
+        if om:
+            state.log.add(f"  {om}", (200, 216, 232))
         return True
 
     if m.kind == "jeweller":

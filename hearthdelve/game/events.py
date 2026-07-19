@@ -29,9 +29,31 @@ _EVENTS = {
     "bloom":    (("Spring", "Summer"), 2),
     "flush":    (("Summer", "Fall"), 2),
     "wolves":   ((), 1),
+    "boars":    ((), 1),
+    "swarm":    (("Spring", "Summer"), 2),
     "fete":     ((), 2),
 }
-_WOLF_SEASON_WEIGHT = {"Fall": 3, "Winter": 4}   # the hungry months drive packs down
+# the hungry months drive beasts down out of the hills
+_SEASON_WEIGHT = {"wolves": {"Fall": 3, "Winter": 4},
+                  "boars": {"Fall": 3, "Winter": 2}}
+
+# Event-spawned visitors, by the name they carry (these species never spawn in
+# the home Vale on their own, so removing by name at dawn is exact).
+_EVENT_CRITTER = {"wolves": "Ash Wolf", "boars": "Cinder Boar"}
+
+# How tomorrow's event whispers itself today — nature-tells for the weather-wise
+# (the same folk who read the sky; see village.talk and the weathervane).
+_OMENS = {
+    "caravan":  "And there's wagon-dust on the far road — traders by morning, I'd say.",
+    "shoal":    "The gulls are massing out over the water — the shoals run tomorrow, mark me.",
+    "starfall": "And the sky feels thin tonight, the old folk say. Watch it after dark.",
+    "bloom":    "Every bud in the meadow is fit to burst — tomorrow the whole vale flowers.",
+    "flush":    "The earth smells of rain and spores — there'll be caps everywhere come morning.",
+    "wolves":   "And the dogs won't settle tonight — they keep looking uphill. Wolves, I'd say.",
+    "boars":    "The turf's torn all along the treeline — a sounder's moving down from the west.",
+    "swarm":    "The air fair hums over the flower-beds — a wild swarm is looking to settle.",
+    "fete":     "And there's bunting going up on a square already — someone's planned a fete.",
+}
 
 
 def is_active(state: GameState, eid: str) -> bool:
@@ -53,42 +75,70 @@ def friendship_mult(state: GameState) -> int:
     return 2 if is_active(state, "fete") else 1
 
 
+def hive_queen_chance(state: GameState) -> float:
+    """Odds a robbed wild hive yields a live queen — long odds normally, short
+    ones the day a wild swarm settles the valley."""
+    return 0.25 if is_active(state, "swarm") else 0.03
+
+
 # --- the dawn roll -------------------------------------------------------------
+def _roll(state: GameState, day: int, season: str) -> str:
+    """What (if anything) the world stirs up on ``day`` — pure and seeded, so
+    tomorrow can be peeked for omens without changing anything."""
+    if day - state.stats.get("last_event_day", -99) < _COOLDOWN_DAYS:
+        return ""
+    rng = random.Random(state.seed * 9176 + day * 131)
+    if rng.random() > _EVENT_CHANCE:
+        return ""
+    pool = []
+    for eid, (seasons, weight) in _EVENTS.items():
+        if seasons and season not in seasons:
+            continue
+        weight = _SEASON_WEIGHT.get(eid, {}).get(season, weight)
+        pool += [eid] * weight
+    return rng.choice(pool)
+
+
+def peek_tomorrow(state: GameState) -> str:
+    """Tomorrow's event id, or "" — the deterministic seed makes true omens."""
+    day = state.day + 1
+    season = C.SEASONS[(day // C.SEASON_LEN) % len(C.SEASONS)]
+    return _roll(state, day, season)
+
+
+def omen(state: GameState) -> str:
+    """A nature-tell for tomorrow's event ("" on a quiet morrow) — appended to
+    the weather-wise folks' forecasts."""
+    return _OMENS.get(peek_tomorrow(state), "")
+
+
 def new_day(state: GameState) -> None:
-    """Clear yesterday's event (walking any wolves back to the hills), then
-    maybe roll today's. Called from farming.new_day after the weather is set."""
+    """Clear yesterday's event (walking any visiting beasts back to the hills),
+    then maybe roll today's. Called from farming.new_day after the weather."""
     _cleanup(state)
     state.event = {}
     surf = state.surface
     if surf is None:
         return
-    rng = random.Random(state.seed * 9176 + state.day * 131)
-    if state.day - state.stats.get("last_event_day", -99) < _COOLDOWN_DAYS:
+    eid = _roll(state, state.day, state.season)
+    if not eid:
         return
-    if rng.random() > _EVENT_CHANCE:
-        return
-    pool = []
-    for eid, (seasons, weight) in _EVENTS.items():
-        if seasons and state.season not in seasons:
-            continue
-        if eid == "wolves":
-            weight = _WOLF_SEASON_WEIGHT.get(state.season, weight)
-        pool += [eid] * weight
-    eid = rng.choice(pool)
+    rng = random.Random(state.seed * 9176 + state.day * 131 + 7)
     state.event = {"id": eid}
     state.stats["last_event_day"] = state.day
     _APPLY[eid](state, rng)
 
 
 def _cleanup(state: GameState) -> None:
-    """Yesterday's pack melts back into the hills (Ash Wolves never spawn in the
-    home Vale on their own, so removing by name is exact)."""
+    """Yesterday's visiting beasts melt back into the hills (their species never
+    spawn in the home Vale on their own, so removing by name is exact)."""
     surf = state.surface
-    if surf is not None and state.event.get("id") == "wolves":
+    critter = _EVENT_CRITTER.get(state.event.get("id", ""))
+    if surf is not None and critter:
         before = len(surf.monsters)
-        surf.monsters = [m for m in surf.monsters if m.name != "Ash Wolf"]
+        surf.monsters = [m for m in surf.monsters if m.name != critter]
         if len(surf.monsters) < before:
-            state.log.add("The wolf-pack has slipped back into the hills.", C.DIM)
+            state.log.add(f"The {critter.lower()}s have slipped back into the hills.", C.DIM)
 
 
 # --- per-event setup -------------------------------------------------------------
@@ -178,26 +228,8 @@ def _apply_flush(state: GameState, rng) -> None:
 
 def _apply_wolves(state: GameState, rng) -> None:
     from ..data import content
-    from ..entities.monster import Mob
-    from .farming import _NATURAL_GROUND
-    surf = state.surface
-    home = surf.bed or surf.spawn
     wolf = next(c for c in content.WEST_WILDLIFE if c.name == "Ash Wolf")
-    packed = 0
-    for _ in range(300):
-        if packed >= rng.randint(4, 6):
-            break
-        x = home[0] + rng.randint(-45, 45)
-        y = home[1] + rng.randint(-45, 45)
-        if not surf.in_bounds(x, y) or surf.tiles[x, y] not in _NATURAL_GROUND:
-            continue
-        if abs(x - home[0]) + abs(y - home[1]) < 18:   # never at the doorstep
-            continue
-        surf.monsters.append(Mob(wolf.name, wolf.glyph, wolf.color, wolf.hp, wolf.hp,
-                                 wolf.speed, wolf.behavior, x, y, dv=wolf.dv, pv=wolf.pv,
-                                 to_hit=wolf.to_hit, dmg=wolf.dmg, kind="wildlife",
-                                 inflicts=wolf.inflicts))
-        packed += 1
+    _spawn_pack(state, rng, wolf, rng.randint(4, 6), 18)
     state.log.add("Wolf-song echoed down from the hills in the night — a pack prowls "
                   "the valley today. Mind the far fields, or meet them armed: wolf "
                   "pelts tan into fine leather.", _ANNOUNCE)
@@ -211,6 +243,73 @@ def _apply_fete(state: GameState, rng) -> None:
                   "thrown open! Friendships warm twice as fast today.", _ANNOUNCE)
 
 
+def _spawn_pack(state: GameState, rng, critter, count: int, min_dist: int) -> int:
+    """Scatter a visiting pack of a Westreach critter around the Vale (removed
+    again at the next dawn by _cleanup)."""
+    from ..entities.monster import Mob
+    from .farming import _NATURAL_GROUND
+    surf = state.surface
+    home = surf.bed or surf.spawn
+    packed = 0
+    for _ in range(300):
+        if packed >= count:
+            break
+        x = home[0] + rng.randint(-45, 45)
+        y = home[1] + rng.randint(-45, 45)
+        if not surf.in_bounds(x, y) or surf.tiles[x, y] not in _NATURAL_GROUND:
+            continue
+        if abs(x - home[0]) + abs(y - home[1]) < min_dist:
+            continue
+        surf.monsters.append(Mob(critter.name, critter.glyph, critter.color, critter.hp,
+                                 critter.hp, critter.speed, critter.behavior, x, y,
+                                 dv=critter.dv, pv=critter.pv, to_hit=critter.to_hit,
+                                 dmg=critter.dmg, kind="wildlife", diet=critter.diet,
+                                 inflicts=critter.inflicts))
+        packed += 1
+    return packed
+
+
+def _apply_boars(state: GameState, rng) -> None:
+    from ..data import content
+    boar = next(c for c in content.WEST_WILDLIFE if c.name == "Cinder Boar")
+    _spawn_pack(state, rng, boar, rng.randint(3, 5), 15)
+    state.log.add("A sounder of great scarred boar has come down from the Westreach "
+                  "in the night — rooting through the far fields. Dangerous if crossed, "
+                  "and a full larder for whoever dares.", _ANNOUNCE)
+
+
+def _apply_swarm(state: GameState, rng) -> None:
+    from ..world import tile
+    from .farming import _NATURAL_GROUND
+    surf = state.surface
+    centers = list(getattr(surf, "village_centers", {}).values())
+    home = surf.bed or surf.spawn
+    stamped = []
+    want = rng.randint(2, 3)
+    for _ in range(400):
+        if len(stamped) >= want:
+            break
+        x = rng.randint(4, surf.width - 5)
+        y = rng.randint(4, surf.height - 5)
+        if surf.tiles[x, y] not in _NATURAL_GROUND:
+            continue
+        if any(abs(x - vx) + abs(y - vy) < 20 for vx, vy in centers):
+            continue
+        if abs(x - home[0]) + abs(y - home[1]) < 10:
+            continue
+        if (x, y) in surf.crops or (x, y) in surf.machines or (x, y) in surf.trees:
+            continue
+        surf.tiles[x, y] = tile.WILD_HIVE            # a lasting gift: real new hives
+        stamped.append((x, y))
+    where = ""
+    if stamped:
+        sx, sy = stamped[0]
+        where = f" — the hum drifts from the {_compass(sx - home[0], sy - home[1])}"
+    state.log.add("A wild swarm crossed the valley in the night and split to settle "
+                  f"new hives{where}. Hives robbed today often hold the QUEEN herself.",
+                  _ANNOUNCE)
+
+
 _APPLY = {"caravan": _apply_caravan, "shoal": _apply_shoal, "starfall": _apply_starfall,
           "bloom": _apply_bloom, "flush": _apply_flush, "wolves": _apply_wolves,
-          "fete": _apply_fete}
+          "boars": _apply_boars, "swarm": _apply_swarm, "fete": _apply_fete}
