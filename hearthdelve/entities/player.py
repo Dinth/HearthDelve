@@ -72,6 +72,7 @@ class Player:
     buff: str = ""                               # active food buff key (see skills.BUFFS)
     buff_until: int = 0                          # abs in-game minute the buff wears off
     status: dict = field(default_factory=dict)   # active DoTs: {"poison": turns_left, ...}
+    sign: str = ""                               # birth sign id (content.ZODIAC); "" = unsigned
 
     @property
     def active_tool(self) -> Item | None:

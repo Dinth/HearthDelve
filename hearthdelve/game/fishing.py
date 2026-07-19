@@ -66,6 +66,8 @@ def begin(state: GameState, tx: int, ty: int):
     if collection.wing_done(state, "Angler's Cabinet"):
         chance += 0.05
     chance += events.fishing_bonus(state)                  # a shoal run: the sea boils
+    if state.player.sign == "heron":                       # born on a still-water morning
+        chance += 0.04
     # The Saltmere lighthouse: the beam steadies the boats and draws the far
     # shoals in — sea casts bite more often, and moonfish rise to the light.
     if table is content.SEA_FISH:

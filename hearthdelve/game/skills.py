@@ -148,6 +148,8 @@ def extra_yield_chance(state: GameState, skill: str) -> float:
     if (b == "tiller" and skill == "Farming") or (b == "forager" and skill == "Foraging"):
         chance += 0.30
     chance += jewelry.cozy_bonus(state, "yield")        # an emerald ring/amulet enriches the harvest
+    if skill == "Farming" and state.player.sign == "ox":   # born to the patient furrow
+        chance += 0.06
     return chance
 
 

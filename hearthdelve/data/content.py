@@ -2577,6 +2577,32 @@ def blacksmith_stock() -> list[tuple[Item, int]]:
 # village gathers in the square. Each: (day_of_season, name, flavour, treat).
 # Each festival scripts its own weather: fine days for most, fog for Hallows'
 # Eve, snow for the winter feasts. (day, name, flavour, treat, weather)
+# --- The Vale's wheel of stars ------------------------------------------------
+# At the start of a new life the player names the sign they were born under —
+# a small, passive boon, chosen once (efficiency, never permission). Each entry:
+# (id, name, glyph, how the midwives tell it, what it quietly grants).
+ZODIAC: tuple = (
+    ("ox",      "The Ox",           "8", "born to the patient furrow",
+     "fields yield a second harvest a little more often"),
+    ("wolf",    "The Wolf",         "w", "born with winter in the blood",
+     "+1 to-hit in a fight"),
+    ("heron",   "The Heron",        "h", "born on a still-water morning",
+     "the fish bite a little more readily"),
+    ("mule",    "The Mule",         "m", "born stubborn and broad-backed",
+     "shoulders a little more weight (+6 carry)"),
+    ("coin",    "The Skimming Coin", "o", "born on a market day",
+     "shipped goods fetch a little more (+3%)"),
+    ("serpent", "The Serpent",      "s", "born in the dry heat of summer",
+     "poison, wounds and fevers pass a turn sooner"),
+    ("star",    "The Evening Star", "*", "born at first lamplight",
+     "a deeper well of stamina (+12)"),
+    ("oak",     "The Old Oak",      "T", "born in a hard year, and it shows",
+     "a sturdier frame (+6 max HP)"),
+    ("wanderer", "The Wanderer",    "@", "born under a moving sky",
+     "no boon but the road itself"),
+)
+
+
 FESTIVALS: dict[str, list] = {
     "Spring": [(11, "the Spring Equinox",
                 "blossom and wildflowers deck the square; fiddles play", items.TULIP_SEEDS, "Clear")],

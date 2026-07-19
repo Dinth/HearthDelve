@@ -953,6 +953,8 @@ def bin_value(state: GameState, item, quality: int) -> int:
     if projects.done(state, "market_cross"):
         v *= 1.10
     v *= events.ship_mult(state)          # a caravan in the valley buys handsomely
+    if state.player.sign == "coin":       # born on a market day
+        v *= 1.03
     return round(v)
 
 

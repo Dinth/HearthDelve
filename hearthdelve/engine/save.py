@@ -121,6 +121,7 @@ def save(state: GameState, path: str = SAVE_PATH) -> None:
             "active_seed": p.active_seed.name if p.active_seed else None,
             "skills": dict(p.skills),
             "status": dict(p.status),
+            "sign": p.sign,
         },
         "ship_bin": [[it.name, q, ql] for it, q, ql in state.ship_bin.slots],
         "storage": [[it.name, q, ql] for it, q, ql in state.storage.slots],
@@ -336,6 +337,7 @@ def load(path: str = SAVE_PATH) -> GameState:
     player.active_seed = items.by_name(pd.get("active_seed") or "") or items.PARSNIP_SEEDS
     player.skills = dict(pd.get("skills", {}))
     player.status = {k: int(v) for k, v in pd.get("status", {}).items()}
+    player.sign = pd.get("sign", "")
 
     state = GameState(world=world, player=player, log=MessageLog(), seed=data["seed"])
     state.surface = world

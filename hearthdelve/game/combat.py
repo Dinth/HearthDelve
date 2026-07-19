@@ -54,6 +54,8 @@ def apply_status(state: GameState, kind: str, turns: int = 0, target=None) -> No
         return
     holder = state.player if target is None else target
     dur = turns or STATUS[kind]["turns"]
+    if target is None and state.player.sign == "serpent":
+        dur = max(1, dur - 1)            # born in the dry heat: afflictions pass sooner
     holder.status[kind] = max(holder.status.get(kind, 0), dur)
 
 
@@ -206,6 +208,8 @@ def player_to_hit(state: GameState) -> int:
         bonus += 2
     elif buff == "clarity":
         bonus += 2                       # Clarity Draught: keener aim
+    if state.player.sign == "wolf":      # born with winter in the blood
+        bonus += 1
     return bonus
 
 

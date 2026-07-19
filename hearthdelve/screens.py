@@ -943,6 +943,45 @@ class LogScreen(Screen):
             self.scroll = max(0, self.scroll - action[2])   # up = older
 
 
+class ZodiacScreen(Screen):
+    """New-life onboarding: pick the sign you were born under. No escape — a
+    birth is not a menu you can back out of."""
+    def __init__(self) -> None:
+        self.sel = 0
+
+    def render(self, ui: UI, con) -> None:
+        rendering.render_zodiac(con, ui.state, self.sel)
+
+    def on_raw(self, ui: UI, event) -> bool:
+        from .data.content import ZODIAC
+        if not isinstance(event, tcod.event.KeyDown) or (event.mod & tcod.event.Modifier.SHIFT):
+            return False
+        s = int(event.sym)
+        ch = chr(s) if ord("a") <= s <= ord("z") else ""
+        if ch and ord(ch) - ord("a") < len(ZODIAC):
+            self.sel = ord(ch) - ord("a")
+            return True
+        return False
+
+    def handle(self, ui: UI, cmd: str, action: tuple) -> None:
+        from .data.content import ZODIAC
+        state = ui.state
+        if cmd == "move" and action[2]:
+            self.sel = (self.sel + action[2]) % len(ZODIAC)
+        elif cmd == "confirm":
+            sid, name, _g, told, boon = ZODIAC[self.sel]
+            state.player.sign = sid
+            if sid == "star":                  # the one-time constitutions
+                state.player.max_energy += 12
+                state.player.energy += 12
+            elif sid == "oak":
+                state.player.max_hp += 6
+                state.player.hp += 6
+            state.log.add(f"You were born under {name} — {told}. ({boon})",
+                          (232, 216, 150))
+            ui.pop()
+
+
 class IntroScreen(Screen):
     """The opening page for a new game — the premise and the core controls.
     Any key steps onto the farm."""

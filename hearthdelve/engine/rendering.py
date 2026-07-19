@@ -2950,6 +2950,11 @@ def render_character(con: tcod.console.Console, state: GameState) -> None:
     ksign = f"+{p.karma}" if p.karma > 0 else str(p.karma)
     kcol = (160, 220, 160) if p.karma >= 8 else (220, 150, 140) if p.karma <= -8 else C.WHITE
     m.text(2, 7, f"☯ Karma   {ksign} ({karma.label(p.karma)})", fg=kcol)
+    if p.sign:
+        from ..data.content import ZODIAC
+        z = next((z for z in ZODIAC if z[0] == p.sign), None)
+        if z:
+            m.text(2, 8, f"✶ Sign    {z[1]} — {z[4]}"[:w - 4], fg=(210, 200, 160))
     m.text(2, 9, "Skills", fg=_HDR)
     for i, s in enumerate(skills.SKILLS):
         lvl = skills.skill_level(state, s)
@@ -3160,6 +3165,26 @@ def render_world_map(con: tcod.console.Console, state: GameState) -> None:
     m.text(x0, y0 + MH + 1, "@ you   ⌂ farm   ■ village   ▼ delve (by kind)   · road",
            fg=C.DIM)
     m.footer("m / Esc close")
+
+
+def render_zodiac(con: tcod.console.Console, state: GameState, sel: int) -> None:
+    """New-life onboarding: name the sign you were born under (a small passive
+    boon, chosen once). The midwives' wheel of stars."""
+    from ..data.content import ZODIAC
+    w, h = 66, len(ZODIAC) * 2 + 9
+    m = ui.Modal(con, w, h, "Under what stars were you born?")
+    m.text(2, 2, "The midwives of the Vale read a child's stars at birth.", fg=C.DIM)
+    m.text(2, 3, "Choose your sign — a small gift that walks with you always.", fg=C.DIM)
+    for i, (sid, name, glyph, told, boon) in enumerate(ZODIAC):
+        dy = 5 + i * 2
+        picked = i == sel
+        bg = ui.SEL_BG if picked else ui.BASE_BG
+        if picked:
+            m.highlight(dy)
+            m.highlight(dy + 1)
+        m.text(2, dy, f"{inv_letter(i)} - {glyph}  {name:<18} {told}", fg=C.WHITE, bg=bg)
+        m.text(7, dy + 1, f"· {boon}", fg=(190, 180, 140), bg=bg)
+    m.footer("↑↓ / a-i choose   Enter be born   (this is for keeps)")
 
 
 def render_donate(con: tcod.console.Console, state: GameState, sel: int) -> None:
