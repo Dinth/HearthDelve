@@ -650,10 +650,13 @@ def _announce_morning(state: GameState) -> None:
             bits.append(f"{produce} animal{'s' if produce != 1 else ''} with produce")
         if bits:
             state.log.add("Ready around the farm: " + ", ".join(bits) + ".", (200, 220, 160))
+    from .village import clear_fair_stalls, fair_stalls
+    clear_fair_stalls(state)                 # yesterday's fair is struck at dawn
     fest = content.festival_on(state.season, state.day_of_season)
     if fest is not None:
-        state.log.add(f"Today is {fest[1]}! The village gathers in the square.",
-                      (244, 210, 130))
+        fair_stalls(state)                   # stalls go up on every square
+        state.log.add(f"Today is {fest[1]}! The village gathers in the square — "
+                      "there'll be stalls and games.", (244, 210, 130))
         # The year's closing night: if you filled the fireworks order, the sky
         # over the square is yours — and the whole Vale remembers who lit it.
         from .requests import _year_finale

@@ -261,6 +261,59 @@ def _grant_machine_xp(state: GameState, mdef, out, qty: int) -> None:
 # heavier than the close bench-work of gem-cutting; both draw on the day's bar.
 _ACTIVE_STAMINA = {"anvil": 5, "gemcut": 3}
 
+_TOMBOLA_COST = 25
+_TREAT_COST = 15
+
+
+def _play_tombola(state: GameState) -> bool:
+    """A festival spin: 25g, every ticket wins something — usually small, now
+    and then a gasp from the crowd. Seeded per spin, so no scumming."""
+    import random as _r
+    p = state.player
+    if p.gold < _TOMBOLA_COST:
+        state.log.add(f"The tombola is {_TOMBOLA_COST}g a spin — you're short.", C.DIM)
+        return True
+    p.gold -= _TOMBOLA_COST
+    spins = state.stats["tombola_spins"] = state.stats.get("tombola_spins", 0) + 1
+    rng = _r.Random(state.seed * 6421 + state.day * 977 + spins)
+    roll = rng.random()
+    if roll < 0.40:
+        prize, qty = items.FIRECRACKER, 2
+    elif roll < 0.65:
+        prize, qty = rng.choice((items.CANDIED_FRUIT, items.COOKIES)), 1
+    elif roll < 0.82:
+        prize, qty = rng.choice((items.TULIP_SEEDS, items.PUMPKIN_SEEDS,
+                                 items.SUNFLOWER_SEEDS)), 2
+    elif roll < 0.94:
+        prize, qty = content.random_gem(rng), 1
+    elif roll < 0.98:
+        prize, qty = items.BLAST_CHARGE, 1
+    else:
+        prize, qty = items.BEE_QUEEN, 1              # the crowd gasps
+    p.inventory.add(prize, qty)
+    got = f"{qty}x {prize.name}" if qty > 1 else prize.name
+    big = roll >= 0.94
+    state.log.add(("The wheel rattles… and the crowd GASPS — " if big
+                   else "The wheel rattles… ") + f"you win {got}!",
+                  (244, 210, 130) if big else (222, 200, 150))
+    return True
+
+
+def _buy_treat(state: GameState) -> bool:
+    """Festival fare off the griddle: 15g for a warm treat into the pack."""
+    import random as _r
+    p = state.player
+    if p.gold < _TREAT_COST:
+        state.log.add(f"Treats are {_TREAT_COST}g — you're short.", C.DIM)
+        return True
+    p.gold -= _TREAT_COST
+    buys = state.stats["fair_treats"] = state.stats.get("fair_treats", 0) + 1
+    rng = _r.Random(state.seed * 3319 + state.day * 613 + buys)
+    treat = rng.choice((items.CANDIED_FRUIT, items.COOKIES, items.SAUSAGE_ROLL))
+    p.inventory.add(treat, 1)
+    state.log.add(f"You buy a {treat.name.lower()}, warm off the stall.", (222, 200, 150))
+    return True
+
 
 def interact_machine(state: GameState, x: int, y: int) -> bool:
     m = state.world.machines.get((x, y))
@@ -283,6 +336,12 @@ def interact_machine(state: GameState, x: int, y: int) -> bool:
 
     if m.kind == "chest":
         return {"storage": True}          # a home store — the player opens the chest UI
+
+    if m.kind == "fair_games":
+        return _play_tombola(state)
+
+    if m.kind == "fair_treats":
+        return _buy_treat(state)
 
     if m.kind == "weathervane":
         from . import farming

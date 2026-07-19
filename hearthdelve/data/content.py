@@ -1102,6 +1102,13 @@ MACHINES: dict[str, MachineDef] = {
     "apothecary": MachineDef("apothecary", "Apothecary", "φ", (150, 200, 168), 480, "brew",
                              None, "The only place to brew: steeps herbs into remedies "
                                    "by the batch and distils stronger potions."),
+    # Festival stalls — raised on every village square at dawn on a festival day
+    # and struck the morning after (see village.fair_stalls).
+    "fair_games": MachineDef("fair_games", "Tombola Stall", "?", (232, 180, 90), 0, "",
+                             None, "A festival game of chance — 25g a spin, every spin "
+                                   "wins something (g to play)."),
+    "fair_treats": MachineDef("fair_treats", "Treat Stall", "8", (222, 150, 130), 0, "",
+                              None, "Festival fare, hot and sticky — 15g a treat (g to buy)."),
 }
 
 # Potions only the apothecary can distil (never a hand-brew) — gated by the

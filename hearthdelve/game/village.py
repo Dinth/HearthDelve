@@ -155,8 +155,7 @@ def talk(state: GameState, npc: NPC) -> str:
     npc.met = True
     if first:
         npc.talked_today = True
-        from . import events
-        gain = karma.scale(state.player.karma, 10) * events.friendship_mult(state)
+        gain = karma.scale(state.player.karma, 10) * _warmth(state)
         npc.friendship = min(MAX_HEARTS * 100, npc.friendship + gain)
     scene = _heart_event(state, npc)         # a once-per-tier scripted moment
     if scene:
@@ -208,6 +207,52 @@ def _teach_recipe(state: GameState, npc: NPC):
             return (f"{npc.name} leans in, conspiratorial: \"Between friends —\n"
                     f"here's how I make {it.name.lower()}. Don't go telling.\"")
     return None
+
+
+def _warmth(state: GameState) -> int:
+    """Friendship-gain multiplier: doubled on a fete-day or a festival (the two
+    never stack — a warm day is a warm day)."""
+    from . import events
+    mult = events.friendship_mult(state)
+    if content.festival_on(state.season, state.day_of_season):
+        mult = max(mult, 2)
+    return mult
+
+
+_FAIR_KINDS = ("fair_games", "fair_treats")
+
+
+def fair_stalls(state: GameState) -> None:
+    """Raise the festival stalls: a tombola and a treat stand on every village
+    square for the day (struck again at the next dawn)."""
+    from ..entities.machine import Machine
+    surf = state.surface
+    for name, (vx, vy) in getattr(surf, "village_centers", {}).items():
+        kinds = list(_FAIR_KINDS)
+        for r in range(2, 8):
+            if not kinds:
+                break
+            for x in range(vx - r, vx + r + 1):
+                for y in range(vy - r, vy + r + 1):
+                    if not kinds:
+                        break
+                    if max(abs(x - vx), abs(y - vy)) != r:
+                        continue
+                    if not surf.in_bounds(x, y) or not surf.walkable(x, y):
+                        continue
+                    if (x, y) in surf.machines or (x, y) in surf.crops:
+                        continue
+                    if any(n.x == x and n.y == y for n in surf.npcs):
+                        continue
+                    surf.machines[(x, y)] = Machine(kind=kinds.pop(0))
+
+
+def clear_fair_stalls(state: GameState) -> None:
+    """Strike yesterday's festival stalls, wherever they stood."""
+    surf = state.surface
+    if surf is not None:
+        surf.machines = {pos: m for pos, m in surf.machines.items()
+                         if m.kind not in _FAIR_KINDS}
 
 
 def _festival_treat(state: GameState, npc: NPC):
@@ -284,9 +329,8 @@ def gift(state: GameState, npc: NPC, item, quality: int = 0) -> None:
     if points > 0:
         points += quality
     points = karma.scale(state.player.karma, points)
-    if points > 0:                       # a fete-day warms a kind gift double
-        from . import events
-        points *= events.friendship_mult(state)
+    if points > 0:                       # a fete or festival warms a kind gift double
+        points *= _warmth(state)
     npc.friendship = max(0, min(MAX_HEARTS * 100, npc.friendship + points))
     npc.gifted_today = True
     if points > 0:
