@@ -33,6 +33,9 @@ day, delve the dark below, and trade it all back into the villages.
 
 - Run: `./run.sh` (or `python play.py`). One-frame render check:
   `HEARTHDELVE_SMOKETEST=1 python -m hearthdelve`.
+- Tests: `python -m unittest discover -s tests -v` (headless; CI runs them on every
+  push and the binary build won't ship if they fail). New systems get tests in
+  `tests/` — especially save round-trips and old-save grandfathering.
 - Content is data-driven in `data/content.py` + `entities/items.py`; game logic in
   `game/`; rendering in `engine/rendering.py`; world in `world/`.
 - **Save compatibility matters**: tile ids are positional — only append to the tile

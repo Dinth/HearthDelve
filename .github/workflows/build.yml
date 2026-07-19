@@ -15,6 +15,23 @@ permissions:
   contents: write
 
 jobs:
+  # Tests run on EVERY push (never throttled) — a broken save format or a
+  # disconnected dungeon can never reach the rolling release.
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+      - name: Run the suite
+        run: python -m unittest discover -s tests -v
+
   gate:
     name: Rate-limit to once per day
     runs-on: ubuntu-latest
@@ -52,7 +69,7 @@ jobs:
   # that antivirus blocks with 'error 5').
   build:
     name: Build (${{ matrix.os }})
-    needs: gate
+    needs: [gate, test]
     if: needs.gate.outputs.build == 'true'
     strategy:
       fail-fast: false
@@ -94,7 +111,7 @@ jobs:
   # onefile runs on that glibc and anything newer — covering current distros.
   build-linux:
     name: Build (Linux)
-    needs: gate
+    needs: [gate, test]
     if: needs.gate.outputs.build == 'true'
     runs-on: ubuntu-22.04
     steps:
