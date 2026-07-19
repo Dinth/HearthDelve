@@ -261,6 +261,18 @@ def _grant_machine_xp(state: GameState, mdef, out, qty: int) -> None:
 # heavier than the close bench-work of gem-cutting; both draw on the day's bar.
 _ACTIVE_STAMINA = {"anvil": 5, "gemcut": 3}
 
+
+def stint_cost(state: GameState, kind: str) -> int:
+    """What a stint at a worked-in-person machine costs in stamina. The anvil is
+    brute work — a strong back (Strength) spends less wind on it."""
+    cost = _ACTIVE_STAMINA.get(kind, C.CRAFT_COST[0])
+    if kind == "anvil":
+        from . import attrs
+        # int() truncates toward zero, so a weak back pays no steeper than a
+        # strong one saves (floor division would skew the penalty side).
+        cost = max(2, cost - int(attrs.mod(state, "St") / 3))
+    return cost
+
 _TOMBOLA_COST = 25
 _TREAT_COST = 15
 
@@ -683,8 +695,7 @@ def load_machine_choice(state: GameState, m: Machine, mdef, opt) -> None:
         from . import turns
         state.player.inventory.add(output, out_qty, quality=out_quality)
         _grant_machine_xp(state, mdef, output, out_qty)
-        state.player.energy = max(0, state.player.energy
-                                  - _ACTIVE_STAMINA.get(mdef.kind, C.CRAFT_COST[0]))
+        state.player.energy = max(0, state.player.energy - stint_cost(state, mdef.kind))
         turns.advance_time(state, minutes * 60)
         star = (" " + skills.stars(out_quality)) if out_quality else ""
         got = f"{out_qty}x {output.name}" if out_qty > 1 else output.name

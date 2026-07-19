@@ -190,19 +190,30 @@ def stars(q: int) -> str:
     return STAR * q if q else ""
 
 
+# The close-work crafts, where deft hands (Dexterity) tell a little.
+_FINE_CRAFTS = ("Gemcutting", "Jewelcrafting")
+
+
 def roll_quality(state: GameState, skill: str) -> int:
     """Quality of freshly produced goods: mostly the relevant skill, a little
-    the overall character level, plus luck. Returns 0-5 stars."""
+    the overall character level, plus luck. Returns 0-5 stars. The close-work
+    crafts also feel the crafter's hands (Dexterity, slightly, both ways)."""
+    from . import attrs
     lvl = skill_level(state, skill)                       # 0..10
     clvl = min(state.player.level, 10)                    # character level, capped
     score = lvl * 0.42 + clvl * 0.12 + random.uniform(-1.3, 1.3)
+    if skill in _FINE_CRAFTS:
+        score += 0.05 * attrs.mod(state, "Dx")
     return max(0, min(5, round(score - 0.8)))
 
 
 def process_quality(avg_in: float, state: GameState, skill: str) -> int:
     """Quality of a processed/cooked good: inherits the average ingredient
-    quality, nudged up or down by the crafter's skill (plus a little luck)."""
-    adjust = (skill_level(state, skill) - 5) * 0.14 + random.uniform(-0.6, 0.6)
+    quality, nudged up or down by the crafter's skill (plus a little luck) —
+    and slightly, both ways, by the deftness of their hands (Dexterity)."""
+    from . import attrs
+    adjust = ((skill_level(state, skill) - 5) * 0.14 + random.uniform(-0.6, 0.6)
+              + 0.05 * attrs.mod(state, "Dx"))
     return max(0, min(5, round(avg_in + adjust)))
 
 

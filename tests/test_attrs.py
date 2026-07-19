@@ -97,6 +97,38 @@ class TestAttributeHooks(unittest.TestCase):
         keen = int(np.count_nonzero(st.world.visible))
         self.assertGreater(keen, dim)
 
+    def test_dexterity_nudges_crafted_quality(self):
+        import random
+        from hearthdelve.game import skills
+        st = fresh_state(13)
+
+        def mean_quality(dx):
+            self._flat(st, Dx=dx)
+            random.seed(42)
+            return sum(skills.process_quality(2.0, st, "Cooking")
+                       for _ in range(600)) / 600
+
+        clumsy, deft = mean_quality(4), mean_quality(17)
+        self.assertGreater(deft, clumsy)
+        self.assertLess(deft - clumsy, 1.2, "the nudge must stay slight")
+        # …and the same hands tell at the gem-cutting wheel
+        def mean_gem(dx):
+            self._flat(st, Dx=dx)
+            random.seed(42)
+            return sum(skills.roll_quality(st, "Gemcutting") for _ in range(600)) / 600
+        self.assertGreaterEqual(mean_gem(17), mean_gem(4))
+
+    def test_strength_saves_the_smiths_wind(self):
+        from hearthdelve.game import crafting
+        st = fresh_state(13)
+        self._flat(st, St=10)
+        self.assertEqual(crafting.stint_cost(st, "anvil"), 5)
+        self._flat(st, St=16)
+        self.assertEqual(crafting.stint_cost(st, "anvil"), 3)
+        self.assertEqual(crafting.stint_cost(st, "gemcut"), 3)   # brawn doesn't cut gems
+        self._flat(st, St=3)
+        self.assertEqual(crafting.stint_cost(st, "anvil"), 7)    # a weak back pays more
+
     def test_attrs_persist_and_grandfather(self):
         import json
         import os

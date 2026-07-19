@@ -4,10 +4,12 @@ Rolled once at character generation (3d6 each, reroll at will) and never a
 gate — each is a small passive modifier on a system that already exists,
 centred on 10 so an average roll changes nothing at all:
 
-  Strength    melee damage (+1 per 3 over 10) and carry weight (+1 per point)
+  Strength    melee damage (+1 per 3 over 10), carry weight (+1 per point),
+              and anvil stints cost less wind
   Learning    skill XP (+2% per point over 10)
   Willpower   foes' poison/fever land less often (-3% odds per point)
-  Dexterity   Dodge and bow aim (+1 per 3 over 10)
+  Dexterity   Dodge and bow aim (+1 per 3 over 10); deft hands nudge cooked,
+              processed and gem-cut quality (slightly, both ways)
   Toughness   max HP (+1 per point, applied once at birth)
   Charisma    talk warms friendships faster (+4% per point)
   Appearance  gifts please more (+4% per point)
@@ -22,8 +24,8 @@ from .state import GameState
 ATTRS = ("St", "Le", "Wi", "Dx", "To", "Ch", "Ap", "Pe")
 NAMES = {"St": "Strength", "Le": "Learning", "Wi": "Willpower", "Dx": "Dexterity",
          "To": "Toughness", "Ch": "Charisma", "Ap": "Appearance", "Pe": "Perception"}
-EFFECTS = {"St": "melee damage & carry weight", "Le": "quicker skill learning",
-           "Wi": "shrugs off poison & fever", "Dx": "dodge & bow aim",
+EFFECTS = {"St": "melee, carry & the smith's wind", "Le": "quicker skill learning",
+           "Wi": "shrugs off poison & fever", "Dx": "dodge, bows & deft crafting",
            "To": "a sturdier frame (max HP)", "Ch": "warmer talk",
            "Ap": "gifts please more", "Pe": "sight in the dark, trap-spotting"}
 
