@@ -40,6 +40,10 @@ class GameMap:
     explored: object = None
     # planted crops, keyed by (x, y)
     crops: dict = field(default_factory=dict)
+    # soil enrichment per worked tile, keyed by (x, y) -> 0..4. Ground improves
+    # with every harvest and dose of fertiliser, and slips when a crop is left
+    # to wither — care compounds (rich loam bears finer produce).
+    soil: dict = field(default_factory=dict)
     # orchard trees, keyed by (x, y)
     trees: dict = field(default_factory=dict)
     # placed machines, keyed by (x, y)

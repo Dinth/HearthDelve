@@ -879,6 +879,8 @@ def do_grab(state: GameState) -> None:
                     and not land.owned_by_other(state, gx, gy)):
                 p.inventory.remove(items.FERTILISER, 1)
                 plot.fertilized = True
+                # beyond this harvest, the dressing enriches the ground for good
+                state.world.soil[(gx, gy)] = min(4, state.world.soil.get((gx, gy), 0) + 1)
                 turns.advance_time(state, C.HARVEST_COST[1])
                 state.log.add(f"You work fertiliser into the soil around the "
                               f"{plot.crop.name.lower()}.", (200, 220, 160))

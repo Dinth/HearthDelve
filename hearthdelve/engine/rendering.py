@@ -1472,6 +1472,15 @@ def _wrap(text: str, width: int) -> list[str]:
 
 _STATUS_ADJ = {"burn": "burning", "poison": "poisoned", "bleed": "bleeding", "sick": "sick"}
 
+# How enriched ground reads in look-mode (index = soil level 1..4).
+_SOIL_WORDS = ("", " The soil is freshly worked.", " Good dark earth, well worked.",
+               " Rich soil — years of care in it.", " Black, living loam — the finest ground.")
+
+
+def _soil_word(state: GameState, x: int, y: int) -> str:
+    lvl = state.world.soil.get((x, y), 0)
+    return _SOIL_WORDS[min(lvl, 4)] if lvl > 0 else ""
+
 
 def _afflictions(m) -> str:
     """A readable list of the DoTs currently on a mob (''  if none)."""
@@ -1536,15 +1545,16 @@ def describe(state: GameState, x: int, y: int) -> str:
     if plot is not None:
         name = plot.crop.name.lower()
         poss = f"{land.owner_label(state, x, y)} " if theft else ""
+        soil = _soil_word(state, x, y)
         if plot.dead:
             return f"a withered {name}. Clear it with g."
         if plot.mature:
-            return f"{poss}{name} — ripe! Harvest it with g{theft}."
+            return f"{poss}{name} — ripe! Harvest it with g{theft}.{soil}"
         water = "watered" if plot.watered else "needs watering"
         fert = ", fertilised" if plot.fertilized else ""
         days = max(0, plot.crop.days_to_mature - plot.days_grown)
         when = "ripe tomorrow" if days <= 1 else f"~{days} days to ripe"
-        return f"{poss}{name}, still growing — {when} ({water}{fert}){theft}."
+        return f"{poss}{name}, still growing — {when} ({water}{fert}){theft}.{soil}"
     tree = state.world.trees.get((x, y))
     if tree is not None:
         if not tree.mature:
@@ -1600,6 +1610,8 @@ def describe(state: GameState, x: int, y: int) -> str:
         fn = fruit.name.lower() if fruit else "berry"
         return f"a {fn} shrub, ripe — pick it (g) and it bears again; machete clears it{theft}."
     base = _TILE_DESC.get(t.name, f"{t.name.replace('_', ' ')}.")
+    if t.name == "tilled":
+        base = base.rstrip(".") + f".{_soil_word(state, x, y)}"
     # Whose ground is this? Note owned/claimed land on open, workable tiles.
     if t.walkable and t.kind in ("terrain", "soil", "road"):
         owner = land.owner_at(state, x, y)

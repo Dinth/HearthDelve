@@ -158,6 +158,7 @@ def save(state: GameState, path: str = SAVE_PATH) -> None:
         "tiles": base64.b64encode(np.ascontiguousarray(surf.tiles).tobytes()).decode("ascii"),
         "crops": {f"{x},{y}": [pl.crop.name, pl.days_grown, pl.watered, pl.dead, pl.fertilized, pl.thirst]
                   for (x, y), pl in surf.crops.items()},
+        "soil": {f"{x},{y}": lvl for (x, y), lvl in surf.soil.items() if lvl > 0},
         "trees": {f"{x},{y}": [t.name, t.age, t.has_fruit, t.refruit_in]
                   for (x, y), t in surf.trees.items()},
         "berry_regrow": {f"{x},{y}": [bt, ready]
@@ -227,6 +228,11 @@ def load(path: str = SAVE_PATH) -> GameState:
         if crop:
             world.crops[(x, y)] = CropPlot(crop=crop, days_grown=days, watered=watered,
                                            dead=dead, fertilized=fert, thirst=thirst)
+
+    world.soil = {}
+    for key, lvl in data.get("soil", {}).items():
+        x, y = map(int, key.split(","))
+        world.soil[(x, y)] = int(lvl)
 
     world.trees = {}
     for key, rec in data.get("trees", {}).items():

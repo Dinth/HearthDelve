@@ -174,6 +174,10 @@ def harvest(state: GameState, x: int, y: int) -> bool:
         return False
     if plot.dead:
         del state.world.crops[(x, y)]
+        # neglect leaches the ground: a plant left to wither costs enrichment
+        soil = state.world.soil
+        if soil.get((x, y), 0) > 0:
+            soil[(x, y)] -= 1
         state.log.add("You clear away the withered plant.", C.DIM)
         turns.advance_time(state, C.HARVEST_COST[1])
         return True
@@ -186,7 +190,11 @@ def harvest(state: GameState, x: int, y: int) -> bool:
     q = skills.roll_quality(state, "Farming")
     if plot.fertilized:
         q = min(5, q + 1)                     # nitre-fed soil bears finer
+    soil_lvl = state.world.soil.get((x, y), 0)
+    q = min(5, q + soil_lvl // 2)             # rich, long-worked loam bears finer still
     state.player.inventory.add(crop.produce, 1, quality=q)
+    # every harvest works the ground a little richer (care compounds)
+    state.world.soil[(x, y)] = min(4, soil_lvl + 1)
     state.bump("crops_harvested")
     skills.gain(state, "Farming", 8)     # ~150 harvests to master, not one weekend
     if random.random() < skills.extra_yield_chance(state, "Farming"):
