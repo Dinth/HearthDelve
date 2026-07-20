@@ -50,6 +50,40 @@ def _mob_to_rec(m) -> list:
             m.level, m.energy, m.boss, m.inflicts, dict(m.status)]
 
 
+def _item_key(it):
+    """Serialize an item reference. Gear & jewellery persist by their STRUCTURED
+    identity (base + material + affixes + gems) so a save survives any change to
+    how display names are composed — a gem glyph, an affix rename. Everything
+    else stores by name (stable). The name rides along only as a human-readable
+    hint; load never trusts it for gear."""
+    if it is None:
+        return None
+    base = content._GEAR_BASE.get(it)
+    if base is not None:
+        return {"g": base, "m": it.material, "p": it.prefix, "s": it.suffix,
+                "x": list(it.gems), "n": it.name}
+    jbase = content._JEWEL_BASE.get(it)
+    if jbase is not None:
+        return {"j": jbase, "m": it.material, "x": list(it.gems), "n": it.name}
+    return it.name
+
+
+def _item_from_key(tok):
+    """Inverse of _item_key. A dict is the structured form (new saves): rebuild
+    through the factory, which memoizes to the very same canonical item. A bare
+    string is a name — old saves and every non-gear item — resolved the legacy
+    way (which for gear still parses the name, the grandfather path)."""
+    if isinstance(tok, dict):
+        if "g" in tok:
+            return content.make_gear(tok["g"], tok["m"], tok.get("p", ""),
+                                     tok.get("s", ""), tuple(tok.get("x", ())))
+        if "j" in tok:
+            gems = tok.get("x", ())
+            return content.make_jewel(tok["j"], tok["m"], gems[0]) if gems else None
+        return items.by_name(tok.get("n", ""))
+    return items.by_name(tok)
+
+
 def _npc_to_rec(n) -> list:
     """Serialize a villager's/dwarf's persistent state. Append-only like the mob
     record: add a new field to the END and read it with a guarded default in
@@ -148,12 +182,12 @@ def save(state: GameState, path: str = SAVE_PATH) -> None:
             "level": p.level, "xp": p.xp, "karma": p.karma,
             "buff": p.buff, "buff_until": p.buff_until,
             "active_slot": p.active_slot,
-            "hotbar": [it.name for it in p.hotbar],
-            "weapon": p.weapon.name if p.weapon else None,
-            "equipment": {slot: (it.name if it else None) for slot, it in p.equipment.items()},
+            "hotbar": [_item_key(it) for it in p.hotbar],
+            "weapon": _item_key(p.weapon),
+            "equipment": {slot: _item_key(it) for slot, it in p.equipment.items()},
             "equip_quality": dict(p.equip_quality),
             "mastery": dict(p.mastery),
-            "inventory": [[it.name, q, ql] for it, q, ql in p.inventory.slots],
+            "inventory": [[_item_key(it), q, ql] for it, q, ql in p.inventory.slots],
             "tool_tier": {it.name: t for it, t in p.tool_tier.items()},
             "tool_affix": {it.name: a for it, a in p.tool_affix.items()},
             "tool_gem": {it.name: list(g) for it, g in p.tool_gem.items()},
@@ -163,8 +197,8 @@ def save(state: GameState, path: str = SAVE_PATH) -> None:
             "sign": p.sign,
             "attrs": dict(p.attrs),
         },
-        "ship_bin": [[it.name, q, ql] for it, q, ql in state.ship_bin.slots],
-        "storage": [[it.name, q, ql] for it, q, ql in state.storage.slots],
+        "ship_bin": [[_item_key(it), q, ql] for it, q, ql in state.ship_bin.slots],
+        "storage": [[_item_key(it), q, ql] for it, q, ql in state.storage.slots],
         "pack_bonus": state.pack_bonus,
         "stats": dict(state.stats),
         "bestiary": dict(state.bestiary),
@@ -360,19 +394,19 @@ def load(path: str = SAVE_PATH) -> GameState:
     player.karma = pd.get("karma", 0)
     player.buff = pd.get("buff", "")
     player.buff_until = pd.get("buff_until", 0)
-    player.hotbar = [it for it in (items.by_name(n) for n in pd["hotbar"]) if it]
+    player.hotbar = [it for it in (_item_from_key(n) for n in pd["hotbar"]) if it]
     # Dropping unresolvable hotbar entries can shrink the bar, so clamp the saved
     # cursor rather than trusting an index that may now point past the end.
     player.active_slot = min(max(0, pd.get("active_slot", 0)), max(0, len(player.hotbar) - 1))
-    player.weapon = items.by_name(pd["weapon"]) if pd["weapon"] else None
+    player.weapon = _item_from_key(pd["weapon"]) if pd["weapon"] else None
     for slot, nm in pd.get("equipment", {}).items():
         if slot in player.equipment:
-            player.equipment[slot] = items.by_name(nm) if nm else None
+            player.equipment[slot] = _item_from_key(nm) if nm else None
     player.equip_quality = {s: q for s, q in pd.get("equip_quality", {}).items()
                             if s in player.equipment}
     player.mastery = dict(pd.get("mastery", {}))
-    player.inventory = Inventory(slots=[[items.by_name(rec[0]), rec[1], rec[2] if len(rec) > 2 else 0]
-                                        for rec in pd["inventory"] if items.by_name(rec[0])])
+    player.inventory = Inventory(slots=[[_item_from_key(rec[0]), rec[1], rec[2] if len(rec) > 2 else 0]
+                                        for rec in pd["inventory"] if _item_from_key(rec[0])])
     player.tool_tier = {items.by_name(n): t for n, t in pd["tool_tier"].items() if items.by_name(n)}
     player.tool_affix = {items.by_name(n): a for n, a in pd.get("tool_affix", {}).items() if items.by_name(n)}
     player.tool_gem = {items.by_name(n): tuple(g) for n, g in pd.get("tool_gem", {}).items() if items.by_name(n)}
@@ -387,10 +421,10 @@ def load(path: str = SAVE_PATH) -> GameState:
     state.day = data["day"]
     state.clock = data["clock"]
     state.weather = data["weather"]
-    state.ship_bin = Inventory(slots=[[items.by_name(rec[0]), rec[1], rec[2] if len(rec) > 2 else 0]
-                                      for rec in data["ship_bin"] if items.by_name(rec[0])])
-    state.storage = Inventory(slots=[[items.by_name(rec[0]), rec[1], rec[2] if len(rec) > 2 else 0]
-                                     for rec in data.get("storage", []) if items.by_name(rec[0])])
+    state.ship_bin = Inventory(slots=[[_item_from_key(rec[0]), rec[1], rec[2] if len(rec) > 2 else 0]
+                                      for rec in data["ship_bin"] if _item_from_key(rec[0])])
+    state.storage = Inventory(slots=[[_item_from_key(rec[0]), rec[1], rec[2] if len(rec) > 2 else 0]
+                                     for rec in data.get("storage", []) if _item_from_key(rec[0])])
     state.pack_bonus = data.get("pack_bonus", 0)
     state.stats = dict(data.get("stats", {}))
     state.bestiary = dict(data.get("bestiary", {}))
