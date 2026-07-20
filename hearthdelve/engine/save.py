@@ -50,6 +50,24 @@ def _mob_to_rec(m) -> list:
             m.level, m.energy, m.boss, m.inflicts, dict(m.status)]
 
 
+def _npc_to_rec(n) -> list:
+    """Serialize a villager's/dwarf's persistent state. Append-only like the mob
+    record: add a new field to the END and read it with a guarded default in
+    _npc_apply_rec, so old and new saves both keep loading."""
+    return [n.friendship, n.gifted_today, n.talked_today, n._blurb_i, n.met]
+
+
+def _npc_apply_rec(n, rec) -> None:
+    """Copy a saved record back onto a freshly-regenerated NPC (NPCs rebuild from
+    content on load; only this mutable state persists). Each field is guarded so
+    a shorter (older) or longer (newer) record loads cleanly."""
+    if not rec:
+        return
+    n.friendship, n.gifted_today, n.talked_today, n._blurb_i = rec[:4]
+    if len(rec) > 4:
+        n.met = rec[4]
+
+
 def _mob_from_rec(rec: list, Mob) -> object:
     """Deserialize a critter defensively: each field is read positionally with a
     default, so a record shorter than this build expects (an older save) or
@@ -172,8 +190,7 @@ def save(state: GameState, path: str = SAVE_PATH) -> None:
                     or (state.depth > 0 and state.return_west)),
         # Khazgrim's folk remember a friend across saves.
         "dwarves": None if state.dwarves is None else {
-            n.name: [n.friendship, n.gifted_today, n.talked_today, n._blurb_i, n.met]
-            for n in state.dwarves},
+            n.name: _npc_to_rec(n) for n in state.dwarves},
         "mail": [{"sender": m["sender"], "body": m["body"],
                   "items": [[(it.name if hasattr(it, "name") else it), q, ql]
                             for it, q, ql in m.get("items", [])],
@@ -201,8 +218,7 @@ def save(state: GameState, path: str = SAVE_PATH) -> None:
         # Player-raised outbuildings (worldgen doesn't recreate these).
         "buildings": [b for b in surf.buildings
                       if b.get("kind") in _PLAYER_BUILT_KINDS and not b.get("village")],
-        "npcs": {n.name: [n.friendship, n.gifted_today, n.talked_today, n._blurb_i, n.met]
-                 for n in surf.npcs},
+        "npcs": {n.name: _npc_to_rec(n) for n in surf.npcs},
     }
     # Keep the previous good save as a rolling .bak (recovery if this write's
     # result ever proves unreadable — see load_or_backup), then write atomically.
@@ -328,11 +344,7 @@ def load(path: str = SAVE_PATH) -> GameState:
         world.buildings.append(dict(b))
 
     for n in world.npcs:
-        rec = data["npcs"].get(n.name)
-        if rec:
-            n.friendship, n.gifted_today, n.talked_today, n._blurb_i = rec[:4]
-            if len(rec) > 4:
-                n.met = rec[4]
+        _npc_apply_rec(n, data["npcs"].get(n.name))
 
     pd = data["player"]
     player = Player(x=pd["x"], y=pd["y"])
@@ -415,11 +427,7 @@ def load(path: str = SAVE_PATH) -> GameState:
     if raw_dwarves:
         state.dwarves = content.dwarf_npcs()
         for n in state.dwarves:
-            rec = raw_dwarves.get(n.name)
-            if rec:
-                n.friendship, n.gifted_today, n.talked_today, n._blurb_i = rec[:4]
-                if len(rec) > 4:
-                    n.met = rec[4]
+            _npc_apply_rec(n, raw_dwarves.get(n.name))
     state.mail = data.get("mail", [])
     state.pending_build = data.get("pending_build", "")
     state.claims = {tuple(map(int, k.split(","))) for k in data.get("claims", [])}
