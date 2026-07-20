@@ -88,6 +88,8 @@ class GameState:
     # {id, village, state: open|building|done, gold_paid, mats: {name: qty}, site, ready_at}
     projects: list = field(default_factory=_fresh_projects)
     pending_build: str = ""        # outbuilding ordered from the carpenter, awaiting placement
+    # bestiary kill record: {base monster name: times slain} — feeds the codex
+    bestiary: dict = field(default_factory=dict)
 
     # land: wilderness tiles the player has claimed (fenced/farmed/built on), and
     # the weekly land-tax standing charged on them.

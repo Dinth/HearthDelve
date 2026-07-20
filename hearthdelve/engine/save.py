@@ -149,6 +149,7 @@ def save(state: GameState, path: str = SAVE_PATH) -> None:
         "storage": [[it.name, q, ql] for it, q, ql in state.storage.slots],
         "pack_bonus": state.pack_bonus,
         "stats": dict(state.stats),
+        "bestiary": dict(state.bestiary),
         "pending_build": state.pending_build,
         "claims": [f"{x},{y}" for (x, y) in state.claims],
         "tax_owed": state.tax_owed,
@@ -380,6 +381,7 @@ def load(path: str = SAVE_PATH) -> GameState:
                                      for rec in data.get("storage", []) if items.by_name(rec[0])])
     state.pack_bonus = data.get("pack_bonus", 0)
     state.stats = dict(data.get("stats", {}))
+    state.bestiary = dict(data.get("bestiary", {}))
     state.quests_done = set(data.get("quests_done", []))
     kr = data.get("known_recipes")
     # A save from before recipe discovery knew every recipe — keep it that way.

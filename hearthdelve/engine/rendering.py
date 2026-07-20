@@ -2096,7 +2096,7 @@ def build_codex_pages(state: GameState):
         ("  e                equipment", C.WHITE),
         ("  m                world map (the whole region at a glance)", C.WHITE),
         ("  h                message log (scrollback)", C.WHITE),
-        ("  v                character sheet (level & skills)", C.WHITE),
+        ("  v                character sheet (stats, combat numbers & skills)", C.WHITE),
         ("  j                journal (goals)", C.WHITE),
         ("  r                relationships", C.WHITE),
         ("  l                look around (read any tile)", C.WHITE),
@@ -2305,8 +2305,20 @@ def build_codex_pages(state: GameState):
         into.append((f" {m.glyph}  {m.name}   HP {m.hp}  DV {m.dv} PV {m.pv}  "
                      f"dmg {m.dmg[0]}-{m.dmg[1]}  from floor {m.min_depth}", _KEY))
         into.append((f"      {m.behavior}, {tags}. {m.desc}", C.DIM))
+        drops = content.MONSTER_DROPS.get(m.name, ())
+        if drops:
+            into.append(("      drops: " + ", ".join(i.name.lower() for i, _ in drops),
+                         (150, 182, 150)))
+        n = state.bestiary.get(m.name, 0)
+        if n:
+            into.append((f"      slain {n}×", (196, 176, 130)))
 
-    mon = [("Monsters", _HDR), ("", C.WHITE)]
+    slain_total = sum(state.bestiary.values())
+    kinds_known = len(state.bestiary)
+    mon = [("Bestiary", _HDR),
+           (f"  {slain_total} foes slain across {kinds_known} kinds.  "
+            "Drops listed; a slain-count marks what you've faced.", C.DIM),
+           ("", C.WHITE)]
     for m in content.MONSTERS:
         _mon_lines(m, mon)
     mon.append(("", C.WHITE))
@@ -2356,7 +2368,55 @@ def build_codex_pages(state: GameState):
     for c in content.WEST_WILDLIFE:
         mon.append((f" {c.glyph}  {c.name}   {c.behavior}", _KEY))
         mon.append((f"      {c.desc}", C.DIM))
-    pages.append(("Monsters", mon))
+    pages.append(("Bestiary", mon))
+
+    # --- Page: Dungeon Sites -------------------------------------------------
+    from ..world import dungeon
+    _SITE_INFO = {
+        "mine":      ("Mines", "boulder-strewn shafts"),
+        "dwarfhold": ("Dwarfholds", "the old dwarven deeps"),
+        "cavern":    ("Caverns", "vast glittering halls"),
+        "grotto":    ("Grottoes", "damp, fungal hollows"),
+        "sea cave":  ("Sea Caves", "tide-flooded coastal caves"),
+        "barrow":    ("Barrows", "grassed-over burial mounds"),
+        "tomb":      ("Tombs", "sealed stone tombs"),
+        "crypt":     ("Crypts", "trap-riddled undercrofts"),
+    }
+
+    def _richness(b):
+        bits = [{5: "veined with ore", 4: "ore-rich", 3: "some ore", 2: "a little ore",
+                 1: "scant metal", 0: "barren of metal"}.get(b["ore"], "some ore")]
+        if b["gem"] >= 2:
+            bits.append("glittering with gems")
+        elif b["gem"] == 1:
+            bits.append("the odd gem")
+        if b["trap"] >= 1.8:
+            bits.append("heavily trapped")
+        elif b["trap"] >= 1.3:
+            bits.append("trap-riddled")
+        if b["lakes"] >= 3:
+            bits.append("half-flooded")
+        elif b["lakes"] == 2:
+            bits.append("pooled with water")
+        elif b["lakes"] == 1:
+            bits.append("a pool or two")
+        if b["chest"] >= 2:
+            bits.append("rich in grave-goods")
+        elif b["chest"] == 1:
+            bits.append("the occasional chest")
+        return "; ".join(bits)
+
+    sites = [("Dungeon Sites  (where you delve shapes the reward)", _HDR), ("", C.WHITE)]
+    for kind, bias in dungeon.KIND_BIAS.items():
+        name, flavour = _SITE_INFO.get(kind, (kind.title(), ""))
+        sites.append((f" {name} — {flavour}", _KEY))
+        sites.append((f"      {_richness(bias)}", C.WHITE))
+    sites.append(("", C.WHITE))
+    sites.append(("Look (l) at an entrance to read which kind it is before you", C.DIM))
+    sites.append(("commit. Every kind rewards a wooden pick — mines just reward a", C.DIM))
+    sites.append(("steel one far more. The rock hardens as you descend, and the", C.DIM))
+    sites.append(("dark tires you more with each floor: pack food and a good pick.", C.DIM))
+    pages.append(("Dungeon Sites", sites))
 
     # --- Page: Villagers ----------------------------------------------------
     vp = [("Folk of Hollowmere Vale", _HDR), ("", C.WHITE)]
@@ -2382,7 +2442,9 @@ def render_codex(con: tcod.console.Console, state: GameState, page: int, scroll:
     # (friendship hearts). Rebuild solely when that signature changes, rather than
     # re-walking every crop/tool/recipe/machine on every frame the help is open.
     global _codex_cache, _codex_sig
-    sig = tuple((n.name, n.friendship) for n in state.world.npcs)
+    # rebuild when friendships move (Villagers page) or a kill lands (Bestiary page)
+    sig = (tuple((n.name, n.friendship) for n in state.world.npcs),
+           sum(state.bestiary.values()), len(state.bestiary))
     if _codex_cache is None or sig != _codex_sig:
         _codex_cache, _codex_sig = build_codex_pages(state), sig
     pages = _codex_cache
@@ -2936,10 +2998,10 @@ def render_relationships(con: tcod.console.Console, state: GameState, scroll: in
 
 
 def render_character(con: tcod.console.Console, state: GameState) -> None:
-    from ..game import skills, karma
+    from ..game import skills, karma, combat
     from ..game import attrs as A
     p = state.player
-    w, h = 50, 15 + len(skills.SKILLS)          # stats, attributes, then the skills list
+    w, h = 50, 17 + len(skills.SKILLS)          # stats, combat, attributes, skills
     m = ui.Modal(con, w, h, f"Character — Level {p.level}")
     nxt = skills.xp_to_next(p.level)
     xpbar = "█" * int(10 * p.xp / nxt) + "·" * (10 - int(10 * p.xp / nxt))
@@ -2961,7 +3023,13 @@ def render_character(con: tcod.console.Console, state: GameState) -> None:
         row2 = "   ".join(f"{k} {A.get(state, k):>2}" for k in A.ATTRS[4:])
         m.text(2, 9, row1, fg=(200, 195, 170))
         m.text(2, 10, row2, fg=(200, 195, 170))
-    m.text(2, 12, "Skills", fg=_HDR)
+    # Derived combat numbers — everything the dice see in a fight, so a new ring
+    # or a better blade shows its worth without a trial by monster.
+    m.text(2, 11, f"⛨ Defence  DV {combat.player_dv(state):<2}  PV {combat.player_pv(state)}",
+           fg=(170, 190, 210))
+    m.text(2, 12, f"⚔ Attack   to-hit {combat.player_to_hit(state):+d}"
+                  f"   crit {combat.player_crit(state) * 100:.0f}%", fg=(210, 180, 160))
+    m.text(2, 14, "Skills", fg=_HDR)
     for i, s in enumerate(skills.SKILLS):
         lvl = skills.skill_level(state, s)
         xp = p.skills.get(s, 0)
@@ -2971,7 +3039,7 @@ def render_character(con: tcod.console.Console, state: GameState) -> None:
             into = xp - lvl * skills.XP_PER_LEVEL
             filled = int(10 * into / skills.XP_PER_LEVEL)
             bar = "█" * filled + "·" * (10 - filled)
-        m.text(2, 13 + i, f"{s:<9} L{lvl:<2} {bar}", fg=C.WHITE if lvl else C.DIM)
+        m.text(2, 15 + i, f"{s:<9} L{lvl:<2} {bar}", fg=C.WHITE if lvl else C.DIM)
     m.footer("v / Esc to close")
 
 

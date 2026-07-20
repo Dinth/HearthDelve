@@ -99,6 +99,8 @@ _BIAS = {
 }
 _BIAS_DEFAULT = dict(ore=2, gem=0, trap=1.0, lakes=1, chest=0)
 
+KIND_BIAS = _BIAS       # a public, read-only view for the codex's Dungeon Sites page
+
 
 def _tunnel(tiles, a, b, rng):
     (x1, y1), (x2, y2) = a, b
