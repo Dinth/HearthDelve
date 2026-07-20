@@ -135,7 +135,8 @@ jobs:
       - name: Prove the glibc floor
         shell: bash
         run: |
-          echo "Container glibc:" && ldd --version | head -1
+          # sed reads the whole stream (head would SIGPIPE ldd under bash -e)
+          echo "Container glibc:" && ldd --version | sed -n '1p'
           python -c "print('binary present:', __import__('os').path.getsize('out/hearthdelve-linux'))"
       - uses: actions/upload-artifact@v4
         with:
