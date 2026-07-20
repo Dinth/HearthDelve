@@ -2468,37 +2468,13 @@ def render_codex(con: tcod.console.Console, state: GameState, page: int, scroll:
 
 
 # Inventory categories, in the order they're listed (ADOM-style grouping).
-_INV_ORDER = ("Weapons", "Armour", "Jewellery", "Ammunition", "Gems",
-              "Cooked Food", "Animal Produce", "Artisan Goods", "Fruit", "Vegetables",
-              "Flowers", "Fish", "Materials", "Seeds & Saplings", "Livestock",
-              "Consumables", "Misc")
+# Item categorisation / ordering / filtering is game logic — see game/inventory.py.
+# These renderers just draw what it returns.
+from ..game import inventory as _inv          # noqa: E402
 
 
 def _inv_category(item) -> str:
-    from ..data import content
-    k = item.kind
-    simple = {"food": "Cooked Food", "animal": "Animal Produce", "artisan": "Artisan Goods",
-              "fish": "Fish", "material": "Materials", "livestock": "Livestock",
-              "bomb": "Consumables", "weapon": "Weapons", "ranged": "Weapons",
-              "armor": "Armour", "jewelry": "Jewellery", "ammo": "Ammunition",
-              "gem": "Gems"}
-    if k in simple:
-        return simple[k]
-    if k in ("seed", "sapling", "pouch"):
-        return "Seeds & Saplings"
-    if k == "crop":
-        if content.is_fruit(item):
-            return "Fruit"
-        if content.PRODUCE_CATEGORY.get(item) == "flower":
-            return "Flowers"
-        return "Vegetables"
-    return "Misc"
-
-
-def inv_sort_key(item, quality: int):
-    cat = _inv_category(item)
-    rank = _INV_ORDER.index(cat) if cat in _INV_ORDER else len(_INV_ORDER)
-    return (rank, cat, item.name, quality)
+    return _inv.category(item)
 
 
 # ADOM-flavoured palette for the list screens.
@@ -2514,30 +2490,12 @@ def inv_letter(i: int) -> str:
     return _INV_LETTERS[i] if i < len(_INV_LETTERS) else " "
 
 
-def inv_visible(state: GameState, filt: str | None = None) -> list[int]:
-    """Slot indices the inventory screen currently shows (all, or one
-    category when Tab-filtered)."""
-    slots = state.player.inventory.slots
-    return [i for i, (it, _q, _ql) in enumerate(slots)
-            if filt is None or _inv_category(it) == filt]
-
-
-def inv_categories(state: GameState) -> list[str]:
-    """The categories present in the pack, in display order (for Tab cycling)."""
-    seen: list[str] = []
-    for it, _q, _ql in state.player.inventory.slots:
-        cat = _inv_category(it)
-        if cat not in seen:
-            seen.append(cat)
-    return seen
-
-
 def render_inventory(con: tcod.console.Console, state: GameState, sel: int = 0,
                      filt: str | None = None) -> None:
     from ..game import skills
     from ..game import encumbrance as enc
     slots = state.player.inventory.slots
-    visible = inv_visible(state, filt)
+    visible = _inv.visible(state, filt)
 
     # Build the display list ADOM-style: a category header (with the group's
     # glyph in quotes) before each run of items, then the items themselves.

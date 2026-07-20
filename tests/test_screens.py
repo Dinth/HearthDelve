@@ -45,10 +45,11 @@ class TestScreensRender(unittest.TestCase):
 
     def test_inventory_all_filters(self):
         from hearthdelve.engine import rendering
+        from hearthdelve.game import inventory
         self.st.player.inventory.slots.sort(
-            key=lambda e: rendering.inv_sort_key(e[0], e[2]))
+            key=lambda e: inventory.sort_key(e[0], e[2]))
         rendering.render_inventory(_con(), self.st, 0, None)
-        for cat in rendering.inv_categories(self.st):
+        for cat in inventory.categories(self.st):
             rendering.render_inventory(_con(), self.st, 0, cat)
 
     def test_equipment(self):

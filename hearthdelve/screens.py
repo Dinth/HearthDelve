@@ -21,7 +21,7 @@ import tcod.event
 from .engine import constants as C
 from .engine import rendering
 from .entities import items
-from .game import combat, crafting, delve, farming, fishing, quests, turns, village
+from .game import combat, crafting, delve, farming, fishing, inventory, quests, turns, village
 from .game import commands as cmds
 
 
@@ -310,7 +310,7 @@ class PlayScreen(Screen):
             ui.push(HelpScreen())
         elif cmd == "inventory":
             state.player.inventory.slots.sort(
-                key=lambda e: rendering.inv_sort_key(e[0], e[2]))
+                key=lambda e: inventory.sort_key(e[0], e[2]))
             ui.push(InventoryScreen())
         elif cmd == "equipment":
             ui.push(EquipmentScreen())
@@ -472,7 +472,7 @@ class InventoryScreen(Screen):
         rendering.render_inventory(con, ui.state, self.sel, self.filt)
 
     def _visible(self, state):
-        return rendering.inv_visible(state, self.filt)
+        return inventory.visible(state, self.filt)
 
     def _picked(self, state):
         """The (item, qty, quality) under the cursor, or None."""
@@ -505,7 +505,7 @@ class InventoryScreen(Screen):
         elif cmd == "slot":
             cmds.select_slot(state, action[1])
         elif cmd == "swap":                      # Tab: cycle the category filter
-            cats = rendering.inv_categories(state)
+            cats = inventory.categories(state)
             cycle = [None] + cats
             self.filt = cycle[(cycle.index(self.filt) + 1) % len(cycle)] \
                 if self.filt in cycle else None
@@ -569,7 +569,7 @@ class EquipmentScreen(Screen):
     def handle(self, ui: UI, cmd: str, action: tuple) -> None:
         if cmd == "inventory":
             ui.state.player.inventory.slots.sort(
-                key=lambda e: rendering.inv_sort_key(e[0], e[2]))
+                key=lambda e: inventory.sort_key(e[0], e[2]))
             ui.replace(InventoryScreen())
         elif cmd in ("cancel", "equipment", "quit"):
             ui.pop()
