@@ -1173,6 +1173,7 @@ class AnyOf:
 
 ANY_MEAT = AnyOf("meat", "any meat")
 ANY_SAUSAGES = AnyOf("sausages", "any sausages")
+ANY_FISH = AnyOf("fish", "any fish")
 
 # The typed cuts, and what a grown animal renders into at the butcher's block:
 # (meat item, how many cuts). The big beasts feed a family; a hen feeds a pan.
@@ -1194,6 +1195,25 @@ MEAT_SAUSAGES = {m: items.register(items.Item(
     value=round(m.value * SAUSAGE_MULT), energy=55, family="sausages", source=m))
     for m in MEATS}
 
+# Curing fish mirrors the jerky model: one premium good per fish, its value
+# scaling with the catch — so a smoked minnow is a trifle and a smoked moonfish
+# a feast, and rarity finally pays. Family-matched ("loves Smoked Fish" covers
+# the lot), source-carrying, and registered so old saves resolve them by name.
+# The sturgeon gives roe, not smoked flesh: its premium good is caviar.
+CURED_FISH_MULT = 1.7
+_CURABLE_FISH = (items.CARP, items.CATFISH, items.TROUT, items.PIKE, items.SALMON,
+                 items.ICEFISH, items.MACKEREL, items.SEA_BASS, items.TUNA,
+                 items.MOONFISH, items.CAVE_BASS, items.EEL, items.BLINDFISH,
+                 items.GLOWFISH)
+FISH_CURED = {f: items.register(items.Item(
+    f"Smoked {f.name}", "▬", "artisan", f"Slow-smoked {f.name.lower()}; keeps and travels well.",
+    value=round(f.value * CURED_FISH_MULT), energy=50, family="cured_fish", source=f))
+    for f in _CURABLE_FISH}
+CAVIAR = items.register(items.Item(
+    "Caviar", "•", "artisan", "Salt-cured sturgeon roe; a glittering, costly delicacy.",
+    value=round(items.STURGEON.value * 2.4), energy=45, family="cured_fish", source=items.STURGEON))
+FISH_CURED[items.STURGEON] = CAVIAR
+
 # What a smoker cures inputs into (a slow, premium transformation). A list, not
 # a map, so one input (meat) can offer several products (jerky/sausages/bacon).
 # Generic legacy Meat keeps its old products, so nothing in an old pack sours.
@@ -1201,11 +1221,8 @@ SMOKE_RECIPES = [
     (items.MEAT, items.JERKY), (items.MEAT, items.SAUSAGES),
     (items.PORK, items.BACON),
 ] + [(m, MEAT_JERKY[m]) for m in MEATS] \
-  + [(m, MEAT_SAUSAGES[m]) for m in MEATS] + [
-    (items.SALMON, items.SMOKED_FISH), (items.TROUT, items.SMOKED_FISH),
-    (items.TUNA, items.SMOKED_FISH), (items.MACKEREL, items.SMOKED_FISH),
-    (items.SEA_BASS, items.SMOKED_FISH),
-]
+  + [(m, MEAT_SAUSAGES[m]) for m in MEATS] \
+  + [(f, cured) for f, cured in FISH_CURED.items()]
 
 
 # What a quern or windmill grinds each input into.
@@ -1454,6 +1471,15 @@ RECIPES: list[Recipe] = [
            output=items.BAKED_PIKE, desc="A whole pike baked in butter."),
     Recipe("Cave Chowder", "cook", ((items.BLINDFISH, 1), (items.CAVE_MUSHROOM, 1), (items.MILK, 1)),
            output=items.CAVE_CHOWDER, desc="A pale chowder from the dark below."),
+    # "Any fish" dishes — take whatever the creel holds, so every catch cooks.
+    Recipe("Sashimi", "cook", ((ANY_FISH, 1), (items.SEA_SALT, 1)),
+           output=items.SASHIMI, desc="Fish sliced clean and raw — any catch will do."),
+    Recipe("Sushi", "cook", ((ANY_FISH, 1), (items.RICE_FLOUR, 1), (items.SEA_SALT, 1)),
+           output=items.SUSHI, desc="Fish and seasoned rice, rolled by hand."),
+    Recipe("Fish Cakes", "cook", ((ANY_FISH, 1), (items.FLOUR, 1), (items.EGG, 1)),
+           output=items.FISH_CAKES, desc="Flaked fish bound with flour and egg."),
+    Recipe("Seafood Chowder", "cook", ((ANY_FISH, 2), (items.POTATO, 1), (items.MILK, 1)),
+           output=items.SEAFOOD_CHOWDER, desc="A creamy chowder thick with the day's catch."),
     Recipe("Truffle Pasta", "cook", ((items.NOODLES, 1), (items.TRUFFLE, 1), (items.BUTTER, 1)),
            output=items.TRUFFLE_PASTA, desc="Buttered noodles under shaved black truffle."),
 ]
