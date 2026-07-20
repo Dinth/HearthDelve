@@ -37,6 +37,8 @@ class Mob:
     inflicts: str = ""      # a status a hit may leave on the player (poison/bleed/burn)
     status: dict = field(default_factory=dict)  # active DoTs ON this mob {kind: turns}
     elite: str = ""         # an elite affix ("Dire", "Venomous", ...) or "" for a common mob
+    base: str = ""          # the template (un-prefixed) name, for drop/bestiary lookup
+                            # without re-parsing the elite prefix out of `name`
 
     @property
     def alive(self) -> bool:

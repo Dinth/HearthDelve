@@ -235,7 +235,9 @@ TWO_HANDED_BASES = {"Greatsword", "Warhammer", "Halberd"}
 
 
 def is_two_handed(item) -> bool:
-    return item is not None and bool(TWO_HANDED_BASES & set(item.name.split()))
+    # Key off the structured base the factory recorded, never the display name
+    # (an affix word could otherwise collide with a base — see _GEAR_BASE).
+    return item is not None and _GEAR_BASE.get(item) in TWO_HANDED_BASES
 #   armour -> (slot, base_dv, slot_weight, base_value)
 # The head takes EITHER a Helm (metal) or a Hat (cloth/straw); the cloak slot
 # takes a Cloak (cloth). Both share the paperdoll slot with their metal kin.
@@ -435,6 +437,7 @@ _GEM_JEWEL: dict[str, dict] = {
 }
 JEWEL_EFFECT: dict[Item, dict] = {}   # item -> {stat: base magnitude (pre-quality)}
 _JEWEL: dict[tuple, Item] = {}
+_JEWEL_BASE: dict[Item, str] = {}      # jewel item -> "Ring" | "Amulet" (for the equip slot)
 
 
 def _jewel_effect(metal: str, gemkey: str, base_mult: float) -> dict:
@@ -457,14 +460,16 @@ def make_jewel(base: str, metal: str, gem, prefix: str = "") -> Item:
     it = items.register(items.Item(
         name, glyph, "jewelry", f"A {metal} {base.lower()} set with a {gemkey}.",
         stackable=False, value=val, material=metal, gems=(gemkey,)))
+    _JEWEL_BASE[it] = base
     JEWEL_EFFECT[it] = _jewel_effect(metal, gemkey, bmult)
     _JEWEL[key] = it
     return it
 
 
 def jewel_slot(item) -> str:
-    """The equip slot a jewellery piece wants: 'neck' for an amulet, else a ring."""
-    return "neck" if item.name.endswith("Amulet") else "ring"
+    """The equip slot a jewellery piece wants: 'neck' for an amulet, else a ring.
+    Keyed off the base the factory recorded, not the display name."""
+    return "neck" if _JEWEL_BASE.get(item) == "Amulet" else "ring"
 
 
 def _resolve_jewel(name: str) -> Item | None:
@@ -1743,7 +1748,7 @@ def make_mob(template: Monster, x: int, y: int, depth: int, rng, boss: bool = Fa
         lvl += 2                                      # a harder kill: more XP, richer loot
     return Mob(name, glyph, color, hp, hp, speed, template.behavior, x, y,
                dv=dv, pv=pv, to_hit=to_hit, dmg=dmg, boss=boss, level=lvl,
-               inflicts=inflicts, elite=elite)
+               inflicts=inflicts, elite=elite, base=template.name)
 
 
 # --- Surface wildlife --------------------------------------------------------
