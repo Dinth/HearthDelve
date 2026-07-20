@@ -8,11 +8,20 @@ See [`DESIGN.md`](DESIGN.md) for the full design (frozen at v5).
 
 ## Download
 
-Prebuilt standalone binaries for **Linux, macOS and Windows** are published on
-every push under the [**rolling release**](https://github.com/Dinth/HearthDelve/releases/tag/rolling)
+Prebuilt standalone binaries for **Linux, macOS (Apple Silicon & Intel) and
+Windows** are published under the
+[**rolling release**](https://github.com/Dinth/HearthDelve/releases/tag/rolling)
 — no Python needed. Grab the one for your OS and run it in a terminal. (On
 macOS, first run: right-click → Open, or clear Gatekeeper with
-`xattr -dr com.apple.quarantine hearthdelve-macos`.)
+`xattr -dr com.apple.quarantine <file>`.)
+
+**NixOS** (no FHS loader, so the prebuilt binary won't start bare):
+
+```bash
+nix run github:Dinth/HearthDelve      # build & play from source (flake)
+# …or run the release binary through an FHS shim:
+steam-run ./hearthdelve-linux
+```
 
 ## Run it
 
