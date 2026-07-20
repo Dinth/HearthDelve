@@ -182,7 +182,7 @@ BOAR_HIDE     = Item("Boar Hide",     "u", "material", "Tough hide from a wild b
 WOLF_PELT     = Item("Wolf Pelt",     "u", "material", "A thick grey pelt from an ash wolf; makes a fine hide cloak.", value=60)
 RAW_HIDE      = Item("Raw Hide",      "u", "material", "A raw skin from a wild beast; cure it on a tanning rack.", value=28)
 LEATHER       = Item("Leather",       "u", "material", "Supple tanned leather — for armour, satchels and tack.", value=60)
-ANTLER        = Item("Antler",        "Y", "material", "A handsome branched antler; prized for buttons and glue.", value=45)
+ANTLER        = Item("Antler",        "Y", "material", "A handsome branched antler; carvers prize it, and ground it makes rich bonemeal.", value=45)
 VENISON       = Item("Venison",       "▬", "material", "Lean deer meat; makes a rich pie or stew.", value=80, family="meat")
 # Carry upgrades — crafted from hunting's leather; each raises how much you can
 # carry before you're laden (see game.encumbrance). Never held; the craft is the
@@ -371,6 +371,10 @@ WOOLEN_CLOTH = Item("Woolen Cloth", "≡", "artisan", "A bolt of warm woven wool
 COTTON_CLOTH = Item("Cotton Cloth", "≡", "artisan", "A bolt of soft cotton cloth.", value=160)
 LINEN_CLOTH  = Item("Linen Cloth",  "≡", "artisan", "A bolt of crisp woven linen.", value=210)
 SILK_CLOTH   = Item("Silk Cloth",   "≡", "artisan", "A bolt of lustrous woven silk.", value=320)
+# Furnishings tailored from cloth — the top of the textile ladder, and a home
+# for bolts beyond weak soft-armour: high-value, giftable, request-board goods.
+QUILT         = Item("Quilt",         "▤", "artisan", "A warm patchwork quilt, stitched from bolts of cloth.", value=420, family="furnishing")
+WALL_TAPESTRY = Item("Wall Tapestry", "▦", "artisan", "A woven hanging that warms a hall and flatters a wall.", value=640, family="furnishing")
 JERKY       = Item("Jerky",       "▬", "artisan", "Smoke-cured strips of meat; keeps for ages.", value=150, energy=45, family="jerky")
 SAUSAGES    = Item("Sausages",    "▬", "artisan", "Plump smoked sausages.", value=170, energy=55, family="sausages")
 BACON       = Item("Bacon",       "▬", "artisan", "Streaky smoked bacon — pork, always pork.", value=180, energy=50, family="bacon", source=PORK)

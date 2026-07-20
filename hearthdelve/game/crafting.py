@@ -552,6 +552,9 @@ def machine_load_options(state: GameState, mdef) -> list:
                     opts.append({"inputs": [(cloth, 1)], "output": content.make_gear(base, material),
                                  "quality_from": None,
                                  "label": f"{material.capitalize()} {base}"})
+        for cloth, decor in content.CLOTH_DECOR.items():        # tailor cloth into furnishings
+            if inv.count(cloth) >= 2:
+                opts.append({"inputs": [(cloth, 2)], "output": decor, "quality_from": cloth})
     elif a == "fruit":
         if inv.count(items.HONEY) > 0:
             opts.append({"inputs": [(items.HONEY, 1)], "output": items.MEAD, "quality_from": items.HONEY})

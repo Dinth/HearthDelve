@@ -1158,6 +1158,14 @@ CLOTH_MATERIAL = {
     items.WOOLEN_CLOTH: "wool", items.COTTON_CLOTH: "cotton",
     items.LINEN_CLOTH: "linen", items.SILK_CLOTH: "silk",
 }
+# Furnishings the loom tailors from cloth (2 bolts each) — the plain wools make a
+# cosy quilt; crisp linen a wall tapestry. A richer sink than soft armour. (Silk
+# keeps its own sinks — fine garments, sale, trader wants — so it isn't spent on
+# a break-even hanging.)
+CLOTH_DECOR = {
+    items.WOOLEN_CLOTH: items.QUILT, items.COTTON_CLOTH: items.QUILT,
+    items.LINEN_CLOTH: items.WALL_TAPESTRY,
+}
 
 
 # A recipe input that means "any carried item of this family" — so a Meat Pie
@@ -1342,6 +1350,9 @@ RECIPES: list[Recipe] = [
     Recipe("Fertiliser", "item", ((items.SALTPETER, 1), (items.CUT_GRASS, 2)),
            output=items.FERTILISER, out_qty=3,
            desc="Nitre meal for the fields — g at a growing crop for a finer harvest."),
+    Recipe("Ground Bonemeal", "item", ((items.ANTLER, 1),),
+           output=items.FERTILISER, out_qty=3,
+           desc="Grind an antler into rich bonemeal — a recurring drop put to the fields."),
     Recipe("Firecrackers", "item", ((items.GUNPOWDER, 1), (items.FIBER, 1)),
            output=items.FIRECRACKER, out_qty=4,
            desc="Throw one (t): a harmless bang that clears wildlife off your land for days."),
@@ -1886,7 +1897,7 @@ def village_npcs() -> dict[str, list[NPC]]:
                         "the long road ever gave me.\"")),
                 loves=(items.WINE, items.GRAPE_WINE, items.JELLIED_EEL, items.MEAT_PIE,
                        items.TRUFFLE, items.TRUFFLE_PASTA, items.VODKA),
-                likes=(items.JAM, items.PICKLES), dislikes=(items.STONE,),
+                likes=(items.JAM, items.PICKLES, items.WALL_TAPESTRY), dislikes=(items.STONE,),
                 gifts=(items.WINE, items.MEAD, items.JAM, items.PICKLES),
                 bio="Keeps the Mossford inn; a settled wanderer, full of stories."),
             NPC("Sister Ivy", "I", (214, 196, 224), shop=None, role="priest",
