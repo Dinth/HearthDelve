@@ -71,6 +71,7 @@ def _fish_pool(state: GameState) -> list:
     pool = [f.item for f in content.FISH
             if not f.seasons or state.season in f.seasons]
     pool += [it for it, _w in content.SEA_FISH]
+    pool += [it for it, _w in content.CAVE_FISH]      # cave lakes fish year-round
     return pool
 
 
@@ -88,9 +89,12 @@ def _request_pool(state: GameState, role: str) -> list:
     herbs = [it.CHAMOMILE, it.YARROW, it.COMFREY, it.LAVENDER, it.SAGE, it.MANDRAKE]
     calming = [it.CHAMOMILE, it.LAVENDER, it.SAGE]
     parts = [it.SLIME_GEL, it.BAT_WING, it.LURKER_SCALE, it.WRAITH_ESSENCE]
+    # Cured fish a taproom or fisher would plausibly ask for — the achievable
+    # ones; the ultra-rare (smoked moonfish, caviar) stay sell/gift/collection.
+    cured_fish = [c for f, c in content.FISH_CURED.items() if f.value <= 120]
     pools = {
         "innkeeper":  _known_dishes(state) + drinks + _fish_pool(state)
-                      + [it.TRUFFLE, it.PORK, it.BEEF],
+                      + cured_fish + [it.TRUFFLE, it.PORK, it.BEEF],
         # Nothing Bron himself sells (fuels, bars): a favour must never be
         # fillable at a profit straight off his own shelf.
         # ...including blasting powder for the mine crews (the miner's commission).
@@ -101,7 +105,7 @@ def _request_pool(state: GameState, role: str) -> list:
         "forager":    mushrooms + herbs + parts + [it.HONEY, it.ASTER] + crops,
         "priest":     [it.ASTER, it.TULIP, it.HONEY] + calming + preserves + parts,
         "farmer":     crops + [it.EGG, it.MILK, it.DUCK_EGG, it.GOAT_MILK, it.FERTILISER],
-        "fisher":     _fish_pool(state),
+        "fisher":     _fish_pool(state) + cured_fish,
         "child":      [d for d in _known_dishes(state)
                        if d.name in ("Cookies", "Candied Fruit", "Frozen Yogurt",
                                      "Pancakes", "Berry Pie", "Cake")]

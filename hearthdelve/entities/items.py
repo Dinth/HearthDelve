@@ -350,6 +350,10 @@ SASHIMI          = Item("Sashimi",          "≈", "food", "Fish sliced clean an
 SUSHI            = Item("Sushi",            "≈", "food", "Fish and seasoned rice, rolled by hand.", value=140, energy=70, buff="brisk")
 FISH_CAKES       = Item("Fish Cakes",       "≈", "food", "Flaked fish bound with flour and egg, pan-fried.", value=160, energy=75, buff="hearty")
 SEAFOOD_CHOWDER  = Item("Seafood Chowder",  "≈", "food", "A creamy chowder thick with the day's catch.", value=220, energy=95, buff="hearty")
+# Signature dishes for the premium coop & dairy goods — a reason to keep a duck
+# and a goat rather than sell their richer eggs and cheese outright.
+QUICHE           = Item("Quiche",           "≈", "food", "A deep tart of rich duck egg and melted cheese.", value=480, energy=110, buff="hearty")
+GOAT_CHEESE_TART = Item("Goat Cheese Tart", "≈", "food", "A savoury tart of tangy goat's cheese and tomato.", value=380, energy=95, buff="forager")
 AGED_MEAD   = Item("Aged Mead",   "u", "artisan",  "Mead matured in the cask; deep and mellow.", value=360)
 SUNFLOWER_OIL = Item("Sunflower Oil", "ó", "artisan", "Golden oil pressed from sunflowers.", value=130)
 # Condiments, dairy & preserved goods.
@@ -388,15 +392,15 @@ DUCKLING    = Item("Duckling",    "b", "livestock", "A paddling duckling — set
 GOAT_KID    = Item("Goat Kid",    "g", "livestock", "A springy young goat — settle it in a barn or pen.", stackable=False, value=320)
 PIGLET      = Item("Piglet",      "P", "livestock", "A bright-eyed piglet — settle it in a barn; grown pigs root out truffles.", stackable=False, value=800)
 WOOL        = Item("Wool",        "%", "material", "A fleece of raw wool, ready to spin.", value=45)
-EGG         = Item("Egg",         "○", "animal",   "A fresh-laid egg.",           value=35, energy=6)
-DUCK_EGG    = Item("Duck Egg",    "○", "animal",   "A big, rich duck egg.",       value=60, energy=12)
-MILK        = Item("Milk",        "◓", "animal",   "A pail of fresh milk.",       value=55, energy=10)
-GOAT_MILK   = Item("Goat's Milk", "◓", "animal",   "A pail of tangy goat's milk.", value=65, energy=10)
+EGG         = Item("Egg",         "○", "animal",   "A fresh-laid egg.",           value=35, energy=6, family="egg")
+DUCK_EGG    = Item("Duck Egg",    "○", "animal",   "A big, rich duck egg.",       value=60, energy=12, family="egg")
+MILK        = Item("Milk",        "◓", "animal",   "A pail of fresh milk.",       value=55, energy=10, family="milk")
+GOAT_MILK   = Item("Goat's Milk", "◓", "animal",   "A pail of tangy goat's milk.", value=65, energy=10, family="milk")
 TRUFFLE     = Item("Truffle",     "•", "animal",   "An earthy black truffle, rooted up by a pig — a chef's treasure.", value=280)
-CHEESE      = Item("Cheese",      "◍", "artisan",  "A wheel of farmhouse cheese.", value=140, energy=32)
-AGED_CHEESE = Item("Aged Cheese", "◍", "artisan",  "A cellar-aged wheel; sharp and crumbling.", value=210, energy=36)
-GOAT_CHEESE = Item("Goat Cheese", "◍", "artisan",  "A soft, tangy round of goat's cheese.", value=170, energy=30)
-AGED_GOAT_CHEESE = Item("Aged Goat Cheese", "◍", "artisan", "Cellar-aged goat's cheese; creamy heart, sharp rind.", value=255, energy=34)
+CHEESE      = Item("Cheese",      "◍", "artisan",  "A wheel of farmhouse cheese.", value=140, energy=32, family="cheese")
+AGED_CHEESE = Item("Aged Cheese", "◍", "artisan",  "A cellar-aged wheel; sharp and crumbling.", value=210, energy=36, family="cheese")
+GOAT_CHEESE = Item("Goat Cheese", "◍", "artisan",  "A soft, tangy round of goat's cheese.", value=170, energy=30, family="cheese")
+AGED_GOAT_CHEESE = Item("Aged Goat Cheese", "◍", "artisan", "Cellar-aged goat's cheese; creamy heart, sharp rind.", value=255, energy=34, family="cheese")
 YOGURT      = Item("Yogurt",      "◓", "artisan",  "Creamy cultured yogurt, churned from fresh milk.", value=90, energy=30)
 
 # --- Fish (caught with the rod at water; most are seasonal) -----------------

@@ -1174,6 +1174,13 @@ class AnyOf:
 ANY_MEAT = AnyOf("meat", "any meat")
 ANY_SAUSAGES = AnyOf("sausages", "any sausages")
 ANY_FISH = AnyOf("fish", "any fish")
+# The dairy & coop wildcards: a hen or duck egg, cow or goat milk, any wheel of
+# cheese — so ducks and goats aren't sell-only and every recipe takes what the
+# larder holds. AnyOf spends the cheapest first, so the rich duck egg and the
+# tangy goat cheese are kept back for the dishes that name them.
+ANY_EGG = AnyOf("egg", "any egg")
+ANY_MILK = AnyOf("milk", "any milk")
+ANY_CHEESE = AnyOf("cheese", "any cheese")
 
 # The typed cuts, and what a grown animal renders into at the butcher's block:
 # (meat item, how many cuts). The big beasts feed a family; a hen feeds a pan.
@@ -1402,26 +1409,26 @@ RECIPES: list[Recipe] = [
     Recipe("Candied Fruit", "cook", ((items.HONEY, 1), (items.STRAWBERRY, 1)), output=items.CANDIED_FRUIT,
            desc="Fruit candied in honey."),
     # --- Cooking with the farm's own eggs, milk & cheese (husbandry tie-in) ---
-    Recipe("Fried Egg", "cook", ((items.EGG, 1),), output=items.FRIED_EGG,
+    Recipe("Fried Egg", "cook", ((ANY_EGG, 1),), output=items.FRIED_EGG,
            desc="A quick fried egg."),
-    Recipe("Omelette", "cook", ((items.EGG, 2),), output=items.OMELETTE,
+    Recipe("Omelette", "cook", ((ANY_EGG, 2),), output=items.OMELETTE,
            desc="A fluffy two-egg omelette."),
-    Recipe("Cheese Omelette", "cook", ((items.EGG, 2), (items.CHEESE, 1)), output=items.CHEESE_OMELETTE,
+    Recipe("Cheese Omelette", "cook", ((ANY_EGG, 2), (ANY_CHEESE, 1)), output=items.CHEESE_OMELETTE,
            desc="An omelette folded with farmhouse cheese."),
-    Recipe("Creamy Soup", "cook", ((items.MILK, 1), (items.POTATO, 1)), output=items.CREAMY_SOUP,
+    Recipe("Creamy Soup", "cook", ((ANY_MILK, 1), (items.POTATO, 1)), output=items.CREAMY_SOUP,
            desc="Potato simmered in fresh milk."),
-    Recipe("Custard", "cook", ((items.MILK, 1), (items.EGG, 1), (items.HONEY, 1)), output=items.CUSTARD,
+    Recipe("Custard", "cook", ((ANY_MILK, 1), (ANY_EGG, 1), (items.HONEY, 1)), output=items.CUSTARD,
            desc="Silky honey-and-egg custard."),
     # --- Baking (the grain-milling payoff: needs flour, and often sugar/salt) --
     Recipe("Bread", "cook", ((items.FLOUR, 2), (items.SEA_SALT, 1)), output=items.BREAD,
            desc="A crusty loaf — flour and a pinch of sea salt."),
-    Recipe("Pancakes", "cook", ((items.FLOUR, 1), (items.EGG, 1), (items.HONEY, 1)), output=items.PANCAKES,
+    Recipe("Pancakes", "cook", ((items.FLOUR, 1), (ANY_EGG, 1), (items.HONEY, 1)), output=items.PANCAKES,
            desc="Honey-drizzled pancakes."),
     Recipe("Berry Pie", "cook", ((items.FLOUR, 1), (items.SUGAR, 1), (items.BLUEBERRY, 1)),
            output=items.BERRY_PIE, desc="A golden pie brimming with berries."),
-    Recipe("Cake", "cook", ((items.FLOUR, 2), (items.SUGAR, 1), (items.EGG, 1), (items.MILK, 1)),
+    Recipe("Cake", "cook", ((items.FLOUR, 2), (items.SUGAR, 1), (ANY_EGG, 1), (ANY_MILK, 1)),
            output=items.CAKE, desc="A rich, sweet celebration cake."),
-    Recipe("Fried Rice", "cook", ((items.RICE_FLOUR, 1), (items.EGG, 1), (items.SEA_SALT, 1)),
+    Recipe("Fried Rice", "cook", ((items.RICE_FLOUR, 1), (ANY_EGG, 1), (items.SEA_SALT, 1)),
            output=items.FRIED_RICE, desc="Rice fried with egg and a pinch of salt."),
     Recipe("Meat Pie", "cook", ((items.FLOUR, 1), (ANY_MEAT, 1), (items.POTATO, 1)),
            output=items.MEAT_PIE, desc="A hearty pie of meat and potato — any cut will do."),
@@ -1429,27 +1436,27 @@ RECIPES: list[Recipe] = [
            output=items.PUMPKIN_PIE, desc="Spiced pumpkin in a golden crust."),
     Recipe("Fish Pie", "cook", ((items.FLOUR, 1), (items.PERCH, 1), (items.POTATO, 1)),
            output=items.FISH_PIE, desc="Flaky fish and potato under a pastry lid."),
-    Recipe("Pizza", "cook", ((items.FLOUR, 2), (items.TOMATO, 1), (items.CHEESE, 1)),
+    Recipe("Pizza", "cook", ((items.FLOUR, 2), (items.TOMATO, 1), (ANY_CHEESE, 1)),
            output=items.PIZZA, desc="Tomato and melted cheese on a crisp base."),
-    Recipe("Cookies", "cook", ((items.FLOUR, 1), (items.SUGAR, 1), (items.EGG, 1)),
+    Recipe("Cookies", "cook", ((items.FLOUR, 1), (items.SUGAR, 1), (ANY_EGG, 1)),
            output=items.COOKIES, desc="A batch of sweet, buttery cookies."),
     # --- Dairy: yogurt (churned from milk) & what it makes -------------------
     Recipe("Fruit Parfait", "cook", ((items.YOGURT, 1), (items.BLUEBERRY, 1), (items.HONEY, 1)),
            output=items.FRUIT_PARFAIT, desc="Layers of yogurt, berries and honey."),
     Recipe("Frozen Yogurt", "cook", ((items.YOGURT, 1), (items.SUGAR, 1)),
            output=items.FROZEN_YOGURT, desc="Sweet, chilled frozen yogurt."),
-    Recipe("Yogurt Pie", "cook", ((items.FLOUR, 1), (items.EGG, 2), (items.STRAWBERRY, 2), (items.YOGURT, 1)),
+    Recipe("Yogurt Pie", "cook", ((items.FLOUR, 1), (ANY_EGG, 2), (items.STRAWBERRY, 2), (items.YOGURT, 1)),
            output=items.YOGURT_PIE, desc="A creamy fruit-and-yogurt custard pie."),
     # --- Condiments & the savoury / pasta line -------------------------------
-    Recipe("Mayonnaise", "cook", ((items.EGG, 1), (items.SUNFLOWER_OIL, 1), (items.SEA_SALT, 1)),
+    Recipe("Mayonnaise", "cook", ((ANY_EGG, 1), (items.SUNFLOWER_OIL, 1), (items.SEA_SALT, 1)),
            output=items.MAYONNAISE, desc="Whisk egg and oil into a creamy mayo."),
     Recipe("Ketchup", "cook", ((items.TOMATO, 2), (items.SUGAR, 1), (items.SEA_SALT, 1)),
            output=items.KETCHUP, desc="A tangy-sweet tomato sauce."),
     Recipe("Coleslaw", "cook", ((items.CABBAGE, 1), (items.MAYONNAISE, 1)),
            output=items.COLESLAW, desc="Shredded cabbage in creamy mayo."),
-    Recipe("Potato Salad", "cook", ((items.POTATO, 1), (items.EGG, 1), (items.MAYONNAISE, 1)),
+    Recipe("Potato Salad", "cook", ((items.POTATO, 1), (ANY_EGG, 1), (items.MAYONNAISE, 1)),
            output=items.POTATO_SALAD, desc="Potato and egg bound in mayonnaise."),
-    Recipe("Egg Sandwich", "cook", ((items.BREAD, 1), (items.EGG, 1), (items.MAYONNAISE, 1)),
+    Recipe("Egg Sandwich", "cook", ((items.BREAD, 1), (ANY_EGG, 1), (items.MAYONNAISE, 1)),
            output=items.EGG_SANDWICH, desc="Egg mayo between slices of fresh bread."),
     Recipe("Tuna Salad", "cook", ((items.TUNA, 1), (items.MAYONNAISE, 1), (items.KALE, 1)),
            output=items.TUNA_SALAD, desc="Flaked tuna, mayo and crisp greens."),
@@ -1457,11 +1464,11 @@ RECIPES: list[Recipe] = [
            output=items.TUNA_SANDWICH, desc="A hearty tuna-mayo sandwich."),
     Recipe("Shortbread", "cook", ((items.FLOUR, 1), (items.BUTTER, 1), (items.SUGAR, 1)),
            output=items.SHORTBREAD, desc="Crumbly, buttery shortbread."),
-    Recipe("Noodles", "cook", ((items.FLOUR, 1), (items.EGG, 1)),
+    Recipe("Noodles", "cook", ((items.FLOUR, 1), (ANY_EGG, 1)),
            output=items.NOODLES, desc="Fresh egg noodles."),
-    Recipe("Pasta", "cook", ((items.NOODLES, 1), (items.KETCHUP, 1), (items.CHEESE, 1)),
+    Recipe("Pasta", "cook", ((items.NOODLES, 1), (items.KETCHUP, 1), (ANY_CHEESE, 1)),
            output=items.PASTA, desc="Noodles in a rich tomato sauce with cheese."),
-    Recipe("Bacon & Eggs", "cook", ((items.BACON, 1), (items.EGG, 2)),
+    Recipe("Bacon & Eggs", "cook", ((items.BACON, 1), (ANY_EGG, 2)),
            output=items.BACON_AND_EGGS, desc="Crispy bacon with fried eggs."),
     Recipe("Sausage Roll", "cook", ((ANY_SAUSAGES, 1), (items.FLOUR, 1)),
            output=items.SAUSAGE_ROLL, desc="A sausage baked in flaky pastry."),
@@ -1469,17 +1476,23 @@ RECIPES: list[Recipe] = [
            output=items.GRILLED_SARDINES, desc="A row of small fish, charred and salted."),
     Recipe("Baked Pike", "cook", ((items.PIKE, 1), (items.BUTTER, 1)),
            output=items.BAKED_PIKE, desc="A whole pike baked in butter."),
-    Recipe("Cave Chowder", "cook", ((items.BLINDFISH, 1), (items.CAVE_MUSHROOM, 1), (items.MILK, 1)),
+    Recipe("Cave Chowder", "cook", ((items.BLINDFISH, 1), (items.CAVE_MUSHROOM, 1), (ANY_MILK, 1)),
            output=items.CAVE_CHOWDER, desc="A pale chowder from the dark below."),
     # "Any fish" dishes — take whatever the creel holds, so every catch cooks.
     Recipe("Sashimi", "cook", ((ANY_FISH, 1), (items.SEA_SALT, 1)),
            output=items.SASHIMI, desc="Fish sliced clean and raw — any catch will do."),
     Recipe("Sushi", "cook", ((ANY_FISH, 1), (items.RICE_FLOUR, 1), (items.SEA_SALT, 1)),
            output=items.SUSHI, desc="Fish and seasoned rice, rolled by hand."),
-    Recipe("Fish Cakes", "cook", ((ANY_FISH, 1), (items.FLOUR, 1), (items.EGG, 1)),
+    Recipe("Fish Cakes", "cook", ((ANY_FISH, 1), (items.FLOUR, 1), (ANY_EGG, 1)),
            output=items.FISH_CAKES, desc="Flaked fish bound with flour and egg."),
-    Recipe("Seafood Chowder", "cook", ((ANY_FISH, 2), (items.POTATO, 1), (items.MILK, 1)),
+    Recipe("Seafood Chowder", "cook", ((ANY_FISH, 2), (items.POTATO, 1), (ANY_MILK, 1)),
            output=items.SEAFOOD_CHOWDER, desc="A creamy chowder thick with the day's catch."),
+    # Signature dishes: these name the rich duck egg and the goat's cheese, so a
+    # duck and a goat earn their keep beyond the churn and the bin.
+    Recipe("Quiche", "cook", ((items.DUCK_EGG, 2), (ANY_CHEESE, 1), (items.FLOUR, 1)),
+           output=items.QUICHE, desc="A deep tart of rich duck egg and melted cheese."),
+    Recipe("Goat Cheese Tart", "cook", ((items.GOAT_CHEESE, 1), (items.FLOUR, 1), (items.TOMATO, 1)),
+           output=items.GOAT_CHEESE_TART, desc="A savoury tart of tangy goat's cheese and tomato."),
     Recipe("Truffle Pasta", "cook", ((items.NOODLES, 1), (items.TRUFFLE, 1), (items.BUTTER, 1)),
            output=items.TRUFFLE_PASTA, desc="Buttered noodles under shaved black truffle."),
 ]
@@ -1501,6 +1514,7 @@ STARTER_RECIPES: tuple[str, ...] = (
 # pay itself back within a handful of cooked plates.
 TAVERN_RECIPES: tuple[tuple[str, int], ...] = (
     ("Cheese Omelette", 150), ("Creamy Soup", 110), ("Fried Rice", 130), ("Pasta", 190),
+    ("Sushi", 160), ("Seafood Chowder", 200), ("Quiche", 260), ("Goat Cheese Tart", 220),
 )
 
 # Recipes that come with practice at the stove: Cooking level -> recipe name.
@@ -2084,7 +2098,7 @@ def village_npcs() -> dict[str, list[NPC]]:
                                   "snag like the back of my own wrinkled hand."),
                               (6, "Lost a friend to the spring flood, long ago.\n"
                                   "I fish the quiet pools he loved. Feels like company.")),
-                loves=(items.WINE, items.GRAPE_WINE, items.FISH_PIE),
+                loves=(items.WINE, items.GRAPE_WINE, items.FISH_PIE, items.SMOKED_FISH),
                 likes=(items.RASPBERRY,), dislikes=(items.STONE,),
                 gifts=(items.TROUT, items.SALMON, items.GRAPE_WINE),
                 bio="An old fisher; quiet and patient, usually by the water."),
@@ -2166,7 +2180,7 @@ def village_npcs() -> dict[str, list[NPC]]:
                         "off the Deep Forge. Reckoned you'd want a piece of what you paid for.\n"
                         "Whatever you raise next — I'll square its stone. Gladly.\"")),
                 loves=(items.STONE, items.BEEF, items.SAUSAGE_ROLL),
-                likes=(items.CHEESE, items.BREAD), dislikes=(items.WINE,),
+                likes=(ANY_CHEESE,items.BREAD), dislikes=(items.WINE,),
                 gifts=(items.STONE,),
                 bio="Cinderhope's stonemason; steady, plainspoken, prouder than he admits."),
         ],
@@ -2418,7 +2432,7 @@ def dwarf_npcs() -> list[NPC]:
                           (6, "For you? The old cask. I was saving it for a coronation,\n"
                               "but I've stopped believing in kings.")),
             loves=(items.MEAD, items.AGED_MEAD, items.CURED_HAM),
-            likes=(items.CHEESE, items.MUSHROOM_STEW, items.JERKY),
+            likes=(ANY_CHEESE,items.MUSHROOM_STEW, items.JERKY),
             dislikes=(items.FIBER,),
             gifts=(items.MEAD, items.CAVE_MUSHROOM, items.GLOWCAP),
             village="Khazgrim",
@@ -2768,7 +2782,10 @@ def _collection_catalogue() -> dict:
                         items.SAGE, items.MANDRAKE, items.BUTTON_MUSHROOM,
                         items.PARASOL_MUSHROOM, items.BOLETE, items.CHANTERELLE,
                         items.CAVE_MUSHROOM, items.GLOWCAP, items.TRUFFLE])
-    anglers = uniq([f.item for f in FISH])
+    anglers = uniq([f.item for f in FISH]
+                   + [it for it, _ in SEA_FISH]
+                   + [it for it, _ in CAVE_FISH]
+                   + [items.MOONFISH])           # the lighthouse special
     lapidary = (items.AMETHYST, items.TOPAZ, items.EMERALD, items.RUBY,
                 items.SAPPHIRE, items.DIAMOND)
     reliquary = (items.SLIME_GEL, items.BAT_WING, items.BOAR_HIDE, items.WOLF_PELT,

@@ -63,7 +63,7 @@ def begin(state: GameState, tx: int, ty: int):
         table = content.fish_in_season(state.season)
     chance = content.FISH_CATCH_CHANCE + skills.fishing_catch_bonus(state)
     from . import collection, events                       # Hall of Wonders — completed Angler's Cabinet
-    if collection.wing_done(state, "Angler's Cabinet"):
+    if collection.perk_earned(state, "Angler's Cabinet"):
         chance += 0.05
     chance += events.fishing_bonus(state)                  # a shoal run: the sea boils
     if state.player.sign == "heron":                       # born on a still-water morning

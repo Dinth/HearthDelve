@@ -143,7 +143,7 @@ def _on_kill(state: GameState, m, award_combat: bool = True) -> None:
             lvl = getattr(m, "level", 1)
             xp = 12 + 6 * lvl + (60 if getattr(m, "boss", False) else 0)
             from . import collection                  # Hall of Wonders — completed Reliquary
-            if collection.wing_done(state, "Reliquary"):
+            if collection.perk_earned(state, "Reliquary"):
                 xp = round(xp * 1.2)
             skills.gain(state, "Combat", xp)
         state.log.add(f"You strike down the {m.name.lower()}!", (200, 220, 160))

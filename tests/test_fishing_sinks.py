@@ -81,5 +81,84 @@ class TestCuredFishPayForRarity(unittest.TestCase):
                 pass
 
 
+class TestAnyEggAndDairy(unittest.TestCase):
+    def test_duck_and_goat_goods_cook_everything(self):
+        """A farmer who keeps only ducks and goats can still cook the coop &
+        dairy dishes — the wildcards take whatever the larder holds."""
+        from hearthdelve.data import content
+        from hearthdelve.game import crafting
+        from hearthdelve.entities import items
+        st = fresh_state(3)
+        inv = st.player.inventory
+        for it in (items.DUCK_EGG, items.DUCK_EGG, items.GOAT_MILK, items.GOAT_CHEESE,
+                   items.FLOUR, items.POTATO, items.TOMATO, items.SUGAR):
+            inv.add(it, 3)
+        for name in ("Omelette", "Creamy Soup", "Cheese Omelette", "Pizza", "Cake"):
+            r = next(r for r in content.RECIPES if r.name == name)
+            self.assertTrue(crafting.has_inputs(st, r), f"{name} won't cook from duck/goat")
+
+    def test_signature_dishes_name_the_premium_good(self):
+        """Quiche and the tart require the rich duck egg / goat cheese by name —
+        a guaranteed sink beyond mere substitution."""
+        from hearthdelve.data import content
+        from hearthdelve.game import crafting
+        from hearthdelve.entities import items
+        st = fresh_state(4)
+        inv = st.player.inventory
+        # only hen eggs & cow cheese — the signature dishes must NOT be craftable
+        for it in (items.EGG, items.EGG, items.CHEESE, items.FLOUR, items.TOMATO):
+            inv.add(it, 3)
+        quiche = next(r for r in content.RECIPES if r.name == "Quiche")
+        tart = next(r for r in content.RECIPES if r.name == "Goat Cheese Tart")
+        self.assertFalse(crafting.has_inputs(st, quiche))
+        self.assertFalse(crafting.has_inputs(st, tart))
+        inv.add(items.DUCK_EGG, 2)
+        inv.add(items.GOAT_CHEESE, 1)
+        self.assertTrue(crafting.has_inputs(st, quiche))
+        self.assertTrue(crafting.has_inputs(st, tart))
+
+
+class TestAnglersCabinetAndPerkLatch(unittest.TestCase):
+    def test_cabinet_covers_every_water(self):
+        from hearthdelve.data import content
+        ang = {it.name for it in content.COLLECTION["Angler's Cabinet"]}
+        for must in ("Moonfish", "Tuna", "Sardine", "Cave Bass", "Glowfish", "Eel"):
+            self.assertIn(must, ang, f"{must} missing from the Angler's Cabinet")
+        self.assertGreaterEqual(len(ang), 21)
+
+    def test_cave_fish_can_be_requested(self):
+        from hearthdelve.game import requests
+        from hearthdelve.entities import items
+        st = fresh_state(6)
+        pool_names = {p.name for p in requests._fish_pool(st)}
+        for cave in (items.CAVE_BASS, items.EEL, items.BLINDFISH):
+            self.assertIn(cave.name, pool_names)
+
+    def test_a_completed_wing_keeps_its_perk_when_the_catalogue_grows(self):
+        """The whole point of the latch: adding specimens must never revoke a
+        perk the player already earned."""
+        from hearthdelve.game import collection
+        st = fresh_state(7)
+        wing = "Angler's Cabinet"
+        # not yet completed -> no perk
+        self.assertFalse(collection.perk_earned(st, wing))
+        # completed once (latched), but the live cabinet is now short of specimens
+        st.stats[f"wing_done_{wing}"] = 1
+        self.assertFalse(collection.wing_done(st, wing))     # live: cases unfilled
+        self.assertTrue(collection.perk_earned(st, wing))    # earned: perk stays
+
+    def test_cured_fish_are_requestable_and_loved(self):
+        from hearthdelve.game import requests
+        from hearthdelve.data import content
+        from hearthdelve.entities import items
+        st = fresh_state(8)
+        inn = {p.name for p in requests._request_pool(st, "innkeeper")}
+        self.assertTrue(any(c.name in inn for c in content.FISH_CURED.values()))
+        pell = next(n for n in st.surface.npcs if n.name == "Old Pell")
+        loved, _ = pell.gift_reaction(content.FISH_CURED[items.TROUT])
+        neutral, _ = pell.gift_reaction(items.PERCH)          # raw fish: a different family
+        self.assertGreater(loved, neutral)
+
+
 if __name__ == "__main__":
     unittest.main()

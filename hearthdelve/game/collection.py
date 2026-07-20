@@ -81,6 +81,15 @@ def all_done(state: GameState) -> bool:
     return tot > 0 and have == tot
 
 
+def perk_earned(state: GameState, wing: str) -> bool:
+    """Whether a wing's lasting perk is active. A wing completed *once* keeps its
+    perk forever, even if a later update adds new specimens to catalogue — growth
+    extends the goal, it never revokes what you earned. (Queried by the systems
+    the perks touch; ``wing_done`` stays the live 'every case filled' check that
+    the journal and completion rewards use.)"""
+    return bool(state.stats.get(f"wing_done_{wing}")) or wing_done(state, wing)
+
+
 # A completed wing grants a lasting perk, queried via wing_done() at the relevant
 # systems (foraging, fishing, gemcutting, combat).
 WING_PERK = {

@@ -177,7 +177,7 @@ def _herbarium_bonus(state: GameState, item, q: int) -> None:
     """Hall of Wonders perk: a completed Herbarium makes the Vale's green bounty
     come freely — a chance at a second specimen when foraging herbs & fungi."""
     from . import collection
-    if collection.wing_done(state, "Herbarium") and random.random() < 0.30:
+    if collection.perk_earned(state, "Herbarium") and random.random() < 0.30:
         state.player.inventory.add(item, 1, quality=q)
         state.log.add("  The green comes freely to your hand — a second.", C.DIM)
 
