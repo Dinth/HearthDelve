@@ -85,9 +85,9 @@ class TestScreensRender(unittest.TestCase):
             rendering.render_requests(_con(), self.st, 0, village)
 
     def test_codex_pages(self):
-        from hearthdelve.engine import rendering
-        for page in range(8):                           # generous page sweep
-            rendering.render_codex(_con(), self.st, page, 0)
+        from hearthdelve.engine import codex
+        for page in range(10):                          # generous page sweep
+            codex.render_codex(_con(), self.st, page, 0)
 
     def test_look_mode_samples(self):
         from hearthdelve.engine import rendering

@@ -19,7 +19,7 @@ import time
 import tcod.event
 
 from .engine import constants as C
-from .engine import rendering
+from .engine import codex, rendering
 from .entities import items
 from .game import combat, crafting, delve, farming, fishing, inventory, quests, turns, village
 from .game import commands as cmds
@@ -447,7 +447,7 @@ class HelpScreen(Screen):
         self.scroll = 0
 
     def render(self, ui: UI, con) -> None:
-        rendering.render_codex(con, ui.state, self.page, self.scroll)
+        codex.render_codex(con, ui.state, self.page, self.scroll)
 
     def handle(self, ui: UI, cmd: str, action: tuple) -> None:
         if cmd in ("help", "cancel", "quit"):

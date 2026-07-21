@@ -76,18 +76,18 @@ class TestKillRecord(unittest.TestCase):
 
 class TestCodexPages(unittest.TestCase):
     def _pages(self, st):
-        from hearthdelve.engine import rendering as R
-        return {t: rows for t, rows in R.build_codex_pages(st)}
+        from hearthdelve.engine import codex
+        return {t: rows for t, rows in codex.build_codex_pages(st)}
 
     def test_bestiary_and_dungeon_pages_exist_and_render(self):
-        from hearthdelve.engine import rendering as R
+        from hearthdelve.engine import codex, constants as C
         st = fresh_state(3)
         pages = self._pages(st)
         self.assertIn("Bestiary", pages)
         self.assertIn("Dungeon Sites", pages)
-        con = tcod.console.Console(R.C.SCREEN_W, R.C.SCREEN_H, order="F")
-        for i in range(len(R.build_codex_pages(st))):
-            R.render_codex(con, st, i, 0)            # must not raise
+        con = tcod.console.Console(C.SCREEN_W, C.SCREEN_H, order="F")
+        for i in range(len(codex.build_codex_pages(st))):
+            codex.render_codex(con, st, i, 0)        # must not raise
 
     def test_dungeon_page_covers_every_kind(self):
         from hearthdelve.world import dungeon
