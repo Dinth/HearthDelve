@@ -478,9 +478,11 @@ def make_jewel(base: str, metal: str, gem, prefix: str = "") -> Item:
 
 
 def jewel_slot(item) -> str:
-    """The equip slot a jewellery piece wants: 'neck' for an amulet, else a ring.
-    Keyed off the base the factory recorded, not the display name."""
-    return "neck" if _JEWEL_BASE.get(item) == "Amulet" else "ring"
+    """The equip slot a jewellery piece wants: 'neck' for an amulet or a boss-
+    trophy relic, else a ring. Keyed off structured membership, not the name."""
+    if _JEWEL_BASE.get(item) == "Amulet" or item in RELIC_ITEMS:
+        return "neck"
+    return "ring"
 
 
 def _resolve_jewel(name: str) -> Item | None:
@@ -496,6 +498,38 @@ def _resolve_jewel(name: str) -> Item | None:
 
 
 items.register_resolver(_resolve_jewel)
+
+
+# --- Boss trophy relics ------------------------------------------------------
+# Each boss trophy can be set (at the jeweller's bench) into a worn relic — so
+# felling a champion MAKES something lasting, not just a shelf piece. They plug
+# into the same worn-jewellery effect system as rings/amulets (JEWEL_EFFECT),
+# hang in the neck slot, and — having no gem — save by name (eagerly registered,
+# so by_name finds them on load) rather than the structured-jewel path.
+def _relic(name: str, glyph: str, desc: str, effect: dict, value: int) -> Item:
+    it = items.register(Item(name, glyph, "jewelry", desc, stackable=False, value=value))
+    JEWEL_EFFECT[it] = effect
+    return it
+
+
+TROPHY_RELIC: dict = {
+    items.TROLL_TUSK:    _relic("Trolltooth Charm", "◈",
+        "A cave troll's tusk on a thong — its bearer shrugs off blows and hits the harder.",
+        {"pv": 2, "dmg": 1}, 300),
+    items.WARDEN_SIGIL:  _relic("Warden's Sigil", "◈",
+        "The gloom warden's iron sigil, worn close — old wards turn wounds aside.",
+        {"pv": 3}, 460),
+    items.MOLTEN_HEART:  _relic("Emberheart Pendant", "◈",
+        "A magma fiend's core, still faintly warm — it lends a fierce, biting strength.",
+        {"dmg": 2, "crit": 0.03}, 570),
+    items.BONE_CROWN:    _relic("Bonecrown Circlet", "◈",
+        "The bonelord's crown cut down to a circlet — a chilling command steadies the aim.",
+        {"to_hit": 2, "crit": 0.03}, 520),
+    items.ABYSSAL_PEARL: _relic("Abyssal Pendant", "◈",
+        "The abyssal pearl set to hang at the throat — the deep's own slippery grace.",
+        {"dv": 3, "crit": 0.03}, 690),
+}
+RELIC_ITEMS = set(TROPHY_RELIC.values())
 
 
 # Curated listings for the codex & shop. Loot/forging make other combinations on

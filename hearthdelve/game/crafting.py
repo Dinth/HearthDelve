@@ -857,6 +857,12 @@ def _jeweller_options(state: GameState) -> list:
                     opts.append({"kind": "embed_gear", "inputs": [(it, 1), (cut, 1)], "output": out,
                                  "group": "Set a gem in gear",
                                  "label": f"Set {content.GEM_TITLE[gemkey]} in {it.name}"})
+    # 4) set a boss trophy into a worn relic (mounted in a silver setting)
+    for trophy, relic in content.TROPHY_RELIC.items():
+        if inv.count(trophy) >= 1 and inv.count(items.SILVER_BAR) >= 1:
+            opts.append({"kind": "relic", "inputs": [(trophy, 1), (items.SILVER_BAR, 1)],
+                         "output": relic, "group": "Set a trophy in a relic",
+                         "label": f"{relic.name}  (from {trophy.name})"})
     # 3) embed a gem into one of your tools (stored per-tool, not a new item)
     p = state.player
     for tool in p.tool_tier:
@@ -895,6 +901,12 @@ def jeweller_choice(state: GameState, opt) -> None:
         inv.add(opt["output"], 1)
         skills.gain(state, "Jewelcrafting", 26)
         state.log.add(f"You set the gem — {opt['output'].name}.", (230, 210, 140))
+    elif kind == "relic":
+        for it, q in opt["inputs"]:
+            inv.remove(it, q)
+        inv.add(opt["output"], 1)
+        skills.gain(state, "Jewelcrafting", 40)
+        state.log.add(f"You set the trophy into a relic — {opt['output'].name}!", (230, 210, 140))
     elif kind == "embed_tool":
         inv.remove(opt["inputs"][0][0], 1)
         tool = opt["tool"]

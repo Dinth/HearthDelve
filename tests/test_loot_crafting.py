@@ -88,5 +88,49 @@ class TestEssenceAlchemy(unittest.TestCase):
         self.assertGreaterEqual(content.FUELS[items.EMBER_CORE], content.FUELS[items.COKE])
 
 
+class TestBossTrophyRelics(unittest.TestCase):
+    def test_every_boss_trophy_mounts_into_a_neck_relic(self):
+        from hearthdelve.data import content
+        for trophy, relic in content.TROPHY_RELIC.items():
+            self.assertEqual(content.jewel_slot(relic), "neck")
+            self.assertTrue(content.JEWEL_EFFECT.get(relic), f"{relic.name} has no effect")
+        self.assertEqual(len(content.TROPHY_RELIC), 5)      # one per boss
+
+    def test_jeweller_mounts_a_trophy_and_it_works_worn(self):
+        from hearthdelve.data import content
+        from hearthdelve.game import crafting, jewelry
+        from hearthdelve.entities import items
+        st = fresh_state(94)
+        inv = st.player.inventory
+        inv.add(items.ABYSSAL_PEARL, 1)
+        inv.add(items.SILVER_BAR, 1)
+        opt = next(o for o in crafting._jeweller_options(st) if o.get("kind") == "relic")
+        crafting.jeweller_choice(st, opt)
+        pendant = content.TROPHY_RELIC[items.ABYSSAL_PEARL]
+        self.assertEqual(inv.count(pendant), 1)
+        self.assertEqual(inv.count(items.ABYSSAL_PEARL), 0)
+        st.player.equipment["neck"] = pendant
+        self.assertGreater(jewelry.combat_bonus(st)["dv"], 0)
+
+    def test_relic_round_trips_through_save(self):
+        import os
+        import tempfile
+        from hearthdelve.data import content
+        from hearthdelve.engine import save
+        from hearthdelve.entities import items
+        relic = content.TROPHY_RELIC[items.MOLTEN_HEART]
+        st = fresh_state(95)
+        st.player.equipment["neck"] = relic
+        path = os.path.join(tempfile.gettempdir(), "hd_relic_rt.json")
+        try:
+            save.save(st, path)
+            self.assertIs(save.load(path).player.equipment["neck"], relic)
+        finally:
+            try:
+                os.remove(path)
+            except OSError:
+                pass
+
+
 if __name__ == "__main__":
     unittest.main()
