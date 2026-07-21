@@ -137,6 +137,8 @@ def _on_kill(state: GameState, m, award_combat: bool = True) -> None:
             state.log.add(f"  You take {got}.", (200, 180, 150))
     else:
         state.bump("monsters_slain")
+        if getattr(m, "boss", False):
+            state.bump("bosses_slain")
         if award_combat:
             # Depth pays: a deep, tough kill is worth far more than a floor-1 slime,
             # and a boss is a windfall — so fighting downward actually levels Combat.

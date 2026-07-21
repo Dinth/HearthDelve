@@ -131,6 +131,32 @@ class TestBosses(unittest.TestCase):
         self.assertGreater(combat.player_crit(st), base)
 
 
+class TestDelveGoals(unittest.TestCase):
+    def test_tiered_delve_goals_exist_and_complete(self):
+        from hearthdelve.game import quests
+        from hearthdelve.data import content
+        ids = {q.id for q in content.QUESTS}
+        self.assertTrue({"delve5", "delve10", "slayer", "champion", "naturalist"} <= ids)
+        st = fresh_state(60)
+        st.stats.update(deepest_depth=10, monsters_slain=40, bosses_slain=1)
+        st.bestiary = {f"M{i}": 1 for i in range(8)}
+        quests.check(st)
+        for qid in ("delve5", "delve10", "slayer", "champion", "naturalist"):
+            self.assertIn(qid, st.quests_done, f"{qid} should complete")
+
+    def test_boss_kill_is_counted(self):
+        import random
+        from hearthdelve.game import combat, delve
+        from hearthdelve.data import content
+        st = fresh_state(61)
+        delve.enter(st, "mine")
+        boss = content.make_mob(next(b for b in content.BOSSES if b.name == "Cave Troll"),
+                                st.player.x + 1, st.player.y, 6, random.Random(1), boss=True)
+        st.world.monsters = [boss]
+        combat._on_kill(st, boss)
+        self.assertEqual(st.stats.get("bosses_slain"), 1)
+
+
 class TestMilestoneFloors(unittest.TestCase):
     def test_every_tenth_floor_guarantees_a_boss(self):
         from hearthdelve.world import dungeon
