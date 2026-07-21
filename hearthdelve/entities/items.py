@@ -23,6 +23,7 @@ class Item:
                          # (see game.encumbrance.weight_of) — a haul of ore or
                          # bars weighs you down, a pouch of seeds barely at all
     buff: str = ""       # a temporary boon granted on eating (see skills.BUFFS)
+    attr: str = ""       # a rare treat that PERMANENTLY raises this attribute (St/Le/…)
     cures: str = ""      # a status a remedy purges: "poison"|"bleed"|"burn"|"all"
     family: str = ""     # groups per-source artisan goods (all jams share "jam")
                          # so NPC gift tastes & the like match any variant
@@ -242,6 +243,18 @@ CLARITY_DRAUGHT = Item("Clarity Draught","!", "food", "A clear-headed focus: kee
 # Draughts distilled from monster spoils — the delve's own trophies, turned to use.
 VENOM_DRAUGHT   = Item("Venom Draught", "!", "food", "Venom and rot-spore in a spirit base: your blows drip poison for a while.", value=350, energy=20, buff="venomed")
 PHANTOM_DRAUGHT = Item("Phantom Draught","!", "food", "A wraith's essence, half-drunk: you turn ghost-light and hard to touch for a while.", value=420, energy=20, buff="phantom")
+# Attribute treats — legendary once-in-a-blue-moon finds that PERMANENTLY raise a
+# birth attribute by one. Never crafted or bought; only won from the deepest
+# chests or a festival's grand prize. Eating one at the attribute's ceiling is
+# refunded (see commands._eat), so a windfall is never wasted.
+TITAN_MARROW      = Item("Titan Marrow",      "★", "food", "Marrow from a deep giant's bones — it thickens the sinews for good. (+Strength)", value=520, energy=40, attr="St")
+MINDSEYE_TEA      = Item("Mind's-Eye Tea",    "★", "food", "A steeping of pale cave-lichen; the world's patterns come clearer ever after. (+Learning)", value=520, energy=40, attr="Le")
+IRONWILL_CORDIAL  = Item("Ironwill Cordial",  "★", "food", "A bitter, steadying cordial — drink it and your resolve never quite bends again. (+Willpower)", value=520, energy=40, attr="Wi")
+QUICKSILVER_TONIC = Item("Quicksilver Tonic", "★", "food", "A shimmering tonic that leaves the hands and feet forever a touch quicker. (+Dexterity)", value=520, energy=40, attr="Dx")
+DWARVEN_STONELOAF = Item("Dwarven Stoneloaf", "★", "food", "A dense, ancient dwarf-bread; it settles in the bones and hardens the frame. (+Toughness)", value=520, energy=40, attr="To")
+SILVERTONGUE_HONEY= Item("Silvertongue Honey","★", "food", "Honey from a queen fed on moon-flowers — words come warmer to you ever after. (+Charisma)", value=520, energy=40, attr="Ch")
+DAWNBLOOM_NECTAR  = Item("Dawnbloom Nectar",  "★", "food", "Nectar of a bloom that opens but once a year; a lasting, kindly glow settles on you. (+Appearance)", value=520, energy=40, attr="Ap")
+FARSIGHT_ELIXIR   = Item("Farsight Elixir",   "★", "food", "A clear draught that sharpens the eye for good — the dark holds fewer secrets now. (+Perception)", value=520, energy=40, attr="Pe")
 LURKER_SCALE  = Item("Lurker Scale",  "u", "material", "A thick armoured scale from a deep lurker.", value=55)
 WRAITH_ESSENCE= Item("Wraith Essence","*", "material", "Cold, half-real essence bled from a wraith.", value=75)
 # Trophies of the deep floors — rarer, richer the further down they're won.

@@ -463,6 +463,10 @@ def enter_contest(state: GameState, item, ql: int) -> str:
             if pool:
                 gamereq.learn_recipe(state, rng.choice(pool), teacher="The judge")
                 extra = "\nThere's a recipe card tucked under the ribbon, too."
+        if rng.random() < 0.2:                    # a rare grand-prize treat (very occasional)
+            treat = rng.choice(content.ATTRIBUTE_TREATS)
+            state.player.inventory.add(treat, 1)
+            extra += f"\nThe grange elders press a rare {treat.name} into your hands."
         state.log.add(f"First prize at {fest[1]} — your {entry} takes the ribbon!",
                       (232, 200, 120))
         return (f"The judge holds your {entry} aloft — the square erupts!\n"

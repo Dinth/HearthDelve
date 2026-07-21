@@ -42,3 +42,24 @@ def mod(state: GameState, key: str) -> int:
 def roll(rng) -> dict:
     """A fresh set: honest 3d6 per attribute, the bell curve and all."""
     return {k: rng.randint(1, 6) + rng.randint(1, 6) + rng.randint(1, 6) for k in ATTRS}
+
+
+# The one way an attribute ever climbs after birth: a very rare treat (see
+# content.ATTRIBUTE_TREATS). A soft ceiling keeps it a windfall, not a grind.
+CEILING = 18
+
+
+def raise_attr(state: GameState, key: str, n: int = 1) -> int:
+    """Permanently raise an attribute (from a treat), clamped to CEILING. Returns
+    the points actually gained (0 if already at the ceiling). Toughness feeds max
+    HP, exactly as it does at birth, so a To gain widens the health bar at once."""
+    p = state.player
+    cur = int(p.attrs.get(key, 10))
+    new = min(CEILING, cur + n)
+    gained = new - cur
+    if gained:
+        p.attrs[key] = new
+        if key == "To":
+            p.max_hp += gained
+            p.hp += gained
+    return gained

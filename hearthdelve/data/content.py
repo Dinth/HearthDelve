@@ -3029,12 +3029,22 @@ def monster_drops(name: str, rng, level: int = 1) -> list:
     return out
 
 
+# The eight attribute treats (one per attribute) — see items.py. Won only from
+# the deepest chests and festival grand prizes; never crafted or sold.
+ATTRIBUTE_TREATS = [items.TITAN_MARROW, items.MINDSEYE_TEA, items.IRONWILL_CORDIAL,
+                    items.QUICKSILVER_TONIC, items.DWARVEN_STONELOAF,
+                    items.SILVERTONGUE_HONEY, items.DAWNBLOOM_NECTAR, items.FARSIGHT_ELIXIR]
+
+
 def chest_loot(depth: int, rng) -> tuple[int, list]:
     """Contents of a dungeon chest: (gold, [items]). Richer the deeper you go."""
     gold = rng.randint(30, 70) + depth * 15
     items_out = []
     # a metal bar or ore for the depth
     items_out.append(ore_for_depth(depth, rng))
+    # a legendary attribute treat — vanishingly rare, and only in the deep dark
+    if depth >= 4 and rng.random() < 0.01 + 0.004 * depth:
+        items_out.append(rng.choice(ATTRIBUTE_TREATS))
     roll = rng.random()
     if roll < 0.35:                       # a gem
         items_out.append(gem_for_depth(depth, rng))

@@ -1088,6 +1088,18 @@ def _eat(state: GameState, item, quality: int) -> None:
         state.log.add(msg, (180, 230, 160))
         turns.advance_time(state, C.USE_SECONDS)
         return
+    if getattr(item, "attr", ""):                        # a legendary attribute treat
+        from . import attrs as A
+        got = A.raise_attr(state, item.attr)
+        if not got:                                      # already at the ceiling — don't waste it
+            p.inventory.add(item, 1, quality=quality)
+            state.log.add(f"Your {A.NAMES[item.attr]} can climb no higher — you keep the "
+                          f"{item.name.lower()} for another day.", C.DIM)
+            return
+        state.log.add(f"You eat the {item.name.lower()}. Something shifts deep within — "
+                      f"your {A.NAMES[item.attr]} rises for good!", (240, 224, 150))
+        turns.advance_time(state, C.USE_SECONDS)
+        return
     gain = round(item.energy * (1 + 0.12 * quality))     # tastier food goes further
     heal = max(1, gain // 6) + item.heal
     p.energy = min(p.max_energy, p.energy + gain)

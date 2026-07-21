@@ -155,5 +155,51 @@ class TestAttributeHooks(unittest.TestCase):
                 pass
 
 
+class TestAttributeGrowth(unittest.TestCase):
+    def test_treats_raise_attributes_and_toughness_widens_hp(self):
+        from hearthdelve.game import attrs as A, commands
+        from hearthdelve.entities import items
+        st = fresh_state(96)
+        st.player.attrs = {k: 10 for k in A.ATTRS}
+        st.player.inventory.add(items.TITAN_MARROW, 1)
+        commands._eat(st, items.TITAN_MARROW, 0)
+        self.assertEqual(A.get(st, "St"), 11)
+        self.assertEqual(st.player.inventory.count(items.TITAN_MARROW), 0)
+        # Toughness feeds max HP, as at birth
+        hp0 = st.player.max_hp
+        st.player.inventory.add(items.DWARVEN_STONELOAF, 1)
+        commands._eat(st, items.DWARVEN_STONELOAF, 0)
+        self.assertEqual(A.get(st, "To"), 11)
+        self.assertEqual(st.player.max_hp, hp0 + 1)
+
+    def test_treat_at_ceiling_is_refunded_not_wasted(self):
+        from hearthdelve.game import attrs as A, commands
+        from hearthdelve.entities import items
+        st = fresh_state(97)
+        st.player.attrs = {"Pe": A.CEILING}
+        st.player.inventory.add(items.FARSIGHT_ELIXIR, 1)
+        commands._eat(st, items.FARSIGHT_ELIXIR, 0)
+        self.assertEqual(A.get(st, "Pe"), A.CEILING)                 # unchanged
+        self.assertEqual(st.player.inventory.count(items.FARSIGHT_ELIXIR), 1)  # kept
+
+    def test_treats_are_rare_and_not_craftable(self):
+        import random
+        from hearthdelve.data import content
+        # one per attribute, each raises exactly its attribute
+        from hearthdelve.game import attrs as A
+        self.assertEqual({t.attr for t in content.ATTRIBUTE_TREATS}, set(A.ATTRS))
+        # a shallow chest never holds one; a deep chest only rarely
+        shallow = sum(1 for s in range(500)
+                      if any(t.attr for t in content.chest_loot(2, random.Random(s))[1]))
+        self.assertEqual(shallow, 0)
+        deep = sum(1 for s in range(2000)
+                   if any(t.attr for t in content.chest_loot(10, random.Random(s))[1]))
+        self.assertLess(deep / 2000, 0.10, "deep-chest treats must stay very rare")
+        # not sold by the blacksmith or general store, not a recipe output
+        self.assertFalse(any(t.attr for t, _p in content.blacksmith_stock()))
+        self.assertFalse(any(r.output in content.ATTRIBUTE_TREATS
+                             for r in content.RECIPES if r.output))
+
+
 if __name__ == "__main__":
     unittest.main()
