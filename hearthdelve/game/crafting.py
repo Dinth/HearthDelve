@@ -616,10 +616,10 @@ def machine_load_options(state: GameState, mdef) -> list:
     elif a == "bars":
         # Forge a piece of any base from the metal bars you carry (deeper metals
         # make finer gear). One entry per (metal, base) you can currently afford.
+        hard_armour = [b for b in content.ARMOR_BASES if b not in content._SOFT_BASES]
         for metal in content.FORGE_METALS:
             bar = content.MATERIALS[metal].bar
-            forgeable = list(content.WEAPON_BASES) + [
-                b for b in content.ARMOR_BASES if b not in content._SOFT_BASES]
+            forgeable = list(content.WEAPON_BASES) + hard_armour
             for base in forgeable:
                 cost = content.forge_cost(base)
                 if bar is not None and inv.count(bar) >= cost:
@@ -627,6 +627,15 @@ def machine_load_options(state: GameState, mdef) -> list:
                     opts.append({"inputs": [(bar, cost)], "output": content.make_gear(base, metal),
                                  "quality_from": None, "group": base,
                                  "label": f"{metal.capitalize()}  ({cost} {bar.name})"})
+        # Beast-scale armour — forged from the scale drops themselves (armour only).
+        for scale in content.SCALE_FORGE:
+            reagent = content.MATERIALS[scale].bar
+            for base in hard_armour:
+                cost = content.forge_cost(base)
+                if reagent is not None and inv.count(reagent) >= cost:
+                    opts.append({"inputs": [(reagent, cost)], "output": content.make_gear(base, scale),
+                                 "quality_from": None, "group": base,
+                                 "label": f"{scale.capitalize()}  ({cost} {reagent.name})"})
     elif a == "crop":
         seen = set()
         for it, _q, _ql in inv.slots:

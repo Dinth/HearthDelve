@@ -25,9 +25,22 @@ day, delve the dark below, and trade it all back into the villages.
 - **Everything produced needs somewhere to go.** New items must have sinks beyond the
   shipping bin: dishes to loved-dish gifting, materials to request-board favours,
   goods to crafting chains. Rarity justifies reward — a rare input (bee queens, deep
-  gems) should pay generously even at low effort.
+  gems) should pay generously even at low effort. And the ingredient carries through:
+  a product's quality and value should scale with what went into it (a tuna sashimi
+  worth far more than a minnow one, adamantium plate more than iron), not be a flat
+  number — see the gear/jewellery/artisan factories for the model.
+- **Crafting chains stay believable.** Recipes should mirror how the thing is really
+  made — ore → bar → tool, milk → cheese, flour + egg → noodles, hide → leather →
+  armour. Where the ingredients are fantasy, keep the transformation plausible
+  in-world (a wraith's essence into a phantom draught, a drake's scale into scale
+  armour); never an arbitrary "A + B → C" that wouldn't make sense.
 - **Information over hand-holding.** Surface the world's state (journal tabs, panel
   hints, look-mode, codex) so the player can plan; never auto-play for them.
+- **Keys follow ADOM.** The control scheme mirrors ADOM's keymap wherever possible —
+  numpad/arrow movement, letter commands players of the genre already know. Don't
+  invent a binding where an ADOM convention exists, and don't add vi-keys (yubn/hjkl):
+  that's a deliberate choice. UI idioms follow ADOM too (paperdoll equipment,
+  categorised letter-indexed inventory, weights shown).
 
 ## Practicalities
 

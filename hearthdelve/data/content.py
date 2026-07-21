@@ -118,7 +118,18 @@ MATERIALS: dict[str, Material] = {
     "linen":      Material("linen",      3, a_pv=3.0, value_mult=1.0),
     "silk":       Material("silk",       4, a_dv=1, a_pv=4.0, value_mult=2.5),
     "fur":        Material("fur",        4, a_pv=4.0, value_mult=1.4),   # wolf-pelt warmth
+    # Beast scales (armour only): a combat-earned path that rivals mined metal —
+    # forged at the anvil from the scale drops themselves (see SCALE_FORGE), not
+    # from bars. Drake hide is tough yet supple (it evades); wyrm scale is the
+    # hardest armour there is, level with adamantium. The "bar" IS the drop.
+    "lurkerscale": Material("lurkerscale", 5, a_pv=5.5, value_mult=2.2, bar=items.LURKER_SCALE),
+    "drakescale":  Material("drakescale",  6, a_dv=1, a_pv=6.5, value_mult=3.8, bar=items.DRAKE_SCALE),
+    "wyrmscale":   Material("wyrmscale",   7, a_dv=-1, a_pv=7.5, value_mult=5.0, bar=items.WYRM_SCALE),
 }
+# Scale materials the anvil can forge armour from (armour bases only, never
+# weapons — you don't knap a sword from a scale). Kept out of FORGE_METALS so
+# gear-loot tiers and the metal ladder are untouched.
+SCALE_FORGE = ["lurkerscale", "drakescale", "wyrmscale"]
 # Bow woods, weakest first (for depth scaling & the codex).
 BOW_WOODS = ["birch", "willow", "yew", "composite"]
 # Soft armour materials for hats & cloaks (cloth + straw + the hides).
