@@ -246,6 +246,13 @@ SPORE_SAC     = Item("Spore Sac",     "*", "material", "The burst spore-sac of a
 GRAVE_DUST    = Item("Grave Dust",    "*", "material", "Ashen dust from a bound corpse — it stirs faintly, as if still called.", value=70)
 EMBER_CORE    = Item("Ember Core",    "*", "material", "The still-molten heart of a magma fiend; it never quite cools.", value=110)
 WYRM_SCALE    = Item("Wyrm Scale",    "u", "material", "A slab of scale from a deep wyrm — harder than steel, and prized for it.", value=150)
+# Boss trophies — one per deep champion; the Hall's Trophies wing, and a windfall
+# to sell. Only the truly deep and dangerous drop these.
+TROLL_TUSK    = Item("Troll Tusk",    "!", "trophy", "The great curved tusk of a cave troll — a hunter's boast in bone.", value=200)
+WARDEN_SIGIL  = Item("Warden Sigil",  "!", "trophy", "The cold iron sigil a gloom warden bore; it still hums with old wards.", value=300)
+MOLTEN_HEART  = Item("Molten Heart",  "!", "trophy", "The unquenched core of a molten colossus, sealed in blackglass.", value=380)
+BONE_CROWN    = Item("Bone Crown",    "!", "trophy", "The grave-crown of a bonelord; the dead no longer answer it.", value=340)
+ABYSSAL_PEARL = Item("Abyssal Pearl", "!", "trophy", "A lightless pearl from the abyssal horror — it drinks the eye that seeks it.", value=460)
 GLOWCAP       = Item("Glowcap",       "î", "material", "A luminous cave fungus from the Glimmerwood — prized by cooks.", value=65)
 # Wild mushrooms — field species (open ground) and forest species (woodland).
 BUTTON_MUSHROOM  = Item("Button Mushroom",  "τ", "material", "A small, common field mushroom.",            value=20)

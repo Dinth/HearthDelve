@@ -218,10 +218,11 @@ def player_to_hit(state: GameState) -> int:
 
 
 def player_crit(state: GameState) -> float:
-    from . import skills, jewelry
+    from . import skills, jewelry, collection
     lvl = skills.mastery_level(state, held_profile(state).category)
     return (0.03 + skills.skill_level(state, "Combat") * 0.01 + skills.mastery_crit(lvl)
             + jewelry.combat_bonus(state)["crit"]
+            + (0.05 if collection.perk_earned(state, "Trophies") else 0.0)   # Hall's Trophies wing
             + (0.10 if skills.active_buff(state) == "clarity" else 0.0))   # Clarity Draught
 
 
@@ -312,6 +313,14 @@ def monsters_act(state: GameState) -> None:
             m.awake = True
         if not m.awake:
             continue
+        # an enrager erupts once its wounds run deep — a hard second wind
+        if getattr(m, "enrage", False) and not m.enraged and m.hp * 2 <= m.max_hp:
+            m.enraged = True
+            m.dmg = (round(m.dmg[0] * 1.5), round(m.dmg[1] * 1.5))
+            m.to_hit += 2
+            if w.visible is not None and w.visible[m.x, m.y]:
+                state.log.add(f"The {m.name.lower()} roars — wounded, it fights twice as hard!",
+                              (240, 130, 90))
         m.energy += m.speed
         while m.energy >= 2 and m.alive and p.hp > 0:
             m.energy -= 2

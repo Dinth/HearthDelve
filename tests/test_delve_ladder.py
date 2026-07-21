@@ -89,5 +89,47 @@ class TestDeepDropsHaveSinks(unittest.TestCase):
             self.assertGreater(r.value, 0)
 
 
+class TestBosses(unittest.TestCase):
+    def test_bosses_have_varied_mechanics(self):
+        from hearthdelve.data import content
+        by = {b.name: b for b in content.BOSSES}
+        self.assertGreaterEqual(len(by), 5)
+        self.assertTrue(by["Molten Colossus"].enrage)
+        self.assertEqual(by["The Bonelord"].behavior, "summon")
+        self.assertEqual(by["Abyssal Horror"].behavior, "ranged")
+        self.assertGreater(by["Abyssal Horror"].reach, 0)
+
+    def test_every_boss_drops_a_signature_trophy(self):
+        from hearthdelve.data import content
+        trophies = {it.name for it in content.COLLECTION["Trophies"]}
+        self.assertEqual(len(trophies), 5)
+        for b in content.BOSSES:
+            drops = {i.name for i, _ in content.MONSTER_DROPS.get(b.name, ())}
+            self.assertTrue(drops & trophies, f"{b.name} drops no trophy")
+
+    def test_enrage_erupts_below_half_health(self):
+        from hearthdelve.game import combat, delve
+        from hearthdelve.data import content
+        st = fresh_state(50)
+        delve.enter(st, "mine")
+        mc = content.make_mob(next(b for b in content.BOSSES if b.name == "Molten Colossus"),
+                              st.player.x + 2, st.player.y, 8, random.Random(1), boss=True)
+        mc.awake = True
+        st.world.monsters = [mc]
+        st.world.visible = None
+        before = mc.dmg
+        mc.hp = mc.max_hp // 2 - 1
+        combat.monsters_act(st)
+        self.assertTrue(mc.enraged)
+        self.assertGreater(mc.dmg[1], before[1])
+
+    def test_trophies_wing_sharpens_crit(self):
+        from hearthdelve.game import combat
+        st = fresh_state(51)
+        base = combat.player_crit(st)
+        st.stats["wing_done_Trophies"] = 1
+        self.assertGreater(combat.player_crit(st), base)
+
+
 if __name__ == "__main__":
     unittest.main()

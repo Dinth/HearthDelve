@@ -1619,6 +1619,7 @@ class Monster:
     reach: int = 0         # ranged attackers strike (and kite) from up to this many
                            # tiles; 0 = melee only
     summons: str = ""      # a "summon"-behavior mob raises this template by name
+    enrage: bool = False   # a boss that hits far harder once below half health
 
 
 # Dungeon kinds share flavour, so one roster covers several sites: barrows,
@@ -1690,6 +1691,16 @@ BOSSES: list[Monster] = [
     Monster("Gloom Warden", "G", (156, 116, 176), 70, 2, "charge", 6, kinds=_UNDEAD,
             dv=10, pv=8, to_hit=8, dmg=(11, 20), boss=True,
             desc="Warden of the deep vaults — vast, armoured, and terribly strong."),
+    # Deep bosses, each with its own trick — not just another charger.
+    Monster("Molten Colossus", "C", (240, 130, 70), 90, 2, "charge", 8, kinds=_ROCK,
+            dv=7, pv=9, to_hit=9, dmg=(10, 18), boss=True, inflicts="burn", enrage=True,
+            desc="A mountain of living slag. Wound it deep and it erupts — its blows redouble in fury."),
+    Monster("The Bonelord", "B", (222, 214, 232), 100, 2, "summon", 8, kinds=_UNDEAD,
+            dv=9, pv=6, to_hit=8, dmg=(8, 15), boss=True, summons="Ghoul",
+            desc="Crowned king of the barrows; while it reigns, the dead rise faster than you can fell them."),
+    Monster("Abyssal Horror", "H", (110, 150, 190), 110, 2, "ranged", 10, kinds=("sea cave", "grotto", "cavern"),
+            dv=11, pv=7, to_hit=10, dmg=(9, 17), boss=True, inflicts="poison", reach=5,
+            desc="A drowned nightmare of the sunless pools; it flenses you from across the water."),
 ]
 
 
@@ -1773,7 +1784,7 @@ def make_mob(template: Monster, x: int, y: int, depth: int, rng, boss: bool = Fa
     return Mob(name, glyph, color, hp, hp, speed, template.behavior, x, y,
                dv=dv, pv=pv, to_hit=to_hit, dmg=dmg, boss=boss, level=lvl,
                inflicts=inflicts, elite=elite, base=template.name,
-               reach=template.reach, summons=template.summons)
+               reach=template.reach, summons=template.summons, enrage=template.enrage)
 
 
 # --- Surface wildlife --------------------------------------------------------
@@ -2833,8 +2844,10 @@ def _collection_catalogue() -> dict:
                  items.ANTLER, items.RAW_HIDE, items.SPIDER_SILK, items.VENOM_GLAND,
                  items.LURKER_SCALE, items.WRAITH_ESSENCE, items.DRAKE_SCALE,
                  items.SPORE_SAC, items.GRAVE_DUST, items.EMBER_CORE, items.WYRM_SCALE)
+    trophies = (items.TROLL_TUSK, items.WARDEN_SIGIL, items.MOLTEN_HEART,
+                items.BONE_CROWN, items.ABYSSAL_PEARL)
     return {"Herbarium": herbarium, "Angler's Cabinet": anglers,
-            "Lapidary": lapidary, "Reliquary": reliquary}
+            "Lapidary": lapidary, "Reliquary": reliquary, "Trophies": trophies}
 
 
 COLLECTION: dict[str, tuple] = _collection_catalogue()
@@ -2937,8 +2950,11 @@ MONSTER_DROPS: dict[str, list] = {
     "Cave Spider":  [(items.SPIDER_SILK, 0.6), (items.VENOM_GLAND, 0.4)],
     "Deep Lurker":  [(items.LURKER_SCALE, 0.6)],
     "Wraith":       [(items.WRAITH_ESSENCE, 0.5)],
-    "Cave Troll":   [(items.BOAR_HIDE, 1.0), (items.COAL, 1.0)],
-    "Gloom Warden": [(items.WRAITH_ESSENCE, 1.0), (items.LURKER_SCALE, 0.8)],
+    "Cave Troll":   [(items.TROLL_TUSK, 1.0), (items.BOAR_HIDE, 1.0), (items.COAL, 1.0)],
+    "Gloom Warden": [(items.WARDEN_SIGIL, 1.0), (items.WRAITH_ESSENCE, 1.0), (items.LURKER_SCALE, 0.8)],
+    "Molten Colossus": [(items.MOLTEN_HEART, 1.0), (items.EMBER_CORE, 1.0), (items.COAL, 1.0)],
+    "The Bonelord": [(items.BONE_CROWN, 1.0), (items.GRAVE_DUST, 1.0), (items.WRAITH_ESSENCE, 0.8)],
+    "Abyssal Horror": [(items.ABYSSAL_PEARL, 1.0), (items.LURKER_SCALE, 1.0), (items.WYRM_SCALE, 0.6)],
     "Spore Spitter": [(items.SPORE_SAC, 0.7)],
     "Bonecaller":   [(items.GRAVE_DUST, 0.8)],
     "Magma Fiend":  [(items.EMBER_CORE, 0.7), (items.COAL, 0.6)],

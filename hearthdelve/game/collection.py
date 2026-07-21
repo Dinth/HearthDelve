@@ -97,6 +97,7 @@ WING_PERK = {
     "Angler's Cabinet": "you read the water like a book — the fish bite more often.",
     "Lapidary": "a jeweller's eye is yours — you cut finer stones.",
     "Reliquary": "the deep's trophies have taught you — your blows earn more Combat mastery.",
+    "Trophies": "the champions of the deep are yours to boast — your killing eye sharpens (+crit).",
 }
 
 

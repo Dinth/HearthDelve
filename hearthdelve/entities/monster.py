@@ -42,6 +42,8 @@ class Mob:
     reach: int = 0          # ranged attackers strike & kite from up to this many tiles
     summons: str = ""       # a "summon"-behavior mob raises this template by name
     summon_cd: int = 0      # turns until it may summon again (transient)
+    enrage: bool = False    # a boss that hits harder once below half health
+    enraged: bool = False   # latched once it has (transient)
 
     @property
     def alive(self) -> bool:
