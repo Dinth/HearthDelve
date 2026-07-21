@@ -95,8 +95,11 @@ def weapon_inflict(state: GameState) -> str:
     and so does any weapon while a Firebrand Elixir is in the blood. (Melee only —
     a burning blade, not a burning arrow.) Returns "" for none."""
     from . import skills
-    if skills.active_buff(state) == "firebrand":
+    buff = skills.active_buff(state)
+    if buff == "firebrand":
         return "burn"
+    if buff == "venomed":                        # a Venom Draught in the blood
+        return "poison"
     gems = getattr(state.player.active_tool, "gems", ())
     return "burn" if "ruby" in gems else ""
 
@@ -194,7 +197,8 @@ def player_dv(state: GameState) -> int:
             + prof.dv + wdv + skills.mastery_parry(lvl)
             + round(jewelry.combat_bonus(state)["dv"])
             + attrs.mod(state, "Dx") // 3                           # born nimble
-            + (3 if skills.active_buff(state) == "swift" else 0))   # Swiftness Tonic
+            + (3 if skills.active_buff(state) == "swift" else 0)    # Swiftness Tonic
+            + (4 if skills.active_buff(state) == "phantom" else 0))  # Phantom Draught
 
 
 def player_pv(state: GameState) -> int:

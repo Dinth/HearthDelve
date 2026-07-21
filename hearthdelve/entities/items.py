@@ -239,6 +239,9 @@ STONESKIN_DRAUGHT= Item("Stoneskin Draught","!", "food", "Drink before a delve: 
 SWIFTNESS_TONIC = Item("Swiftness Tonic","!", "food", "A quickening tonic: light on your feet and hard to land a blow on for a while.", value=300, energy=20, buff="swift")
 FIREBRAND_ELIXIR= Item("Firebrand Elixir","!", "food", "Brimstone in the blood: your blows set foes alight for a while.", value=360, energy=20, buff="firebrand")
 CLARITY_DRAUGHT = Item("Clarity Draught","!", "food", "A clear-headed focus: keener aim and a deadlier eye for the opening, for a while.", value=300, energy=20, buff="clarity")
+# Draughts distilled from monster spoils — the delve's own trophies, turned to use.
+VENOM_DRAUGHT   = Item("Venom Draught", "!", "food", "Venom and rot-spore in a spirit base: your blows drip poison for a while.", value=350, energy=20, buff="venomed")
+PHANTOM_DRAUGHT = Item("Phantom Draught","!", "food", "A wraith's essence, half-drunk: you turn ghost-light and hard to touch for a while.", value=420, energy=20, buff="phantom")
 LURKER_SCALE  = Item("Lurker Scale",  "u", "material", "A thick armoured scale from a deep lurker.", value=55)
 WRAITH_ESSENCE= Item("Wraith Essence","*", "material", "Cold, half-real essence bled from a wraith.", value=75)
 # Trophies of the deep floors — rarer, richer the further down they're won.

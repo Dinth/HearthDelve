@@ -79,6 +79,8 @@ BUFFS = {
     "swift":   "Swift",               # +Dodge (harder to hit)
     "firebrand": "Firebrand",         # your blows set foes alight
     "clarity": "Clarity",             # +to-hit and +crit
+    "venomed": "Envenomed",           # your blows drip poison
+    "phantom": "Phantom",             # ghost-light: +Dodge (harder to hit)
 }
 
 

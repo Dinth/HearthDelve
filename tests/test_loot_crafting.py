@@ -53,5 +53,40 @@ class TestScaleArmour(unittest.TestCase):
                 pass
 
 
+class TestEssenceAlchemy(unittest.TestCase):
+    def test_essence_draughts_exist_and_clear_margin(self):
+        from hearthdelve.data import content
+        from hearthdelve.entities import items
+        made = {out: (inp, need) for inp, out, _oq, need, _m in content.APOTHECARY_POTIONS}
+        for draught in (items.VENOM_DRAUGHT, items.PHANTOM_DRAUGHT):
+            self.assertIn(draught, made)
+            inp, _need = made[draught]
+            iv = sum(it.value * q for it, q in inp)
+            self.assertGreaterEqual(draught.value, iv * 1.25 - 0.5)
+        # they're built from monster spoils, not just herbs
+        venom_inputs = {it for it, _q in made[items.VENOM_DRAUGHT][0]}
+        self.assertIn(items.SPORE_SAC, venom_inputs)
+
+    def test_venom_draught_makes_blows_poison(self):
+        from hearthdelve.game import combat, skills
+        st = fresh_state(92)
+        self.assertEqual(combat.weapon_inflict(st), "")
+        skills.apply_buff(st, "venomed", minutes=600)
+        self.assertEqual(combat.weapon_inflict(st), "poison")
+
+    def test_phantom_draught_raises_dodge(self):
+        from hearthdelve.game import combat, skills
+        st = fresh_state(93)
+        base = combat.player_dv(st)
+        skills.apply_buff(st, "phantom", minutes=600)
+        self.assertGreater(combat.player_dv(st), base)
+
+    def test_ember_core_is_a_fuel(self):
+        from hearthdelve.data import content
+        from hearthdelve.entities import items
+        self.assertIn(items.EMBER_CORE, content.FUELS)
+        self.assertGreaterEqual(content.FUELS[items.EMBER_CORE], content.FUELS[items.COKE])
+
+
 if __name__ == "__main__":
     unittest.main()

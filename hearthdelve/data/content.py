@@ -1138,6 +1138,9 @@ APOTHECARY_POTIONS: list = [
     (((items.YARROW, 1), (items.LAVENDER, 1), (items.VODKA, 1)), items.SWIFTNESS_TONIC, 1, 5, 600),
     (((items.SULPHUR, 1), (items.MANDRAKE, 1), (items.VODKA, 1)), items.FIREBRAND_ELIXIR, 1, 6, 720),
     (((items.SAGE, 1), (items.CHAMOMILE, 1), (items.VODKA, 1)), items.CLARITY_DRAUGHT, 1, 6, 600),
+    # Distilled from the delve's own spoils — monster essence turned to a boon.
+    (((items.VENOM_GLAND, 1), (items.SPORE_SAC, 1), (items.VODKA, 1)), items.VENOM_DRAUGHT, 1, 6, 720),
+    (((items.WRAITH_ESSENCE, 1), (items.GRAVE_DUST, 1), (items.VODKA, 1)), items.PHANTOM_DRAUGHT, 1, 7, 720),
 ]
 
 # The vodka chain. The keg ferments a grain or potato into a mash; the apothecary
@@ -3018,6 +3021,7 @@ FUELS = {
     items.CHARCOAL: 2,   # kiln-charred wood; a reliable mid fuel
     items.COAL:     3,   # mined; hot enough for the precious & hard metals
     items.COKE:     4,   # kiln-baked coal; the hottest — smelts anything, fast
+    items.EMBER_CORE: 5, # a magma fiend's still-molten heart — a rare, ferocious fuel
 }
 # Ordered hottest-first, so the loader can offer the best fuel a player carries.
 FUELS_BY_HEAT = sorted(FUELS, key=lambda f: -FUELS[f])
