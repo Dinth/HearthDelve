@@ -1616,6 +1616,9 @@ class Monster:
     inflicts: str = ""     # a status a hit may leave: "poison" | "bleed" | "burn"
     kinds: tuple = ()      # dungeon kinds it haunts ("mine"/"grotto"/"barrow"/"tomb"/
                            # "dwarfhold"); () = found in any dungeon
+    reach: int = 0         # ranged attackers strike (and kite) from up to this many
+                           # tiles; 0 = melee only
+    summons: str = ""      # a "summon"-behavior mob raises this template by name
 
 
 # Dungeon kinds share flavour, so one roster covers several sites: barrows,
@@ -1656,6 +1659,27 @@ MONSTERS: list[Monster] = [
             desc="A gaunt corpse-eater; its filthy claws breed a wasting sickness."),
     Monster("Wraith", "W", (186, 204, 224), 22, 2, "erratic", 6, kinds=_UNDEAD,
             dv=18, pv=2, to_hit=6, dmg=(4, 11), desc="A cold, half-there shade you can barely lay a hand on."),
+    # --- Deep floors: new archetypes that carry the ladder past floor ~6 -------
+    # A ranged attacker — spits festering spores from across the chamber, and
+    # kites to keep its distance. Bring a bow, or close the gap fast.
+    Monster("Spore Spitter", "p", (150, 200, 130), 18, 2, "ranged", 5, kinds=_DAMP,
+            dv=9, pv=1, to_hit=5, dmg=(3, 7), inflicts="poison", reach=4,
+            desc="A bloated fungal stalk that spits rot-spores from afar, shrinking back as you near."),
+    # A summoner — claws the lesser dead back to their feet, so it must be reached
+    # and put down before the floor fills with bone.
+    Monster("Bonecaller", "n", (214, 208, 224), 30, 2, "summon", 7, kinds=_UNDEAD,
+            dv=8, pv=2, to_hit=5, dmg=(3, 7), summons="Skeleton",
+            desc="A hooded adept of the barrows; while it stands, the dead keep rising."),
+    # Deep bruisers per kind — the floor-8-and-below muscle.
+    Monster("Magma Fiend", "F", (238, 138, 74), 40, 2, "charge", 8, kinds=_ROCK,
+            dv=8, pv=5, to_hit=7, dmg=(7, 13), inflicts="burn",
+            desc="Living rock veined with fire; its every blow sears, and it charges through the dark."),
+    Monster("Barrow Wight", "z", (170, 186, 210), 38, 2, "chase", 8, kinds=_UNDEAD, inflicts="sick",
+            dv=12, pv=4, to_hit=8, dmg=(6, 12),
+            desc="A crowned corpse wreathed in grave-cold; its grip breeds a wasting sickness."),
+    Monster("Rockjaw Wyrm", "y", (176, 150, 120), 64, 1, "chase", 10, kinds=("mine", "cavern"),
+            dv=6, pv=10, to_hit=9, dmg=(10, 18),
+            desc="A vast blind wyrm that chews ore and stone alike — slow, but frightful to crack."),
 ]
 
 # Bosses appear on deep floors and are spawned by special logic (not the pool).
@@ -1748,7 +1772,8 @@ def make_mob(template: Monster, x: int, y: int, depth: int, rng, boss: bool = Fa
         lvl += 2                                      # a harder kill: more XP, richer loot
     return Mob(name, glyph, color, hp, hp, speed, template.behavior, x, y,
                dv=dv, pv=pv, to_hit=to_hit, dmg=dmg, boss=boss, level=lvl,
-               inflicts=inflicts, elite=elite, base=template.name)
+               inflicts=inflicts, elite=elite, base=template.name,
+               reach=template.reach, summons=template.summons)
 
 
 # --- Surface wildlife --------------------------------------------------------
@@ -2806,7 +2831,8 @@ def _collection_catalogue() -> dict:
                 items.SAPPHIRE, items.DIAMOND)
     reliquary = (items.SLIME_GEL, items.BAT_WING, items.BOAR_HIDE, items.WOLF_PELT,
                  items.ANTLER, items.RAW_HIDE, items.SPIDER_SILK, items.VENOM_GLAND,
-                 items.LURKER_SCALE, items.WRAITH_ESSENCE, items.DRAKE_SCALE)
+                 items.LURKER_SCALE, items.WRAITH_ESSENCE, items.DRAKE_SCALE,
+                 items.SPORE_SAC, items.GRAVE_DUST, items.EMBER_CORE, items.WYRM_SCALE)
     return {"Herbarium": herbarium, "Angler's Cabinet": anglers,
             "Lapidary": lapidary, "Reliquary": reliquary}
 
@@ -2913,6 +2939,11 @@ MONSTER_DROPS: dict[str, list] = {
     "Wraith":       [(items.WRAITH_ESSENCE, 0.5)],
     "Cave Troll":   [(items.BOAR_HIDE, 1.0), (items.COAL, 1.0)],
     "Gloom Warden": [(items.WRAITH_ESSENCE, 1.0), (items.LURKER_SCALE, 0.8)],
+    "Spore Spitter": [(items.SPORE_SAC, 0.7)],
+    "Bonecaller":   [(items.GRAVE_DUST, 0.8)],
+    "Magma Fiend":  [(items.EMBER_CORE, 0.7), (items.COAL, 0.6)],
+    "Barrow Wight": [(items.GRAVE_DUST, 0.6), (items.WRAITH_ESSENCE, 0.3)],
+    "Rockjaw Wyrm": [(items.WYRM_SCALE, 0.8), (items.STONE, 0.9)],
 }
 
 

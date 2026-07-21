@@ -348,6 +348,16 @@ def _step(state: GameState, m) -> None:
     if _dist(m, p) == 1:
         _attack_player(state, m)
         return
+    # summoners raise the lesser dead while they hold ground, then close in
+    if m.behavior == "summon":
+        _try_summon(state, m)
+    # ranged attackers fire from afar and kite to keep their distance
+    reach = getattr(m, "reach", 0)
+    if reach and _dist(m, p) <= reach:
+        _ranged_attack(state, m)
+        if _dist(m, p) <= 2:                 # too close for comfort — give ground
+            _move_toward(state, m, away=True)
+        return
     # bats flit erratically; wounded ones flee
     if m.behavior == "erratic" and random.random() < 0.45:
         dirs = [(dx, dy) for dx in (-1, 0, 1) for dy in (-1, 0, 1) if dx or dy]
@@ -384,6 +394,12 @@ def _attack_player(state: GameState, m) -> None:
                       (210, 170, 140))
     else:
         state.log.add(f"The {m.name.lower()} hits you for {dmg}!", (224, 140, 120))
+    _maybe_inflict(state, m)
+
+
+def _maybe_inflict(state: GameState, m) -> None:
+    """Roll a mob's on-hit status (poison/bleed/burn/sick), tempered by an herbal
+    ward and the player's Willpower. Shared by melee and ranged attacks."""
     inflicts = getattr(m, "inflicts", "")
     if inflicts in STATUS and inflicts not in state.player.status:
         from . import skills, attrs
@@ -394,6 +410,48 @@ def _attack_player(state: GameState, m) -> None:
         if random.random() < chance:
             apply_status(state, inflicts)
             state.log.add(STATUS[inflicts]["on"], STATUS[inflicts]["color"])
+
+
+def _ranged_attack(state: GameState, m) -> None:
+    """A ranged mob strikes from a distance — the same to-hit vs DV and damage
+    minus PV as a melee blow, but it can be answered only by closing or shooting
+    back."""
+    res = _resolve(m.to_hit, m.dmg, 0, 0.0, player_dv(state), player_pv(state))
+    if res is None:
+        state.log.add(f"The {m.name.lower()} looses at you — it goes wide.", C.DIM)
+        return
+    dmg, _crit = res
+    state.player.hp -= dmg
+    state.log.add(f"The {m.name.lower()} strikes you from afar for {dmg}!", (224, 150, 130))
+    _maybe_inflict(state, m)
+
+
+def _try_summon(state: GameState, m) -> None:
+    """A summoner raises a fresh minion (its ``summons`` template, at that mob's
+    own baseline so it's fodder, not a floor-native) on a cooldown, capped so a
+    floor never floods."""
+    w = state.world
+    cd = getattr(m, "summon_cd", 0)
+    if cd > 0:
+        m.summon_cd = cd - 1
+        return
+    if sum(1 for o in w.monsters if o.alive) >= 8:
+        return
+    tmpl = next((t for t in content.MONSTERS if t.name == (m.summons or "Cave Slime")), None)
+    if tmpl is None:
+        return
+    spots = [(dx, dy) for dx in (-1, 0, 1) for dy in (-1, 0, 1) if dx or dy]
+    random.shuffle(spots)
+    for dx, dy in spots:
+        if _can_move(state, m, dx, dy):
+            minion = content.make_mob(tmpl, m.x + dx, m.y + dy, max(1, tmpl.min_depth), random)
+            minion.awake = True
+            w.monsters.append(minion)
+            m.summon_cd = 5
+            if w.visible is not None and w.visible[m.x, m.y]:
+                state.log.add(f"The {m.name.lower()} calls up a {minion.name.lower()}!",
+                              (200, 170, 210))
+            return
 
 
 # --- the Bomb ability --------------------------------------------------------

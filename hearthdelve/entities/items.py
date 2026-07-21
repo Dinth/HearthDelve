@@ -241,6 +241,11 @@ FIREBRAND_ELIXIR= Item("Firebrand Elixir","!", "food", "Brimstone in the blood: 
 CLARITY_DRAUGHT = Item("Clarity Draught","!", "food", "A clear-headed focus: keener aim and a deadlier eye for the opening, for a while.", value=300, energy=20, buff="clarity")
 LURKER_SCALE  = Item("Lurker Scale",  "u", "material", "A thick armoured scale from a deep lurker.", value=55)
 WRAITH_ESSENCE= Item("Wraith Essence","*", "material", "Cold, half-real essence bled from a wraith.", value=75)
+# Trophies of the deep floors — rarer, richer the further down they're won.
+SPORE_SAC     = Item("Spore Sac",     "*", "material", "The burst spore-sac of a fungal spitter; the apothecary covets it.", value=50)
+GRAVE_DUST    = Item("Grave Dust",    "*", "material", "Ashen dust from a bound corpse — it stirs faintly, as if still called.", value=70)
+EMBER_CORE    = Item("Ember Core",    "*", "material", "The still-molten heart of a magma fiend; it never quite cools.", value=110)
+WYRM_SCALE    = Item("Wyrm Scale",    "u", "material", "A slab of scale from a deep wyrm — harder than steel, and prized for it.", value=150)
 GLOWCAP       = Item("Glowcap",       "î", "material", "A luminous cave fungus from the Glimmerwood — prized by cooks.", value=65)
 # Wild mushrooms — field species (open ground) and forest species (woodland).
 BUTTON_MUSHROOM  = Item("Button Mushroom",  "τ", "material", "A small, common field mushroom.",            value=20)

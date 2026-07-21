@@ -39,6 +39,9 @@ class Mob:
     elite: str = ""         # an elite affix ("Dire", "Venomous", ...) or "" for a common mob
     base: str = ""          # the template (un-prefixed) name, for drop/bestiary lookup
                             # without re-parsing the elite prefix out of `name`
+    reach: int = 0          # ranged attackers strike & kite from up to this many tiles
+    summons: str = ""       # a "summon"-behavior mob raises this template by name
+    summon_cd: int = 0      # turns until it may summon again (transient)
 
     @property
     def alive(self) -> bool:

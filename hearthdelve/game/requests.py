@@ -88,7 +88,8 @@ def _request_pool(state: GameState, role: str) -> list:
                  it.CAVE_MUSHROOM, it.GLOWCAP]
     herbs = [it.CHAMOMILE, it.YARROW, it.COMFREY, it.LAVENDER, it.SAGE, it.MANDRAKE]
     calming = [it.CHAMOMILE, it.LAVENDER, it.SAGE]
-    parts = [it.SLIME_GEL, it.BAT_WING, it.LURKER_SCALE, it.WRAITH_ESSENCE]
+    parts = [it.SLIME_GEL, it.BAT_WING, it.LURKER_SCALE, it.WRAITH_ESSENCE,
+             it.SPORE_SAC, it.GRAVE_DUST, it.EMBER_CORE, it.WYRM_SCALE]
     # Cured fish a taproom or fisher would plausibly ask for — the achievable
     # ones; the ultra-rare (smoked moonfish, caviar) stay sell/gift/collection.
     cured_fish = [c for f, c in content.FISH_CURED.items() if f.value <= 120]
