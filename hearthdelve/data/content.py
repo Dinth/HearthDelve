@@ -3100,3 +3100,50 @@ QUESTS: list[Quest] = [
 ALL_TOOLS = [items.HOE, items.WATERING_CAN, items.AXE, items.PICKAXE, items.MACHETE, items.FISHING_ROD]
 # ALL_WEAPONS / ALL_ARMOR are defined by the gear factory above.
 ALL_SEEDS = [c.seed for c in CROPS] + [t.sapling for t in TREES]
+
+
+# --- Value floor: every crafted good is worth its ingredients + 25% ----------
+CRAFT_MARGIN = 1.25
+
+
+def _enforce_recipe_margins() -> None:
+    """Value every craftable from its ingredients up, not by hand: each output is
+    worth at least the goods that go into it plus CRAFT_MARGIN (the design's
+    ≥25% rule). Goods already worth more — premium gifts, rarer/deeper chains —
+    keep their higher value; only the shortfalls are lifted to the floor. Runs
+    once at import over the hand-authored chains (cooking, milling, bench items);
+    the factory chains (jam/wine/jerky/cured/cloth) already derive value ×mult
+    and clear the floor by construction. A wildcard input (any fish/meat/…) is
+    valued at its cheapest family member, so the floor holds for the humblest
+    thing that can satisfy the recipe."""
+    import math
+    all_items = [v for v in vars(items).values() if isinstance(v, items.Item)]
+
+    def fam_min(fam: str) -> int:
+        vals = [x.value for x in all_items if getattr(x, "family", "") == fam and x.value > 0]
+        return min(vals) if vals else 0
+
+    def ing_value(inputs) -> int:
+        return sum((fam_min(it.family) if isinstance(it, AnyOf) else it.value) * q
+                   for it, q in inputs)
+
+    entries = [(r.inputs, r.output, r.out_qty) for r in RECIPES
+               if r.kind in ("cook", "item", "craft", "remedy") and r.output and r.output.value > 0]
+    entries += [(((src, 1),), out, 1) for src, out in MILL_RECIPES.items()]
+    # Iterate to a fixed point: lifting an intermediate (flour) raises the cost of
+    # anything built from it, so recompute until nothing moves. Values only rise
+    # and are bounded, so this converges in a few passes.
+    changed = True
+    while changed:
+        changed = False
+        for inputs, out, qty in entries:
+            iv = ing_value(inputs)          # reads current (possibly-lifted) values
+            if iv <= 0:
+                continue
+            need = math.ceil(iv * CRAFT_MARGIN / max(1, qty))
+            if out.value < need:
+                object.__setattr__(out, "value", need)   # Item is frozen; lift the floor
+                changed = True
+
+
+_enforce_recipe_margins()

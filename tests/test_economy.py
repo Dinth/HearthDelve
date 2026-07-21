@@ -47,6 +47,33 @@ class TestAlchemyMargins(unittest.TestCase):
         self.assertLessEqual(worst[1], 500, f"{worst[0]} prints {worst[1]:.0f} g/day")
 
 
+class TestCraftMargins(unittest.TestCase):
+    def test_every_craftable_clears_its_ingredients(self):
+        """The value floor: no cook/bench/mill good is worth less than its
+        ingredients + 25% (a wildcard input is priced at its cheapest member)."""
+        from hearthdelve.data import content
+        from hearthdelve.entities import items as I
+        all_items = [v for v in vars(I).values() if isinstance(v, I.Item)]
+
+        def fam_min(fam):
+            vals = [x.value for x in all_items if getattr(x, "family", "") == fam and x.value > 0]
+            return min(vals) if vals else 0
+
+        def ing(inputs):
+            return sum((fam_min(it.family) if isinstance(it, content.AnyOf) else it.value) * q
+                       for it, q in inputs)
+
+        entries = [(r.name, r.inputs, r.output, r.out_qty) for r in content.RECIPES
+                   if r.kind in ("cook", "item", "craft", "remedy") and r.output and r.output.value > 0]
+        entries += [(f"mill {s.name}", ((s, 1),), o, 1) for s, o in content.MILL_RECIPES.items()]
+        for name, inputs, out, qty in entries:
+            iv = ing(inputs)
+            if iv <= 0:
+                continue
+            self.assertGreaterEqual(out.value * qty, iv * content.CRAFT_MARGIN - 0.5,
+                                    f"{name}: {out.value}x{qty} < {iv} ingredients +25%")
+
+
 class TestRequestBoard(unittest.TestCase):
     ROLES = ("innkeeper", "blacksmith", "carpenter", "forester", "forager", "priest",
              "farmer", "fisher", "child", "trader",
