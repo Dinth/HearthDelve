@@ -316,7 +316,7 @@ class PlayScreen(Screen):
             state.log.add("Open your pack (i), then Shift+D to drop the highlighted stack.", C.DIM)
         elif cmd == "equipment":
             ui.push(EquipmentScreen())
-        elif cmd == "messages":
+        elif cmd == "messages" or cmd == "scroll":   # h / Shift+M / PageUp-Down: message history
             ui.push(LogScreen())
         elif cmd == "worldmap":
             ui.push(WorldMapScreen())
@@ -943,6 +943,8 @@ class LogScreen(Screen):
             ui.pop()
         elif cmd == "move" and action[2]:
             self.scroll = max(0, self.scroll - action[2])   # up = older
+        elif cmd == "scroll":                                # PageUp/PageDown: jump a page
+            self.scroll = max(0, self.scroll + action[1] * 12)
 
 
 class CharGenScreen(Screen):

@@ -59,7 +59,7 @@ def build_codex_pages(state: GameState):
         ("                   Tab filters by category; Shift+D drops the stack)", C.DIM),
         ("  e                equipment", C.WHITE),
         ("  m                world map (the whole region at a glance)", C.WHITE),
-        ("  h                message log (scrollback)", C.WHITE),
+        ("  h  /  Shift+M     message history (PgUp/PgDn page, ↑↓ scroll)", C.WHITE),
         ("  v                character sheet (stats, combat numbers & skills)", C.WHITE),
         ("  j                journal (goals)", C.WHITE),
         ("  r                relationships", C.WHITE),

@@ -69,6 +69,10 @@ def _sym_to_action(event: tcod.event.KeyDown):
         return ("use",)
     if sym == K.TAB:
         return ("swap",)         # in aim mode: toggle between loosing the bow and lobbing a bomb
+    if sym == getattr(K, "PAGEUP", object()):
+        return ("scroll", 1)     # page back through older messages / list rows
+    if sym == getattr(K, "PAGEDOWN", object()):
+        return ("scroll", -1)
     # '?' is its own keysym on some builds; also accept shift+'/' for robustness.
     if sym == getattr(K, "QUESTION", object()) or (sym == K.SLASH and shift):
         return ("help",)
@@ -85,7 +89,9 @@ def _sym_to_action(event: tcod.event.KeyDown):
     if ch == "c" and shift:
         return ("talk",)             # Shift+C: chat with a villager / open a shop
     if ch == "m" and shift:
-        return ("mutemusic",)        # Shift+M: mute / unmute the background music
+        return ("messages",)         # Shift+M: the full message history (also 'h')
+    if ch == "u" and shift:
+        return ("mutemusic",)        # Shift+U: mute / unmute the background music
     if ch in _LETTER_CMD:
         return _LETTER_CMD[ch]
     return None
