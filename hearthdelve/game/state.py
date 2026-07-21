@@ -14,9 +14,19 @@ class MessageLog:
 
     def __init__(self) -> None:
         self.messages: list[tuple[str, tuple[int, int, int]]] = []
+        self._last: tuple[str, tuple[int, int, int]] | None = None
+        self._count = 0
 
     def add(self, text: str, color: tuple[int, int, int] = C.WHITE) -> None:
+        # Coalesce an immediate repeat into "… (xN)" so spammy events (bumping a
+        # wall, watering row after row) don't flush the short visible log.
+        if self.messages and self._last == (text, color):
+            self._count += 1
+            self.messages[-1] = (f"{text} (x{self._count})", color)
+            return
         self.messages.append((text, color))
+        self._last = (text, color)
+        self._count = 1
         if len(self.messages) > self.MAX:
             del self.messages[:-self.MAX]
 

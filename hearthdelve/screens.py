@@ -312,6 +312,8 @@ class PlayScreen(Screen):
             state.player.inventory.slots.sort(
                 key=lambda e: inventory.sort_key(e[0], e[2]))
             ui.push(InventoryScreen())
+        elif cmd == "drop":                      # 'd' on the map: point to where drop lives
+            state.log.add("Open your pack (i), then Shift+D to drop the highlighted stack.", C.DIM)
         elif cmd == "equipment":
             ui.push(EquipmentScreen())
         elif cmd == "messages":

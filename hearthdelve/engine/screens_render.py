@@ -344,6 +344,29 @@ def inv_letter(i: int) -> str:
     return _INV_LETTERS[i] if i < len(_INV_LETTERS) else " "
 
 
+def _pack_detail(it) -> str:
+    """A one-line 'what is this' for the highlighted pack item — the stats that
+    matter for its kind, then its flavour. The pack used to show none of this."""
+    stats = []
+    ws = content.WEAPON_STATS.get(it)
+    if ws:
+        lo, hi = ws.dmg
+        stats.append(f"dmg {lo}-{hi}, hit {ws.to_hit:+d}")
+    ar = content.ARMOR_STATS.get(it)
+    if ar:
+        stats.append(f"DV {ar[0]:+d} PV {ar[1]:+d}")
+    if getattr(it, "energy", 0):
+        stats.append(f"+{it.energy} stamina")
+    if getattr(it, "heal", 0):
+        stats.append(f"heals {it.heal}")
+    if getattr(it, "buff", ""):
+        from ..game import skills
+        stats.append(skills.BUFFS.get(it.buff, it.buff))
+    stats.append(f"{it.value}g")
+    head = " · ".join(stats)
+    return f"{head}  —  {it.desc}" if it.desc else head
+
+
 def render_inventory(con: tcod.console.Console, state: GameState, sel: int = 0,
                      filt: str | None = None) -> None:
     from ..game import skills
@@ -363,8 +386,8 @@ def render_inventory(con: tcod.console.Console, state: GameState, sel: int = 0,
             prev = cat
         rows.append(("item", v))
 
-    w, h = 62, min(C.SCREEN_H - 2, max(9, len(rows) + 5))
-    body = h - 4
+    w, h = 62, min(C.SCREEN_H - 2, max(11, len(rows) + 6))
+    body = h - 6
     m = ui.Modal(con, w, h, "PACK" + (f" — {filt}" if filt else ""))
     total = sum(q for _it, q, _ql in slots)
     etier = enc.tier(state)
@@ -402,6 +425,8 @@ def render_inventory(con: tcod.console.Console, state: GameState, sel: int = 0,
             qs = f"[x{qty} · {enc.weight_of(it) * qty:.0f}⚖]"
             m.text(w - 2 - len(qs), dy, qs, fg=_BRACKET_FG, bg=bg)
         m.arrows(start > 0, end < len(rows), 2, h - 3, dx=-3, glyphs=("↑", "↓"))
+        it_sel, _q, ql_sel = slots[visible[sel]]      # detail line for the highlighted item
+        m.text(2, h - 3, _pack_detail(it_sel)[:w - 6], fg=(188, 184, 168))
     m.footer("[a-z] pick  [Enter] use/equip  [⇧D] drop  [Tab] filter  [e] equipment",
              fg=_FOOT_FG)
 
@@ -439,7 +464,7 @@ def _jewel_desc(it, quality: int) -> str:
     if r("pv"):     parts.append(f"+{round(r('pv'))} PV")
     if r("crit"):   parts.append(f"+{round(r('crit') * 100)}% crit")
     if r("yield"):  parts.append(f"+{round(r('yield') * 100)}% yield")
-    if r("energy"): parts.append(f"-{round(r('energy'))} energy")
+    if r("energy"): parts.append(f"-{round(r('energy'))} stamina")
     return "[" + ", ".join(parts) + "]" if parts else ""
 
 
@@ -1114,12 +1139,18 @@ def render_gift(con: tcod.console.Console, state: GameState, npc, sel: int) -> N
     def row(i, dy, selected, bg):
         it, q, ql = gifts[i]
         # Match the same family-aware taste logic the gift actually uses, so the
-        # tag never lies (a "loves Jam" NPC tags any jam variant as loved).
-        tag = (" (loves!)" if npc._matches(it, npc.loves)
-               else " (likes)" if npc._matches(it, npc.likes)
-               else " (dislikes)" if npc._matches(it, npc.dislikes) else "")
+        # tag never lies (a "loves Jam" NPC tags any jam variant as loved). Colour
+        # reinforces the tag so taste reads at a glance, not by text alone.
+        if npc._matches(it, npc.loves):
+            tag, fg = " (loves!)", (150, 220, 150)
+        elif npc._matches(it, npc.likes):
+            tag, fg = " (likes)", (196, 220, 176)
+        elif npc._matches(it, npc.dislikes):
+            tag, fg = " (dislikes)", (222, 150, 140)
+        else:
+            tag, fg = "", C.WHITE
         star = (" " + skills.stars(ql)) if ql else ""
-        m.text(2, dy, ui.cur(selected) + f"{q:>3} {it.name}{star}{tag}", fg=C.WHITE, bg=bg)
+        m.text(2, dy, ui.cur(selected) + f"{q:>3} {it.name}{star}{tag}", fg=fg, bg=bg)
 
     m.list(2, body, len(gifts), sel, row, arrow_top=2, arrow_bottom=h - 3)
     m.footer("↑↓ select   Enter give   Esc close")

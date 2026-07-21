@@ -64,23 +64,30 @@ tcod, SDL, numpy, and the font are all bundled.
 
 [PyInstaller]: https://pyinstaller.org
 
-## Controls (M1)
+## Controls
+
+The in-game encyclopedia (`?`) is the authoritative, always-current reference.
 
 | Key | Action |
 |-----|--------|
 | Arrow keys | move (up / down / left / right) |
 | Numpad `1`–`9` | move, including diagonals |
 | Numpad `5` / `.` | wait a turn |
+| `w` then a direction / `.` | run until something happens / rest a while |
 | `Space` | use the active tool / plant the selected seed on the faced tile |
 | `1`–`9` (top row) | select hotbar tool or seed |
-| `g` | gather / harvest a crop, or load/collect a machine |
+| `g` | gather / harvest, load/collect a machine, or use a notice board / post box |
 | `c` | craft, build machines, cook |
+| `p` | site a carpenter building |
+| `x` | eat (restore stamina & health) |
 | `b` | shipping bin — sell goods (stand beside it) |
-| `t` | talk to a villager / open their shop |
+| `t` | aim & fire a readied bow/sling, or throw a bomb |
+| `Shift`+`C` | talk to a villager / open their shop |
 | `f` | give a villager a gift |
 | `s` | sleep (in or beside your bed) → next day |
-| `i` | inventory |
-| `e` | equipment |
+| `i` | inventory · `e` equipment · `v` character sheet |
+| `j` | journal (goals, favours, projects, collection) · `r` relationships |
+| `m` | world map · `h` message-log scrollback |
 | `l` | look around (move a cursor, read what's there) |
 | `?` | help + encyclopedia (← → pages, ↑ ↓ scroll) |
 | `Esc` | quit / close a screen |

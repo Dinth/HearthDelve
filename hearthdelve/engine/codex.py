@@ -100,7 +100,7 @@ def build_codex_pages(state: GameState):
     pages.append(("Land & Home", landpg))
 
     # --- Page: Tools & Equipment --------------------------------------------
-    tools = [("Tools  (energy cost per use)", _HDR), ("", C.WHITE)]
+    tools = [("Tools  (stamina cost per use)", _HDR), ("", C.WHITE)]
     for it in content.ALL_TOOLS:
         s = content.TOOL_STATS[it]
         tools.append((f" {it.glyph}  {it.name}", _KEY))
@@ -230,7 +230,7 @@ def build_codex_pages(state: GameState):
         rarity = "common" if w >= 25 else "uncommon" if w >= 8 else "rare"
         fishp.append((f" {it.glyph}  {it.name:<10} {it.value:>4}g  {rarity}", C.WHITE))
     fishp.append(("", C.WHITE))
-    fishp.append(("Sell them, or cook Fish Stew / Grilled Trout for energy.", C.DIM))
+    fishp.append(("Sell them, or cook Fish Stew / Grilled Fish to restore stamina.", C.DIM))
     pages.append(("Fish", fishp))
 
     # --- Page: Terrain & Features -------------------------------------------

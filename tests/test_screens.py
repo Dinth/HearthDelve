@@ -16,6 +16,20 @@ def _con():
     return tcod.console.Console(80, 50, order="F")
 
 
+class TestMessageLog(unittest.TestCase):
+    def test_repeats_coalesce(self):
+        from hearthdelve.game.state import MessageLog
+        log = MessageLog()
+        for _ in range(3):
+            log.add("A wall blocks the way.")
+        self.assertEqual(len(log.messages), 1)
+        self.assertEqual(log.messages[-1][0], "A wall blocks the way. (x3)")
+        log.add("Something else.")
+        log.add("A wall blocks the way.")            # streak broken, then repeats again
+        self.assertEqual([t for t, _ in log.messages][-2:],
+                         ["Something else.", "A wall blocks the way."])
+
+
 class TestScreensRender(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

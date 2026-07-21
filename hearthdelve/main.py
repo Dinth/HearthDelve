@@ -35,7 +35,7 @@ def new_game(seed: int = 1337) -> GameState:
 
     state.log.add("A letter from your grandfather: the old farm is yours now.", (236, 226, 180))
     state.log.add(f"You wake in Hollowmere Vale. {state.date_str()}, {state.weather.lower()}.", C.WHITE)
-    state.log.add("Hoe (1) the soil, plant seeds (6), water them (2), then sleep (s).", C.DIM)
+    state.log.add("Hoe (1) the soil, plant seeds (7), water them (2), then sleep (s).", C.DIM)
     state.log.add("Chop/mine for materials, c to craft & build, b at the bin to sell.", C.DIM)
     state.log.add("Space uses the active tool. ? for help, l to look, g to gather.", C.DIM)
     state.log.add("Visit Mossford (SE) & Cinderhope (SW): Shift+C to talk/shop, f to gift.", C.DIM)
