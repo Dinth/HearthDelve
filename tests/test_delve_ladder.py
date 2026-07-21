@@ -131,5 +131,28 @@ class TestBosses(unittest.TestCase):
         self.assertGreater(combat.player_crit(st), base)
 
 
+class TestMilestoneFloors(unittest.TestCase):
+    def test_every_tenth_floor_guarantees_a_boss(self):
+        from hearthdelve.world import dungeon
+        for seed in range(10):
+            gm = dungeon.generate(seed * 7919 + 101, "mine", 10)
+            self.assertTrue(any(getattr(m, "boss", False) for m in gm.monsters),
+                            f"seed {seed}: a Sanctum floor must have a boss")
+
+    def test_sanctum_is_richer_than_an_ordinary_floor(self):
+        from hearthdelve.world import dungeon, tile
+        gm = dungeon.generate(101, "mine", 10)
+        gold = int((gm.tiles == tile.GOLD_PILE).sum())
+        chests = int((gm.tiles == tile.CHEST).sum())
+        self.assertGreaterEqual(gold, 14)
+        self.assertGreater(chests, 0, "a Sanctum vault keeps chests")
+
+    def test_feeling_announces_the_sanctum(self):
+        from hearthdelve.world import dungeon
+        from hearthdelve.game import delve
+        self.assertIn("SANCTUM", delve._feeling(dungeon.generate(101, "mine", 20)))
+        self.assertNotIn("SANCTUM", delve._feeling(dungeon.generate(101, "mine", 7)))
+
+
 if __name__ == "__main__":
     unittest.main()

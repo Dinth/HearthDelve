@@ -11,6 +11,9 @@ from .state import GameState
 
 def _feeling(gm) -> str:
     """A NetHack-style level feeling from the floor's riches and dangers."""
+    if getattr(gm, "depth", 0) and gm.depth % 10 == 0:
+        return ("A DEEP SANCTUM. The dark here is thick with dread and promise — "
+                "a great guardian, and a hoard worth the descent.")
     ore = int((gm.tiles == tile.ORE_VEIN).sum())
     gem = int((gm.tiles == tile.GEM_VEIN).sum())
     score = ore + gem * 3

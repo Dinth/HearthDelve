@@ -389,19 +389,27 @@ def generate(seed: int, kind: str, depth: int) -> GameMap:
         t = rng.choice(pool)
         gm.monsters.append(content.make_mob(t, mx, my, depth, rng))
 
-    # A boss lurks on deep floors (near the down-stairs).
+    # Every tenth floor is a Deep Sanctum: a guaranteed boss and a rich vault.
+    milestone = depth > 0 and depth % 10 == 0
+
+    # A boss lurks on deep floors (near the down-stairs); always on a Sanctum,
+    # and there it's the most fearsome the floor can muster.
     bosses = content.bosses_for(kind, depth)
-    if bosses and rng.random() < 0.6:
-        b = rng.choice(bosses)
+    if bosses and (milestone or rng.random() < 0.6):
+        b = max(bosses, key=lambda m: m.min_depth) if milestone else rng.choice(bosses)
         room = rooms[-1]
-        bx = rng.randint(room.x + 1, room.x + room.w - 2)
-        by = rng.randint(room.y + 1, room.y + room.h - 2)
-        if tiles[bx, by] == tile.DUNGEON_FLOOR and (bx, by) not in occupied:
+        # scan the room for a free floor cell so the spawn never silently fails
+        spots = [(x, y) for x in range(room.x + 1, room.x + room.w - 1)
+                 for y in range(room.y + 1, room.y + room.h - 1)
+                 if tiles[x, y] == tile.DUNGEON_FLOOR and (x, y) not in occupied]
+        if spots:
+            bx, by = rng.choice(spots)
             occupied.add((bx, by))
             gm.monsters.append(content.make_mob(b, bx, by, depth, rng, boss=True))
 
-    # Vault: a big chamber on deep floors, packed with gold and its guardians.
-    if depth >= 3 and rng.random() < 0.5:
+    # Vault: a big chamber on deep floors, packed with gold and its guardians —
+    # guaranteed and richer on a Sanctum floor.
+    if milestone or (depth >= 3 and rng.random() < 0.5):
         vw, vh = rng.randint(10, 14), rng.randint(7, 9)
         vroom = None
         for _ in range(40):
@@ -419,8 +427,13 @@ def generate(seed: int, kind: str, depth: int) -> GameMap:
                      for y in range(vroom.y + 1, vroom.y + vh - 1)
                      if tiles[x, y] == tile.DUNGEON_FLOOR]
             rng.shuffle(cells)
-            for gx, gy in cells[:rng.randint(8, 14)]:          # heaps of gold
+            n_gold = rng.randint(14, 20) if milestone else rng.randint(8, 14)
+            for gx, gy in cells[:n_gold]:                      # heaps of gold
                 tiles[gx, gy] = tile.GOLD_PILE
+            if milestone:                                      # a Sanctum keeps chests too
+                for cx, cy in cells[n_gold:n_gold + rng.randint(2, 3)]:
+                    if tiles[cx, cy] == tile.DUNGEON_FLOOR:
+                        tiles[cx, cy] = tile.CHEST
             guards = pool or content.MONSTERS
             for mx, my in cells[-rng.randint(4, 6):]:          # and its guardians
                 if tiles[mx, my] == tile.DUNGEON_FLOOR and (mx, my) not in occupied:
