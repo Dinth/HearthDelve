@@ -362,9 +362,12 @@ def _step(state: GameState, m) -> None:
     # summoners raise the lesser dead while they hold ground, then close in
     if m.behavior == "summon":
         _try_summon(state, m)
-    # ranged attackers fire from afar and kite to keep their distance
+    # ranged attackers fire from afar and kite — but only with a clear line of
+    # sight (no shooting through walls); blind, they close in to find one
     reach = getattr(m, "reach", 0)
-    if reach and _dist(m, p) <= reach:
+    w = state.world
+    has_los = w.visible is None or w.visible[m.x, m.y]
+    if reach and has_los and _dist(m, p) <= reach:
         _ranged_attack(state, m)
         if _dist(m, p) <= 2:                 # too close for comfort — give ground
             _move_toward(state, m, away=True)
@@ -438,15 +441,16 @@ def _ranged_attack(state: GameState, m) -> None:
 
 
 def _try_summon(state: GameState, m) -> None:
-    """A summoner raises a fresh minion (its ``summons`` template, at that mob's
-    own baseline so it's fodder, not a floor-native) on a cooldown, capped so a
-    floor never floods."""
+    """A summoner raises a fresh minion on a short cooldown — scaled to THIS floor,
+    not fodder, so an ignored summoner genuinely swarms you under. It's a race:
+    reach and kill it before the tide rises. Capped only high enough to keep the
+    floor from grinding to a halt."""
     w = state.world
     cd = getattr(m, "summon_cd", 0)
     if cd > 0:
         m.summon_cd = cd - 1
         return
-    if sum(1 for o in w.monsters if o.alive) >= 8:
+    if sum(1 for o in w.monsters if o.alive) >= 12:
         return
     tmpl = next((t for t in content.MONSTERS if t.name == (m.summons or "Cave Slime")), None)
     if tmpl is None:
@@ -455,10 +459,10 @@ def _try_summon(state: GameState, m) -> None:
     random.shuffle(spots)
     for dx, dy in spots:
         if _can_move(state, m, dx, dy):
-            minion = content.make_mob(tmpl, m.x + dx, m.y + dy, max(1, tmpl.min_depth), random)
+            minion = content.make_mob(tmpl, m.x + dx, m.y + dy, max(tmpl.min_depth, w.depth), random)
             minion.awake = True
             w.monsters.append(minion)
-            m.summon_cd = 5
+            m.summon_cd = 3
             if w.visible is not None and w.visible[m.x, m.y]:
                 state.log.add(f"The {m.name.lower()} calls up a {minion.name.lower()}!",
                               (200, 170, 210))

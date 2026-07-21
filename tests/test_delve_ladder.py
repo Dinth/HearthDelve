@@ -170,7 +170,7 @@ class TestMilestoneFloors(unittest.TestCase):
         gm = dungeon.generate(101, "mine", 10)
         gold = int((gm.tiles == tile.GOLD_PILE).sum())
         chests = int((gm.tiles == tile.CHEST).sum())
-        self.assertGreaterEqual(gold, 14)
+        self.assertGreaterEqual(gold, 8)      # a rich vault, but no longer a gold pump
         self.assertGreater(chests, 0, "a Sanctum vault keeps chests")
 
     def test_feeling_announces_the_sanctum(self):

@@ -395,6 +395,8 @@ def generate(seed: int, kind: str, depth: int) -> GameMap:
     # A boss lurks on deep floors (near the down-stairs); always on a Sanctum,
     # and there it's the most fearsome the floor can muster.
     bosses = content.bosses_for(kind, depth)
+    if milestone and not bosses:               # a Sanctum ALWAYS has a guardian, even
+        bosses = [b for b in content.BOSSES if b.min_depth <= depth]   # in a kind with none of its own
     if bosses and (milestone or rng.random() < 0.6):
         b = max(bosses, key=lambda m: m.min_depth) if milestone else rng.choice(bosses)
         room = rooms[-1]
@@ -427,11 +429,11 @@ def generate(seed: int, kind: str, depth: int) -> GameMap:
                      for y in range(vroom.y + 1, vroom.y + vh - 1)
                      if tiles[x, y] == tile.DUNGEON_FLOOR]
             rng.shuffle(cells)
-            n_gold = rng.randint(14, 20) if milestone else rng.randint(8, 14)
+            n_gold = rng.randint(8, 12) if milestone else rng.randint(5, 9)
             for gx, gy in cells[:n_gold]:                      # heaps of gold
                 tiles[gx, gy] = tile.GOLD_PILE
             if milestone:                                      # a Sanctum keeps chests too
-                for cx, cy in cells[n_gold:n_gold + rng.randint(2, 3)]:
+                for cx, cy in cells[n_gold:n_gold + rng.randint(1, 2)]:
                     if tiles[cx, cy] == tile.DUNGEON_FLOOR:
                         tiles[cx, cy] = tile.CHEST
             guards = pool or content.MONSTERS

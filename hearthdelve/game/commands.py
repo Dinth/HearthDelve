@@ -112,7 +112,8 @@ def _scoop_gold(state: GameState) -> None:
     """Pick up a gold pile the player is standing on (dungeon vaults)."""
     p = state.player
     if state.world.tile_at(p.x, p.y).kind == "gold":
-        amt = random.randint(20, 60) + state.world.depth * 10
+        # a gentler depth curve — vaults were a runaway daily gold pump
+        amt = random.randint(15, 40) + state.world.depth * 4
         p.gold += amt
         state.world.tiles[p.x, p.y] = _floor_of(state.world)
         state.log.add(f"You scoop up {amt}g!", (244, 216, 110))
