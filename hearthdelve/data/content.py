@@ -3102,6 +3102,77 @@ ALL_TOOLS = [items.HOE, items.WATERING_CAN, items.AXE, items.PICKAXE, items.MACH
 ALL_SEEDS = [c.seed for c in CROPS] + [t.sapling for t in TREES]
 
 
+# --- Source-derived dishes: a dish is worth the fish/meat that went into it --
+# A cook recipe with an "any fish/meat/…" input yields a variant tied to the
+# actual ingredient — Tuna Sashimi is worth far more than Minnow Sashimi — the
+# same way gear tracks its metal and jam tracks its fruit. Memoized like the gear
+# factory; a resolver rebuilds a variant from its saved name on load.
+COOK_MARGIN = 1.3
+# Families whose dishes track their ingredient. Fish first: the widest value
+# spread (a 15g minnow to a 420g moonfish) and names that read cleanly ("Tuna
+# Sashimi"). Meat could follow once its names are handled ("Chicken Meat" would
+# double up in "…Meat Pie"); egg/milk/cheese have too little spread to bother.
+SOURCE_DISH_FAMILIES = ("fish",)
+_DISHES: dict = {}
+_FAMILY_ITEMS: dict | None = None
+
+
+def dish_wildcard(recipe):
+    """The AnyOf input of a cook recipe (the fish/meat it's built around), or None."""
+    for it, _q in recipe.inputs:
+        if isinstance(it, AnyOf):
+            return it
+    return None
+
+
+def _family_items(fam: str) -> list:
+    global _FAMILY_ITEMS
+    if _FAMILY_ITEMS is None:
+        _FAMILY_ITEMS = {}
+        for v in vars(items).values():
+            if isinstance(v, items.Item) and v.family:
+                _FAMILY_ITEMS.setdefault(v.family, []).append(v)
+    return _FAMILY_ITEMS.get(fam, [])
+
+
+def cooked_dish(recipe, source):
+    """The variant of ``recipe``'s dish made with ``source`` — value derived from
+    the real ingredients (so a better catch makes a costlier dish), everything
+    else (glyph, stamina, buff) inherited from the base dish."""
+    key = (recipe.name, source.name)
+    if key in _DISHES:
+        return _DISHES[key]
+    base = recipe.output
+    total = sum((source.value if isinstance(it, AnyOf) else it.value) * q
+                for it, q in recipe.inputs)
+    val = max(1, round(total * COOK_MARGIN / max(1, recipe.out_qty)))
+    it = items.register(items.Item(
+        f"{source.name} {base.name}", base.glyph, base.kind,
+        f"{base.desc} Made with {source.name.lower()}.",
+        value=val, energy=base.energy, buff=base.buff,
+        family=f"dish:{base.name}", source=source))
+    _DISHES[key] = it
+    return it
+
+
+def _resolve_cooked_dish(name: str):
+    """Rebuild a saved dish variant ("Tuna Sashimi") by matching it against the
+    cook recipes and their families — no fragile name-parsing."""
+    for r in RECIPES:
+        if r.kind != "cook":
+            continue
+        wc = dish_wildcard(r)
+        if wc is None:
+            continue
+        for src in _family_items(wc.family):
+            if f"{src.name} {r.output.name}" == name:
+                return cooked_dish(r, src)
+    return None
+
+
+items.register_resolver(_resolve_cooked_dish)
+
+
 # --- Value floor: every crafted good is worth its ingredients + 25% ----------
 CRAFT_MARGIN = 1.25
 

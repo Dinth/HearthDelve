@@ -148,6 +148,52 @@ def arrow_choice_options(state: GameState) -> list:
     return opts
 
 
+def is_choice_dish(recipe) -> bool:
+    """A cook recipe built around a value-tracking wildcard (a fish) — cooked via
+    a source picker so the dish's value tracks the ingredient chosen."""
+    wc = content.dish_wildcard(recipe)
+    return (recipe.kind == "cook" and wc is not None
+            and wc.family in content.SOURCE_DISH_FAMILIES)
+
+
+def dish_choice_options(state: GameState, recipe) -> list:
+    """One option per carried ingredient that could fill the recipe's wildcard,
+    each producing that ingredient's dish variant (cheapest first). Shape matches
+    the machine chooser, so it reuses render_load_machine."""
+    inv = state.player.inventory
+    wc = content.dish_wildcard(recipe)
+    if wc is None:
+        return []
+    sources = sorted({e[0] for e in inv.slots if e[0].family == wc.family},
+                     key=lambda i: i.value)
+    opts = []
+    for src in sources:
+        pinned = [((src if isinstance(it, content.AnyOf) else it), q) for it, q in recipe.inputs]
+        if all(inv.count(it) >= q for it, q in pinned):
+            opts.append({"inputs": pinned, "output": content.cooked_dish(recipe, src),
+                         "out_qty": recipe.out_qty, "cook": True})
+    return opts
+
+
+def cook_choice(state: GameState, opt) -> None:
+    """Cook a chosen dish variant: spend the inputs, roll quality from their
+    average (adjusted by Cooking skill), and add the source-derived dish."""
+    inv = state.player.inventory
+    if not all(inv.count(it) >= q for it, q in opt["inputs"]):
+        return
+    from . import skills, requests, turns
+    qs = [inv.pop_quality(it, q) for it, q in opt["inputs"]]
+    dish_q = skills.process_quality(sum(qs) / len(qs) if qs else 0, state, "Cooking")
+    inv.add(opt["output"], opt.get("out_qty", 1), quality=dish_q)
+    skills.gain(state, "Cooking", 14)
+    state.bump("dishes_cooked")
+    star = (" " + skills.stars(dish_q)) if dish_q else ""
+    state.log.add(f"You cook {opt['output'].name}{star}.", (180, 230, 160))
+    requests.check_level_recipes(state)
+    state.player.energy = max(0, state.player.energy - C.CRAFT_COST[0])
+    turns.advance_time(state, C.CRAFT_COST[1])
+
+
 def craft_choice(state: GameState, opt) -> None:
     """Resolve a chosen craft option (e.g. metal-tipped arrows): spend the inputs,
     make ``out_qty`` of the output."""

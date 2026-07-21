@@ -160,5 +160,65 @@ class TestAnglersCabinetAndPerkLatch(unittest.TestCase):
         self.assertGreater(loved, neutral)
 
 
+class TestSourceDerivedDishes(unittest.TestCase):
+    def test_dish_value_tracks_the_fish(self):
+        from hearthdelve.data import content
+        from hearthdelve.entities import items
+        sashimi = next(r for r in content.RECIPES if r.name == "Sashimi")
+        mn = content.cooked_dish(sashimi, items.MINNOW)
+        tn = content.cooked_dish(sashimi, items.TUNA)
+        mf = content.cooked_dish(sashimi, items.MOONFISH)
+        self.assertLess(mn.value, tn.value)
+        self.assertLess(tn.value, mf.value)
+        self.assertEqual(mn.name, "Minnow Sashimi")
+        self.assertEqual(mn.family, tn.family)          # variants share a family
+
+    def test_only_fish_dishes_use_the_picker(self):
+        from hearthdelve.data import content
+        from hearthdelve.game import crafting
+        picker = {r.name for r in content.RECIPES if crafting.is_choice_dish(r)}
+        self.assertEqual(picker, {"Sashimi", "Sushi", "Fish Cakes", "Seafood Chowder"})
+        # an egg/milk dish keeps a single fixed output (no awkward variants)
+        self.assertFalse(crafting.is_choice_dish(next(r for r in content.RECIPES if r.name == "Omelette")))
+
+    def test_cook_picks_a_fish_and_consumes_it(self):
+        from hearthdelve.data import content
+        from hearthdelve.game import crafting
+        from hearthdelve.entities import items
+        st = fresh_state(80)
+        inv = st.player.inventory
+        inv.add(items.MINNOW, 1)
+        inv.add(items.TUNA, 1)
+        inv.add(items.SEA_SALT, 2)
+        st.known_recipes.add("Sashimi")
+        sashimi = next(r for r in content.RECIPES if r.name == "Sashimi")
+        opts = crafting.dish_choice_options(st, sashimi)
+        tuna_opt = next(o for o in opts if "Tuna" in o["output"].name)
+        crafting.cook_choice(st, tuna_opt)
+        self.assertEqual(inv.count(content.cooked_dish(sashimi, items.TUNA)), 1)
+        self.assertEqual(inv.count(items.TUNA), 0)
+        self.assertEqual(inv.count(items.MINNOW), 1)     # the minnow was spared
+
+    def test_dish_variant_round_trips(self):
+        import os
+        import tempfile
+        from hearthdelve.data import content
+        from hearthdelve.engine import save
+        from hearthdelve.entities import items
+        sashimi = next(r for r in content.RECIPES if r.name == "Sashimi")
+        variant = content.cooked_dish(sashimi, items.SALMON)
+        st = fresh_state(81)
+        st.player.inventory.add(variant, 2)
+        path = os.path.join(tempfile.gettempdir(), "hd_dishvar.json")
+        try:
+            save.save(st, path)
+            self.assertEqual(save.load(path).player.inventory.count(variant), 2)
+        finally:
+            try:
+                os.remove(path)
+            except OSError:
+                pass
+
+
 if __name__ == "__main__":
     unittest.main()
