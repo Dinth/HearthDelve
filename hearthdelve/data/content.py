@@ -1630,6 +1630,17 @@ FISH: list[Fish] = [
 ]
 FISH_CATCH_CHANCE = 0.75
 
+# What the dwarves' Underriver carries down — panned with a rod (no minigame).
+# Common ore dominates; precious metal and gems are the rare glint in the gravel.
+RIVER_PAN: list[tuple[Item, int]] = [
+    (items.COPPER_ORE, 20), (items.TIN_ORE, 16), (items.IRON_ORE, 20),
+    (items.SILVER_ORE, 10), (items.GOLD_ORE, 6), (items.ADAMANTITE_ORE, 4),
+    (items.MITHRIL_ORE, 2), (items.COAL, 10),
+    (items.AMETHYST, 7), (items.TOPAZ, 5), (items.EMERALD, 3),
+    (items.RUBY, 2), (items.SAPPHIRE, 2), (items.DIAMOND, 1),
+]
+
+
 # Distinct catches from underground lakes (not seasonal).
 CAVE_FISH: list[tuple[Item, int]] = [
     (items.CAVE_BASS, 30), (items.EEL, 22), (items.BLINDFISH, 30), (items.GLOWFISH, 6),

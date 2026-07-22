@@ -29,6 +29,7 @@ class GameMap:
     is_dungeon: bool = False
     depth: int = 0
     kind: str = ""
+    underriver: bool = False     # the dwarves' persistent ore-river cavern (pan it with a rod)
     # this floor's re-skinned wall/floor tiles (per-kind palette) and the tiles
     # that hide a trap — kept off the grid so a themed floor can't give them away
     floor_tile: int = 0

@@ -115,6 +115,37 @@ def _tunnel(tiles, a, b, rng):
             tiles[ex, y] = tile.DUNGEON_FLOOR
 
 
+def _carve_river(gm, rng) -> None:
+    """Cut a winding water channel clear across the cavern, with walkable gravel
+    banks either side so you can stand and pan it, then tunnel from the entrance
+    to the middle of it so the river is always reachable."""
+    w, h = gm.width, gm.height
+    y = rng.randint(h // 3, 2 * h // 3)
+    mid = None
+    for x in range(1, w - 1):
+        y = max(3, min(h - 4, y + rng.choice((-1, 0, 0, 1))))
+        gm.tiles[x, y] = tile.RIVER
+        gm.tiles[x, y - 1] = tile.DUNGEON_FLOOR      # gravel banks (walkable)
+        gm.tiles[x, y + 1] = tile.DUNGEON_FLOOR
+        if x == w // 2:
+            mid = (x, y - 1)
+    if gm.spawn and mid:
+        _tunnel(gm.tiles, gm.spawn, mid, rng)
+
+
+def generate_underriver(seed: int) -> GameMap:
+    """The Underriver — the dwarves' persistent ore-river cavern, one floor below
+    Khazgrim. World-seeded (so it never re-rolls; the same river every visit),
+    and tougher/richer than its floor number lets on — a braved expedition. Pan
+    it with a rod (see fishing) for ore and gems the black water carries down."""
+    from . import dwarftown
+    gm = generate(seed ^ 0x51DE12, "cavern", dwarftown.UNDERRIVER_DEPTH + 3)
+    gm.depth = dwarftown.UNDERRIVER_DEPTH
+    _carve_river(gm, random.Random(seed ^ 0x1F1E))
+    gm.underriver = True
+    return gm
+
+
 def _carve_room(tiles, room, style, rng) -> None:
     """Carve a room's floor. Halls/mines fill the rectangle; caves fill a
     jittered ellipse so the chamber reads as an organic cavern."""

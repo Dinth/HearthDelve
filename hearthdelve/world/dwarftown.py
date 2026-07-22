@@ -19,6 +19,7 @@ from . import tile
 from .gamemap import GameMap
 
 TOWN_DEPTH = 4          # deeper than the door, shallower than the dark
+UNDERRIVER_DEPTH = TOWN_DEPTH + 1   # one below Khazgrim: the dwarves' ore-river cavern
 W, H = 72, 46
 
 

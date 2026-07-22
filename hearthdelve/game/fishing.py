@@ -46,6 +46,25 @@ def _difficulty(fish) -> float:
     return max(0.8, min(1.6, 0.8 + fish.value / 420.0))
 
 
+def _pan_river(state: GameState, tx: int, ty: int) -> None:
+    """A single cast at the Underriver: sift the gravel for what the black water
+    carries down. No minigame — a straight cast, time-bounded like fishing, so a
+    trip yields a bounded haul. Richer eyes (Fishing skill) sift a touch better."""
+    from . import skills
+    p = state.player
+    p.energy = max(0, p.energy - C.FISH_COST[0])
+    turns.advance_time(state, random.randint(C.FISH_SECONDS_MIN, C.FISH_SECONDS_MAX))
+    chance = 0.80 + skills.fishing_catch_bonus(state)
+    if random.random() > chance:
+        state.log.add("You pan the gravel... only cold silt this time.", C.DIM)
+        return
+    catch = _weighted(content.RIVER_PAN)
+    p.inventory.add(catch, 1)
+    skills.gain(state, "Fishing", 8)                     # panning trains the same patient eye
+    state.bump("river_panned")
+    state.log.add(f"You pan the Underriver and sift out {catch.name.lower()}!", (200, 214, 150))
+
+
 def begin(state: GameState, tx: int, ty: int):
     """Roll for a bite and, if one comes, open the reel minigame. Returns a ctx
     dict (fed to update/resolve) or None if nothing's biting / can't fish."""
@@ -54,6 +73,9 @@ def begin(state: GameState, tx: int, ty: int):
         state.log.add("You're too exhausted to fish.", C.DIM)
         return None
     p.facing = (max(-1, min(1, tx - p.x)), max(-1, min(1, ty - p.y)))
+    if getattr(state.world, "underriver", False):        # pan the ore-river — no minigame
+        _pan_river(state, tx, ty)
+        return None
     from . import skills
     if state.world.is_dungeon:
         table = content.CAVE_FISH

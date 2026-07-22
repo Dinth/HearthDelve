@@ -87,6 +87,18 @@ def _go_to_floor(state: GameState, depth: int, descending: bool) -> None:
             state.log.add("Braziers. Voices. Ale-smell. This level is LIVED IN — "
                           "you've found Khazgrim, the dwarves' town under the mountain.",
                           (232, 200, 120))
+        elif state.dungeon_kind == "dwarfhold" and depth == dwarftown.UNDERRIVER_DEPTH:
+            # The Underriver: world-seeded like the town, so the same river every
+            # time — a persistent stake you return to and pan for ore & gems.
+            gm = dungeon.generate_underriver(state.seed)
+            first = not state.stats.get("found_underriver")
+            state.stats["found_underriver"] = 1
+            state.log.add(
+                ("A black river roars through the deep dark below Khazgrim — its gravel "
+                 "glints with ore and gemstone. THE UNDERRIVER. Cast a line to pan it."
+                 if first else
+                 "The Underriver runs on, black and cold. Cast a line to pan its gravel."),
+                (150, 200, 224))
         else:
             gm = dungeon.generate(_floor_seed(state, depth), state.dungeon_kind, depth)
         state.floor_cache[key] = gm
