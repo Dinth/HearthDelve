@@ -569,9 +569,34 @@ def trader_entries(state: GameState, npc: NPC) -> list:
     return out
 
 
+# What the player pays for (buy_mult) vs is paid for (sell_mult) — the rest
+# (civic commissions, house jobs, contest entry) are unaffected by reputation.
+_PAY_KINDS = {"buy", "meal", "recipe", "tradebuy", "upgrade"}
+
+
 def shop_entries(shop: str, state: GameState | None = None,
                  npc: NPC | None = None) -> list[ShopRow]:
-    """The rows on a shop's counter, in display order."""
+    """The rows on a shop's counter, priced with the player's standing folded in
+    (a hero haggles well; a villain pays over the odds)."""
+    rows = _shop_entries(shop, state, npc)
+    if state is None:
+        return rows
+    import dataclasses
+    from . import karma
+    bm, sm = karma.buy_mult(state.player.karma), karma.sell_mult(state.player.karma)
+    out = []
+    for r in rows:
+        if r.price > 0 and r.kind in _PAY_KINDS:
+            r = dataclasses.replace(r, price=max(1, round(r.price * bm)))
+        elif r.price > 0 and r.kind == "sellto":
+            r = dataclasses.replace(r, price=max(1, round(r.price * sm)))
+        out.append(r)
+    return out
+
+
+def _shop_entries(shop: str, state: GameState | None = None,
+                  npc: NPC | None = None) -> list[ShopRow]:
+    """The rows on a shop's counter, in display order (base prices)."""
     if shop == "trader":
         return trader_entries(state, npc) if state is not None and npc is not None else []
     if shop == "general":

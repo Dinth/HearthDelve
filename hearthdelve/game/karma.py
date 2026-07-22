@@ -35,6 +35,19 @@ def adjust(state, delta: int) -> None:
     p.karma = max(MIN_KARMA, min(MAX_KARMA, p.karma + delta))
 
 
+def buy_mult(karma: int) -> float:
+    """What the player PAYS at a counter, scaled by reputation: a beloved hero
+    gets a discount, a feared one pays a premium. Soft — at most ±10%, and never
+    a lock (you can always buy)."""
+    return 1.0 - max(-100, min(100, karma)) / 1000.0     # +100 -> 0.90, -100 -> 1.10
+
+
+def sell_mult(karma: int) -> float:
+    """What the player RECEIVES when a shop buys from them: the good are paid
+    better, the ill worse."""
+    return 1.0 + max(-100, min(100, karma)) / 1000.0     # +100 -> 1.10, -100 -> 0.90
+
+
 def scale(karma: int, points: int) -> int:
     """Adjust a friendship change by the player's karma.
 

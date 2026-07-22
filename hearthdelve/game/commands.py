@@ -202,9 +202,19 @@ def _pray(state: GameState) -> None:
         return
     state.stats["blessed_day"] = state.day
     blessing = _BLESSINGS[state.day % len(_BLESSINGS)]     # drifts day to day, no RNG needed
-    skills.apply_buff(state, blessing, minutes=720)
-    state.log.add(f"You pray at the shrine — a blessing settles over your day: "
-                  f"{skills.BUFFS[blessing]}.", (232, 216, 150))
+    # The season favours the kind: a good soul's blessing lingers longer, and the
+    # devout are mended a little; the wicked get only a grudging, short boon.
+    k = state.player.karma
+    minutes = max(360, 720 + k * 3)                        # +100 karma ≈ 17h, -100 ≈ 7h
+    skills.apply_buff(state, blessing, minutes=minutes)
+    msg = f"You pray at the shrine — a blessing settles over your day: {skills.BUFFS[blessing]}."
+    if k >= 25:                                            # kindly and above: a gentle mending
+        mend = 6 + k // 12
+        p = state.player
+        p.hp = min(p.max_hp, p.hp + mend)
+        p.energy = min(p.max_energy, p.energy + mend)
+        msg += " The season's grace mends you a little, too."
+    state.log.add(msg, (232, 216, 150))
     karma.adjust(state, 1)
 
 
