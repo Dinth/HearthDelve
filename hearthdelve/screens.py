@@ -664,9 +664,10 @@ class RequestsScreen(Screen):
         elif cmd in ("confirm", "use"):
             self.sel = min(self.sel, n_rows - 1)
             if self.sel < len(state.requests):
-                if cmd == "confirm":
-                    gamereq.deliver(state, state.requests[self.sel])
-                    self.sel = 0
+                # A favour has only one thing you can do with it, so Enter and
+                # Space agree here (they differ only on the project row below).
+                gamereq.deliver(state, state.requests[self.sel])
+                self.sel = 0
             elif proj is not None and proj["state"] == "open":
                 # Enter = mats + a 500g instalment; Space = all-in gold
                 gameproj.contribute(state, proj, all_in=(cmd == "use"))

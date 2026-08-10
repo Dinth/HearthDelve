@@ -366,8 +366,7 @@ def new_day(state: GameState, rested: bool = True) -> None:
     projects.new_day(state)
 
     # The Westreach restocks its beasts once it's been discovered.
-    from . import wildlife as _wildlife
-    _wildlife.respawn_west(state, random)
+    wildlife.respawn_west(state, random)
 
     # The crown's weekly land tax on claimed wilderness (karma-only if unpaid).
     from . import land

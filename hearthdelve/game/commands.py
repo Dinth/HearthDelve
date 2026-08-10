@@ -190,7 +190,7 @@ def _pray(state: GameState) -> None:
     """Bow at an altar. Once the Shrine of the Seasons is raised, a prayer draws
     down a daily blessing (a random boon lasting the day); otherwise it's a quiet
     moment worth a little karma."""
-    from . import projects, karma, skills
+    from . import projects, karma
     if not projects.done(state, "shrine"):
         state.log.add("You bow your head at the altar a while. It is quiet, and kind, here.", C.DIM)
         if state.stats.get("prayed_day") != state.day:
@@ -401,11 +401,16 @@ def _dungeon_tile_fx(state: GameState) -> bool:
     return sprang
 
 
-def use_tool(state: GameState) -> None:
+def use_tool(state: GameState) -> dict | None:
     """Use the active hotbar item on the tile the player is facing.
 
     Seeds plant; the watering can waters a crop if one is there; other tools
     fall through to the pure resolver.
+
+    Returns None when the action resolved (or couldn't start), ``{"fishing":
+    ctx}`` when a bite opens the reel minigame, or a busy-context dict when a
+    long task (chop/mine) begins and should animate over frames — see
+    screens.PlayScreen.
     """
     from ..data import content
     from . import actions
@@ -943,7 +948,6 @@ def _pick_berries(state: GameState, x: int, y: int) -> None:
 
 def _rob_hive(state: GameState, x: int, y: int) -> None:
     """Rob a wild bee hive: honey and wax, a mild sting, and rarely a queen."""
-    from . import skills
     p = state.player
     honey = random.randint(1, 3)
     wax = random.randint(1, 2)
@@ -961,7 +965,6 @@ def _rob_hive(state: GameState, x: int, y: int) -> None:
         sting = random.randint(1, 3)
         p.hp = max(1, p.hp - sting)
         state.log.add(f"  The bees sting you (−{sting} HP)!", (224, 140, 120))
-    from . import skills
     skills.gain(state, "Foraging", 14)
     turns.advance_time(state, C.HARVEST_COST[1])
 

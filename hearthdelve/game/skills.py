@@ -136,12 +136,9 @@ def mastery_parry(level: int) -> int:
 
 
 # --- gentle bonuses ----------------------------------------------------------
-def combat_atk_bonus(state: GameState) -> int:
-    bonus = skill_level(state, "Combat") // 3           # +0..+3 attack
-    if active_buff(state) == "hearty":
-        bonus += 2                                      # a hearty meal steels you
-    return bonus
-
+# (A flat Combat-level attack bonus used to live here; the ADOM rework replaced
+#  it with weapon mastery + Strength in combat.player_attack, and moved the
+#  "hearty" meal boon into combat.player_to_hit.)
 def fishing_catch_bonus(state: GameState) -> float:
     return skill_level(state, "Fishing") * 0.02         # up to +20% catch
 

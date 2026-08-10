@@ -399,7 +399,7 @@ def _step(state: GameState, m) -> None:
 
 
 def _attack_player(state: GameState, m) -> None:
-    lo, hi = m.dmg
+    hi = m.dmg[1]                       # its top-end swing, to judge a soaked hit below
     res = _resolve(m.to_hit, m.dmg, 0, 0.0, player_dv(state), player_pv(state))
     if res is None:
         state.log.add(f"The {m.name.lower()} lunges — you dodge.", C.DIM)
