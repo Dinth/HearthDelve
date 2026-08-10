@@ -1,6 +1,7 @@
 """Village life: NPC schedules, talking, gifting, shops, and tool upgrades."""
 from __future__ import annotations
 
+import bisect
 from dataclasses import dataclass
 
 from ..data import content
@@ -507,18 +508,44 @@ def npc_shop(state: GameState, npc: NPC) -> str | None:
     return None
 
 
+def _window_len(seed: int, n: int) -> int:
+    """How many days window ``n`` runs for (3-6, drifting from the seed)."""
+    import random as _random
+    return 3 + _random.Random((seed * 611_953 + n * 2_741) & 0x7FFFFFFF).randint(0, 3)
+
+
+# First day of each window, per seed, grown on demand: _WINDOW_STARTS[seed][n] is
+# the day window n opens, so window n runs [starts[n], starts[n+1]). Windows are
+# 3-6 days, so this is ~1 int per 4.5 days played — a few hundred over a long
+# life — and each window's length is rolled ONCE ever, rather than on every
+# lookup (see trader_window).
+_WINDOW_STARTS: dict[int, list[int]] = {}
+
+
 def trader_window(seed: int, day: int) -> tuple[int, int]:
     """(window index, window seed) for the traders' rotating stock. Windows run
     3-6 days, their lengths drifting from the seed — fully derived from
-    (seed, day), so the rotation needs no save field and never goes stale."""
-    import random as _random
-    n, start = 0, 0
-    while True:
-        length = 3 + _random.Random((seed * 611_953 + n * 2_741) & 0x7FFFFFFF).randint(0, 3)
-        if day < start + length:
-            return n, (seed * 887 + n * 104_729) & 0x7FFFFFFF
-        start += length
-        n += 1
+    (seed, day), so the rotation needs no save field and never goes stale.
+
+    The window boundaries are memoized because this is read while a trader's
+    counter is drawn, i.e. every frame: walking the whole calendar from day 0
+    each time cost ~1ms a call by year 9 and grew without bound. The answer is
+    unchanged — only the work is."""
+    starts = _WINDOW_STARTS.setdefault(seed, [0])
+    while starts[-1] <= day:                 # extend just past the day asked for
+        starts.append(starts[-1] + _window_len(seed, len(starts) - 1))
+    n = bisect.bisect_right(starts, day) - 1
+    return n, (seed * 887 + n * 104_729) & 0x7FFFFFFF
+
+
+# The recipe cards a wagon might carry: every cook recipe that isn't a starter
+# and isn't already over an innkeeper's bar. Static content, so it's built once
+# — the draw below is read every frame while a counter is open.
+_CARD_POOL: tuple[str, ...] = tuple(sorted(
+    r.name for r in content.RECIPES
+    if r.kind == "cook"
+    and r.name not in dict(content.TAVERN_RECIPES)
+    and r.name not in content.STARTER_RECIPES))
 
 
 def trader_entries(state: GameState, npc: NPC) -> list:
@@ -559,11 +586,7 @@ def trader_entries(state: GameState, npc: NPC) -> list:
         if not state.stats.get(key):                 # sold slots stay sold this window
             out.append(ShopRow("tradebuy", label=it.name, item=it, price=price, key=key))
     # a recipe card, drawn unconditionally (determinism) but hidden once known
-    card_pool = sorted(r.name for r in content.RECIPES
-                       if r.kind == "cook"
-                       and r.name not in dict(content.TAVERN_RECIPES)
-                       and r.name not in content.STARTER_RECIPES)
-    card = rng.choice(card_pool)
+    card = rng.choice(_CARD_POOL)
     if card not in state.known_recipes:
         out.append(ShopRow("recipe", name=card, price=260))
     return out
