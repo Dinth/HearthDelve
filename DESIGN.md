@@ -2,21 +2,28 @@
 
 *A cozy farming & crafting life-sim with the soul of a surface roguelike. Grow, make, trade, and befriend a valley — wander into the wilds only when you choose to.*
 
-**Status:** draft for review (v5) · **Engine:** Python 3.14 + `tcod` 21.2.1 · **Render:** pure ASCII tile grid, keyboard-driven
+**Status:** living document (v6) · **Engine:** Python 3.14 + `tcod` · **Render:** pure ASCII tile grid, keyboard-driven
+
+> **Scope of this document.** It describes the game *as built*. The creed that
+> governs new work — the north star, the save-compatibility rules, the balance
+> rule of thumb — lives in `CLAUDE.md` and takes precedence. Numbers here are
+> read from `engine/constants.py` and `data/content.py`; if they ever disagree,
+> the code is right and this file is stale.
 
 ---
 
 ## 0. Changelog
 
-- **v5** — folded in locked choices: **two villages from the start** (§9), **minimal fishing in the slice** (§5/§10), **lean classic day-1 loadout** (§14). Added a **Content appendix** (§18): the valley, both villages & their residents, seasonal crops, dungeon roster, monsters, starter recipes. Debug fast-season flag confirmed.
-- **v4** — cozy-first re-centering: farming + crafting as twin core, combat a minor side mechanic; villages & NPCs added; single mine → multiple themed dungeons; no ultimate goal.
-- **v3** — large procedural frontier; 4-season cycle; tunables. · **v2** — surface-first, danger by distance. · **v1** — initial pitch.
+- **v6** — brought in line with the built game. Corrected the world (1024×1024, four regions, a sea and the Westreach), the settlements (four villages + a camp, a hut and a dwarf town), the tool ladder, the tunables and the keymap (§13 had listed vi-keys, which are a deliberate *omission*). Documented the systems that had shipped undescribed: birth signs & attributes, karma, skills & weapon mastery, land ownership & tax, encumbrance, herbalism, jewellery & gems, community projects, the Hall of Wonders, world events, the request board & market cravings, Khazgrim and the Underriver. Rewrote the architecture map and the content appendix.
+- **v5** — folded in locked choices: two villages from the start, minimal fishing, lean day-1 loadout. Added a content appendix.
+- **v4** — cozy-first re-centering: farming + crafting as twin core, combat a minor side mechanic; villages & NPCs; multiple themed dungeons.
+- **v3** — large procedural frontier; 4-season cycle. · **v2** — surface-first, danger by distance. · **v1** — initial pitch.
 
 ## 1. The pitch
 
-You inherit a homestead on the frontier — a few tilled acres at the edge of **Hollowmere Vale**, a wide, half-wild valley. The heart of the game is **making a life**: till and plant across the seasons, raise crops, **craft** them into goods worth far more than their parts, cook, build out your homestead, and trade with the **two villages** down the road whose people you slowly get to know.
+You inherit a homestead on the frontier — a few tilled acres at the heart of **Hollowmere Vale**, a wide, half-wild valley. The heart of the game is **making a life**: till and plant across the seasons, raise animals, **craft** raw goods into things worth far more than their parts, cook, build out your homestead, and slowly get to know the folk of the valley's villages.
 
-The Vale around you is alive and explorable — meadows, woods, riverlands, a fog-moor, old ruins — dotted with **small dungeons**, each themed to its biome. They're optional. You go in for what you can't grow: ore and gems for better tools, rare seeds, mushrooms, monster-drop crafting reagents. Fighting is *one way* to get those things — never the point of the day.
+The Vale is alive and explorable — woods, fen, rocky hills, open plains, a southern sea — dotted with **dungeon mouths**, each themed to its ground. They're optional. You go in for what you can't grow: ore and gems for better tools, rare reagents, deep metal. Fighting is *one way* to get those things — never the point of the day.
 
 **Cozy and roguelike share one map. The cozy is the main course.**
 
@@ -26,233 +33,281 @@ A **cozy game**: calm, productive, social, seasonal. In descending priority:
 
 1. **Farming** — the daily heartbeat.
 2. **Crafting** — the progression & economic engine; raw goods → valuable artisan goods.
-3. **Village & NPCs** — the warmth; shops, gifts, friendships, festivals.
-4. **Exploration & gathering** — foraging, fishing, mining, discovering dungeon sites.
-5. **Combat** — a *side* mechanic, low-stakes by design, gating some crafting materials. Always avoidable; never a fail-the-day threat near home.
+3. **Village & NPCs** — the warmth; shops, gifts, friendships, festivals, favours.
+4. **Exploration & gathering** — foraging, fishing, mining, discovering sites.
+5. **Combat** — a *side* mechanic. It has grown real teeth since v4 (ADOM-style rolls, weapon mastery, elites, bosses, statuses), but it is still always avoidable and never a fail-the-day threat near home.
 
 If a choice trades coziness for challenge, **coziness wins.**
 
 ## 3. Pillars
 
-1. **Make, don't just kill.** Progression = crops → crafted goods → upgraded tools/buildings, not a kill count.
-2. **One world, no mode switch.** Same renderer, scheduler, player, inventory at the workbench or in a grotto.
-3. **Optional danger, by distance.** Wilds & dungeons when you want them; homestead and villages always safe.
-4. **Every wild thing has a home use.** Loot is reagents, seeds, ingredients — it feeds the farm and the workbench.
-5. **Soft losses, persistent gains.** Faint in a dungeon → wake home, lose loose loot + a little gold; land/tools/relationships persist. **No permadeath, no game over, no win — you just live here.**
-6. **The seasons are the clock.** Spring planting, summer growth, fall harvest, winter craft-and-cozy — rhythm for an open sandbox.
-7. **Data-driven content.** Crops, recipes, biomes, monsters, items, NPCs, abilities are table entries.
+1. **Progression is efficiency, not permission.** Nothing is hard-locked behind gear, level or quest flags. A wooden pickaxe can chip at the deepest mithril vein — it's just slow, exhausting and wasteful. Better tools, skills, meals and jewellery make the same world *cheap*, not newly *allowed*. Prefer cost gradients (time, stamina, yield, risk) to walls.
+2. **Make, don't just kill.** Progression = crops → crafted goods → upgraded tools & buildings, not a kill count.
+3. **One world, no mode switch.** Same renderer, scheduler, player and inventory at the workbench or in a grotto.
+4. **Optional danger, by distance.** Wilds and dungeons when you want them; homestead and villages always safe.
+5. **Every wild thing has a home use.** Loot is reagents, seeds, ingredients — it feeds the farm and the workbench.
+6. **Soft losses, persistent gains.** Faint → wake in your bed, lose loose loot and a little gold; land, tools and relationships persist. **No permadeath, no game over, no win — you just live here.**
+7. **The seasons are the clock.** Spring planting, summer growth, fall harvest, winter craft-and-cozy.
+8. **Organic, not mechanical.** Spawns, regrowth, requests, market cravings and gifts drift on seeded randomness — never fixed spots or metronome cadences. The world should breathe, not tick.
+9. **Data-driven content.** Crops, recipes, machines, monsters, items, NPCs are table entries in `data/content.py`.
 
 ## 4. Core loop
 
 ```
         ┌──────────────────── A DAY ────────────────────┐
  wake → farm chores → craft/cook → village / forage / fish / (optional) delve → ship goods → sleep
-        └──────────── energy drains · time passes ───────┘  crops grow · machines finish · world stirs
+        └──────────── time passes · stamina drains ─────┘  crops grow · machines finish · world stirs
 ```
 
-- **Time** advances per action; the day ends when you sleep (or faint).
-- **Energy** is the daily budget for physical actions (till, chop, mine, fight). Machine crafting is *time*, not energy — load it and it works while you do other things.
-- **Sleep** advances the day: crops grow, machines complete, shops/forage restock, wilds re-stir, calendar ticks, NPC schedules reset.
+- **The day has two budgets: time and stamina.** Actions cost both, independently. For long work the clock, not stamina, is usually the real limit.
+- **Sleep** advances the day: crops grow, machines complete, animals produce, forage drifts, favours turn over, the calendar ticks.
+- Machine crafting costs *time*, not stamina — load it and it works while you get on with the day. A few benches (anvil, gem wheel) are worked in person instead, and charge stamina there and then.
 
-## 5. Farming  *(main mechanic — Stardew/Coral Island model)*
+## 5. Farming
 
-- **Plot lifecycle:** hoe→till, plant seed, water daily → a growth stage per watered day → harvest at maturity. Some crops **regrow**; some are single-harvest.
-- **Season-bound:** each crop lists season(s) + days-to-mature; out of season it won't sprout; caught by a season change it withers at the new season's dawn (one grace night).
-- **Quality tiers** (normal/silver/gold) from soil care, fertilizer, sprinklers → higher price & better crafted goods.
-- **Watering** by hand early; **sprinklers** (crafted from bars) automate it later — the key QoL unlock freeing days for crafting/exploring.
-- **Fertilizer & soil** crafted from forage/compost.
-- **Fishing** (light, in slice): cast at water tiles for fish that feed cooking/crafting; deeper catches in the flooded dungeon.
-- **Animals & orchards** (post-slice): coops/barns/trees producing craft inputs.
+- **Plot lifecycle:** hoe → till, plant, water daily → a growth stage per watered day → harvest at maturity. Some crops **regrow** on a shorter clock; some are single-harvest.
+- **Season-bound:** each crop lists its season and days-to-mature. Out of season it won't sprout; caught by a season change it withers.
+- **Thirst, not instant death.** An unwatered crop goes thirsty and withers only after a dry spell — one day under clear sun, three under cloud. Rain and storms water for you; **rice floods its own paddy** and never needs watering.
+- **Quality is 0–5 stars**, from the Farming skill, fertiliser, and **soil enrichment** — ground improves with every harvest and dose of fertiliser and slips when a crop is left to wither, so care compounds. Stars scale sell value 1.0× → 2.0×, and carry through into everything you make.
+- **Sprinklers** water their neighbours each dawn; a **greenhouse** grows any crop in any season.
+- **Orchard trees** from saplings bear in their season, refruiting every few days (jittered, never clockwork). 200-odd wild fruit trees already stand out in the Vale.
+- **Hay:** grass around the homestead grows tall through the growing seasons; scythe it for cut grass, which dries into **straw** on a fair day — winter feed.
+- **Animals** (chicken, duck, cow, goat, sheep, pig) are bought young, settled into a coop, barn or pen, and roam the yard. Pet them daily: happiness lifts the quality of their produce. Neglect never starves them, it just lets their spirits drift. Two well-kept adults under one roof may bring a **newborn**. An ill beast wants a Herbal Tonic. The **butcher's block** renders a grown animal into typed cuts — a somber trade.
+- **Fishing:** cast at water for a catch that depends on **which water it is** — see §8.
 
-## 6. Crafting  *(co-main mechanic — the economic engine)*
+## 6. Crafting
 
 Raw goods are cheap; **crafted goods are the money and the upgrades.**
 
-- **Bench crafting** (instant, costs materials): tools, sprinklers, fertilizer, fences, paths, scarecrow, bombs, fishing rod, machines.
-- **Machine crafting** (takes time, runs unattended):
-  - **Furnace:** ore + coal → metal **bars** (tool upgrades & machines).
-  - **Preserves Jar:** crop → pickle/jam (much higher value).
-  - **Keg:** fruit/crop → juice/wine (highest value, slowest).
-  - **Loom / Mill / Dehydrator** (later).
-- **Value ladder:** `raw crop < cooked dish < artisan good`. Selling raw is the trickle; **processing is the river.**
-- **Cooking** (kitchen): recipes → dishes that restore energy/HP and grant temporary buffs.
-- **Recipe unlocks:** start with a few; more from **NPC friendship**, shops, foraged blueprints, seasonal events.
-- **Tool upgrades:** bars + gold at the blacksmith upgrade hoe/can/axe/pickaxe (bigger area, less energy) — the main power curve, all utility, not combat.
+- **Bench crafting** (instant, costs materials): tools, sprinklers, fertiliser, fences, bombs, arrows, machines, satchels.
+- **Machine crafting** (takes in-game time, runs unattended) — 31 machines, including:
+  - **Furnace** — ore → bars. Every fuel has a **heat** (wood 1 · charcoal 2 · coal 3 · coke 4 · ember core 5); a metal needs a minimum heat to smelt at all, and hotter fuel smelts faster.
+  - **Kiln** — wood → charcoal, coal → coke. **Anvil** — bars → weapons & armour of that metal (a skilled smith forges in a bonus affix). **Gem wheel** — rough gems → cut stones, and cracks geodes. **Jeweller's bench** — cut gem + bar → rings & amulets, or embeds a gem into gear or a tool.
+  - **Preserves jar** (per-fruit jams, per-veg pickles, jellied eel) · **Keg** (per-fruit wines, mead, grain mash) · **Churn** (cheese, yogurt, butter) · **Smoker** (jerky, sausages, bacon, cured ham, smoked fish, caviar) · **Tanning rack** (hides → leather) · **Spinning wheel** → **Loom** (fibre → yarn → cloth → garments & furnishings) · **Quern / Windmill** (grain → flour, cane → sugar, salt) · **Oil press** · **Sawmill** · **Beehive** (yields more the more flowers bloom nearby).
+  - **Apothecary** — the only place remedies are brewed, and where potions are distilled. **Oven** — double batches of baked goods, a touch finer. **Cellar** — ages wine, mead and cheese into something better.
+- **Value flows from the ingredient.** A jam is worth its fruit; a wine its grape; a sashimi its fish; a plate of armour its metal. `content._enforce_recipe_margins()` derives every craftable's value from its inputs at import, iterating to a fixed point, so no crafted good is ever worth less than its parts + 25%. (Forging is a deliberate exception — gear is for wearing, never for flipping.)
+- **Cooking** is *learned*, not known: 8 starter recipes, the rest gathered around the Vale — a friend shares their favourite dish at 3 hearts, innkeepers sell house recipes, some come with practice, a filled favour sometimes has one folded in, and the Scriptorium lets you study one out.
+- **Tool upgrades** at a blacksmith: **Wooden → Bronze → Iron → Steel → Adamantium → Mithril**. Each tier is −12% stamina and −10% time per use. All utility; nothing combat.
 
 ## 7. Time, seasons & weather
 
-- **Calendar:** Spring / Summer / Fall / Winter — **28 days** each ⇒ 112-day year. *(Debug "fast season" flag, e.g. 4-day, for testing.)*
-- **A day:** 06:00 → ~02:00; actions cost minutes; sleep resets to 06:00 and advances the date.
-- **Season character:** Spring gentle & rainy (free watering) · Summer long days, best forage, livelier wilds · Fall peak harvest & festivals · **Winter no outdoor crops** — the cozy indoor season: craft, cook, ice-fish, delve, deepen friendships.
-- **Weather** (per dawn, season-weighted): clear / rain (auto-waters) / fog (shorter sight) / storm / snow — mostly flavor & farming convenience.
-- **Festivals** mark the calendar without imposing a goal.
+- **Calendar:** Spring / Summer / Fall / Winter, **28 days** each ⇒ 112-day year.
+- **A day:** 06:00 → 02:00. Actions cost seconds; past midnight you're warned, and at 02:00 you drop where you stand.
+- **Season character:** spring gentle & rainy · summer long and lively · fall the peak harvest · **winter** the cozy indoor season (three hardy crops outdoors, and ice-fishing).
+- **Weather** (per dawn, season-weighted, deterministic from the seed): Clear · Cloudy · Rain · Storm · Fog · Snow. Rain waters crops; fog closes your sight right in; storms keep villagers indoors and rattle the animals.
+- **Tomorrow is knowable.** The weather-wise (fishers, foragers, foresters, the dwarf elder) foretell it in folk lore, a weathervane points to it, and gnats rise before rain. Deterministic from `seed + day`, so the omens are true.
+- **Festivals** (6 a year, on fitting days, each scripting its own weather): the Spring Equinox · the Summer Solstice · the Harvest Fair · Hallows' Eve · the Winter Solstice · Yuletide. The village gathers in the square; stalls go up (a tombola and a treat stand); the last festival of the year is fireworks night if you filled the order.
 
-## 8. The world & its dungeons  *(ADOM/ToME "world of sites")*
+## 8. The world
 
-**Large procedural frontier, generated once per save**, homestead at center, danger by distance (T1 Homestead → T2 Edge → T3 Wilds). Both **villages** sit in T1/T2. Scattered across biomes are **several small, themed dungeons** — not one big hole.
-
-```
-   T3 WILDS ── old-forest grove · fog-moor barrow · ruined keep
-   T2 EDGE  ── woodland grotto · flooded hollow · the old mine · Cinderhope village
-   T1 HOME  ── homestead · Mossford village
-```
-
-- Each dungeon is **2–4 floors**, procedurally generated (rooms + corridors), with **FOV**.
-- **Themed loot tied to crafting** (see §18 roster).
-- **Low-stakes combat:** few, slow, telegraphed monsters; sneak/retreat/mine-around viable. Faint → eject home.
-- **Re-rolls per in-game day** (stable within a day, fresh after sleep); depth/danger scales with the biome's wildness tier. You can step out and return to the same floor the same day — rewards a planned delve.
-- **Worldgen:** wildness field (distance + noise) → biome flood-fill → carve homestead + two village sites → rivers/ore/forage → dungeon entrances per biome → bake passability/FOV grids (numpy).
-
-## 9. Villages & NPCs  *(two villages — in scope)*
-
-- **Mossford** *(T1, down the road)* — the friendly farming hamlet. Warm, welcoming, everyday hub: **General Store**, **Carpenter**, the river path. Where early days are spent.
-- **Cinderhope** *(T2, by the old mine)* — a rugged crafter/miner outpost. **Blacksmith** (tool upgrades, bars), tinker. A reason to travel out, and the gateway to ore.
-- **Shops** rotate stock by season; the General Store also **buys your goods** (a faster sell than the shipping bin, slightly lower price).
-- **NPCs:** residents with simple **daily schedules** (home ↔ work ↔ gather by time), short **dialogue**, and **friendship hearts** raised by talking and **gift-giving** (each has liked/loved/disliked items — your crops & crafts are the currency of friendship). Friendship unlocks recipes, discounts, warmth.
-- **Festivals:** a couple of seasonal gatherings (spring fair, fall harvest feast).
-- **Slice scope:** stationary-or-scheduled NPCs, menu dialogue, gifting, friendship meter, shops. No romance/marriage/quest-trees yet (clean later additions).
-
-## 10. Systems summary (MVP → later)
-
-**MVP (v0.1 slice):** scrolling ASCII renderer + camera + HUD/log · 8-dir movement & collision across the procedural multi-biome world · **farming** (till/plant/water/grow/harvest, quality) + **light fishing** · **crafting** (bench + furnace/jar/keg + cooking) · **season & weather clock** · inventory + tools + hotbar · **two villages** (general store, blacksmith, carpenter, ~6 NPCs, gifting, friendship) · economy (shipping bin + shops) · **wilds + 2 small dungeons** (FOV, ~3 gentle monsters, bump + 1 ability, forage/ore/fish nodes) · save/load JSON.
-
-**Later:** festivals, romance/quests, more NPCs · animals & orchards · more machines (loom/mill) & buildings · sprinkler/automation tiers · the remaining dungeons, deeper floors, more biomes · fishing depth · optional audio.
-
-## 11. Combat (deliberately light)
-
-- Bump-attack on simple stats (HP/ATK/DEF/SPD). **One** stamina ability in the slice: the **Bomb** — a thrown explosive that hurts monsters *and* breaks rock/ore in a small area, so it's useful even to a pacifist miner. Craftable from dungeon materials. More abilities later — all optional.
-- Monsters **sparse, slow, avoidable**; AI = wander → chase-in-FOV → bump; many flee. **None in T1** (home/villages). Combat exists to gate *some* dungeon reagents, nothing more.
-- Faint → eject home next dawn, drop loose loot + ~10% gold. No death screen.
-
-## 12. Technical architecture
+**Generated once per seed, 1024×1024**, homestead at the centre, danger by distance. Four regions grow from seed points and meet at the farm, their borders ruffled by noise so they interlock organically:
 
 ```
-hearthdelve/
-  main.py            # tcod context, main loop, top-level state switch
-  engine/  constants.py · rendering.py · input.py · save.py
-  world/   tile.py · worldgen.py · biome.py · chunk.py · dungeon.py · crops.py
-  entities/ player.py · monster.py · npc.py · items.py
-  game/    state.py · actions.py · economy.py · crafting.py · turns.py · abilities.py
-  data/    content.py   # tables: crops, recipes, machines, biomes, monsters, items, npcs, abilities
+      NW  deep wildwood ──────────── fen & bog  NE
+             (grotto, camp, hut)   (barrow, crypt, Fenwick)
+                      ╲  homestead  ╱
+      SW  rocky hills ──────────── open plains  SE
+        (mine, cavern, Cinderhope)   (Mossford)
+                  southern sea (Saltmere, sea cave)
 ```
 
-- **No hard mode switch;** overlays (`PLAY`, `INVENTORY`, `CRAFT`, `SHOP`, `DIALOGUE`, `SLEEP`, `MENU`) over one world.
-- **Turn model:** single scheduler; loose near home, strict turn-based only when a monster is in FOV. One `advance_time(minutes)`; machines resolved by completion-time on tick/sleep.
-- **tcod:** `context`, `console`, `event`, `map`/`path` (FOV + pathfinding), numpy grids, scrolling camera (world > screen). Pure ASCII/CP437, colored by biome/tile; swappable for tiles later.
+- A **river** meanders the whole map as a real barrier that roads must bridge. A **sea** floods the southern reach behind an irregular coast.
+- **Roads** are a single network: a minimum spanning tree from the farm to each settlement, with spurs to each dungeon mouth, pathfound over terrain-aware costs so they hug gentle ground and wind through the hills. Signposts stand only where three genuine routes meet.
+- **The Westreach** — a second, wilder overworld (320×320) beyond the map's western edge: ash slopes climbing to a live volcano, sulphur and nitre, ore-rich crags, and beasts that hunt on sight. No bed, no farming, no villages. Born the first time you cross, persistent thereafter.
 
-## 13. Controls (draft)
+### Dungeons
 
-`arrows`/`hjkl`(+`yubn` diagonals) move · `.` wait · `1-5` tool/hotbar · `Space` use tool on facing tile · `g` grab/forage · `t` talk · `f` gift · `c` craft/cook · `a` ability · `>`/`<` dungeon in/out · `i` inventory · `b` buy/sell · `s` sleep · `Esc` menu.
+Eight mouths in the Vale, of six kinds; the Westreach adds tombs, a lava cavern and the dwarven mine. Each kind differs in **layout** (blobby caves · rectilinear halls · mine chambers on long tunnels), **palette**, **décor**, **spawn roster**, and what it's rich in (ore, gems, traps, pools, chests).
 
-## 14. Tunables (first pass)
+- Floors are **72×46 with FOV**, generated on demand and **re-rolled per in-game day** — but cached within the day, so stepping out and back returns the same already-looted floor. Depth is unbounded.
+- Texture: hidden traps, rubble, chests, cave fungus, underground lakes, gold vaults on deeper floors, and the rare **Glimmerwood Hollow** — a glowing grove of wispwood and giant caps.
+- Every **10th floor is a Deep Sanctum**: a guaranteed boss and a rich vault.
+- **Khazgrim** — the dwarves' living town on floor 4 of the dwarfhold. Hand-shaped and world-seeded, so it never re-rolls: a pillared hall, an alehall, Thrunn's forge, and folk who remember a friend across saves. Floor 5 below it is the **Underriver**, a persistent ore-river you pan with a rod for ore and gems.
+
+### Water
+
+Which body of water you cast into decides the catch, derived from the world rather than stored: the coastline says what's salt, and the ground around a pool says whether it's peat or open water.
+
+| Water | Catch | Character |
+|---|---|---|
+| **River** | seasonal freshwater | the doorstep trickle |
+| **Still water** | pond fish — perch, rudd, bream, carp, zander, mirror carp | safe, close, easy |
+| **The fen** | roach, tench, eel, red swamp crayfish, lamprey | a trek, and the miasma can make you ill |
+| **The sea** | sardine, mackerel, sea bass, tuna (+ moonfish once the lighthouse stands) | the coast |
+| **Cave pools** | cave bass, eel, blindfish, glowfish | pays best of all |
+
+## 9. Villages & folk
+
+**42 residents** across four villages and three smaller places. Each has a home and a work anchor, an hourly schedule (home ↔ work ↔ inn ↔ temple ↔ square, bent by weather, season and festivals), and children who roam and chase each other about the square.
+
+- **Mossford** (SE plains, 10) — the farming town: general store, carpenter, chapel, inn.
+- **Cinderhope** (SW hills, 9) — the mining outpost: blacksmith, chapel, taproom, a trader.
+- **Saltmere** (south coast, 7) — the fishing village: piers, boats, an inn.
+- **Fenwick** (NE fen, 7) — the stilt-house hamlet: a herbalist, an eel-catcher, a trapper, a trader.
+- **Thornwake Camp** (4) — woodcutters living rough round a fire in the NW wood. No shops, no roofs but canvas.
+- **The Wildwood hut** (1) — Yew the forester, who speaks in rhyme.
+- **Khazgrim** (4) — the dwarves, underground.
+
+**Friendship** (0–10 hearts) rises by talking daily and, more, by **gifting**. Tastes match by *family*, so "loves jam" is satisfied by any jam. Depth unfolds as you grow closer: **heart blurbs** reveal backstory at 3 and 6 hearts, and **heart events** are one-time scripted scenes at 4, 7 or 8. Good friends give you things from their own in-character pool, teach you their favourite dish, and remember.
+
+**Shops:** general store (seeds, saplings, livestock, soft goods) · blacksmith (fuel, bars, gear, tool upgrades) · carpenter (outbuildings, farmhouse fittings) · taverns (meals, house recipes, and they buy your artisan goods at a premium) · **rotating trader wagons** whose stock turns over on 3–6 day windows, carrying high-tier gear at 3–4× its worth — the non-crafter's road to endgame kit.
+
+**The notice board** on each square carries **favours**: a villager needs so-many of a thing, paid over the odds with friendship and sometimes a recipe folded in. They drift on and expire on their own clocks, and only ever ask for things you could plausibly lay hands on. Separately the **market takes cravings** — for a few days one kind of goods sells dear at the shipping bin.
+
+## 10. Community restoration projects
+
+Each village dreams of one great work. You fund it in freeform instalments — gold and materials, any amount, at that village's notice board. Once funded, a site is staked near the square and raised over days into a standing landmark with a **lasting perk**. Nine of them; a village hosts several over the game's life, the next stepping up as one is finished.
+
+Mossford's **Grange Hall** (festival produce contests), **Shrine of the Seasons** (a daily blessing at the altar) and **Hall of Wonders**; Cinderhope's **Deep Forge** (deep-metal stock, cheaper upgrades, a public furnace and anvil) and **Scriptorium** (study out a recipe); Saltmere's **Lighthouse** (better sea fishing, and moonfish) and **Market Cross** (+10% shipped); Fenwick's **Causeway** (opens Willa's wagon, paves and lights the fen road) and **Bathhouse**.
+
+Nothing is ever locked behind a project — perks make the world cheaper or richer, never newly permitted.
+
+**The Hall of Wonders** is the flagship: present the first of each specimen to the curator for a cabinet of the Vale's wonders — 93 across five wings (Herbarium, Angler's Cabinet, Lapidary, Reliquary, Trophies). Each completed wing grants a lasting perk, latched so a later content addition can never revoke what you earned.
+
+## 11. Character
+
+- **Birth.** A new life opens with the midwives rolling your **sign** (one of nine, each a small passive boon) and your **eight attributes** (ADOM's own — St Le Wi Dx To Ch Ap Pe — honest 3d6 each, reroll at will). Centred on 10, so an average roll changes nothing; each is a small modifier on a system that already exists, never a gate. A very rare treat can raise one for good, to a ceiling of 18.
+- **Ten skills** (Farming, Foraging, Mining, Fishing, Combat, Cooking, Smithing, Jewelcrafting, Gemcutting, Herbalism), 0–10, gaining from the matching work. Levels grant small, cozy bonuses and lift the quality of what you make.
+- **Character level** 1–15 on its own track — every deed feeds it and it keeps growing after a skill has capped. Each level: +8 max HP, +12 max stamina.
+- **Weapon mastery** per category (blade, axe, blunt, polearm, archery, unarmed), learned by doing: to-hit, damage, crit and parry.
+- **Karma**, −100 (villainous) to +100 (saintly), moved by kindness and cruelty. It scales how fast the world warms to you, and what you pay and are paid at a counter (±10%, soft — never a lock).
+- **Encumbrance.** Carry weight comes from item kind. Over capacity you tire faster and move slower; well over, much more so. Never a wall — always a cost gradient. Crafted satchels raise the ceiling; the home chest takes weight off your back entirely.
+- **Buffs** from cooked dishes and brewed draughts (hearty, green thumb, keen forager, brisk, warded, stoneskin, swift, firebrand, clarity, envenomed, phantom).
+
+## 12. Land
+
+Every surface tile has an owner, resolved on demand and cached per map:
+
+- **Village land** — building footprints, farmhouse fields and cottage gardens belong to a named resident, or to the village. You may *take* from it — theft and vandalism cost karma and the owner's regard, after one warning — but you may not build on it.
+- **The homestead grant** — a radius of 20 around your spawn. Yours, and never taxed.
+- **Your claims** — wilderness you improved by tilling, building or fencing in. Yours to use, but the crown levies **2g per tile per week**. Unpaid balances only cost a drip of karma; gold and land are never seized.
+- **Wilderness** — everything else is ownerless.
+
+## 13. Combat (deliberately light, but real)
+
+ADOM's model: a to-hit roll against the target's **DV**, then damage minus its **PV** (Protection soaks at most ~⅔ of any blow, so armour is never total immunity and a weak weapon is never useless).
+
+- **Gear is composed, not enumerated:** a **base** (9 weapons, 10 armour slots, 2 bows) × a **material** (7 forge metals, plus leather, cloths, bow woods and beast scales) × optional **prefix/suffix affixes** × **embedded gems**. Stats and value derive from all of it; the item saves by its structured identity, so a piece can always be rebuilt.
+- **Gems** carry one themed effect each, powering both worn jewellery (scaled by metal and star quality) and sockets in gear and tools.
+- **Statuses:** poison, bleed, burn and a lingering sickness, each a damage-over-time that scales with the victim's max HP so it never fades to a rounding error.
+- **Monsters:** 15 kinds + 5 bosses, filtered by dungeon kind and depth, each scaled by the levels it stands *above* its intro floor. Behaviours: chase, erratic, charge, ranged (kites you), summon (raises the dead while it stands), and bosses that enrage below half health. Deeper floors roll **elite** variants — prefixed, brighter, tougher, worth more.
+- **Ranged:** bows and a sling, with **tiered ammo** (plain wood → metal-tipped by ore → brimstone and venom tips). A shot spends your best arrow first.
+- **The Bomb** and the gunpowder **Blast Charge** harm monsters *and* shatter rock and ore — useful to a pacifist miner. Firecrackers are all noise, and scare crop-raiders off your land for days.
+- **Surface wildlife** is peaceful (skittish or defensive); killing it costs karma but fills the larder and the tanning rack. The Westreach's beasts are **predators** that hunt on sight.
+- **Faint** → carried to your bed, wake next dawn, lose loose loot and some gold (scaled by depth). No death screen.
+
+## 14. Tunables
 
 | Knob | Value |
 |---|---|
-| Start energy / HP / stamina | 100 / 50 / 20 |
-| **Day-1 loadout** | hoe, watering can, axe, pickaxe, basic sword + 15 parsnip seeds + 0 gold (**lean & classic**) |
-| Till/plant/water | 6/4/4 energy · ~10 min |
-| Chop / mine / bump | 8 / 10 / 3 energy |
-| Furnace / Jar / Keg time | ~5h / ~part-day / ~1–3 days |
-| Season length / year | 28 days / 112 days (debug flag → 4) |
-| Pass-out gold loss | 10% |
-| World size | 200×200 tiles |
-| Value ladder | raw 1× · cooked ~2× · artisan ~3–4× |
+| Start HP / stamina / gold | 50 / 270 / 0 |
+| Day-1 loadout | 6 tools, seed pouch, a rusty iron sword, 15 parsnip seeds |
+| Day length | 06:00 → 02:00 |
+| Season / year | 28 days / 112 days |
+| World size | 1024×1024 (Westreach 320×320, dungeon floor 72×46) |
+| Till / water / plant / harvest | 3 · 2 · 2 · 1 stamina |
+| Chop / mine | 6 stamina, 10 min · 8 stamina, 20 min |
+| Tool tiers | Wooden → Bronze → Iron → Steel → Adamantium → Mithril (−12% stamina, −10% time each) |
+| Quality | 0–5 stars, sell value 1.0× → 2.0× |
+| Skills / character level | 10 levels (120 xp each) / 15 levels |
+| Carry capacity | 50 base + 4/level + satchels + Strength |
+| Land tax | 2g per claimed tile per week |
+| Crafted-good margin floor | ingredients + 25% |
+| Faint penalty | loose loot + 10% gold + 15/depth |
 
-## 15. Milestones  *(cozy-first ordering)*
+## 15. Controls
 
-- **M1 — Walking skeleton:** window; player walks a scrolling procedural multi-biome world; HUD (date/time/energy).
-- **M2 — Hearth & seasons:** full farming loop + light fishing + season/weather clock + inventory/tools.
-- **M3 — Make & trade:** crafting (bench + machines + cooking), shipping bin, **two villages** with shops, NPCs, gifting & friendship.
-- **M4 — The wilds:** FOV, **2 small themed dungeons**, gentle combat + 1 ability, forage/ore nodes, eject-on-faint, save/load. *(playable cozy vertical slice)*
+Movement is **arrows** (4-way) and the **numeric keypad** (8-way, keypad-5 waits). **There are deliberately no vi-keys** — the keymap follows ADOM, and letters are reserved for commands.
 
-## 16. Decisions locked
+```
+arrows / keypad  move        . or KP5  wait        w  run (then a direction)
+Space  use the active tool   g  grab / gather / interact     1-9,0  hotbar slot
+>  <   descend / ascend      l  look        t  aim & throw or loose
+i  pack   e  equipment       c  craft & cook          x  eat
+b  ship at the bin           f  gift       Shift+C  talk / shop
+s  sleep  p  site a building j  journal     r  relationships   v  character
+m  world map     h / Shift+M  message history    ?  help & codex
+Tab  filter or swap    Enter  confirm    Esc  cancel    q  quit    Shift+U  mute
+```
 
-- Visuals: pure ASCII (swappable). · Tone: **cozy-first, combat a minor side mechanic.** · Goal: **none — open-ended life-sim.**
-- World: one contiguous procedural frontier (~200×200), danger by distance. · Dungeons: **multiple small themed sites** (2–4 floors), 2 in slice.
-- Villages: **two** (Mossford, Cinderhope) with NPCs, shops, gifting, friendship, festivals.
-- Seasons: full 4-season, **28-day** cadence (+debug fast flag). · Fishing: **light, in slice.** · Combat: light bump + the **Bomb** ability.
-- Loadout: **lean & classic** (tools + starter seeds, no gold). · Death: eject home, drop loose loot + ~10% gold.
-- Dungeons re-roll **per in-game day** (stable within a day).
-- **Tool targeting: directional** — tools act on the adjacent tile you face (Stardew-style), so trees/rock/walls stay impassable for cozy texture and dungeon/combat tactics. The faced tile is always **highlighted** (green when the active tool can act there) — this is the facing indicator. Bumping an obstacle turns you to face it without moving. "Where you stand" actions (grab, stairs, sleep) remain non-directional.
+**Tool targeting is directional** — tools act on the adjacent tile you face, always highlighted (green when the active tool can act there), which doubles as the facing indicator. Bumping an obstacle turns you to face it. "Where you stand" actions (grab, stairs, sleep) are non-directional. Bumping an animal pets it or collects its produce; bumping a creature attacks it; bumping an altar, lectern or bath uses it.
 
-## 17. Open questions
+## 16. Technical architecture
 
-*All design decisions are locked.* The Content appendix (§18) is illustrative starter data — names/numbers are placeholders to tune during build, not decisions. Remaining choices are implementation details to settle as we build (e.g. exact growth-day counts, monster stats, gift-taste tables).
+```
+hearthdelve/
+  main.py         # tcod context, the thin main loop
+  screens.py      # the screen stack: one class per mode (play, inventory, shop, aim, fishing…)
+  engine/  constants · rendering · screens_render · codex · input · save · audio · font · ui
+  world/   tile · gamemap · worldgen · worldlib · westgen · dungeon · dwarftown · crops
+  entities/ player · items · monster · npc · animal · machine
+  game/    state · commands · turns · actions · farming · crafting · combat · village ·
+           husbandry · projects · requests · collection · delve · fishing · wildlife ·
+           events · land · karma · skills · attrs · jewelry · encumbrance · inventory · quests
+  data/    content.py     # every table: crops, recipes, machines, monsters, items, NPCs, projects
+```
 
-## 18. Content appendix (starter data — tune during build)
+- **Screen stack, not a mode enum.** The loop only ever talks to the top: `tick` (per-frame real-time work), `render`, `on_raw` (raw events, for held keys and letter namespaces), `handle` (translated commands).
+- **Layering:** `game/` never imports the renderer. Presentation reads from simulation, never the reverse.
+- **Turn model:** one `advance_time(seconds)`. Time passing steps monsters underground, residents/wildlife/animals above. Machines resolve lazily by completion time.
+- **Save:** JSON. The world is **regenerated from its seed** on load, then the player's changes are overlaid (the tile grid base64-encoded, plus crops, soil, trees, machines, animals, wildlife, buildings, NPC friendships). Persistence is **structural** — gear stores base + material + affixes + gems, never a parsed display name — and record formats are append-only with guarded defaults, so new fields don't break old saves. Tile ids are positional: **only ever append** to the registry in `world/tile.py`.
+- **Determinism:** everything drifting is seeded from `(seed, day)` and salted arithmetically — never `hash()`, which is salted per process.
 
-**The valley:** Hollowmere Vale. Homestead at center; river running NE→SW; Mossford near home; Cinderhope out by the mine.
+## 17. Content at a glance
 
-**Villages & residents**
-- *Mossford:* **Marda** (General Store — warm, gossipy; loves jams/flowers), **Tomas** (Carpenter — building upgrades; likes wood/stone), **Old Pell** (river fisher/forager — likes fish/bait), **Wrenna** (herbalist & cook — teaches recipes; loves foraged herbs/mushrooms).
-- *Cinderhope:* **Bron** (Blacksmith — tool upgrades, sells bars/coal; likes ore/gems), **Sable** (tinker/wandering trader — rotating rare stock; likes relics).
+- **26 crops** across all four seasons (12 vegetables, 5 fruits, 4 grains, 3 flowers, 2 fibre) · **5 orchard trees** · **6 livestock species**
+- **31 machines** · **97 recipes** (52 cooked dishes, 22 buildings, 12 bench items, 8 remedies, 2 carry upgrades, 1 chooser)
+- **6 wild herbs** → remedies, potions and combat draughts · **4 wild mushroom species** + cave fungus and glowcaps
+- **9 weapon bases** × 7 forge metals × affixes × 6 gems · **10 armour slots** including cloth and beast-scale lines
+- **15 monsters + 5 bosses + 6 elite affixes** · **10 wildlife species** (5 common + the rare bear in the Vale, 4 in the Westreach)
+- **42 NPCs** · **9 community projects** · **93 collection specimens** · **21 goals** · **9 birth signs** · **6 festivals**
 
-**Seasonal crops (sample)**
-- *Spring:* parsnip, potato, cauliflower, strawberry *(regrows)*.
-- *Summer:* tomato *(regrows)*, corn, hot pepper *(regrows)*, melon, blueberry.
-- *Fall:* pumpkin, eggplant *(regrows)*, cranberry, wheat, grape.
-- *Winter:* none outdoors; forage winter-root & crystal-fruit; greenhouse later.
+## 18. Screen layout & glyph legend
 
-**Dungeon roster** *(★ = built in slice)*
-- ★ **The Old Mine** (Cinderhope, T2) — ore, coal, gems → bars, tools, machines.
-- ★ **Woodland Grotto** (woods, T2) — rare seeds, sap, mushrooms.
-- **Flooded Hollow** (river, T2/T3) — fish, pearls, clay (richer fishing).
-- **Moor Barrow / Ruined Keep** (T3) — relic reagents, gold, rarer drops.
-
-**Monster roster** *(★ = slice; gentle)*
-- ★ **Cave Slime** (slow, weak), ★ **Bat** (erratic, flees), ★ **Boar** (charges, then calms), · Bandit-Scavenger (T2), Moor-Wight (T3).
-
-**Starter recipes (known day 1 or early):** Furnace, Preserves Jar, Scarecrow, basic Fertilizer · Cooked: **Veggie Stew** (restore energy), **Berry Jam** (sell), **Fish Chowder** (energy+small HP). Later via friendship/shops: Keg, Sprinkler (needs bars), Loom, more dishes.
-
-**Tools:** Hoe · Watering Can · Axe · Pickaxe · Sword (basic) · Fishing Rod. Upgrade tiers **Copper → Iron → Gold** (bars + gold at Bron's).
-
-## 19. Screen layout & glyph legend
-
-Target window ~**80×50** cells: a large play viewport, a right-side status panel, and a bottom message log.
+Target window **80×50**: a 58×44 world viewport, a 22-wide status panel, a bottom message log.
 
 ```
 ┌──────────────────────────────────────────────┬───────────────────────┐
 │ ♣ ♣ ♣ , , , , . . . ~ ~ ~ . . . . . ♠ ♠       │  Spring 3  ☀ Clear    │
 │ ♣ ♣ , , " " " . . . ~ ~ . . . ☖ . . ♠         │  08:40                │
-│ , , " " " " " . . . . . . . . . . . .          │                       │
 │ , , " " " ‗ ‗ ‗ ‗ . . . F . . . . . .          │  ♥ HP    42/50        │
-│ , , " " ‗ ≈ ‗ ‗ ‗ . . . . . @ . . . .          │  ⚡ Energy 71/100      │
-│ , , " " ‗ ‗ ♬ ‗ ‗ . . . s . . . . . .          │  ✦ Stamina 12/20      │
-│ , , " " ‗ ‗ ‗ ‗ ‗ . . . . . . . o . .          │  ⛁ Gold  340g         │
-│ ♣ , , , . . . . . . . . . . . . . . ♣          │                       │
-│ ♣ ♣ , , . . . . . n . . . . . . ♣ ♣ ♣          │  Tool ▸ [2] Can       │
-│ . . . . . . . . . . . . . . . . . . .          │  1 Hoe  2 Can  3 Axe  │
-│ . . . . . . . . . . . . . . . . . . .          │  4 Pick 5 Sword       │
-│ . . . . . . . . . . . . . . . . . . .          │  Bombs ×2             │
+│ , , " " ‗ ≈ ‗ ‗ ‗ . . . . . @ . . . .          │  ✦ Stamina 71/270     │
+│ , , " " ‗ ‗ ♬ ‗ ‗ . . . s . . . . . .          │  ⛁ Gold  340g         │
+│ ♣ , , , . . . . . . . . . . . . . . ♣          │  ⚖ Load 22/54         │
+│ ♣ ♣ , , . . . . . n . . . . . . ♣ ♣ ♣          │  ▸ Space: till        │
 ├──────────────────────────────────────────────┴───────────────────────┤
 │ You water the parsnip sprout.                                          │
-│ Marda: "Lovely morning for it!"                                        │
-│ A boar snuffles in the brush to the east.                              │
 └────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Glyph legend** (colored by biome/state; CP437/Unicode):
-
 | Glyph | Meaning | | Glyph | Meaning |
 |---|---|---|---|---|
-| `@` | player | | `‗` | tilled soil (dark when watered) |
-| `.` | grass / floor | | `♬`/`♠` | crop by growth stage → ripe |
-| `,` `"` | meadow / tall grass | | `F` | forage node (herb/berry) |
-| `♣` `♠` | tree / bush | | `≈` `~` | water (fishable) / river |
-| `☖` | building / house | | `*` | ore vein · `◊` gem |
-| `+` | door · `▒` wall | | `>` `<` | dungeon down / up |
-| `s` `b` `o` | slime · bat · boar | | `n` | NPC · `☼` machine working |
+| `@` | player | | `‗` `≡` | tilled soil (cool when watered) |
+| `.` `,` `"` | grass / meadow / tall grass | | `.` `,` `"` → crop glyph | growth stages → ripe |
+| `♣` `♠` | broadleaf / conifer | | `&` `*` | shrub / bush, flowers |
+| `▓` | foliage (machete) | | `≈` `~` | sea / river |
+| `;` `:` `‖` | marsh / moor / reeds | | `^` `░` | hill / scree |
+| `☖` `#` `+` | building / wall / door | | `·` `=` | road & cobble / bridge |
+| `*` `◊` | ore vein / gem vein | | `‡` `⊠` `☐` | signpost / post box / bin |
+| `>` `<` | stairs down / up | | `■` `^` `%` | chest / trap / bones |
+| `τ` `ψ` | mushroom / herb | | `î` `♨` `Ω` | lamp / campfire / hearth |
+| `▦` | scaffold (building site) | | `≈` (orange) | lava |
 
-- **Color carries meaning:** biome tints the base terrain; watered soil darkens; ripe crops brighten; monsters are warm-hued; the player is always bright white. Out-of-FOV dungeon tiles render dim (explored-but-unseen), like classic roguelikes.
-- **Modal overlays** (inventory, craft, shop, dialogue) draw a centered panel over the play view; the world pauses.
+- **Colour carries meaning:** terrain recolours with the season (autumn golds, winter snow); watered soil goes cool, parched soil warm; a machine pulses gold when its output is ready; ore twinkles; gems glitter. Out-of-FOV dungeon tiles render dim, like classic roguelikes.
+- **Atmosphere:** day/night light with a warm dawn and dusk, directional sun shadows, fake ambient occlusion, cloud shadows, rain puddles and ripples, coastal foam, wind gusts across the grass, seasonal motes (petals, pollen, fireflies, leaves), birds and butterflies crossing, chimney smoke, and steam boiling off the Westreach caldera in the rain.
 
-## 20. Opening & onboarding (first 10 minutes)
+## 19. Opening & onboarding
 
-- **Arrival:** a short title card — *"A letter from your grandfather: the old farm in Hollowmere Vale is yours now…"* — then you wake in the farmhouse on **Spring 1**, morning.
-- **Soft, diegetic tutorial** (no walls of text — NPCs and the message log nudge):
-  1. Step outside; a few starter tiles are already tilled. The log hints: *"Press 2 for the watering can, Space to use it."* Plant your 15 parsnip seeds.
-  2. Marda walks up from Mossford, introduces the **General Store** and the **shipping bin** ("leave goods in the bin by night, gold by morning").
-  3. The day's energy naturally runs down; the bed prompts **sleep** → first season tick, parsnips advance.
-  4. Over the first few days, hints surface crafting (a furnace blueprint known from day 1), Cinderhope & Bron (tool upgrades), and the **dungeon entrances** as optional discoveries — never required.
-- **No fail state in the opening.** Worst case you faint and wake home; the game frames it gently.
-- **Goalless by design:** the closing onboarding line sets the tone — *"There's no rush. The Vale keeps its own time."*
+- **Birth:** a title card — *"A letter from your grandfather: the old farm in Hollowmere Vale is yours now…"* — then the midwives roll your sign and attributes.
+- **Soft, diegetic tutorial.** No walls of text: the log nudges, the panel previews what Space would do on the tile you face, and NPCs explain themselves. A few tiles come pre-tilled; you have 15 parsnip seeds.
+- **No fail state.** Worst case you faint and wake at home, and the game frames it gently.
+- **Goalless by design.** 21 goals mark progress and pay a little gold, but there is no ending. *"There's no rush. The Vale keeps its own time."*
+
+## 20. Open questions
+
+Design decisions are locked; what remains is tuning and judgement, tracked in `BUGS.md`:
+
+- **Gear pricing.** Buying a finished piece is currently cheaper than buying the bars to forge it, at every tier — a bought edge should be dearer than a crafted one.
+- **Faucets vs sinks.** The one-off sinks amount to roughly an in-game year of a developed farm's income; past that, gold is unbounded with little to want. Wild fruit trees, truffle pigs and dungeon gold all need a decision about what gold is *for*.
+- **Disease.** A night's sleep clears sickness, which undercuts the remedies and the Bathhouse built to cure it.
+- **The daily blessing and the Scriptorium** cycle on a fixed rotation, against pillar 8.
