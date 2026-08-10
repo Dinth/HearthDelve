@@ -259,7 +259,7 @@ def new_day(state: GameState) -> None:
 # --- completion --------------------------------------------------------------------
 def finish(state: GameState, x: int, y: int, m: Machine) -> None:
     """Raise the finished landmark (called from husbandry's construction tick)."""
-    from . import karma
+    from . import karma, land
     d = content.PROJECTS[m.build_kind]
     proj = get(state, m.build_kind)
     surf = state.surface
@@ -269,6 +269,10 @@ def finish(state: GameState, x: int, y: int, m: Machine) -> None:
     _STAMPS[d.id](state, rect)
     surf.buildings.append({"x": rect[0], "y": rect[1], "w": rect[2], "h": rect[3],
                            "kind": d.id, "village": d.village, "owner": None})
+    # The landmark is village land from this moment, so drop the cached ownership
+    # grid — without this it stayed "wilderness" until the next load, and you
+    # could set machines down on a hall you'd just paid to raise.
+    land.invalidate(surf)
     if proj:
         proj["state"] = "done"
     # the whole village turns out for the raising
@@ -404,9 +408,11 @@ def register_buildings(world, projects: list) -> None:
     """Re-register completed landmarks' look-mode records after a load (the save
     only persists player-built, non-village buildings — the landmark's tiles
     survive in the grid, but its record must be rebuilt from the project)."""
+    from . import land
     for proj in projects:
         if proj.get("state") == "done" and proj.get("site"):
             x, y, w, h = proj["site"]
             world.buildings.append({"x": x, "y": y, "w": w, "h": h,
                                     "kind": proj["id"],
                                     "village": proj.get("village", ""), "owner": None})
+    land.invalidate(world)          # these are village land; re-derive ownership
