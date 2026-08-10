@@ -1601,6 +1601,20 @@ def describe(state: GameState, x: int, y: int) -> str:
     t = state.world.tile_at(x, y)
     if t.kind == "signpost":
         return _signpost_text(state, x, y)
+    if t.kind == "water":
+        # Name the water, because which body it is decides what you'll pull out.
+        from ..game.fishing import water_kind
+        return {
+            "river": "the river running through the Vale — cast here for its "
+                     "seasonal fish.",
+            "sea":   "the open sea, too deep to wade — sardine, mackerel, bass "
+                     "and, if you're lucky, tuna.",
+            "marsh": "a peaty fen pool, brown and still — eels, tench, and that "
+                     "red crayfish nobody invited.",
+            "lake":  "still, clear water — a pond's own fish: perch, rudd, bream "
+                     "and the odd great carp.",
+            "cave":  "a lightless underground pool. Pale things live in it.",
+        }[water_kind(state, x, y)]
     if t.kind == "tree":
         return f"a {t.name} tree — passable. Chop it with an axe for wood."
     if t.kind == "foliage":

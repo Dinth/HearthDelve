@@ -13,6 +13,7 @@ import time
 
 from ..data import content
 from ..engine import constants as C
+from ..world import tile
 from . import turns
 from .state import GameState
 
@@ -46,6 +47,43 @@ def _difficulty(fish) -> float:
     return max(0.8, min(1.6, 0.8 + fish.value / 420.0))
 
 
+# --- which body of water is this? --------------------------------------------
+# The map stores only two water tiles — RIVER for the flowing kind and WATER for
+# everything standing — so the sea, the fen's bog pools and a village pond all
+# share one tile id. Telling them apart from the tile alone used to hand out
+# tuna and sea bass in a marsh puddle (and let Saltmere's lighthouse light it).
+# Instead we read the world: the coastline says what's salt, and what crowds
+# round a pool says whether it's fen or open water. Nothing new to save, and a
+# pond dug in a meadow fishes differently from a pool out in the peat.
+_MARSHY = (tile.MARSH, tile.MOOR, tile.FOG_GRASS, tile.REEDS)
+_MARSH_RADIUS = 3       # how far around a pool we look
+_MARSH_MIN = 6          # marshy tiles in that window before we call it fen water
+
+
+def water_kind(state: GameState, x: int, y: int) -> str:
+    """Which water body (x, y) belongs to: cave | river | sea | marsh | lake."""
+    w = state.world
+    if w.is_dungeon:
+        return "cave"
+    if w.tiles[x, y] == tile.RIVER:
+        return "river"
+    coast = getattr(w, "coast", None)             # per-column first sea row
+    if coast is not None and 0 <= x < len(coast) and y >= int(coast[x]):
+        return "sea"
+    marshy = 0
+    for xx in range(x - _MARSH_RADIUS, x + _MARSH_RADIUS + 1):
+        for yy in range(y - _MARSH_RADIUS, y + _MARSH_RADIUS + 1):
+            if w.in_bounds(xx, yy) and w.tiles[xx, yy] in _MARSHY:
+                marshy += 1
+    return "marsh" if marshy >= _MARSH_MIN else "lake"
+
+
+# What each still water holds. The river is absent: it turns with the seasons,
+# so it's resolved through content.fish_in_season instead.
+_STILL_TABLES = {"cave": content.CAVE_FISH, "sea": content.SEA_FISH,
+                 "marsh": content.MARSH_FISH, "lake": content.LAKE_FISH}
+
+
 def _pan_river(state: GameState, tx: int, ty: int) -> None:
     """A single cast at the Underriver: sift the gravel for what the black water
     carries down. No minigame — a straight cast, time-bounded like fishing, so a
@@ -77,12 +115,9 @@ def begin(state: GameState, tx: int, ty: int):
         _pan_river(state, tx, ty)
         return None
     from . import skills
-    if state.world.is_dungeon:
-        table = content.CAVE_FISH
-    elif state.world.tile_at(tx, ty).name == "water":     # open sea (rivers/lakes are "river")
-        table = content.SEA_FISH
-    else:
-        table = content.fish_in_season(state.season)
+    kind = water_kind(state, tx, ty)
+    table = (content.fish_in_season(state.season) if kind == "river"
+             else _STILL_TABLES[kind])
     chance = content.FISH_CATCH_CHANCE + skills.fishing_catch_bonus(state)
     from . import collection, events                       # Hall of Wonders — completed Angler's Cabinet
     if collection.perk_earned(state, "Angler's Cabinet"):
@@ -92,7 +127,8 @@ def begin(state: GameState, tx: int, ty: int):
         chance += 0.04
     # The Saltmere lighthouse: the beam steadies the boats and draws the far
     # shoals in — sea casts bite more often, and moonfish rise to the light.
-    if table is content.SEA_FISH:
+    # Salt water only; the beam does nothing for a bog pool inland.
+    if kind == "sea":
         from . import projects
         from ..entities import items
         if projects.done(state, "lighthouse"):

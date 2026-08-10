@@ -13,8 +13,10 @@ class TestFishFamily(unittest.TestCase):
         tables = ([f.item for f in content.FISH]
                   + [it for it, _ in content.SEA_FISH]
                   + [it for it, _ in content.CAVE_FISH]
+                  + [it for it, _ in content.MARSH_FISH]
+                  + [it for it, _ in content.LAKE_FISH]
                   + [items.MOONFISH])          # the lighthouse special
-        self.assertGreaterEqual(len(set(tables)), 21)
+        self.assertGreaterEqual(len(set(tables)), 28)
         for it in tables:
             self.assertEqual(it.family, "fish", f"{it.name} is not in the fish family")
 
@@ -122,9 +124,10 @@ class TestAnglersCabinetAndPerkLatch(unittest.TestCase):
     def test_cabinet_covers_every_water(self):
         from hearthdelve.data import content
         ang = {it.name for it in content.COLLECTION["Angler's Cabinet"]}
-        for must in ("Moonfish", "Tuna", "Sardine", "Cave Bass", "Glowfish", "Eel"):
+        for must in ("Moonfish", "Tuna", "Sardine", "Cave Bass", "Glowfish", "Eel",
+                     "Lamprey", "Red Swamp Crayfish", "Zander", "Mirror Carp"):
             self.assertIn(must, ang, f"{must} missing from the Angler's Cabinet")
-        self.assertGreaterEqual(len(ang), 21)
+        self.assertGreaterEqual(len(ang), 28)
 
     def test_cave_fish_can_be_requested(self):
         from hearthdelve.game import requests

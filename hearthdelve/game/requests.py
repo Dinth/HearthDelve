@@ -72,6 +72,8 @@ def _fish_pool(state: GameState) -> list:
             if not f.seasons or state.season in f.seasons]
     pool += [it for it, _w in content.SEA_FISH]
     pool += [it for it, _w in content.CAVE_FISH]      # cave lakes fish year-round
+    pool += [it for it, _w in content.MARSH_FISH]     # the fen and the ponds, likewise
+    pool += [it for it, _w in content.LAKE_FISH]
     return pool
 
 

@@ -1272,7 +1272,11 @@ CURED_FISH_MULT = 1.7
 _CURABLE_FISH = (items.CARP, items.CATFISH, items.TROUT, items.PIKE, items.SALMON,
                  items.ICEFISH, items.MACKEREL, items.SEA_BASS, items.TUNA,
                  items.MOONFISH, items.CAVE_BASS, items.EEL, items.BLINDFISH,
-                 items.GLOWFISH)
+                 items.GLOWFISH,
+                 # the fen & the ponds; the little shoalers (roach, rudd) are too
+                 # slight to bother smoking, exactly like a sardine or a minnow
+                 items.TENCH, items.CRAYFISH, items.LAMPREY,
+                 items.ZANDER, items.MIRROR_CARP)
 FISH_CURED = {f: items.register(items.Item(
     f"Smoked {f.name}", "▬", "artisan", f"Slow-smoked {f.name.lower()}; keeps and travels well.",
     value=round(f.value * CURED_FISH_MULT), energy=50, family="cured_fish", source=f))
@@ -1649,6 +1653,22 @@ CAVE_FISH: list[tuple[Item, int]] = [
 # Catches from the open sea (cast from the coast); tuna is the rare prize.
 SEA_FISH: list[tuple[Item, int]] = [
     (items.SARDINE, 34), (items.MACKEREL, 26), (items.SEA_BASS, 14), (items.TUNA, 5),
+]
+
+# The fen's own water — peaty, weedy and thick with eels, which is Fenwick's
+# whole living. It's a long walk out to the marsh and the miasma there can make
+# you ill, so it pays better than the home river.
+MARSH_FISH: list[tuple[Item, int]] = [
+    (items.ROACH, 34), (items.TENCH, 24), (items.EEL, 20),
+    (items.CRAYFISH, 18), (items.LAMPREY, 4),
+]
+
+# Still, clear standing water: village ponds and the odd upland tarn. Safe,
+# close to home and easy — so it's the gentlest catch of the four. The crayfish
+# turns up here too; it turns up everywhere, which is rather the trouble.
+LAKE_FISH: list[tuple[Item, int]] = [
+    (items.PERCH, 30), (items.RUDD, 26), (items.BREAM, 20), (items.CARP, 14),
+    (items.CRAYFISH, 10), (items.ZANDER, 7), (items.MIRROR_CARP, 3),
 ]
 
 
@@ -2896,6 +2916,8 @@ def _collection_catalogue() -> dict:
     anglers = uniq([f.item for f in FISH]
                    + [it for it, _ in SEA_FISH]
                    + [it for it, _ in CAVE_FISH]
+                   + [it for it, _ in MARSH_FISH]
+                   + [it for it, _ in LAKE_FISH]
                    + [items.MOONFISH])           # the lighthouse special
     lapidary = (items.AMETHYST, items.TOPAZ, items.EMERALD, items.RUBY,
                 items.SAPPHIRE, items.DIAMOND)

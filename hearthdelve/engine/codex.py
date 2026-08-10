@@ -219,18 +219,26 @@ def build_codex_pages(state: GameState):
     pages.append(("Crafting & Machines", craftp))
 
     # --- Page: Fish ---------------------------------------------------------
+    # Every water holds its own catch, so where you cast matters as much as when.
+    def _rarity(w: int) -> str:
+        return "common" if w >= 25 else "uncommon" if w >= 8 else "rare"
+
     fishp = [("Fish  (face water, cast the rod)", _HDR), ("", C.WHITE)]
+    fishp.append(("The river  ~  flowing water; turns with the seasons", _HDR))
     for f in content.FISH:
-        rarity = "common" if f.weight >= 25 else "uncommon" if f.weight >= 8 else "rare"
         when = "all year" if not f.seasons else "/".join(f.seasons)
-        fishp.append((f" {f.item.glyph}  {f.item.name:<9} {f.item.value:>4}g  {rarity:<8} {when}", C.WHITE))
+        fishp.append((f" {f.item.name:<19}{f.item.value:>4}g  {_rarity(f.weight):<9}{when}", C.WHITE))
+    for title, table in (("The open sea  ≈  cast from the coast & beaches", content.SEA_FISH),
+                         ("The fen  ;  peaty marsh pools — eels, and worse", content.MARSH_FISH),
+                         ("Still water  ≈  village ponds and upland tarns", content.LAKE_FISH),
+                         ("Underground lakes  ·  fish while delving", content.CAVE_FISH)):
+        fishp.append(("", C.WHITE))
+        fishp.append((title, _HDR))
+        for it, w in table:
+            fishp.append((f" {it.name:<19}{it.value:>4}g  {_rarity(w)}", C.WHITE))
     fishp.append(("", C.WHITE))
-    fishp.append(("Underground lakes  (fish while delving)", _HDR))
-    for it, w in content.CAVE_FISH:
-        rarity = "common" if w >= 25 else "uncommon" if w >= 8 else "rare"
-        fishp.append((f" {it.glyph}  {it.name:<10} {it.value:>4}g  {rarity}", C.WHITE))
-    fishp.append(("", C.WHITE))
-    fishp.append(("Sell them, or cook Fish Stew / Grilled Fish to restore stamina.", C.DIM))
+    fishp.append(("Sell them, smoke them, or cook any catch into sashimi & chowder —", C.DIM))
+    fishp.append(("the finer the fish, the finer (and dearer) the dish.", C.DIM))
     pages.append(("Fish", fishp))
 
     # --- Page: Terrain & Features -------------------------------------------
