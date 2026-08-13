@@ -866,14 +866,17 @@ def render_panel(con: tcod.console.Console, state: GameState) -> None:
 
     p = state.player
     _bar(con, x, 5, "♥ HP", p.hp, p.max_hp, C.HP_COLOR, low_frac=C.LOW_HP_FRAC)
-    if p.status:                        # active damage-over-time: poison/bleed/burn
-        from ..game.combat import STATUS
+    if p.status:                        # active afflictions: wounds and illness
+        from ..game.combat import STATUS, is_disease
         col = 0
         for k in p.status:
             info = STATUS.get(k)
             if info:
-                con.print(x + col, 7, info["tag"], fg=info["color"])
-                col += len(info["tag"]) + 1
+                # A disease runs on days, so show how many are left — you need it
+                # to decide whether the illness is worth physicking away.
+                tag = info["tag"] + (f" {p.status[k]}d" if is_disease(k) else "")
+                con.print(x + col, 7, tag, fg=info["color"])
+                col += len(tag) + 1
     _bar(con, x, 8, "✦ Stamina", p.energy, p.max_energy, C.ENERGY_COLOR,
          low_frac=C.LOW_ENERGY_FRAC)
     con.print(x, 11, f"⛁ Gold  {p.gold}g", fg=C.GOLD_COLOR)

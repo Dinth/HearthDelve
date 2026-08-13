@@ -189,7 +189,8 @@ ADOM's model: a to-hit roll against the target's **DV**, then damage minus its *
 
 - **Gear is composed, not enumerated:** a **base** (9 weapons, 10 armour slots, 2 bows) × a **material** (7 forge metals, plus leather, cloths, bow woods and beast scales) × optional **prefix/suffix affixes** × **embedded gems**. Stats and value derive from all of it; the item saves by its structured identity, so a piece can always be rebuilt.
 - **Gems** carry one themed effect each, powering both worn jewellery (scaled by metal and star quality) and sockets in gear and tools.
-- **Statuses:** poison, bleed, burn and a lingering sickness, each a damage-over-time that scales with the victim's max HP so it never fades to a rounding error.
+- **Afflictions come on two clocks.** A **wound** — poison, bleed, burn — bites once per action, counts down in actions, and a night's rest sweats it out. A **disease** keeps a calendar: it does nothing turn to turn, but each dawn you wake short of health and with only three-quarters of a day's rest in you, and it counts down one day. Sleeping does *not* shake it off; it runs its course over 5–8 days (drifting, never a fixed week), or you physick it away with a charcoal tincture, a panacea, or a soak at the Fenwick bathhouse. Damage on either clock scales with the victim's max HP so it never fades to a rounding error, and an illness can never be lethal.
+- The fen's miasma is the common way to catch one — a low per-step chance out in the wet marsh, warded off by a Warding Tea. Fenwick sits in that fen, and Fenwick is where the bathhouse gets built.
 - **Monsters:** 15 kinds + 5 bosses, filtered by dungeon kind and depth, each scaled by the levels it stands *above* its intro floor. Behaviours: chase, erratic, charge, ranged (kites you), summon (raises the dead while it stands), and bosses that enrage below half health. Deeper floors roll **elite** variants — prefixed, brighter, tougher, worth more.
 - **Ranged:** bows and a sling, with **tiered ammo** (plain wood → metal-tipped by ore → brimstone and venom tips). A shot spends your best arrow first.
 - **The Bomb** and the gunpowder **Blast Charge** harm monsters *and* shatter rock and ore — useful to a pacifist miner. Firecrackers are all noise, and scare crop-raiders off your land for days.
@@ -309,5 +310,4 @@ Design decisions are locked; what remains is tuning and judgement, tracked in `B
 
 - **Gear pricing.** Buying a finished piece is currently cheaper than buying the bars to forge it, at every tier — a bought edge should be dearer than a crafted one.
 - **Faucets vs sinks.** The one-off sinks amount to roughly an in-game year of a developed farm's income; past that, gold is unbounded with little to want. Wild fruit trees, truffle pigs and dungeon gold all need a decision about what gold is *for*.
-- **Disease.** A night's sleep clears sickness, which undercuts the remedies and the Bathhouse built to cure it.
 - **The daily blessing and the Scriptorium** cycle on a fixed rotation, against pillar 8.

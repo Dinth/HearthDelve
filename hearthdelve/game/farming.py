@@ -279,7 +279,6 @@ def new_day(state: GameState, rested: bool = True) -> None:
     state.day += 1
     state.clock = 0
     state.warned.clear()            # a fresh morning re-arms the day's warnings
-    state.player.status.clear()     # a night's rest sweats out poison, bleed & burn
     season = state.season
     if season != old_season:
         _seasonal_flora(state, old_season, season)
@@ -376,6 +375,11 @@ def new_day(state: GameState, rested: bool = True) -> None:
     p.energy = p.max_energy if rested else p.max_energy // 2
     p.hp = p.max_hp if rested else max(1, p.max_hp // 2)
     p.stamina = p.max_stamina
+
+    # The night sweats out wounds; an illness has to run its course, and takes
+    # its toll off the rest you just had (see combat.morning_status).
+    from . import combat
+    combat.morning_status(state)
 
     # auto-save each morning
     try:

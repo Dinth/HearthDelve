@@ -14,14 +14,21 @@ def _sign(n: int) -> int:
     return (n > 0) - (n < 0)
 
 
-# --- status effects (damage over time) ---------------------------------------
-# Each entry: per-turn damage, how many turns a fresh application lasts, the
-# chance a landing hit inflicts it, and the display/log wording. Ticked once per
-# action by turns.advance_time; cleared by a night's rest (farming.new_day).
-# Per-turn damage is the larger of a flat ``dmg`` and ``pct`` of the victim's
-# max HP — so a status is unchanged for a fragile newcomer (the flat value wins)
-# yet keeps its teeth against a 160-HP veteran or a scaled deep monster (the
-# percentage wins), instead of fading to a rounding error as HP grows.
+# --- afflictions --------------------------------------------------------------
+# Two kinds, told apart by their CLOCK:
+#
+#   clock "turn" (the default) — a WOUND. Bites once per action (ticked by
+#       turns.advance_time), counts down in actions, and a night's rest sweats
+#       it out entirely. Poison, bleeding, burns.
+#   clock "day" — a DISEASE. It keeps a calendar of its own: it does nothing
+#       action to action, but each dawn it takes its toll and counts down one
+#       day, and sleeping does NOT shake it off. It has to run its course, or be
+#       physicked away (a charcoal tincture, a panacea, or a soak in a bathhouse).
+#
+# Damage is the larger of a flat ``dmg`` and ``pct`` of the victim's max HP — so
+# an affliction is unchanged for a fragile newcomer (the flat value wins) yet
+# keeps its teeth against a 160-HP veteran (the percentage wins), instead of
+# fading to a rounding error as HP grows.
 STATUS = {
     "poison": {"dmg": 2, "pct": 0.018, "turns": 5, "chance": 0.45, "color": (150, 210, 120),
                "tag": "☠ Poisoned", "on": "The bite festers — you're poisoned!",
@@ -32,36 +39,56 @@ STATUS = {
     "burn":   {"dmg": 3, "pct": 0.022, "turns": 3, "chance": 0.50, "color": (240, 150, 80),
                "tag": "♨ Burning", "on": "You're set alight — burning!",
                "off": "The burns cool."},
-    # A lingering illness (not a wound): weak but long, and it saps your stamina.
-    # The brimstone salve won't touch it — only a charcoal tincture or a panacea.
-    "sick":   {"dmg": 1, "pct": 0.012, "turns": 8, "chance": 0.5, "stam": 4,
+    # A wasting illness — the fen's miasma, a ghoul's filthy claws. It costs you
+    # days, not turns: you wake poorly rested, with less of a day in you. The
+    # brimstone salve won't touch it; a charcoal tincture, a panacea or the
+    # Fenwick bathhouse will. ``days`` is a range, so no two illnesses run to the
+    # same length; ``stamina_frac`` is how much of your rest you actually get.
+    "sick":   {"dmg": 3, "pct": 0.05, "days": (5, 8), "chance": 0.5,
+               "stamina_frac": 0.75, "clock": "day",
                "color": (170, 192, 120), "tag": "☣ Sick",
-               "on": "A cold sweat takes you — you've caught something.",
-               "off": "The sickness finally lifts."},
+               "on": "A cold sweat takes you — you've caught something, and it "
+                     "won't pass in a day.",
+               "off": "The sickness finally breaks. You feel like yourself again."},
 }
 
 
+def is_disease(kind: str) -> bool:
+    """Whether an affliction runs on the calendar rather than the turn clock."""
+    return STATUS.get(kind, {}).get("clock") == "day"
+
+
 def _status_damage(holder, info: dict) -> int:
-    """A DoT tick's damage on a holder: a flat floor, scaled up toward a small
+    """An affliction's damage on a holder: a flat floor, scaled up toward a small
     fraction of the victim's max HP so it stays relevant as HP grows."""
     return max(info["dmg"], round(getattr(holder, "max_hp", 0) * info.get("pct", 0.0)))
 
 
 def apply_status(state: GameState, kind: str, turns: int = 0, target=None) -> None:
-    """Lay a damage-over-time on a holder (the player by default, or a mob when
-    ``target`` is given). Refreshing, never stacking beyond its full duration."""
+    """Lay an affliction on a holder (the player by default, or a mob when
+    ``target`` is given). Refreshing, never stacking beyond its full duration.
+    A wound's duration is fixed; a disease's drifts within its ``days`` range."""
     if kind not in STATUS:
         return
+    info = STATUS[kind]
+    if is_disease(kind) and target is not None:
+        return                           # a disease is the player's alone to carry
     holder = state.player if target is None else target
-    dur = turns or STATUS[kind]["turns"]
+    if turns:
+        dur = turns
+    elif is_disease(kind):
+        dur = random.randint(*info["days"])
+    else:
+        dur = info["turns"]
     if target is None and state.player.sign == "serpent":
         dur = max(1, dur - 1)            # born in the dry heat: afflictions pass sooner
     holder.status[kind] = max(holder.status.get(kind, 0), dur)
 
 
 def _tick_status(holder) -> list:
-    """One turn of every DoT on a holder: each bites, then counts down. Returns
-    the list of (kind, info) that expired this turn (for the caller to log)."""
+    """One turn of every WOUND on a holder: each bites, then counts down. Returns
+    the list of (kind, info) that expired this turn (for the caller to log()).
+    Diseases are skipped — they answer to the dawn (see :func:`morning_status`)."""
     st = getattr(holder, "status", None)
     if not st:
         return []
@@ -71,10 +98,9 @@ def _tick_status(holder) -> list:
         if info is None:
             del st[kind]
             continue
+        if is_disease(kind):
+            continue
         holder.hp -= _status_damage(holder, info)
-        stam = info.get("stam", 0)                       # illness also drags at stamina (player only)
-        if stam and getattr(holder, "max_energy", None) is not None:
-            holder.energy = max(0, holder.energy - stam)
         st[kind] -= 1
         if st[kind] <= 0:
             del st[kind]
@@ -83,11 +109,34 @@ def _tick_status(holder) -> list:
 
 
 def tick_player_status(state: GameState) -> None:
-    """Tick the player's DoTs. Damage shows in the HP bar and status pips; only
+    """Tick the player's wounds. Damage shows in the HP bar and status pips; only
     the onset and the end are logged, so it doesn't spam. Called each action from
     turns.advance_time."""
     for _kind, info in _tick_status(state.player):
         state.log.add(info["off"], C.DIM)
+
+
+def morning_status(state: GameState) -> None:
+    """A new dawn. A night's rest sweats out every wound — but a disease keeps
+    its own calendar: it takes the day's toll (you wake short of both health and
+    rest), counts down one day, and only then lets go. Called from
+    farming.new_day, after the night's health and stamina have been restored."""
+    p = state.player
+    for kind in [k for k in p.status if not is_disease(k)]:
+        del p.status[kind]                        # wounds are slept off
+    for kind in [k for k in p.status if is_disease(k)]:
+        info = STATUS[kind]
+        left = p.status[kind] - 1
+        if left <= 0:
+            del p.status[kind]
+            state.log.add(info["off"], (180, 230, 160))
+            continue
+        p.status[kind] = left
+        p.hp = max(1, p.hp - _status_damage(p, info))
+        p.energy = int(p.energy * info.get("stamina_frac", 1.0))
+        state.log.add(f"You wake still ill, and poorly rested — there's less of a "
+                      f"day in you. ({left} more day{'s' if left != 1 else ''} of it)",
+                      info["color"])
 
 
 def weapon_inflict(state: GameState) -> str:

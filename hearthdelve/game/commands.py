@@ -354,17 +354,22 @@ def _spring_trap(state: GameState) -> None:
         state.log.add("An alarm trap clatters — the whole floor stirs!", (228, 208, 120))
 
 
+MIASMA_CHANCE = 0.003       # per step of wet marsh; ~1 trip in 3 brings something home
+
+
 def _surface_tile_fx(state: GameState) -> None:
     """React to stepping onto a surface tile. The deep fen breathes a miasma:
     lingering in the wet marsh can breed a wasting sickness — a low, drifting
-    chance, warded off by herbal tea and never while you're already ill."""
+    chance, warded off by herbal tea and never while you're already ill. The
+    illness costs DAYS now (see combat.STATUS), so catching it is rarer than it
+    was when it passed in a handful of turns."""
     p, w = state.player, state.world
     if w.tiles[p.x, p.y] not in (tile.MARSH, tile.FOG_GRASS):
         return
     from . import skills, combat
     if "sick" in p.status or skills.active_buff(state) == "warded":
         return
-    if random.random() < 0.008:
+    if random.random() < MIASMA_CHANCE:
         combat.apply_status(state, "sick")
         state.log.add("A foul miasma rises off the bog — it settles cold in your chest.",
                       combat.STATUS["sick"]["color"])
