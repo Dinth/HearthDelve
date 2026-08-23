@@ -478,10 +478,25 @@ def door_toward(bxc: int, byc: int, tx: int, ty: int) -> str:
     return "S" if dy > 0 else "N"
 
 
-def area_clear(gm: GameMap, x: int, y: int, w: int, h: int, margin: int = 1) -> bool:
+# Wet ground a fen or coastal village may build *over*, on planks and piles, when
+# there is no dry rectangle to be had (DESIGN §9's stilt houses). Only used as a
+# fallback — see worldgen._try_building — so dry villages are unaffected.
+WET_BUILD = {"water", "river"}
+
+
+def area_clear(gm: GameMap, x: int, y: int, w: int, h: int, margin: int = 1,
+               allow: frozenset | set | tuple = ()) -> bool:
+    """Whether a w×h rect (plus margin) is free of un-buildable terrain.
+
+    ``allow`` tolerates named terrain that NO_BUILD would otherwise veto — the
+    caller is undertaking to carve over it (rect_building overwrites whatever is
+    beneath, so water becomes a plank floor)."""
     for xx in range(x - margin, x + w + margin):
         for yy in range(y - margin, y + h + margin):
-            if not gm.in_bounds(xx, yy) or tile.TILES[gm.tiles[xx, yy]].name in NO_BUILD:
+            if not gm.in_bounds(xx, yy):
+                return False
+            name = tile.TILES[gm.tiles[xx, yy]].name
+            if name in NO_BUILD and name not in allow:
                 return False
     return True
 

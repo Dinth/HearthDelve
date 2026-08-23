@@ -137,16 +137,32 @@ def _child_roam(state: GameState, npc) -> None:
 
 
 def npc_near(state: GameState):
-    """The NPC on the faced tile, or an adjacent one (for talk/gift)."""
+    """The NPC on the faced tile, or an adjacent one (for talk/gift).
+
+    Several residents can share a tile — a schedule sends them to the same
+    fireside or tavern spot, and a village with nowhere to build once put all
+    seven on the square. This used to be a ``{pos: npc}`` comprehension, so the
+    last one in the list won and everybody behind them was unreachable: no talk,
+    no gift, no heart line, and in Fenwick's case a tavern and a trading counter
+    that could never be opened. Prefer whoever still has business today, so
+    speaking to a crowd cycles through it instead of hitting one person over
+    and over."""
     p = state.player
     fx, fy = p.facing
+    by_pos: dict = {}
+    for n in state.world.npcs:
+        by_pos.setdefault((n.x, n.y), []).append(n)
+
+    def pick(here: list):
+        return next((n for n in here if not n.talked_today or not n.gifted_today), here[0])
+
     faced = (p.x + fx, p.y + fy)
-    by_pos = {(n.x, n.y): n for n in state.world.npcs}
     if faced in by_pos:
-        return by_pos[faced]
+        return pick(by_pos[faced])
     for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
-        if (p.x + dx, p.y + dy) in by_pos:
-            return by_pos[(p.x + dx, p.y + dy)]
+        here = by_pos.get((p.x + dx, p.y + dy))
+        if here:
+            return pick(here)
     return None
 
 

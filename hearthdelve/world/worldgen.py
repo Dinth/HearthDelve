@@ -688,20 +688,29 @@ def _carve_docks(gm: GameMap, vx: int, vy: int, coast: np.ndarray, rng) -> list:
 def _try_building(gm: GameMap, vx: int, vy: int, placed: list,
                   w: int, h: int, ang: float, rad: int) -> dict | None:
     """Place a building near (angle, radius) from the square, nudging outward
-    until it fits on open ground clear of roads, water and other structures."""
+    until it fits on open ground clear of roads, water and other structures.
+
+    Two passes. The first wants dry ground. If nothing fits — which is what
+    happens to Fenwick, sat in a fen where scattered water vetoed every
+    candidate rectangle and left the village with no buildings at all, and so
+    with all seven residents standing on the square's centre tile — the second
+    pass builds on planks and piles over the water instead (DESIGN §9). Dry
+    villages never reach it, so their layout is unchanged."""
     import math
-    for r in range(rad, rad + 14):
-        bxc = vx + int(round(math.cos(ang) * r))
-        byc = vy + int(round(math.sin(ang) * r))
-        x, y = bxc - w // 2, byc - h // 2
-        rect = (x, y, w, h)
-        if any(_overlap(rect, p, 2) for p in placed):
-            continue
-        if not _area_clear(gm, x, y, w, h, margin=1):
-            continue
-        b = _rect_building(gm, x, y, w, h, _door_toward(bxc, byc, vx, vy))
-        placed.append(rect)
-        return b
+    from .worldlib import WET_BUILD
+    for allow in ((), WET_BUILD):
+        for r in range(rad, rad + 14):
+            bxc = vx + int(round(math.cos(ang) * r))
+            byc = vy + int(round(math.sin(ang) * r))
+            x, y = bxc - w // 2, byc - h // 2
+            rect = (x, y, w, h)
+            if any(_overlap(rect, p, 2) for p in placed):
+                continue
+            if not _area_clear(gm, x, y, w, h, margin=1, allow=allow):
+                continue
+            b = _rect_building(gm, x, y, w, h, _door_toward(bxc, byc, vx, vy))
+            placed.append(rect)
+            return b
     return None
 
 
