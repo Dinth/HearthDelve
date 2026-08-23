@@ -133,7 +133,16 @@ def owner_label(state, x: int, y: int) -> str:
 # --- claiming ----------------------------------------------------------------
 def claim(state, tiles) -> int:
     """Claim wilderness tiles for the player (skipping others' land and the
-    tax-free homestead grant). Returns how many *new* tiles were claimed."""
+    tax-free homestead grant). Returns how many *new* tiles were claimed.
+
+    Claims are Vale ground only. ``state.claims`` holds bare ``(x, y)`` with no
+    map identity, and ownership is resolved against ``state.surface`` — so a
+    fence or a hoe-stroke out in the Westreach used to add its west coordinates
+    to the Vale's claim set, and the bailiff then charged 2g a week on Vale
+    ground the player had never stood on. Refuse off-map claims at this one
+    choke point, which covers every caller (fencing, tilling, coops, pens)."""
+    if state.surface is not None and state.world is not state.surface:
+        return 0
     surf = _surf(state)
     new = 0
     for (x, y) in tiles:

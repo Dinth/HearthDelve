@@ -220,6 +220,15 @@ def _place_fence(state: GameState) -> bool:
     if surf.is_dungeon:
         state.log.add("There's nothing to fence off down here.", C.DIM)
         return False
+    if state.surface is not None and surf is not state.surface:
+        # Land is a Vale institution — there's no crown, no bailiff and no
+        # boundary worth keeping out here. (This branch used to be unreachable:
+        # _place_machine's Westreach guard sits *below* the fence case, which
+        # returns early, so a fence went up and claimed a Vale tile by its west
+        # coordinates.)
+        state.log.add("No one out here would honour a boundary. Fence your own "
+                      "ground, back in the Vale.", C.DIM)
+        return False
     tx, ty = p.x + p.facing[0], p.y + p.facing[1]
     if not surf.in_bounds(tx, ty):
         state.log.add("There's nothing there to fence.", C.DIM)
