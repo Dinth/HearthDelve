@@ -1706,7 +1706,20 @@ class Monster:
 # part damp; sea caves are damp. New kinds join these groups to inherit a roster.
 _UNDEAD = ("barrow", "tomb", "crypt")
 _DAMP = ("grotto", "sea cave", "cavern")
-_ROCK = ("mine", "cavern")
+# "dwarfhold" belongs here: it is worked stone under the mountain, the same rock
+# the mines run through. Leaving it out left every ordinary dwarfhold floor — the
+# whole descent to Khazgrim and the Underriver — with only the two kinds=() mobs,
+# a depth-1 slime and a bat, at any depth, and no boss at all. The
+# monsters_for() "no floor is left empty" fallback never fired, because those two
+# always qualify, which is exactly what hid it.
+_ROCK = ("mine", "cavern", "dwarfhold")
+
+
+def _kinds(*groups) -> tuple:
+    """Merge kind groups, order-preserving and deduplicated — the groups overlap
+    ("cavern" is both rock and damp), and a repeated tag is harmless but reads as
+    a copy-paste slip."""
+    return tuple(dict.fromkeys(k for g in groups for k in g))
 
 MONSTERS: list[Monster] = [
     # Common everywhere — the baseline fauna of any dark (kinds=()).
@@ -1721,7 +1734,7 @@ MONSTERS: list[Monster] = [
     Monster("Rock Grub", "g", (176, 156, 122), 22, 1, "chase", 2,
             dv=5, pv=5, to_hit=3, dmg=(2, 5), kinds=_ROCK,
             desc="A blind, armoured grub that chews the ore-veins — slow, stubborn, hard to crack."),
-    Monster("Deep Lurker", "L", (150, 140, 172), 30, 1, "chase", 5, kinds=_ROCK + _DAMP,
+    Monster("Deep Lurker", "L", (150, 140, 172), 30, 1, "chase", 5, kinds=_kinds(_ROCK, _DAMP),
             dv=7, pv=8, to_hit=5, dmg=(6, 12), desc="A slab of armoured muscle; only a real blade bites it."),
     # Grottoes — damp, fungal, many-legged.
     Monster("Cave Spider", "x", (170, 176, 200), 12, 3, "erratic", 3, kinds=_DAMP + _UNDEAD,
@@ -1757,14 +1770,15 @@ MONSTERS: list[Monster] = [
     Monster("Barrow Wight", "z", (170, 186, 210), 38, 2, "chase", 8, kinds=_UNDEAD, inflicts="sick",
             dv=12, pv=4, to_hit=8, dmg=(6, 12),
             desc="A crowned corpse wreathed in grave-cold; its grip breeds a wasting sickness."),
-    Monster("Rockjaw Wyrm", "y", (176, 150, 120), 64, 1, "chase", 10, kinds=("mine", "cavern"),
+    Monster("Rockjaw Wyrm", "y", (176, 150, 120), 64, 1, "chase", 10, kinds=_ROCK,
             dv=6, pv=10, to_hit=9, dmg=(10, 18),
             desc="A vast blind wyrm that chews ore and stone alike — slow, but frightful to crack."),
 ]
 
 # Bosses appear on deep floors and are spawned by special logic (not the pool).
 BOSSES: list[Monster] = [
-    Monster("Cave Troll", "T", (214, 120, 92), 44, 1, "charge", 4, kinds=_ROCK + _DAMP,
+    Monster("Cave Troll", "T", (214, 120, 92), 44, 1, "charge", 4,
+            kinds=_kinds(_ROCK, _DAMP),
             dv=6, pv=6, to_hit=5, dmg=(6, 12), boss=True, inflicts="bleed",
             desc="A hulking cave troll — slow, but its raking claws open deep wounds."),
     Monster("Gloom Warden", "G", (156, 116, 176), 70, 2, "charge", 6, kinds=_UNDEAD,
