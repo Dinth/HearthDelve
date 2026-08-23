@@ -2699,6 +2699,25 @@ def solo_npcs() -> list[NPC]:
     ]
 
 
+# A counter price must never sit below what the shipping bin pays for the same
+# thing, or buying stock and posting it is free money. Sling Stones were listed
+# at 1g while _enforce_recipe_margins had lifted their value to 2g (one 4g Stone
+# makes four, so the +25% floor forces ceil(4*1.25/4) = 2) — gold doubled per
+# round trip, uncapped, from the first visit to Cinderhope. Livestock was listed
+# at exactly its sell value, which is a pump the moment any multiplier applies.
+#
+# Derive small-ware prices from the item's *post-margin* value rather than a
+# literal, so a future tuning pass can't reopen the hole. See
+# tests/test_shop_prices.py, which asserts the invariant across every counter.
+COUNTER_MARKUP = 1.35
+
+
+def counter_price(it: Item, markup: float = COUNTER_MARKUP) -> int:
+    """What a shop charges for one unit: its worth plus the shopkeeper's cut,
+    and never less than 1g above that worth."""
+    return max(it.value + 1, int(round(it.value * markup)))
+
+
 # General store stock: (seed, buy price)
 GENERAL_STOCK: list[tuple[Item, int]] = [
     (items.PARSNIP_SEEDS, 20), (items.POTATO_SEEDS, 50), (items.CAULIFLOWER_SEEDS, 80),
@@ -2713,8 +2732,12 @@ GENERAL_STOCK: list[tuple[Item, int]] = [
     (items.SUGARCANE_SEEDS, 55), (items.COTTON_SEEDS, 45), (items.FLAX_SEEDS, 40),
     (items.TULIP_SEEDS, 40), (items.SUNFLOWER_SEEDS, 50), (items.ASTER_SEEDS, 50),
     (items.SNOW_TURNIP_SEEDS, 40), (items.WINTERBERRY_SEEDS, 90),
-    (items.CHICK, 120), (items.CALF, 400), (items.LAMB, 260),
-    (items.DUCKLING, 160), (items.GOAT_KID, 320), (items.PIGLET, 800),
+    # Livestock at the drover's markup. These were listed at exactly their sell
+    # value, so a bought animal posted straight back cost nothing — and turned a
+    # profit the moment a craving, a caravan or the Market Cross applied.
+    (items.CHICK, counter_price(items.CHICK)), (items.CALF, counter_price(items.CALF)),
+    (items.LAMB, counter_price(items.LAMB)), (items.DUCKLING, counter_price(items.DUCKLING)),
+    (items.GOAT_KID, counter_price(items.GOAT_KID)), (items.PIGLET, counter_price(items.PIGLET)),
     # a little soft-goods rack: hats, cloaks & robes (cloth, no forging needed)
     (make_gear("Hat", "straw"), 20), (make_gear("Hat", "wool"), 45),
     (make_gear("Cloak", "wool"), 70), (make_gear("Cloak", "linen"), 110),
@@ -2738,6 +2761,7 @@ def _round5(v: float) -> int:
     return max(5, int(round(v / 5.0)) * 5)
 
 
+
 # Bars anyone may buy (at twice their worth) — so a non-crafter can still pay
 # for tool upgrades. The deep metals join only once the Deep Forge stands
 # (see village.shop_entries), at the same doubled rate.
@@ -2753,7 +2777,12 @@ def blacksmith_stock() -> list[tuple[Item, int]]:
     out += [(b, _round5(b.value * 2.0)) for b in SMITH_BARS]
     out += [(it, _round5(it.value * smith_markup(it))) for it in _SMITH_WEAPONS]
     out += [(items.SLING, 45), (make_ranged("Short Bow", "birch"), 110),
-            (make_ranged("Long Bow", "yew"), 260), (items.ARROW, 4), (items.SLING_STONE, 1)]
+            (make_ranged("Long Bow", "yew"), 260),
+            # Ammo is priced off its own value, not a literal: the margin pass
+            # rewrites these and a hard-coded 1g put the sling stone below what
+            # the bin paid for it.
+            (items.ARROW, counter_price(items.ARROW)),
+            (items.SLING_STONE, counter_price(items.SLING_STONE))]
     out += [(it, _round5(it.value * smith_markup(it))) for it in ALL_ARMOR]
     return out
 
