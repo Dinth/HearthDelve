@@ -220,18 +220,31 @@ def held_profile(state: GameState):
     return content.profile_of(state.player.active_tool)
 
 
+# How much Dodge a full suit of heavy plate may cost, in total. Each steel or
+# adamantium piece carries -1 DV, which reads as a fair trade per piece — but
+# summed across eight slots it came to -7, swamping BASE_DV of 8 and dropping a
+# fully plated hero to DV 5, where anything with to-hit +7 or better hit them
+# *every single time*. Full steel was strictly worse than iron and full
+# adamantium — the costliest suit in the game — was worse than both. Cap the
+# aggregate so the tradeoff stays a tradeoff instead of an inversion.
+MAX_ARMOR_DV_PENALTY = 2
+
+
 def _worn(state: GameState):
     p = state.player
     two_handed = content.is_two_handed(p.active_tool)   # both hands full — no shield
-    dv = pv = 0
+    bonus = penalty = pv = 0
     for slot, it in p.equipment.items():
         if slot == "shield" and two_handed:
             continue
         stats = content.ARMOR_STATS.get(it)
         if stats:
-            dv += stats[0]
+            if stats[0] >= 0:
+                bonus += stats[0]
+            else:
+                penalty += stats[0]
             pv += stats[1]
-    return dv, pv
+    return bonus + max(-MAX_ARMOR_DV_PENALTY, penalty), pv
 
 
 def player_dv(state: GameState) -> int:
@@ -281,22 +294,39 @@ def player_crit(state: GameState) -> float:
             + (0.10 if skills.active_buff(state) == "clarity" else 0.0))   # Clarity Draught
 
 
+# Protection turns aside up to two thirds of a blow outright, then keeps paying at
+# a diminishing rate for whatever Protection is left over.
+#
+# The flat 2/3 cap alone meant PV stopped mattering the moment it reached two
+# thirds of the attacker's top-end hit — so against a depth-8 Magma Fiend, cotton
+# (PV 10) and mithril (PV 21) were *identical*: 29.0 turns to die against 29.2,
+# for 210g against 1,890g. Iron, silver and mithril were indistinguishable at
+# every depth, so the whole upper half of the armour ladder bought nothing at all.
+#
+# The surplus term de-saturates it and keeps the ladder monotone, while leaving
+# the cap where it was so the player's own damage against armoured monsters is
+# essentially unchanged (only a low roll into PV 8+ shifts, by a point).
+# ``min_dmg`` — never zero — is what guarantees no total immunity either way.
+SOAK_CAP_NUM, SOAK_CAP_DEN = 2, 3     # soak ceiling: two thirds of the blow
+SOAK_SURPLUS_DIV = 3                  # each 3 points of PV beyond it turns aside 1 more
+
+
 def _resolve(to_hit: int, dmg_range, dmg_bonus: int, crit_chance: float,
              target_dv: int, target_pv: int, min_dmg: int = 1):
     """One attack. Returns (damage, crit) if it lands, or None on a miss. A crit
     doubles the damage and ignores Protection.
 
-    Protection soaks at most ~2/3 of any single blow, so at least a third always
-    lands — heavy armour is a huge advantage but never total immunity (a fully
-    plated hero still takes real chip damage from a deep monster), and a stoutly
-    armoured foe is slow to fell but never invulnerable to a weak weapon. ``min_dmg``
-    floors a landed hit at 1 by default."""
+    Heavy armour is a huge advantage but never total immunity: ``min_dmg`` floors
+    a landed hit at 1, so a fully plated hero still takes real chip damage from a
+    deep monster, and a stoutly armoured foe is slow to fell rather than
+    invulnerable to a weak weapon."""
     if random.randint(1, 20) + to_hit < target_dv:
         return None
     dmg = random.randint(dmg_range[0], dmg_range[1]) + dmg_bonus
     if random.random() < crit_chance:
         return dmg * 2, True
-    soak = min(target_pv, dmg * 2 // 3)
+    cap = dmg * SOAK_CAP_NUM // SOAK_CAP_DEN
+    soak = min(target_pv, cap) + max(0, target_pv - cap) // SOAK_SURPLUS_DIV
     return max(min_dmg, dmg - soak), False
 
 

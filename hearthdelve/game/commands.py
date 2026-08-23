@@ -1087,6 +1087,38 @@ def _cure_status(state: GameState, spec: str) -> list:
     return [spec] if st.pop(spec, None) is not None else []
 
 
+# Eating cost 45 seconds, which turns.advance_time converts to two monster turns —
+# against maybe 5 HP of incoming damage, while the weakest remedy restores 30 and
+# the best 100. Every heal netted +24 to +95, so a fight was unloseable as long as
+# the pack held anything: attack, eat, repeat. Under fire it takes real time to
+# get a stopper out and drink it, so charge the full turn budget instead. Out of
+# combat nothing changes — the clock has ample slack for a meal.
+# Four monster turns. Six (the full _MAX_STEPS) turned out to be too harsh: against
+# a depth-15 elite it made even the 360g Greater Healing Potion a net loss, so no
+# heal was ever worth drinking and the only play was to disengage. Four keeps cheap
+# remedies useless in a real fight while leaving a proper potion the emergency
+# button it is priced to be.
+EAT_COMBAT_SECONDS = 120
+_EAT_THREAT_RADIUS = 6
+
+
+def _under_threat(state: GameState) -> bool:
+    """Whether something awake and hostile is close enough to make a swig cost."""
+    p = state.player
+    for m in state.world.monsters:
+        if not m.alive or not getattr(m, "awake", False):
+            continue
+        if getattr(m, "kind", "monster") == "wildlife" and not getattr(m, "hostile", False):
+            continue
+        if max(abs(m.x - p.x), abs(m.y - p.y)) <= _EAT_THREAT_RADIUS:
+            return True
+    return False
+
+
+def _eat_seconds(state: GameState) -> int:
+    return EAT_COMBAT_SECONDS if _under_threat(state) else C.USE_SECONDS
+
+
 def _eat(state: GameState, item, quality: int) -> None:
     from . import skills
     p = state.player
@@ -1104,7 +1136,7 @@ def _eat(state: GameState, item, quality: int) -> None:
             msg += (" Every affliction clears." if len(cured) > 1
                     else f" The {_adj.get(cured[0], cured[0])}.")
         state.log.add(msg, (180, 230, 160))
-        turns.advance_time(state, C.USE_SECONDS)
+        turns.advance_time(state, _eat_seconds(state))
         return
     if getattr(item, "attr", ""):                        # a legendary attribute treat
         from . import attrs as A
@@ -1116,7 +1148,7 @@ def _eat(state: GameState, item, quality: int) -> None:
             return
         state.log.add(f"You eat the {item.name.lower()}. Something shifts deep within — "
                       f"your {A.NAMES[item.attr]} rises for good!", (240, 224, 150))
-        turns.advance_time(state, C.USE_SECONDS)
+        turns.advance_time(state, _eat_seconds(state))
         return
     gain = round(item.energy * (1 + 0.12 * quality))     # tastier food goes further
     heal = max(1, gain // 6) + item.heal
@@ -1128,7 +1160,7 @@ def _eat(state: GameState, item, quality: int) -> None:
     if item.buff:
         skills.apply_buff(state, item.buff)
         state.log.add(f"  You feel {skills.BUFFS.get(item.buff, item.buff)}!", (200, 220, 250))
-    turns.advance_time(state, C.USE_SECONDS)
+    turns.advance_time(state, _eat_seconds(state))
 
 
 def _open_chest(state: GameState, x: int, y: int) -> None:
