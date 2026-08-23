@@ -970,13 +970,17 @@ def _tend_beehive(state: GameState, m, mdef, x: int, y: int) -> bool:
 
 # --- morning processing -----------------------------------------------------
 def run_sprinklers(state: GameState) -> None:
-    """Sprinklers water adjacent crops at dawn."""
+    """Sprinklers water adjacent crops at dawn — ripe ones included.
+
+    A sprinkler that skipped mature plots left every regrowing crop dry on the
+    day it was picked (harvest makes it immature again), so a sprinklered berry
+    patch withered under clear skies exactly like an untended one."""
     for (mx, my), m in state.world.machines.items():
         if m.kind != "sprinkler":
             continue
         for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
             plot = state.world.crops.get((mx + dx, my + dy))
-            if plot is not None and not plot.dead and not plot.mature:
+            if plot is not None and not plot.dead:
                 plot.watered = True
 
 

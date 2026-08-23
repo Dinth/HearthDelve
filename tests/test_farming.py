@@ -101,5 +101,76 @@ class TestApothecary(unittest.TestCase):
         self.assertIn("Vodka", labels)
 
 
+class TestRegrowHarvestKeepsItsWater(unittest.TestCase):
+    """Picking a regrowing crop used to kill it outright under a clear sky.
+
+    Three things compounded: the dawn rain and sprinkler passes both skipped
+    ``mature`` plots, so a ripe plot went into the day dry; ``harvest`` then
+    cleared ``watered``, discarding the player's own watering can; and
+    ``_WITHER_DAYS["Clear"] == 1`` makes a single dry dawn fatal. All twelve
+    regrowing crops died about one harvest in five, whatever the player did.
+    """
+
+    def _cycle(self, hand_water=False, weather="Clear", sprinkler=False):
+        from hearthdelve.game import farming
+        from hearthdelve.world.crops import CropPlot, advance_growth
+        from hearthdelve.data import content
+        crop = next(c for c in content.CROPS if c.regrows and c.season == "Spring")
+        plot = CropPlot(crop=crop, days_grown=crop.days_to_mature)   # ripe at dawn
+        wither = farming._WITHER_DAYS.get(weather, 999)
+        advance_growth(plot, crop.season, wither)                    # dawn N tick
+        if farming.is_wet_weather(weather) and not plot.dead:
+            plot.watered = True                                     # dawn rain
+        if sprinkler and not plot.dead:
+            plot.watered = True                                     # dawn sprinkler
+        if hand_water:
+            plot.watered = True                                     # the player waters
+        plot.days_grown = max(0, crop.days_to_mature - crop.regrow_days)  # harvest()
+        advance_growth(plot, crop.season, wither)                   # dawn N+1
+        return plot
+
+    def test_hand_watering_before_harvest_is_not_thrown_away(self):
+        self.assertFalse(self._cycle(hand_water=True).dead)
+
+    def test_a_sprinklered_patch_survives_being_picked(self):
+        self.assertFalse(self._cycle(sprinkler=True).dead)
+
+    def test_rain_reaches_a_ripe_plot(self):
+        self.assertFalse(self._cycle(weather="Rain").dead)
+
+    def test_genuine_neglect_still_kills(self):
+        """The pressure has to stay: no water at all under a clear sky is fatal."""
+        self.assertTrue(self._cycle().dead)
+
+    def test_harvest_leaves_the_watered_flag_alone(self):
+        from hearthdelve.game import farming
+        from hearthdelve.world.crops import CropPlot
+        from hearthdelve.data import content
+        st = fresh_state(4)
+        crop = next(c for c in content.CROPS if c.regrows and c.season == st.season)
+        pos = (st.player.x + 1, st.player.y)
+        st.surface.crops[pos] = CropPlot(crop=crop, days_grown=crop.days_to_mature,
+                                         watered=True)
+        random.seed(2)
+        self.assertTrue(farming.harvest(st, *pos))
+        self.assertTrue(st.surface.crops[pos].watered,
+                        "harvest discarded water the player had already given the plot")
+
+    def test_sprinklers_water_ripe_neighbours(self):
+        from hearthdelve.game import crafting
+        from hearthdelve.world.crops import CropPlot
+        from hearthdelve.entities.machine import Machine
+        from hearthdelve.data import content
+        st = fresh_state(4)
+        crop = next(c for c in content.CROPS if c.regrows)
+        mx, my = st.player.x + 3, st.player.y + 3
+        st.surface.machines[(mx, my)] = Machine(kind="sprinkler")
+        pos = (mx + 1, my)
+        st.surface.crops[pos] = CropPlot(crop=crop, days_grown=crop.days_to_mature)
+        self.assertTrue(st.surface.crops[pos].mature)
+        crafting.run_sprinklers(st)
+        self.assertTrue(st.surface.crops[pos].watered)
+
+
 if __name__ == "__main__":
     unittest.main()

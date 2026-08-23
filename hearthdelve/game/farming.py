@@ -202,7 +202,10 @@ def harvest(state: GameState, x: int, y: int) -> bool:
         state.log.add("  Your farming skill yields an extra one!", C.DIM)
     if crop.regrows:
         plot.days_grown = max(0, crop.days_to_mature - crop.regrow_days)
-        plot.watered = False
+        # Keep any water the plot has already had today. Clearing it here threw
+        # away the player's own watering can — and since the dawn rain/sprinkler
+        # passes skip ripe plots, the plant then entered the next dawn bone dry
+        # and _WITHER_DAYS["Clear"] == 1 killed it outright.
         state.log.add(f"You harvest a {crop.produce.name.lower()}. It will fruit again.", (180, 230, 160))
     else:
         del state.world.crops[(x, y)]
@@ -323,7 +326,10 @@ def new_day(state: GameState, rested: bool = True) -> None:
     # those you tend yourself. This watered state is consumed by tomorrow's tick.
     if raining:
         for (cx, cy), plot in state.world.crops.items():
-            if not plot.dead and not plot.mature and not in_greenhouse(state.world, cx, cy):
+            # Ripe plots get the rain too: a regrowing crop picked later today
+            # stops being mature the moment it's harvested, and without this it
+            # would face tomorrow's dawn dry through no fault of the player.
+            if not plot.dead and not in_greenhouse(state.world, cx, cy):
                 plot.watered = True
     crafting.run_sprinklers(state)
 
