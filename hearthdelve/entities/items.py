@@ -41,6 +41,20 @@ class Item:
     # identity so a gem-set piece is a distinct memoized type with its own stats.
     gems: tuple = ()
 
+    def __hash__(self) -> int:
+        """Hash on the NAME alone, not on every field.
+
+        Items are frozen, but ``content._enforce_recipe_margins`` deliberately
+        lifts ``value`` in place (via ``object.__setattr__``) to hold the crafting
+        margin floor. A whole-tuple hash would change when it does, orphaning the
+        item in every dict already keyed by it — ARMOR_STATS, ARMOR_SLOT, AMMO,
+        _GEAR_BASE are all built *before* that pass runs. Leather Armour became
+        unequippable and the sling unfireable exactly that way. A name is unique
+        in the registry and never rewritten, so hashing on it keeps those lookups
+        valid however the value is tuned. (Equality stays structural; dict lookup
+        checks identity first, which is what every call site relies on.)"""
+        return hash(self.name)
+
 
 # --- Tools (hotbar) ----------------------------------------------------------
 # Tools carry a material tier per player (see TOOL_TIERS); the base name here is
