@@ -238,11 +238,15 @@ def _stake_site(state: GameState, proj: dict) -> None:
         for y in range(y0, y0 + h):
             surf.tiles[x, y] = tile.SCAFFOLD
     anchor = (x0 + w // 2, y0 + h - 1)            # the door-to-be, south-centre
-    surf.machines[anchor] = Machine(kind="site", build_kind=d.id,
-                                    ready_at=(state.day + d.build_days) * 1440
-                                    + C.DAY_START_MIN)
+    ready_at = (state.day + d.build_days) * 1440 + C.DAY_START_MIN
+    surf.machines[anchor] = Machine(kind="site", build_kind=d.id, ready_at=ready_at)
     proj["state"] = "building"
     proj["site"] = list(rect)
+    # The record carries the same deadline as the site machine. Without this it
+    # stayed at the 0 from fresh(), and both readers (the notice board and the
+    # journal) computed `0 - abs_minutes` and clamped it to max(1, ...) — so a
+    # 5,000g project reported "finished in ~1 day" every single day of its build.
+    proj["ready_at"] = ready_at
     state.log.add(f"Ground is broken for the {d.name} — the frame should stand "
                   f"in ~{d.build_days} days.", (232, 200, 120))
 

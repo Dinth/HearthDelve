@@ -380,9 +380,13 @@ def anger_owner(state: GameState, owner: str, amount: int) -> None:
 def giftable_items(state: GameState, npc: NPC | None = None):
     """Inventory items that can be given (anything but tools/weapon/livestock).
     Given an NPC, their loved things float to the top, then liked, then the rest
-    — so the right gift is a keypress away, not a scroll through the pack."""
+    — so the right gift is a keypress away, not a scroll through the pack.
+
+    Cut gems are giftable: Kazrik *loves* the Cut Diamond, and while "gem" was
+    missing from this filter his favourite gift was the one thing he could never
+    be given."""
     out = [(it, q, ql) for it, q, ql in state.player.inventory.slots
-           if it.kind in ("crop", "artisan", "material", "food", "fish", "animal")]
+           if it.kind in ("crop", "artisan", "material", "food", "fish", "animal", "gem")]
     if npc is not None:
         def taste(e):
             it = e[0]

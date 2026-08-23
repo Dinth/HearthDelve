@@ -15,17 +15,33 @@ from .state import GameState
 
 # Per-unit weight by item kind. Tuned so the default loadout sits comfortably
 # under capacity and a real mining/smelting haul is what weighs you down.
+#
+# EVERY kind carries an entry. Half of them used to be missing and silently fell
+# to _DEFAULT_WEIGHT, which made an arrow weigh 1.0 — so a quiver of 100 was
+# twice the whole base capacity and ranged combat couldn't be supplied — while a
+# minnow (1.0) outweighed a pumpkin (0.4) and a calf weighed less than a steel
+# bar. tests/test_encumbrance_weights.py asserts the table stays total.
 _KIND_WEIGHT = {
     "material": 1.5,   # ore, bars, stone, wood, cloth — the bulk of a heavy pack
     "tool": 2.0,
     "weapon": 2.5,
     "armor": 3.0,
+    "ranged": 1.5,     # a bow is bulky but light; a sling is nothing
+    "ammo": 0.05,      # a full quiver should cost a pound or two, not fifty
+    "bomb": 0.8,       # a packed charge has real heft
     "artisan": 0.6,
     "food": 0.4,
     "crop": 0.4,
+    "fish": 0.4,       # a typical catch; the leviathans carry their own weight
+    "animal": 0.4,     # eggs, milk pails, a truffle
+    "livestock": 8.0,  # you are carrying a live calf home — it should tell
     "seed": 0.1,
+    "sapling": 0.5,
     "gem": 0.05,
     "jewelry": 0.1,
+    "trophy": 0.5,     # a tusk or a crown: awkward, not heavy
+    "gear": 1.0,       # satchels & packs (crafted, never actually held)
+    "pouch": 0.1,      # the seed pouch itself
 }
 _DEFAULT_WEIGHT = 1.0
 
