@@ -115,6 +115,27 @@ def _tunnel(tiles, a, b, rng):
             tiles[ex, y] = tile.DUNGEON_FLOOR
 
 
+def _nearest_free_floor(tiles, start, taken) -> tuple[int, int] | None:
+    """The plain floor cell closest to ``start`` by walking (breadth-first over
+    walkable tiles, so never through rock), that isn't ``start`` itself or
+    already ``taken``. None if there is no such cell."""
+    w, h = tiles.shape
+    seen, frontier = {start}, [start]
+    while frontier:
+        nxt = []
+        for x, y in frontier:
+            for nx, ny in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
+                if not (0 <= nx < w and 0 <= ny < h) or (nx, ny) in seen:
+                    continue
+                seen.add((nx, ny))
+                if tiles[nx, ny] == tile.DUNGEON_FLOOR and (nx, ny) not in taken:
+                    return nx, ny
+                if tile.TILES[tiles[nx, ny]].walkable:
+                    nxt.append((nx, ny))
+        frontier = nxt
+    return None
+
+
 def _grow_vein(tiles, start, length, rng) -> None:
     """Grow one ore vein from a wall cell that borders open floor: up to
     ``length`` cells, each step onto a neighbouring wall that also borders floor.
@@ -480,6 +501,7 @@ def generate(seed: int, kind: str, depth: int, river_seed: int | None = None) ->
     bosses = content.bosses_for(kind, depth)
     if milestone and not bosses:               # a Sanctum ALWAYS has a guardian, even
         bosses = [b for b in content.BOSSES if b.min_depth <= depth]   # in a kind with none of its own
+    late_boss = None
     if bosses and (milestone or rng.random() < 0.6):
         b = max(bosses, key=lambda m: m.min_depth) if milestone else rng.choice(bosses)
         room = rooms[-1]
@@ -491,6 +513,8 @@ def generate(seed: int, kind: str, depth: int, river_seed: int | None = None) ->
             bx, by = rng.choice(spots)
             occupied.add((bx, by))
             gm.monsters.append(content.make_mob(b, bx, by, depth, rng, boss=True))
+        else:
+            late_boss = b       # a cramped last chamber: placed once the floor is joined up
 
     # Vault: a big chamber on deep floors, packed with gold and its guardians —
     # guaranteed and richer on a Sanctum floor.
@@ -615,6 +639,18 @@ def generate(seed: int, kind: str, depth: int, river_seed: int | None = None) ->
             if tiles[gx, y] == tile.DUNGEON_WALL or not tile.TILES[tiles[gx, y]].walkable:
                 if (gx, y) not in (up, down):
                     tiles[gx, y] = tile.DUNGEON_FLOOR
+
+    # A guardian whose last chamber had no free floor (mines run to tiny ones
+    # that the stairs, a monster and some fungus can fill) waits at the nearest
+    # free floor out from the down-stairs — rather than silently never spawning
+    # while the level feeling promises one. Placed only now, once the repair has
+    # joined everything up, so it is reachable, and last, so the rest of the
+    # floor rolls exactly as it would have.
+    if late_boss is not None:
+        spot = _nearest_free_floor(tiles, down, occupied)
+        if spot:
+            occupied.add(spot)
+            gm.monsters.append(content.make_mob(late_boss, *spot, depth, rng, boss=True))
 
     # Hidden traps only survive on tiles that are still plain floor (a vein or a
     # repair corridor may have overwritten one), then re-skin to the kind palette.

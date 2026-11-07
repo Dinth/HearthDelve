@@ -165,6 +165,35 @@ class TestMilestoneFloors(unittest.TestCase):
             self.assertTrue(any(getattr(m, "boss", False) for m in gm.monsters),
                             f"seed {seed}: a Sanctum floor must have a boss")
 
+    def test_a_cramped_last_chamber_still_gets_its_guardian(self):
+        """The boss was only ever placed in the last room. Mines run to tiny
+        last chambers that the down-stairs, a monster and some fungus can fill,
+        so about 1 Sanctum mine in 11 had no boss — while the level feeling
+        still promised one. Seeds 50 and 55 were two of those."""
+        from hearthdelve.world import dungeon, tile
+
+        def reach(gm):
+            seen, stack = {gm.stairs_up}, [gm.stairs_up]
+            while stack:
+                x, y = stack.pop()
+                for n in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
+                    if n not in seen and tile.TILES[gm.tiles[n]].walkable:
+                        seen.add(n)
+                        stack.append(n)
+            return seen
+
+        floors = [("mine", 10, s * 104_729 + 10) for s in (50, 55)]
+        floors += [(kind, depth, s * 104_729 + depth)
+                   for kind in ("mine", "grotto", "cavern", "sea cave", "barrow", "tomb",
+                                "crypt", "dwarfhold")
+                   for depth in (10, 20, 30) for s in range(40)]
+        for kind, depth, seed in floors:
+            gm = dungeon.generate(seed, kind, depth)
+            bosses = [m for m in gm.monsters if m.boss]
+            with self.subTest(kind=kind, depth=depth, seed=seed):
+                self.assertEqual(len(bosses), 1)
+                self.assertIn((bosses[0].x, bosses[0].y), reach(gm))
+
     def test_sanctum_is_richer_than_an_ordinary_floor(self):
         from hearthdelve.world import dungeon, tile
         gm = dungeon.generate(101, "mine", 10)
