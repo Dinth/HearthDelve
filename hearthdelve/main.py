@@ -119,87 +119,145 @@ def main() -> None:
             # stars and attributes (chargen sits under the intro on the stack).
             ui.push(screens.CharGenScreen())
             ui.push(screens.IntroScreen())
-        konami: list = []        # rolling buffer of recent keys
-        start = time.perf_counter()
-        while ui.running:
-            anim_time = time.perf_counter() - start
+        try:
+            run_guarded(ui, lambda: _loop(ui, state, console, context, music))
+        finally:
+            music.stop()
 
-            # Cheats: hold health / stamina pinned to full while frozen.
-            if state.cheats.get("freeze_hp"):
-                state.player.hp = state.player.max_hp
-            if state.cheats.get("freeze_stamina"):
-                state.player.energy = state.player.max_energy
 
-            # Real-time work on the active screen: an in-progress run, rest or
-            # long tool action on the world; the fishing minigame's physics.
-            ui.top.tick(ui)
+def _loop(ui, state: GameState, console, context, music) -> None:
+    """Advance the top screen, render, route events — until the UI stops."""
+    konami: list = []        # rolling buffer of recent keys
+    start = time.perf_counter()
+    while ui.running:
+        anim_time = time.perf_counter() - start
 
-            rendering.render_all(console, state, anim_time)
-            ui.top.render(ui, console)
-            context.present(console)
+        # Cheats: hold health / stamina pinned to full while frozen.
+        if state.cheats.get("freeze_hp"):
+            state.player.hp = state.player.max_hp
+        if state.cheats.get("freeze_stamina"):
+            state.player.energy = state.player.max_energy
 
-            # A short timeout drives the ambient animation: when no key is
-            # pressed, wait() returns after ~1/30s and we redraw the next frame.
-            for event in tcod.event.wait(timeout=1.0 / 30.0):
-                if isinstance(event, tcod.event.WindowEvent) and event.type == "WINDOWCLOSE":
-                    ui.running = False
-                    break
+        # Real-time work on the active screen: an in-progress run, rest or
+        # long tool action on the world; the fishing minigame's physics.
+        ui.top.tick(ui)
 
-                # Konami code (↑↑↓↓←→←→ B A) opens the hidden cheat menu.
-                if isinstance(event, tcod.event.KeyDown):
-                    konami.append(int(event.sym))
-                    del konami[:-len(_KONAMI)]
-                    if konami == _KONAMI:
-                        konami.clear()
-                        ui.open_cheats()
-                        state.log.add("A hidden door creaks open...", (250, 230, 140))
-                        continue
+        rendering.render_all(console, state, anim_time)
+        ui.top.render(ui, console)
+        context.present(console)
 
-                # The screen's raw pre-pass: the fishing rod's held arrows, the
-                # inventory/equipment letter namespaces.
-                if ui.top.on_raw(ui, event):
+        # A short timeout drives the ambient animation: when no key is
+        # pressed, wait() returns after ~1/30s and we redraw the next frame.
+        for event in tcod.event.wait(timeout=1.0 / 30.0):
+            if isinstance(event, tcod.event.WindowEvent) and event.type == "WINDOWCLOSE":
+                ui.running = False
+                break
+
+            # Konami code (↑↑↓↓←→←→ B A) opens the hidden cheat menu.
+            if isinstance(event, tcod.event.KeyDown):
+                konami.append(int(event.sym))
+                del konami[:-len(_KONAMI)]
+                if konami == _KONAMI:
+                    konami.clear()
+                    ui.open_cheats()
+                    state.log.add("A hidden door creaks open...", (250, 230, 140))
                     continue
 
-                # For a beat after the fishing minigame closes, swallow presses
-                # so a still-held arrow doesn't send the player walking off.
-                if isinstance(event, tcod.event.KeyDown) and time.monotonic() < ui.input_lock_until:
-                    continue
+            # The screen's raw pre-pass: the fishing rod's held arrows, the
+            # inventory/equipment letter namespaces.
+            if ui.top.on_raw(ui, event):
+                continue
 
-                # A fresh key press interrupts an in-progress run or rest — but
-                # NOT OS key-repeat from still holding the direction that began
-                # the run, which would cancel it almost immediately.
-                if (isinstance(event, tcod.event.KeyDown) and not getattr(event, "repeat", False)
-                        and ui.play.cancel_auto()):
-                    continue
+            # For a beat after the fishing minigame closes, swallow presses
+            # so a still-held arrow doesn't send the player walking off.
+            if isinstance(event, tcod.event.KeyDown) and time.monotonic() < ui.input_lock_until:
+                continue
 
-                action = game_input.event_to_action(event)
-                if action is None:
-                    continue
-                cmd = action[0]
+            # A fresh key press interrupts an in-progress run or rest — but
+            # NOT OS key-repeat from still holding the direction that began
+            # the run, which would cancel it almost immediately.
+            if (isinstance(event, tcod.event.KeyDown) and not getattr(event, "repeat", False)
+                    and ui.play.cancel_auto()):
+                continue
 
-                # OS quit (Cmd+Q / window close via SDL): leave immediately
-                # without saving, from any screen.
-                if cmd == "sysquit":
-                    ui.save_on_exit = False
-                    ui.running = False
-                    break
+            action = game_input.event_to_action(event)
+            if action is None:
+                continue
+            cmd = action[0]
 
-                # Mute / unmute the music from any screen (Shift+M).
-                if cmd == "mutemusic":
-                    off = music.toggle_mute()
-                    state.log.add("Music muted." if off else "Music on.", C.DIM)
-                    continue
+            # OS quit (Cmd+Q / window close via SDL): leave immediately
+            # without saving, from any screen.
+            if cmd == "sysquit":
+                ui.save_on_exit = False
+                ui.running = False
+                break
 
-                ui.top.handle(ui, cmd, action)
+            # Mute / unmute the music from any screen (Shift+U).
+            if cmd == "mutemusic":
+                off = music.toggle_mute()
+                state.log.add("Music muted." if off else "Music on.", C.DIM)
+                continue
 
-        music.stop()
+            ui.top.handle(ui, cmd, action)
 
-        # Save on exit (unless the player chose to quit without saving).
+
+def run_guarded(ui, loop) -> None:
+    """Run the main loop and keep the day however it ends — the window closing,
+    Ctrl+C in the terminal, or a bug raising out of some screen. The game saves
+    on the way out unless the player chose to quit without saving; the previous
+    save rotates into ``.bak`` as always, so a bad rescue still has a fallback.
+    A crash also leaves a report beside the save (packaged builds launched from
+    a file manager have no console to read a traceback from), then re-raises."""
+    crash: Exception | None = None
+    try:
+        loop()
+    except Exception as exc:
+        crash = exc
+        raise
+    finally:
+        save_error = None
         if ui.save_on_exit:
             try:
-                save.save(state)
-            except Exception as e:  # noqa: BLE001
-                print(f"Could not save game: {e}")
+                save.save(ui.state)
+            except Exception as e:  # noqa: BLE001 - report it, never mask the crash
+                save_error = e
+                print(f"Could not save game: {e}", file=sys.stderr)
+        if crash is not None:
+            report = write_crash_report(crash, ui.save_on_exit, save_error)
+            kept = ("Nothing was saved (you chose to quit without saving)." if not ui.save_on_exit
+                    else "Your game could NOT be saved." if save_error
+                    else "Your game was saved on the way out.")
+            print(f"Hearthdelve crashed. {kept}"
+                  + (f" Details: {report}" if report else ""), file=sys.stderr)
+
+
+def crash_report_path() -> str:
+    """The crash log lives beside the save (``…_save.json.crash.log``)."""
+    return save.default_path() + ".crash.log"
+
+
+def write_crash_report(exc: BaseException, tried_save: bool, save_error) -> str | None:
+    """Append the traceback, with when and where it ran, to the crash log.
+    Returns its path, or None if even that couldn't be written."""
+    import datetime
+    import platform
+    import traceback
+    path = crash_report_path()
+    if not tried_save:
+        outcome = "The player had chosen to quit without saving; nothing was saved."
+    elif save_error is not None:
+        outcome = f"The rescue save FAILED: {save_error!r}"
+    else:
+        outcome = "The game was saved on the way out (the previous save is in .bak)."
+    try:
+        with open(path, "a", encoding="utf-8") as f:
+            f.write(f"=== {datetime.datetime.now().isoformat(timespec='seconds')} · "
+                    f"Python {platform.python_version()} · {platform.platform()}\n")
+            f.write("".join(traceback.format_exception(exc)))
+            f.write(outcome + "\n\n")
+        return path
+    except OSError:
+        return None
 
 
 if __name__ == "__main__":
