@@ -59,21 +59,31 @@ def update_fov(state: GameState) -> None:
     w.explored |= w.visible
 
 
+def _site(state: GameState) -> tuple:
+    """The mouth this delve began at: the map it opens from and its tile. Two
+    mines are two holes in the ground, and each leads to floors of its own."""
+    x, y = state.return_pos
+    return ("west" if state.return_west else "vale", x, y)
+
+
 def _floor_seed(state: GameState, depth: int) -> int:
     # hash() is salted per process (PYTHONHASHSEED), which would re-roll floors
-    # on every reload — combine the inputs arithmetically instead.
-    kind_id = zlib.crc32(state.dungeon_kind.encode())
-    return (state.seed * 1_000_003 + depth * 7919 + state.day * 104_729 + kind_id) & 0x7FFFFFFF
+    # on every reload — combine the inputs arithmetically instead. The mouth is
+    # part of it, so two sites of the same kind never roll the same floor.
+    where, x, y = _site(state)
+    site_id = zlib.crc32(f"{state.dungeon_kind}@{where}:{x},{y}".encode())
+    return (state.seed * 1_000_003 + depth * 7919 + state.day * 104_729 + site_id) & 0x7FFFFFFF
 
 
 def _go_to_floor(state: GameState, depth: int, descending: bool) -> None:
     # Re-use the floor if we've already been on it today (so opened chests, scooped
     # gold and slain monsters stay gone); otherwise generate it and remember it.
-    # The cache is dropped on a new day, so floors still re-roll daily.
+    # The cache is dropped on a new day, so floors still re-roll daily. It is
+    # keyed by the mouth too: looting one mine's floor 1 leaves the other's be.
     if state.floor_cache_day != state.day:
         state.floor_cache.clear()
         state.floor_cache_day = state.day
-    key = (state.dungeon_kind, depth)
+    key = (state.dungeon_kind, _site(state), depth)
     gm = state.floor_cache.get(key)
     if gm is None:
         from ..world import dwarftown
