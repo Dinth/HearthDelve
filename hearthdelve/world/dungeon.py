@@ -115,22 +115,49 @@ def _tunnel(tiles, a, b, rng):
             tiles[ex, y] = tile.DUNGEON_FLOOR
 
 
-def _carve_river(gm, rng) -> None:
-    """Cut a winding water channel clear across the cavern, with walkable gravel
-    banks either side so you can stand and pan it, then tunnel from the entrance
-    to the middle of it so the river is always reachable."""
-    w, h = gm.width, gm.height
+def _carve_river(tiles, entry, rng) -> np.ndarray:
+    """Cut a winding water channel across the cavern, with walkable gravel
+    banks either side so you can stand and pan it, a tunnel from the entrance to
+    its middle so it is always reachable, and a few dwarf-built bridges across.
+
+    Runs inside :func:`generate`, after the rooms are dug but before the stairs,
+    veins, chests, traps and monsters are placed, so none of them lands in the
+    water or under a bank — and the closing connectivity repair covers the river
+    like any other obstacle. Returns the channel as a mask, so the chambers
+    added later (vault, grove) can be kept off it."""
+    w, h = tiles.shape
+    river = np.zeros((w, h), dtype=bool)
+    rows: dict[int, int] = {}
     y = rng.randint(h // 3, 2 * h // 3)
     mid = None
     for x in range(1, w - 1):
+        yp = y
         y = max(3, min(h - 4, y + rng.choice((-1, 0, 0, 1))))
-        gm.tiles[x, y] = tile.RIVER
-        gm.tiles[x, y - 1] = tile.DUNGEON_FLOOR      # gravel banks (walkable)
-        gm.tiles[x, y + 1] = tile.DUNGEON_FLOOR
+        rows[x] = y
+        if not 2 <= x < w - 2:
+            continue          # rock at either end: nothing open beside the border wall
+        # Gravel banks either side (walkable). Where the channel steps up or
+        # down, also fill each bank's outer corner, so both banks stay one
+        # unbroken strip rather than a chain of diagonal-only cells.
+        for bx, by in ((x, y - 1), (x, y + 1), (x, yp - 1), (x, yp + 1),
+                       (x - 1, y - 1), (x - 1, y + 1)):
+            if 2 <= bx < w - 2 and not river[bx, by] and (bx, by) != (x, y):
+                tiles[bx, by] = tile.DUNGEON_FLOOR
+        tiles[x, y] = tile.RIVER
+        river[x, y] = True
         if x == w // 2:
             mid = (x, y - 1)
-    if gm.spawn and mid:
-        _tunnel(gm.tiles, gm.spawn, mid, rng)
+    if mid:
+        _tunnel(tiles, entry, mid, rng)
+    # The dwarves have bridged it here and there: one span somewhere in each
+    # stretch of the river, never at fixed spots.
+    n = rng.randint(2, 3)
+    stretch = (w - 6) / n
+    for i in range(n):
+        bx = max(2, min(w - 3, int(3 + stretch * i + rng.uniform(0, stretch))))
+        tiles[bx, rows[bx]] = tile.BRIDGE
+        river[bx, rows[bx]] = False
+    return river
 
 
 def generate_underriver(seed: int) -> GameMap:
@@ -139,9 +166,9 @@ def generate_underriver(seed: int) -> GameMap:
     and tougher/richer than its floor number lets on — a braved expedition. Pan
     it with a rod (see fishing) for ore and gems the black water carries down."""
     from . import dwarftown
-    gm = generate(seed ^ 0x51DE12, "cavern", dwarftown.UNDERRIVER_DEPTH + 3)
+    gm = generate(seed ^ 0x51DE12, "cavern", dwarftown.UNDERRIVER_DEPTH + 3,
+                  river_seed=seed ^ 0x1F1E)
     gm.depth = dwarftown.UNDERRIVER_DEPTH
-    _carve_river(gm, random.Random(seed ^ 0x1F1E))
     gm.underriver = True
     return gm
 
@@ -191,7 +218,10 @@ def _carve_tunnel(tiles, a, b, style, rng) -> None:
                 paint(ex - 1, y)
 
 
-def generate(seed: int, kind: str, depth: int) -> GameMap:
+def generate(seed: int, kind: str, depth: int, river_seed: int | None = None) -> GameMap:
+    """Generate one floor. ``river_seed`` cuts the Underriver's channel across
+    it (see :func:`_carve_river`) from its own generator, so an ordinary floor
+    rolls exactly as it would without one."""
     rng = random.Random(seed)
     w, h = DUN_W, DUN_H
     tiles = np.full((w, h), tile.DUNGEON_WALL, dtype=np.uint8)
@@ -228,6 +258,14 @@ def generate(seed: int, kind: str, depth: int) -> GameMap:
     else:
         up = rooms[0].center
         down = rooms[-1].center
+    # The river goes in before anything is placed, so the stairs, veins,
+    # chests, traps and monsters below all see it.
+    river = _carve_river(tiles, up, random.Random(river_seed)) if river_seed is not None else None
+
+    def _wet(room) -> bool:
+        """Would this chamber (walls included) sit on the river channel?"""
+        return river is not None and bool(river[room.x:room.x + room.w, room.y:room.y + room.h].any())
+
     tiles[up] = tile.STAIRS_UP
     tiles[down] = tile.DUNGEON_DOWN
 
@@ -448,7 +486,7 @@ def generate(seed: int, kind: str, depth: int) -> GameMap:
         for _ in range(40):
             vx, vy = rng.randint(1, w - vw - 2), rng.randint(1, h - vh - 2)
             cand = _Room(vx, vy, vw, vh)
-            if not any(cand.intersects(o) for o in rooms):
+            if not any(cand.intersects(o) for o in rooms) and not _wet(cand):
                 vroom = cand
                 break
         if vroom is not None:
@@ -483,7 +521,7 @@ def generate(seed: int, kind: str, depth: int) -> GameMap:
         for _ in range(40):
             gx, gy = rng.randint(1, w - gw - 2), rng.randint(1, h - gh - 2)
             cand = _Room(gx, gy, gw, gh)
-            if not any(cand.intersects(o) for o in rooms):
+            if not any(cand.intersects(o) for o in rooms) and not _wet(cand):
                 groom = cand
                 break
         if groom is not None:

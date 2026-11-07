@@ -26,6 +26,57 @@ class TestUnderriverFloor(unittest.TestCase):
         self.assertEqual(dwarftown.UNDERRIVER_DEPTH, dwarftown.TOWN_DEPTH + 1)
 
 
+class TestTheRiverRespectsTheFloor(unittest.TestCase):
+    """The river used to be cut across a finished floor: it tunnelled over the
+    up-stairs in every world (fainting was the only way out), drowned the down-
+    stairs in some, and left monsters, chests and traps in the water. It is now
+    carved before anything is placed."""
+
+    def _reach(self, gm, start):
+        from hearthdelve.world import tile
+        seen, stack = {start}, [start]
+        while stack:
+            x, y = stack.pop()
+            for nx, ny in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
+                if (0 <= nx < gm.width and 0 <= ny < gm.height and (nx, ny) not in seen
+                        and tile.TILES[gm.tiles[nx, ny]].walkable):
+                    seen.add((nx, ny))
+                    stack.append((nx, ny))
+        return seen
+
+    def test_both_stairs_stand_and_join_up_in_every_world(self):
+        from hearthdelve.world import dungeon, tile
+        for seed in range(80):
+            gm = dungeon.generate_underriver(seed)
+            with self.subTest(seed=seed):
+                self.assertEqual(gm.tiles[gm.stairs_up], tile.STAIRS_UP)
+                self.assertEqual(gm.tiles[gm.stairs_down], tile.DUNGEON_DOWN)
+                self.assertEqual(gm.spawn, gm.stairs_up)
+                reach = self._reach(gm, gm.stairs_up)
+                self.assertIn(gm.stairs_down, reach)
+                self.assertTrue({r.center for r in gm.rooms} <= reach)
+
+    def test_nothing_is_left_standing_in_the_water(self):
+        from hearthdelve.world import dungeon, tile
+        for seed in range(80):
+            gm = dungeon.generate_underriver(seed)
+            with self.subTest(seed=seed):
+                for m in gm.monsters:
+                    self.assertTrue(tile.TILES[gm.tiles[m.x, m.y]].walkable, m.name)
+                for t in gm.hidden_traps:
+                    self.assertEqual(gm.tiles[t], gm.floor_tile)
+                # the banks wear the cavern's own floor, not a stripe of mine floor
+                self.assertFalse((gm.tiles == tile.DUNGEON_FLOOR).any())
+                self.assertGreater(int((gm.tiles == tile.RIVER).sum()), 40)
+                self.assertGreaterEqual(int((gm.tiles == tile.BRIDGE).sum()), 2)
+
+    def test_an_ordinary_floor_has_no_river(self):
+        from hearthdelve.world import dungeon, tile
+        gm = dungeon.generate(4242, "cavern", 8)
+        self.assertFalse((gm.tiles == tile.RIVER).any())
+        self.assertFalse((gm.tiles == tile.BRIDGE).any())
+
+
 class TestPanning(unittest.TestCase):
     def _river_bank(self, gm):
         for x in range(gm.width):
