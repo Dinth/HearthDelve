@@ -387,6 +387,12 @@ def new_day(state: GameState, rested: bool = True) -> None:
     from . import combat
     combat.morning_status(state)
 
+    # The dawn's tally — and the fair: yesterday's stalls struck, today's raised,
+    # the year's fireworks paid out. Those change the world, so they come before
+    # the autosave below; after it, a reload lost the stalls and the fireworks'
+    # karma and friendship for good.
+    _announce_morning(state)
+
     # auto-save each morning
     try:
         from ..engine import save
@@ -612,7 +618,6 @@ def _tend_village_fields(state: GameState, season: str) -> None:
 def sleep(state: GameState) -> None:
     state.log.add("You sleep soundly. A new day dawns.", (180, 200, 240))
     new_day(state, rested=True)
-    _announce_morning(state)
 
 
 def collapse(state: GameState, reason: str) -> None:
@@ -640,10 +645,11 @@ def collapse(state: GameState, reason: str) -> None:
     if state.surface and state.surface.bed:
         state.player.x, state.player.y = state.surface.bed
     new_day(state, rested=False)
-    _announce_morning(state)
 
 
 def _announce_morning(state: GameState) -> None:
+    """The morning's news, and the fair's comings and goings. Called at the end
+    of new_day, before the autosave (it raises and strikes stalls)."""
     state.log.add(f"{state.date_str()} — {state.weather}.", (236, 226, 180))
     # A one-line dawn tally of what's ready, so a farm that sprawls across the
     # map doesn't need a manual patrol to find finished goods and produce.
