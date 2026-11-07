@@ -100,25 +100,85 @@ def update_npcs(state: GameState) -> None:
 
 
 _CHILD_RANGE = 9      # how far kids stray from the square while playing
+# How far a walk to the square may detour beyond the straight box between the
+# two ends: a tight window first, a wide one if the door faces the wrong way.
+_ROUTE_MARGINS = (12, 32)
+
+
+def _route(w, start, goal, near: int = 2) -> list:
+    """The shortest walkable way (8-way) from ``start`` to within ``near`` tiles
+    of ``goal``, as the cells to step onto in order — [] if there is none.
+    Searched breadth-first inside a window around both ends, so it stays cheap
+    on a world-sized map: out of a cottage door and round the houses, which a
+    straight-line step can't do."""
+    for margin in _ROUTE_MARGINS:
+        path = _route_within(w, start, goal, near, margin)
+        if path:
+            return path
+    return []
+
+
+def _route_within(w, start, goal, near: int, margin: int) -> list:
+    from collections import deque
+    (sx, sy), (gx, gy) = start, goal
+    x0, x1 = min(sx, gx) - margin, max(sx, gx) + margin
+    y0, y1 = min(sy, gy) - margin, max(sy, gy) + margin
+    came = {start: None}
+    todo = deque([start])
+    while todo:
+        x, y = todo.popleft()
+        if max(abs(x - gx), abs(y - gy)) <= near:
+            path = []
+            while (x, y) != start:
+                path.append((x, y))
+                x, y = came[(x, y)]
+            return path[::-1]
+        for dx in (-1, 0, 1):
+            for dy in (-1, 0, 1):
+                n = (x + dx, y + dy)
+                if (n in came or not (x0 <= n[0] <= x1 and y0 <= n[1] <= y1)
+                        or not w.walkable(*n)):
+                    continue
+                came[n] = (x, y)
+                todo.append(n)
+    return []
+
+
+def _head_for(state: GameState, npc, goal) -> None:
+    """Take one step along the way to ``goal``, following the cached route and
+    finding a fresh one whenever its next step is gone (a fence went up, or the
+    villager was moved). The player is never walked through — they wait."""
+    w = state.world
+    r = npc.route
+    if not (r and max(abs(r[0][0] - npc.x), abs(r[0][1] - npc.y)) == 1 and w.walkable(*r[0])):
+        r = npc.route = _route(w, (npc.x, npc.y), goal)
+    if r and r[0] != (state.player.x, state.player.y):
+        npc.x, npc.y = r.pop(0)
 
 
 def _child_roam(state: GameState, npc) -> None:
-    """A lively amble: kids wander near the square and chase each other to play."""
+    """A lively amble about the square — kids also chase each other to play.
+    Anyone who has strayed (or is just setting out from home) walks back first,
+    by a real route: a straight-line step couldn't get out of a cottage door,
+    which left most of a village wedged at home all day and festivals empty."""
     import random
     w = state.world
     anchor = npc.spots.get("square") or npc.spots.get("home") or (npc.x, npc.y)
     px, py = state.player.x, state.player.y
-    # find a playmate to run toward, if one's a little way off
-    mates = [n for n in w.npcs if n.role == "child" and n is not npc]
-    mate = min(mates, key=lambda k: (k.x - npc.x) ** 2 + (k.y - npc.y) ** 2, default=None)
+    if max(abs(npc.x - anchor[0]), abs(npc.y - anchor[1])) > _CHILD_RANGE:
+        _head_for(state, npc, anchor)                   # strayed too far — head back
+        return
+    npc.route = []
 
     tx = ty = None
-    if mate is not None:
-        d = max(abs(mate.x - npc.x), abs(mate.y - npc.y))
-        if 2 < d < 16 and random.random() < 0.6:
-            tx, ty = mate.x, mate.y                     # chase a friend
-    if tx is None and max(abs(npc.x - anchor[0]), abs(npc.y - anchor[1])) > _CHILD_RANGE:
-        tx, ty = anchor                                 # strayed too far — head back
+    if npc.role == "child":
+        # find a playmate to run toward, if one's a little way off
+        mates = [n for n in w.npcs if n.role == "child" and n is not npc]
+        mate = min(mates, key=lambda k: (k.x - npc.x) ** 2 + (k.y - npc.y) ** 2, default=None)
+        if mate is not None:
+            d = max(abs(mate.x - npc.x), abs(mate.y - npc.y))
+            if 2 < d < 16 and random.random() < 0.6:
+                tx, ty = mate.x, mate.y                 # chase a friend
     if random.random() < 0.35 and tx is None:
         return                                          # pause a beat
 

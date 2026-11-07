@@ -50,6 +50,9 @@ class NPC:
     gifted_today: bool = False
     talked_today: bool = False
     _blurb_i: int = 0
+    # the way back to the square while walking there (transient, never saved:
+    # recomputed whenever its next step turns out blocked)
+    route: list = field(default_factory=list, repr=False, compare=False)
 
     @property
     def hearts(self) -> int:
