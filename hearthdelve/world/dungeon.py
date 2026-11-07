@@ -115,6 +115,30 @@ def _tunnel(tiles, a, b, rng):
             tiles[ex, y] = tile.DUNGEON_FLOOR
 
 
+def _grow_vein(tiles, start, length, rng) -> None:
+    """Grow one ore vein from a wall cell that borders open floor: up to
+    ``length`` cells, each step onto a neighbouring wall that also borders floor.
+
+    Never into the outer ring: that is the map's edge, where a vein would open
+    the border once mined and the next step would index off the grid. (Ordinary
+    floors never put floor beside the edge, so they grow exactly as before; the
+    bound is what keeps a floor that does — the Underriver's banks — safe.)"""
+    w, h = tiles.shape
+    x, y = start
+    for _ in range(length):
+        if tiles[x, y] != tile.DUNGEON_WALL:
+            break
+        tiles[x, y] = tile.ORE_VEIN
+        nbrs = [(nx, ny) for dx in (-1, 0, 1) for dy in (-1, 0, 1) if dx or dy
+                for nx, ny in ((x + dx, y + dy),)
+                if 1 <= nx < w - 1 and 1 <= ny < h - 1
+                and tiles[nx, ny] == tile.DUNGEON_WALL
+                and (tiles[nx - 1:nx + 2, ny - 1:ny + 2] == tile.DUNGEON_FLOOR).any()]
+        if not nbrs:
+            break
+        x, y = rng.choice(nbrs)
+
+
 def _carve_river(tiles, entry, rng) -> np.ndarray:
     """Cut a winding water channel across the cavern, with walkable gravel
     banks either side so you can stand and pan it, a tunnel from the entrance to
@@ -290,17 +314,7 @@ def generate(seed: int, kind: str, depth: int, river_seed: int | None = None) ->
         cands = [p for p in walls if tiles[p] == tile.DUNGEON_WALL]
         if not cands:
             break
-        x, y = rng.choice(cands)
-        for _ in range(rng.randint(1, max_len)):
-            if tiles[x, y] != tile.DUNGEON_WALL:
-                break
-            tiles[x, y] = tile.ORE_VEIN
-            nbrs = [(x + dx, y + dy) for dx in (-1, 0, 1) for dy in (-1, 0, 1)
-                    if (dx or dy) and tiles[x + dx, y + dy] == tile.DUNGEON_WALL
-                    and (tiles[x + dx - 1:x + dx + 2, y + dy - 1:y + dy + 2] == tile.DUNGEON_FLOOR).any()]
-            if not nbrs:
-                break
-            x, y = rng.choice(nbrs)
+        _grow_vein(tiles, rng.choice(cands), rng.randint(1, max_len), rng)
 
     gem_count = bias["gem"] + (1 if rng.random() < 0.18 * depth else 0)
     for _ in range(gem_count):
