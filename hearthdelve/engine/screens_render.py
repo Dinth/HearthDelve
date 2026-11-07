@@ -337,11 +337,23 @@ _SECTION_FG = (208, 146, 86)      # category / slot names
 _BRACKET_FG = (140, 140, 152)     # right-hand [qty]/[tier] column
 _CAP_FG = (150, 200, 150)         # the capacity/summary line
 _FOOT_FG = (232, 192, 112)        # footer key hints
-_INV_LETTERS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+# The pick letters for the pack and equipment screens, in order: lowercase,
+# then Shift+letter. Every key that is already a command on those screens is
+# left out, so a label never names a key that does something else: e and i
+# switch between the two screens, Shift+D drops the highlighted stack, and
+# Shift+U mutes the music from anywhere. Rows past the last letter go
+# unlabelled (arrows still reach them; Tab narrows the pack by category).
+INV_LETTERS = "abcdfghjklmnopqrstuvwxyz" + "ABCEFGHIJKLMNOPQRSTVWXYZ"
 
 
 def inv_letter(i: int) -> str:
-    return _INV_LETTERS[i] if i < len(_INV_LETTERS) else " "
+    return INV_LETTERS[i] if 0 <= i < len(INV_LETTERS) else " "
+
+
+def letter_index(ch: str) -> int | None:
+    """The row a typed pick letter addresses, or None if it isn't one."""
+    i = INV_LETTERS.find(ch) if len(ch) == 1 else -1
+    return i if i >= 0 else None
 
 
 def _pack_detail(it) -> str:
@@ -427,7 +439,7 @@ def render_inventory(con: tcod.console.Console, state: GameState, sel: int = 0,
         m.arrows(start > 0, end < len(rows), 2, h - 3, dx=-3, glyphs=("↑", "↓"))
         it_sel, _q, ql_sel = slots[visible[sel]]      # detail line for the highlighted item
         m.text(2, h - 3, _pack_detail(it_sel)[:w - 6], fg=(188, 184, 168))
-    m.footer("[a-z] pick  [Enter] use/equip  [⇧D] drop  [Tab] filter  [e] equipment",
+    m.footer("[letter] pick  [Enter] use/equip  [⇧D] drop  [Tab] filter  [e] equipment",
              fg=_FOOT_FG)
 
 

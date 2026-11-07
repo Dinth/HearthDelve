@@ -1785,6 +1785,8 @@ render_intro = _sr.render_intro
 render_storage = _sr.render_storage
 render_confirm = _sr.render_confirm
 inv_letter = _sr.inv_letter
+letter_index = _sr.letter_index
+INV_LETTERS = _sr.INV_LETTERS
 render_inventory = _sr.render_inventory
 render_equipment = _sr.render_equipment
 # The equipment screen's letter keys address the same rows the renderer draws.

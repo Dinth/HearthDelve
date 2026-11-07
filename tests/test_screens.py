@@ -145,8 +145,8 @@ def _key(ch: str, shift: bool = False):
 
 
 class TestEquipmentScreenKeys(unittest.TestCase):
-    """Every bare letter on the equipment screen addresses a row: the worn
-    slots first (take off), then the carried gear (put on)."""
+    """Every letter on the equipment screen addresses a row: the worn slots
+    first (take off), then the carried gear (put on)."""
 
     def _ui_with_gear(self):
         from hearthdelve import screens
@@ -184,10 +184,90 @@ class TestEquipmentScreenKeys(unittest.TestCase):
         p = ui.state.player
         gear = rendering.equippables(ui.state)
         boots = next(i for i, (it, _q, _ql) in enumerate(gear) if it.name == "Iron Boots")
-        letter = chr(ord("a") + len(rendering.PAPERDOLL_SLOTS) + boots)
-        self.assertNotIn(letter, ("e", "i"))
-        ui.top.on_raw(ui, _key(letter))
+        letter = rendering.inv_letter(len(rendering.PAPERDOLL_SLOTS) + boots)
+        ui.top.on_raw(ui, _key(letter.lower(), shift=letter.isupper()))
         self.assertEqual(p.equipment.get("feet").name, "Iron Boots")
+
+    def test_every_worn_slot_comes_off_by_the_letter_beside_it(self):
+        """The Girdle sat on 'e' and the Amulet on 'i' — both screen switches —
+        so neither could be taken off by letter."""
+        from hearthdelve.engine import rendering
+        for i, slot in enumerate(rendering.PAPERDOLL_SLOTS):
+            letter = rendering.inv_letter(i)
+            with self.subTest(slot=slot, letter=letter):
+                self.assertNotIn(letter, "ei ")
+                self.assertEqual(rendering.letter_index(letter), i)
+        from hearthdelve.data import content
+        from hearthdelve.game import commands as cmds
+        ui, _ = self._ui_with_gear()
+        girdle = content.make_gear("Girdle", "iron")
+        ui.state.player.inventory.add(girdle, 1)
+        cmds._equip(ui.state, girdle)
+        self.assertIs(ui.state.player.equipment.get("waist"), girdle)
+        letter = rendering.inv_letter(rendering.PAPERDOLL_SLOTS.index("waist"))
+        self.assertTrue(ui.top.on_raw(ui, _key(letter)))
+        self.assertIsNone(ui.state.player.equipment.get("waist"))
+
+
+class TestPackLetters(unittest.TestCase):
+    """The pack drew a-z then A-Z beside its rows, but only bare a-z (minus e
+    and i) picked anything: the e and i rows and every capital row were dead
+    labels, and Shift+D — which reads as 'pick D' — dropped the highlighted
+    stack instead."""
+
+    def _ui_with_a_full_pack(self, n=60):
+        from hearthdelve import screens
+        from hearthdelve.entities import items
+        from hearthdelve.game import inventory
+        st = fresh_state(6)
+        cheap = [it for it in items.BY_NAME.values()
+                 if it.stackable and it.value < 100 and it.kind not in
+                 ("weapon", "armor", "jewelry", "ranged", "ammo", "bomb")]
+        for it in cheap[:n]:
+            st.player.inventory.add(it, 1)
+        st.player.inventory.slots.sort(key=lambda e: inventory.sort_key(e[0], e[2]))
+        ui = screens.UI(st)
+        ui.push(screens.InventoryScreen())
+        return ui
+
+    def test_every_drawn_letter_picks_its_own_row(self):
+        from hearthdelve.engine import rendering
+        ui = self._ui_with_a_full_pack()
+        shown = len(ui.top._visible(ui.state))
+        self.assertGreater(shown, len(rendering.INV_LETTERS))
+        for v in range(shown):
+            letter = rendering.inv_letter(v)
+            if letter == " ":
+                continue                                  # past the alphabet: arrows only
+            with self.subTest(row=v, letter=letter):
+                self.assertTrue(ui.top.on_raw(ui, _key(letter.lower(), shift=letter.isupper())))
+                self.assertEqual(ui.top.sel, v)
+
+    def test_the_screens_own_keys_are_never_labels(self):
+        from hearthdelve.engine import input as game_input, rendering
+        ui = self._ui_with_a_full_pack()
+        for ch, shift, cmd in (("e", False, "equipment"), ("i", False, "inventory"),
+                               ("d", True, "drop"), ("u", True, "mutemusic")):
+            label = ch.upper() if shift else ch
+            with self.subTest(key=label):
+                self.assertNotIn(label, rendering.INV_LETTERS)
+                self.assertFalse(ui.top.on_raw(ui, _key(ch, shift=shift)))
+                self.assertEqual(game_input.event_to_action(_key(ch, shift=shift))[0], cmd)
+
+    def test_shift_d_drops_the_highlighted_stack_not_another_row(self):
+        from hearthdelve.engine import input as game_input
+        ui = self._ui_with_a_full_pack()
+        slots = ui.state.player.inventory.slots
+        vis = ui.top._visible(ui.state)
+        first, other = slots[vis[0]][0], slots[vis[3]][0]
+        self.assertTrue(ui.top.on_raw(ui, _key("a")))
+        ev = _key("d", shift=True)
+        self.assertFalse(ui.top.on_raw(ui, ev))
+        action = game_input.event_to_action(ev)          # what main routes it to
+        ui.top.handle(ui, action[0], action)
+        self.assertEqual(ui.state.player.inventory.count(first), 0)
+        self.assertEqual(ui.state.player.inventory.count(other), 1)
+        ui.top.render(ui, _con())
 
 
 if __name__ == "__main__":

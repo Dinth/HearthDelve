@@ -55,7 +55,7 @@ def build_codex_pages(state: GameState):
         ("                   & perk (j → Projects shows them anywhere)", C.DIM),
         ("  > / <            descend / climb a dungeon (on stairs)", C.WHITE),
         ("  s                sleep in bed -> next day", C.WHITE),
-        ("  i                inventory  (a-z select; Enter eats/equips;", C.WHITE),
+        ("  i                inventory  (a letter picks; Enter eats/equips;", C.WHITE),
         ("                   Tab filters by category; Shift+D drops the stack)", C.DIM),
         ("  e                equipment", C.WHITE),
         ("  m                world map (the whole region at a glance)", C.WHITE),

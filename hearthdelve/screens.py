@@ -467,6 +467,20 @@ class HelpScreen(Screen):
 _EQUIP_KINDS = ("weapon", "armor", "jewelry", "ranged", "ammo", "bomb")
 
 
+def _pick_index(event) -> int | None:
+    """The row a key press picks on a lettered list (pack, equipment): the
+    typed letter — Shift makes it a capital — looked up in the same alphabet
+    the rows are labelled with. None for any other key, or a letter that is one
+    of the screen's commands, so it falls through to the command."""
+    if not isinstance(event, tcod.event.KeyDown):
+        return None
+    s = int(event.sym)
+    if not ord("a") <= s <= ord("z"):
+        return None
+    ch = chr(s).upper() if event.mod & tcod.event.Modifier.SHIFT else chr(s)
+    return rendering.letter_index(ch)
+
+
 class InventoryScreen(Screen):
     def __init__(self) -> None:
         self.sel = 0
@@ -487,16 +501,14 @@ class InventoryScreen(Screen):
         return state.player.inventory.slots[vis[self.sel]]
 
     def on_raw(self, ui: UI, event) -> bool:
-        # ADOM-style: a bare letter picks an item directly — even keys that
-        # would otherwise be commands act as selectors here.
-        if not isinstance(event, tcod.event.KeyDown) or (event.mod & tcod.event.Modifier.SHIFT):
+        # ADOM-style: a letter picks an item directly. The letters are exactly
+        # the ones drawn beside the rows (see rendering.INV_LETTERS), so the
+        # screen's own commands — e, i, Shift+D, Shift+U — pass through.
+        idx = _pick_index(event)
+        if idx is None:
             return False
-        s = int(event.sym)
-        ch = chr(s) if ord("a") <= s <= ord("z") else ""
-        if not ch or ch in ("i", "e"):
-            return False
-        if ord(ch) - ord("a") < len(self._visible(ui.state)):
-            self.sel = ord(ch) - ord("a")
+        if idx < len(self._visible(ui.state)):
+            self.sel = idx
         return True
 
     def handle(self, ui: UI, cmd: str, action: tuple) -> None:
@@ -551,15 +563,12 @@ class EquipmentScreen(Screen):
         rendering.render_equipment(con, ui.state)
 
     def on_raw(self, ui: UI, event) -> bool:
-        # One letter namespace: a.. address the worn slots (take off), then the
-        # carried gear list (equip).
-        if not isinstance(event, tcod.event.KeyDown) or (event.mod & tcod.event.Modifier.SHIFT):
+        # One letter namespace: the first letters address the worn slots (take
+        # off), the rest the carried gear list (equip) — the same letters the
+        # screen draws, so e / i still switch screens.
+        idx = _pick_index(event)
+        if idx is None:
             return False
-        s = int(event.sym)
-        ch = chr(s) if ord("a") <= s <= ord("z") else ""
-        if not ch or ch in ("i", "e"):
-            return False
-        idx = ord(ch) - ord("a")
         nslots = len(rendering.PAPERDOLL_SLOTS)
         if 0 <= idx < nslots:
             cmds._unequip(ui.state, rendering.PAPERDOLL_SLOTS[idx])
