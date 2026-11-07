@@ -149,5 +149,44 @@ class TestBackupRecovery(unittest.TestCase):
             save.load_or_backup(self.path)
 
 
+class TestTheSuiteNeverTouchesARealSave(unittest.TestCase):
+    """Advancing the day autosaves. The suite used to write that autosave over
+    the developer's own farm, because the path was frozen into default
+    arguments at import time where no test could redirect it."""
+
+    def test_the_default_path_is_the_suites_scratch_file(self):
+        from hearthdelve.engine import save
+        here = save.default_path()
+        self.assertNotEqual(os.path.abspath(here), os.path.abspath(save.SAVE_PATH))
+        self.assertTrue(os.path.abspath(here).startswith(
+            os.path.abspath(tempfile.gettempdir())))
+
+    def test_the_path_is_resolved_at_call_time(self):
+        from unittest import mock
+        from hearthdelve.engine import save
+        elsewhere = os.path.join(tempfile.mkdtemp(prefix="hd-elsewhere-"), "s.json")
+        st = fresh_state(5)
+        with mock.patch.dict(os.environ, {"HEARTHDELVE_SAVE": elsewhere}):
+            save.save(st)
+            self.assertTrue(save.exists())
+            self.assertEqual(save.load().seed, 5)
+            save.delete()
+            self.assertFalse(os.path.isfile(elsewhere))
+
+    def test_the_dawn_autosave_lands_in_the_scratch_file(self):
+        from hearthdelve.engine import save
+        from hearthdelve.game import farming
+
+        def stamp(p):
+            return os.stat(p).st_mtime_ns if os.path.isfile(p) else None
+        real = (stamp(save.SAVE_PATH), stamp(save.SAVE_PATH + ".bak"))
+        save.delete()
+        st = fresh_state(5)
+        farming.new_day(st)
+        self.assertTrue(os.path.isfile(save.default_path()))
+        self.assertEqual(save.load().day, st.day)
+        self.assertEqual((stamp(save.SAVE_PATH), stamp(save.SAVE_PATH + ".bak")), real)
+
+
 if __name__ == "__main__":
     unittest.main()

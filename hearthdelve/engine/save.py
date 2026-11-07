@@ -30,6 +30,15 @@ SAVE_VERSION = 8
 SAVE_PATH = os.path.join(os.path.expanduser("~"), ".hearthdelve_save.json")
 
 
+def default_path() -> str:
+    """Where the save lives: ``$HEARTHDELVE_SAVE`` when set, else ``SAVE_PATH``.
+
+    Resolved on every call rather than frozen into default arguments at import,
+    so the test suite (which points the variable at a scratch directory) and the
+    dawn autosave inside ``farming.new_day`` can never write to a real farm."""
+    return os.environ.get("HEARTHDELVE_SAVE") or SAVE_PATH
+
+
 class IncompatibleSaveError(Exception):
     """The save file's format version doesn't match this build — distinct from a
     truly corrupt/unreadable file so the caller can explain it clearly."""
@@ -118,21 +127,22 @@ def _mob_from_rec(rec: list, Mob) -> object:
                status={str(k): int(v) for k, v in g(22, {}).items()})
 
 
-def exists(path: str = SAVE_PATH) -> bool:
-    return os.path.isfile(path)
+def exists(path: str | None = None) -> bool:
+    return os.path.isfile(path or default_path())
 
 
-def delete(path: str = SAVE_PATH) -> None:
+def delete(path: str | None = None) -> None:
     try:
-        os.remove(path)
+        os.remove(path or default_path())
     except OSError:
         pass
 
 
-def backup(path: str = SAVE_PATH) -> str | None:
+def backup(path: str | None = None) -> str | None:
     """Copy an unreadable/incompatible save aside as ``.broken`` before it's
     abandoned — never silently destroyed, and never clobbering the rolling
     ``.bak`` (which holds the previous GOOD save; see :func:`save`)."""
+    path = path or default_path()
     if not os.path.isfile(path):
         return None
     bak = path + ".broken"
@@ -143,13 +153,14 @@ def backup(path: str = SAVE_PATH) -> str | None:
         return None
 
 
-def load_or_backup(path: str = SAVE_PATH):
+def load_or_backup(path: str | None = None):
     """Load the save; if the main file is corrupt but the previous morning's
     rolling ``.bak`` reads fine, set the broken file aside, promote the backup
     to main, and load that instead. Returns ``(state, restored)``.
 
     A version mismatch (IncompatibleSaveError) propagates untouched — the
     backup is from the same build, so it can't help there."""
+    path = path or default_path()
     try:
         return load(path), False
     except IncompatibleSaveError:
@@ -164,7 +175,8 @@ def load_or_backup(path: str = SAVE_PATH):
 
 
 # --- save --------------------------------------------------------------------
-def save(state: GameState, path: str = SAVE_PATH) -> None:
+def save(state: GameState, path: str | None = None) -> None:
+    path = path or default_path()
     surf = state.surface
     px, py = state.return_pos if state.depth > 0 else (state.player.x, state.player.y)
     p = state.player
@@ -268,8 +280,8 @@ def save(state: GameState, path: str = SAVE_PATH) -> None:
 
 
 # --- load --------------------------------------------------------------------
-def load(path: str = SAVE_PATH) -> GameState:
-    with open(path) as f:
+def load(path: str | None = None) -> GameState:
+    with open(path or default_path()) as f:
         data = json.load(f)
     ver = data.get("version")
     if ver != SAVE_VERSION:
