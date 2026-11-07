@@ -112,5 +112,83 @@ class TestScreensRender(unittest.TestCase):
                 rendering.describe(st, st.player.x + dx, st.player.y + dy)
 
 
+class TestRenderingFacade(unittest.TestCase):
+    """rendering re-exports the overlays that moved to screens_render. When the
+    split missed PAPERDOLL_SLOTS and equippables, nothing that only *draws*
+    noticed — the equipment screen's key handler crashed the game instead."""
+
+    def test_every_rendering_name_a_caller_uses_exists(self):
+        import ast
+        import pathlib
+        from hearthdelve.engine import rendering
+        root = pathlib.Path(rendering.__file__).resolve().parent.parent
+        missing = []
+        for path in sorted(root.rglob("*.py")):
+            if path.name == "rendering.py":
+                continue
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            aliases = {a.asname or a.name for n in ast.walk(tree)
+                       if isinstance(n, (ast.Import, ast.ImportFrom))
+                       for a in n.names if a.name.split(".")[-1] == "rendering"}
+            for n in ast.walk(tree):
+                if (isinstance(n, ast.Attribute) and isinstance(n.value, ast.Name)
+                        and n.value.id in aliases and not hasattr(rendering, n.attr)):
+                    missing.append(f"{path.relative_to(root)}:{n.lineno} rendering.{n.attr}")
+        self.assertEqual(missing, [])
+
+
+def _key(ch: str, shift: bool = False):
+    import tcod.event
+    return tcod.event.KeyDown(
+        scancode=tcod.event.Scancode(0), sym=tcod.event.KeySym(ord(ch)),
+        mod=tcod.event.Modifier.SHIFT if shift else tcod.event.Modifier.NONE)
+
+
+class TestEquipmentScreenKeys(unittest.TestCase):
+    """Every bare letter on the equipment screen addresses a row: the worn
+    slots first (take off), then the carried gear (put on)."""
+
+    def _ui_with_gear(self):
+        from hearthdelve import screens
+        from hearthdelve.data import content
+        from hearthdelve.game import commands as cmds
+        st = fresh_state(6)
+        helm = content.make_gear("Helm", "iron")
+        st.player.inventory.add(helm, 1)
+        cmds._equip(st, helm)
+        st.player.inventory.add(content.make_gear("Boots", "iron"), 1)
+        ui = screens.UI(st)
+        ui.push(screens.EquipmentScreen())
+        return ui, helm
+
+    def test_every_letter_is_handled_without_crashing(self):
+        import string
+        ui, _ = self._ui_with_gear()
+        for ch in string.ascii_lowercase:
+            ui.top.on_raw(ui, _key(ch))
+            ui.top.render(ui, _con())
+
+    def test_the_first_letter_takes_off_the_helm(self):
+        from hearthdelve.engine import rendering
+        ui, helm = self._ui_with_gear()
+        p = ui.state.player
+        self.assertEqual(rendering.PAPERDOLL_SLOTS[0], "head")
+        self.assertIs(p.equipment.get("head"), helm)
+        self.assertTrue(ui.top.on_raw(ui, _key("a")))
+        self.assertIsNone(p.equipment.get("head"))
+        self.assertEqual(p.inventory.count(helm), 1)
+
+    def test_a_gear_letter_puts_the_piece_on(self):
+        from hearthdelve.engine import rendering
+        ui, _ = self._ui_with_gear()
+        p = ui.state.player
+        gear = rendering.equippables(ui.state)
+        boots = next(i for i, (it, _q, _ql) in enumerate(gear) if it.name == "Iron Boots")
+        letter = chr(ord("a") + len(rendering.PAPERDOLL_SLOTS) + boots)
+        self.assertNotIn(letter, ("e", "i"))
+        ui.top.on_raw(ui, _key(letter))
+        self.assertEqual(p.equipment.get("feet").name, "Iron Boots")
+
+
 if __name__ == "__main__":
     unittest.main()

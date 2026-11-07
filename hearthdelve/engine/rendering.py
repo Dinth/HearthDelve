@@ -1787,6 +1787,9 @@ render_confirm = _sr.render_confirm
 inv_letter = _sr.inv_letter
 render_inventory = _sr.render_inventory
 render_equipment = _sr.render_equipment
+# The equipment screen's letter keys address the same rows the renderer draws.
+PAPERDOLL_SLOTS = _sr.PAPERDOLL_SLOTS
+equippables = _sr.equippables
 render_craft = _sr.render_craft
 render_ship = _sr.render_ship
 render_journal = _sr.render_journal
