@@ -105,5 +105,82 @@ class TestCharGenScreen(unittest.TestCase):
         rendering.render_character(tcod.console.Console(80, 50, order="F"), st)
 
 
+class TestCreationSurvivesQuitting(unittest.TestCase):
+    """The 'life not yet begun' flag was cleared the moment the intro opened and
+    never saved: closing the window at the intro or at the midwives' roll saved
+    an unsigned, all-10s farmer, and creation never came back."""
+
+    def setUp(self):
+        import contextlib
+        import io
+        import os
+        import tempfile
+        from unittest import mock
+        self.dir = tempfile.mkdtemp(prefix="hd-chargen-")
+        self.env = mock.patch.dict(os.environ, {"HEARTHDELVE_SAVE": os.path.join(self.dir, "s.json")})
+        self.env.start()
+        self.quiet = contextlib.redirect_stderr(io.StringIO())
+        self.quiet.__enter__()
+
+    def tearDown(self):
+        import shutil
+        self.quiet.__exit__(None, None, None)
+        self.env.stop()
+        shutil.rmtree(self.dir, ignore_errors=True)
+
+    def _opened(self, st):
+        from hearthdelve import main, screens
+        ui = screens.UI(st)
+        main.open_screens(ui)
+        return ui, [type(s).__name__ for s in ui.stack]
+
+    def test_closing_the_window_at_the_intro_resumes_creation(self):
+        from hearthdelve import main
+        from hearthdelve.engine import save
+        st = fresh_state(12)
+        ui, stack = self._opened(st)
+        self.assertEqual(stack, ["PlayScreen", "CharGenScreen", "IntroScreen"])
+        main.run_guarded(ui, lambda: None)            # the window closes on the intro
+        again = save.load()
+        self.assertTrue(again.chargen_pending)
+        self.assertEqual(self._opened(again)[1], ["PlayScreen", "CharGenScreen", "IntroScreen"])
+
+    def test_a_crash_at_the_midwives_roll_resumes_creation(self):
+        from hearthdelve import main
+        from hearthdelve.engine import save
+        ui, _ = self._opened(fresh_state(12))
+        ui.pop()                                       # past the intro, onto the roll
+
+        def crash():
+            raise RuntimeError("fell over mid-roll")
+        with self.assertRaises(RuntimeError):
+            main.run_guarded(ui, crash)
+        self.assertTrue(save.load().chargen_pending)
+
+    def test_accepting_a_life_ends_it_for_good(self):
+        from hearthdelve.engine import save
+        ui, _ = self._opened(fresh_state(12))
+        ui.pop()                                       # dismiss the intro
+        ui.top.handle(ui, "confirm", ("confirm",))     # accept the roll
+        self.assertFalse(ui.state.chargen_pending)
+        self.assertTrue(ui.state.player.sign)
+        save.save(ui.state)
+        again = save.load()
+        self.assertFalse(again.chargen_pending)
+        self.assertEqual(again.player.sign, ui.state.player.sign)
+        self.assertEqual(self._opened(again)[1], ["PlayScreen"])
+
+    def test_an_older_save_is_a_life_already_begun(self):
+        import json
+        from hearthdelve.engine import save
+        save.save(fresh_state(12))
+        with open(save.default_path()) as f:
+            raw = json.load(f)
+        raw.pop("chargen_pending")
+        with open(save.default_path(), "w") as f:
+            json.dump(raw, f)
+        self.assertFalse(save.load().chargen_pending)
+
+
 if __name__ == "__main__":
     unittest.main()

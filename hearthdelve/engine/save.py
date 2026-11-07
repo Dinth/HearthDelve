@@ -215,6 +215,7 @@ def save(state: GameState, path: str | None = None) -> None:
         "stats": dict(state.stats),
         "bestiary": dict(state.bestiary),
         "pending_build": state.pending_build,
+        "chargen_pending": state.chargen_pending,
         "claims": [f"{x},{y}" for (x, y) in state.claims],
         "tax_owed": state.tax_owed,
         "last_tax_day": state.last_tax_day,
@@ -476,6 +477,9 @@ def load(path: str | None = None) -> GameState:
             _npc_apply_rec(n, raw_dwarves.get(n.name))
     state.mail = data.get("mail", [])
     state.pending_build = data.get("pending_build", "")
+    # Absent from older saves, whose lives were all begun (or, if the window
+    # closed mid-creation, already skipped — nothing to tell those apart by).
+    state.chargen_pending = bool(data.get("chargen_pending", False))
     state.claims = {tuple(map(int, k.split(","))) for k in data.get("claims", [])}
     state.tax_owed = data.get("tax_owed", 0)
     state.last_tax_day = data.get("last_tax_day", state.day)

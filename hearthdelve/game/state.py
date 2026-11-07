@@ -100,6 +100,11 @@ class GameState:
     pending_build: str = ""        # outbuilding ordered from the carpenter, awaiting placement
     # bestiary kill record: {base monster name: times slain} — feeds the codex
     bestiary: dict = field(default_factory=dict)
+    # a life not yet begun: the opening page and the midwives' roll (character
+    # creation) are still to come. Set on a new game and cleared only when a
+    # life is accepted — and saved, so closing the window partway through
+    # resumes creation next launch rather than skipping it for good.
+    chargen_pending: bool = False
 
     # land: wilderness tiles the player has claimed (fenced/farmed/built on), and
     # the weekly land-tax standing charged on them.

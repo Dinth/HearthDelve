@@ -1010,6 +1010,7 @@ class CharGenScreen(Screen):
             p.hp += 6
         sid, name, _g, told, boon = next(z for z in ZODIAC if z[0] == p.sign)
         state.log.add(f"You were born under {name} — {told}. ({boon})", (232, 216, 150))
+        state.chargen_pending = False      # a life is begun; never offered again
 
 
 class IntroScreen(Screen):

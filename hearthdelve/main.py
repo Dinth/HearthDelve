@@ -40,7 +40,7 @@ def new_game(seed: int = 1337) -> GameState:
     state.log.add("Space uses the active tool. ? for help, l to look, g to gather.", C.DIM)
     state.log.add("Visit Mossford (SE) & Cinderhope (SW): Shift+C to talk/shop, f to gift.", C.DIM)
     state.log.add("Villagers pin favours to the ‡ notice board on each square — g to read.", C.DIM)
-    state.intro_pending = True     # a fresh game opens on the intro page (see main)
+    state.chargen_pending = True   # a fresh game opens on the intro page (see open_screens)
     return state
 
 
@@ -113,16 +113,21 @@ def main() -> None:
         music.start()
 
         ui = screens.UI(state, music)
-        if getattr(state, "intro_pending", False):
-            state.intro_pending = False
-            # A fresh life: the intro reads first, then the midwives roll your
-            # stars and attributes (chargen sits under the intro on the stack).
-            ui.push(screens.CharGenScreen())
-            ui.push(screens.IntroScreen())
+        open_screens(ui)
         try:
             run_guarded(ui, lambda: _loop(ui, state, console, context, music))
         finally:
             music.stop()
+
+
+def open_screens(ui) -> None:
+    """A life not yet begun — a fresh game, or one closed before the midwives
+    finished — opens on the intro page, with character creation beneath it
+    (the midwives roll your stars and attributes). Only accepting a life clears
+    ``chargen_pending``, so quitting partway resumes here next launch."""
+    if ui.state.chargen_pending:
+        ui.push(screens.CharGenScreen())
+        ui.push(screens.IntroScreen())
 
 
 def _loop(ui, state: GameState, console, context, music) -> None:
