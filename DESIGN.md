@@ -310,4 +310,3 @@ Design decisions are locked; what remains is tuning and judgement:
 
 - **Gear pricing.** Buying a finished piece is currently cheaper than buying the bars to forge it, at every tier — a bought edge should be dearer than a crafted one.
 - **Faucets vs sinks.** The one-off sinks amount to roughly an in-game year of a developed farm's income; past that, gold is unbounded with little to want. Wild fruit trees, truffle pigs and dungeon gold all need a decision about what gold is *for*.
-- **The daily blessing and the Scriptorium** cycle on a fixed rotation, against pillar 8.

@@ -186,6 +186,14 @@ def _herbarium_bonus(state: GameState, item, q: int) -> None:
 _BLESSINGS = ("hearty", "tiller", "forager", "brisk", "warded")
 
 
+def _days_draw(state: GameState, salt: int):
+    """A random draw fixed for this world and this day (so reloading can't
+    re-roll it), salted per use. The shrine and the Scriptorium used to take
+    `day % n`, a fixed rotation you could set a calendar by."""
+    import random
+    return random.Random((state.seed * 1_000_003 + state.day * 7_919 + salt) & 0x7FFFFFFF)
+
+
 def _pray(state: GameState) -> None:
     """Bow at an altar. Once the Shrine of the Seasons is raised, a prayer draws
     down a daily blessing (a random boon lasting the day); otherwise it's a quiet
@@ -201,7 +209,7 @@ def _pray(state: GameState) -> None:
         state.log.add("The season's blessing is already upon you today.", C.DIM)
         return
     state.stats["blessed_day"] = state.day
-    blessing = _BLESSINGS[state.day % len(_BLESSINGS)]     # drifts day to day, no RNG needed
+    blessing = _days_draw(state, 31).choice(_BLESSINGS)    # the season's whim, fixed for the day
     # The season favours the kind: a good soul's blessing lingers longer, and the
     # devout are mended a little; the wicked get only a grudging, short boon.
     k = state.player.karma
@@ -235,7 +243,7 @@ def _study(state: GameState) -> None:
         state.log.add("You've mastered every recipe in the library already.", C.DIM)
         return
     state.stats["studied_day"] = state.day
-    name = pool[state.day % len(pool)]          # deterministic, drifts day to day
+    name = _days_draw(state, 47).choice(sorted(pool))   # whatever falls open today
     state.known_recipes.add(name)
     state.log.add(f"You pore over the books and work out {name}!", (232, 216, 150))
 
