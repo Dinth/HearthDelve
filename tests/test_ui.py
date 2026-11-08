@@ -105,5 +105,46 @@ class TestLongLogLinesWrap(unittest.TestCase):
         self.assertEqual(shown.count("bites for 4217."), 2)
 
 
+class TestTheAimBannerStaysReadable(unittest.TestCase):
+    """The aim banner and its key hint shared the top row and the hint was
+    printed over the banner: with only bombs it read ' Aim — th', so 'out of
+    range' never showed; with a bow too, the 64-character hint covered it all
+    and ran past the map onto the side panel."""
+
+    def _aim(self, purpose, bow, far):
+        from hearthdelve.data import content
+        from hearthdelve.engine import constants as C
+        from hearthdelve.engine import rendering
+        from hearthdelve.entities import items
+        from tests.common import fresh_state
+        st = fresh_state(1)
+        st.player.inventory.add(items.BOMB, 3)
+        if bow:
+            st.player.equipment["ranged"] = content.make_ranged("Short Bow", "birch")
+            st.player.inventory.add(items.ARROW, 10)
+        p = st.player
+        cursor = (p.x + (30 if far else 1), p.y)
+        con = _con()
+        rendering.render_all(con, st, 0.0)
+        panel = (con.ch[C.VIEW_W:].copy(), con.fg[C.VIEW_W:].copy())
+        rendering.render_target(con, st, {"cursor": cursor, "purpose": purpose})
+        return con, panel
+
+    def test_out_of_range_is_shown_with_bombs_alone(self):
+        from hearthdelve.engine import constants as C
+        con, _panel = self._aim("throw", bow=False, far=True)
+        self.assertIn("Aim — out of range", _rows(con, 0, C.VIEW_W, 0, 1))
+
+    def test_with_bow_and_bomb_the_banner_and_hint_both_read_in_full(self):
+        from hearthdelve.engine import constants as C
+        con, panel = self._aim("shoot", bow=True, far=False)
+        self.assertIn("Aim — loose the short bow", _rows(con, 0, C.VIEW_W, 0, 1))
+        hint = _rows(con, 0, C.VIEW_W, 1, 4)
+        for words in ("move to aim", "Enter/Space confirm", "Tab bow/bomb", "Esc cancel"):
+            self.assertIn(words, hint)
+        self.assertTrue(np.array_equal(con.ch[C.VIEW_W:], panel[0]), "spilled onto the panel")
+        self.assertTrue(np.array_equal(con.fg[C.VIEW_W:], panel[1]))
+
+
 if __name__ == "__main__":
     unittest.main()

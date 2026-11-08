@@ -1719,12 +1719,18 @@ def render_target(con: tcod.console.Console, state: GameState, ctx) -> None:
         name = MACHINES[kind].name.lower()
         banner = f" Site your {name} — the door faces you" if ok else f" Can't build here: {reason}"
 
-    con.draw_rect(0, 0, C.VIEW_W, 1, ch=ord(" "), bg=(40, 38, 30))
-    con.print(0, 0, banner[:C.VIEW_W], fg=(245, 235, 200), bg=(40, 38, 30))
+    # The banner has the top row to itself and the key hint the row(s) below:
+    # sharing one row, the hint was printed over the banner ("Aim — th…", so
+    # "out of range" never showed) and, with bow and bomb both carried, ran
+    # past the map onto the side panel.
     swap = " · Tab bow/bomb" if (ctx["purpose"] in ("shoot", "throw")
                                  and combat.can_shoot(state) and combat.can_throw(state)) else ""
-    hint = f"(move to aim · Enter/Space confirm{swap} · Esc cancel)"
-    con.print(max(0, C.VIEW_W - len(hint) - 1), 0, hint, fg=C.DIM, bg=(40, 38, 30))
+    hint = ui.wrap(f"move to aim · Enter/Space confirm{swap} · Esc cancel", C.VIEW_W - 2)
+    bg = (40, 38, 30)
+    con.draw_rect(0, 0, C.VIEW_W, 1 + len(hint), ch=ord(" "), bg=bg)
+    con.print(0, 0, banner[:C.VIEW_W], fg=(245, 235, 200), bg=bg)
+    for i, line in enumerate(hint):
+        con.print(1, 1 + i, line, fg=C.DIM, bg=bg)
 
 
 # --- Modal overlays (the skeleton lives in engine/ui.py) ----------------------
