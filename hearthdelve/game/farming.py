@@ -128,6 +128,11 @@ def plant_tree(state: GameState, x: int, y: int, sapling: Item) -> None:
     if world.is_dungeon:
         state.log.add("No room to plant a tree down here.", C.DIM)
         return
+    if world is not state.surface:
+        # Only the Vale's orchards are tended (and kept in the save): a sapling
+        # set in the Westreach never grew, and vanished on the next load.
+        state.log.add("A sapling wouldn't take out here, untended — plant it at home.", C.DIM)
+        return
     if world.tile_at(x, y).name not in ("grass", "meadow", "tall_grass", "tilled", "path"):
         state.log.add("Plant saplings on open ground.", C.DIM)
         return

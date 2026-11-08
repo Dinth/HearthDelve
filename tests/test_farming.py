@@ -266,5 +266,37 @@ class TestTheSeasonsEndIsNotNeglect(unittest.TestCase):
         self.assertTrue(save.load().surface.crops[(x, y)].season_ended)
 
 
+class TestSaplingsArePlantedAtHome(unittest.TestCase):
+    """plant() refused anywhere but the Vale, but plant_tree() only refused the
+    dungeons: a sapling set in the Westreach took the sapling, never grew (the
+    night only ages the Vale's trees) and was gone on the next load (the
+    Westreach saves its tiles and beasts, not trees)."""
+
+    def test_a_sapling_is_not_taken_in_the_westreach(self):
+        from hearthdelve.entities import items
+        from hearthdelve.game import farming
+        from hearthdelve.world import westgen
+        st = fresh_state(4)
+        st.west = westgen.generate(st.seed)
+        st.world = st.west
+        x, y = next((x, y) for x in range(st.west.width) for y in range(st.west.height)
+                    if st.west.tile_at(x, y).name in ("grass", "meadow"))
+        st.player.inventory.add(items.APPLE_SAPLING, 1)
+        farming.plant_tree(st, x, y, items.APPLE_SAPLING)
+        self.assertEqual(st.west.trees, {})
+        self.assertEqual(st.player.inventory.count(items.APPLE_SAPLING), 1)
+
+    def test_one_still_plants_at_home(self):
+        from hearthdelve.entities import items
+        from hearthdelve.game import farming
+        st = fresh_state(4)
+        x, y = next((st.player.x + d, st.player.y + d) for d in range(2, 30)
+                    if st.surface.tile_at(st.player.x + d, st.player.y + d).name == "grass"
+                    and (st.player.x + d, st.player.y + d) not in st.surface.trees)
+        st.player.inventory.add(items.APPLE_SAPLING, 1)
+        farming.plant_tree(st, x, y, items.APPLE_SAPLING)
+        self.assertIn((x, y), st.surface.trees)
+
+
 if __name__ == "__main__":
     unittest.main()
