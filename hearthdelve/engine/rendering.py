@@ -6,11 +6,11 @@ matching the world map and ``console.print(x, y, ...)``.
 from __future__ import annotations
 
 import math
-import random
 
 import numpy as np
 import tcod.console
 
+from . import anim
 from . import constants as C
 from . import ui
 from ..entities import items
@@ -32,13 +32,10 @@ _TEX_BY_ID = np.array([t.kind in _TEX_KINDS and t.name not in ("cobble", "path")
                        for t in tile.TILES], dtype=bool)
 _OCCLUDER_BY_ID = np.array([not t.walkable for t in tile.TILES], dtype=bool)
 
-# Tile-id groups that get ambient animation.
-_GRASS_IDS = np.array([tile.GRASS, tile.MEADOW, tile.TALL_GRASS, tile.FOG_GRASS, tile.BUSH,
-                       tile.FLOWER_RED, tile.FLOWER_YELLOW, tile.FLOWER_VIOLET, tile.FLOWER_WHITE])
+# Trees and foliage: the wind rustles them (engine/effects.py) and winter frosts
+# them (below).
 _TREE_IDS = np.array([tile.TREE_OAK, tile.TREE_MAPLE, tile.TREE_BIRCH, tile.TREE_POPLAR,
                       tile.TREE_WILLOW, tile.TREE_PINE, tile.TREE_SPRUCE, tile.FOLIAGE])
-_WATER_IDS = np.array([tile.WATER, tile.RIVER])
-_ORE_IDS = np.array([tile.ORE_VEIN])
 
 
 def _biome_group(t) -> int:
@@ -59,9 +56,6 @@ def _biome_group(t) -> int:
 
 
 _BIOME_BY_ID = np.array([_biome_group(t) for t in tile.TILES], dtype=np.int8)
-# gem glitter colours: red, blue, orange, green, white
-_GEM_PALETTE = np.array([[226, 84, 84], [92, 132, 232], [236, 150, 68],
-                         [92, 202, 112], [236, 236, 236]], dtype=np.float32)
 
 # --- Seasonal colour ---------------------------------------------------------
 # Broadleaf foliage & open ground recolour with the season; conifers stay green.
@@ -111,11 +105,7 @@ def _apply_season(view, fg, bg, season: str) -> None:
             fg[frost] = fg[frost] * 0.6 + _SNOW_FG * 0.4
 
 
-def _hash01(a, b):
-    """Stable pseudo-random value in [0, 1) per (a, b) — the classic
-    shader hash. Used to desync per-tile ore twinkles."""
-    v = np.sin(a.astype(np.float64) * 127.1 + b.astype(np.float64) * 311.7) * 43758.5453
-    return v - np.floor(v)
+_hash01 = anim.hash01          # the engine's stable per-tile hash (ground texture)
 
 
 def _glow_from(view: np.ndarray, ids: tuple, rad: int, sigma2: float) -> np.ndarray:
@@ -135,91 +125,7 @@ def _glow_from(view: np.ndarray, ids: tuple, rad: int, sigma2: float) -> np.ndar
 _DUNGEON_WARM_IDS = (tile.LAMP, tile.CAMPFIRE, tile.HEARTH, tile.LAVA, tile.BRAZIER)
 
 
-def _blur5(f: np.ndarray) -> np.ndarray:
-    """A gentle 4-neighbour blur (weights .5 centre, .125 each side) that rubs
-    out the hard cell-grid edges so steam reads as cloud, not squares."""
-    out = f * 0.5
-    out[1:, :] += 0.125 * f[:-1, :]
-    out[:-1, :] += 0.125 * f[1:, :]
-    out[:, 1:] += 0.125 * f[:, :-1]
-    out[:, :-1] += 0.125 * f[:, 1:]
-    return out
-
-
-def _h1(i: int, s: float) -> float:
-    """A stable scalar hash in [0, 1) — for per-source particle phases."""
-    v = math.sin(i * 12.9898 + s * 78.233) * 43758.5453
-    return v - math.floor(v)
-
-
-# --- irregular rhythms --------------------------------------------------------
-# Lightning, the eruption and the bird flyovers each ran on one fixed period
-# (6.5s, 41s, ~40s), and every ready machine glinted on the same 1-second beat:
-# a world that ticked. Each now happens at an unpredictable moment within its
-# own window of time (salted by the world's seed), sometimes not at all, and
-# each machine keeps its own beat. Pure functions of time, so they're testable.
-def _burst_age(t: float, window: float, chance: float, span: float, salt: float):
-    """Seconds since the burst in this window of time began, or None if this
-    window has none (or it hasn't started yet). A burst lands somewhere in
-    the window, early enough to finish inside it (`span` long), on a
-    `chance` of windows."""
-    k = math.floor(t / window)
-    if _h1(k, salt + 0.37) >= chance:
-        return None
-    start = k * window + _h1(k, salt + 0.71) * max(0.0, window - span)
-    age = t - start
-    return age if 0.0 <= age < span else None
-
-
-def _lightning(t: float, seed: int) -> float:
-    """The storm's flash brightness at time `t`: a double strike at irregular
-    moments, 0 most of the time."""
-    age = _burst_age(t, 6.5, 0.8, 0.6, (seed % 1009) + 0.11)
-    if age is None:
-        return 0.0
-    return float(np.exp(-(age ** 2) / 0.010) + 0.6 * np.exp(-((age - 0.22) ** 2) / 0.010))
-
-
-def _eruption_age(t: float, seed: int):
-    """Seconds into the caldera's current spitting fit, or None while it's quiet."""
-    span = 4.0 + 3.0 * _h1(math.floor(t / 41.0), (seed % 1009) + 0.53)
-    return _burst_age(t, 41.0, 0.85, span, (seed % 1009) + 0.29)
-
-
-def _machine_lit(t: float, mx: int, my: int) -> bool:
-    """A finished machine's glint: on its own phase and a beat of its own
-    (0.8-1.2s), so a yard of them twinkles rather than flashing as one."""
-    h = mx * 7 + my * 13
-    beat = 0.8 + 0.4 * _h1(h, 6.7)
-    return ((t / beat + _h1(h, 4.1)) % 1.0) < 0.5
-
-
-def _flyover(f: int, t: float, seed: int):
-    """How far flock `f` is across the view (0..1), or None while none is
-    crossing: a crossing takes 40% of its window, starts somewhere within it,
-    and some windows pass without birds. Returns (travel, window index)."""
-    per = 34.0 + 14.0 * _h1(f, 2.0)
-    phase = t / per + _h1(f, 5.0)
-    cyc = math.floor(phase)
-    if _h1(f * 7 + cyc, (seed % 1009) + 11.0) >= 0.75:
-        return None
-    local = (phase - cyc) - 0.55 * _h1(f * 7 + cyc, (seed % 1009) + 13.0)
-    if not 0.0 <= local <= 0.40:
-        return None
-    return local / 0.40, cyc
-
-
-def _shift2d(a: np.ndarray, sx: int, sy: int) -> np.ndarray:
-    """A copy of `a` translated by (sx, sy), vacated cells left at zero (no
-    wrap). Used to stack a rising, drifting steam plume off the caldera."""
-    out = np.zeros_like(a)
-    xw, yw = a.shape[0] - abs(sx), a.shape[1] - abs(sy)
-    if xw <= 0 or yw <= 0:
-        return out
-    xs_, xd_ = (0, sx) if sx >= 0 else (-sx, 0)
-    ys_, yd_ = (0, sy) if sy >= 0 else (-sy, 0)
-    out[xd_:xd_ + xw, yd_:yd_ + yw] = a[xs_:xs_ + xw, ys_:ys_ + yw]
-    return out
+_shift2d = anim.shift2d        # (the sun's cast shadow)
 
 
 # Per-channel light multiplier across the day: cool/dim at night, warm at
@@ -283,171 +189,6 @@ def camera_origin(state: GameState) -> tuple[int, int]:
     return cx, cy
 
 
-_STEAM_RNG = random.Random(0xC01DFACE)
-# A steam blob: [world x, world y, vx, vy (tiles/s), age, life (s), radius].
-_S_X, _S_Y, _S_VX, _S_VY, _S_AGE, _S_LIFE, _S_R = range(7)
-
-
-def _steam(con, state: GameState, view, ox: int, oy: int, t: float,
-           vw: int, vh: int, xs, ys) -> None:
-    """Persistent, world-space steam over the Westreach.
-
-    Blobs are born at the caldera while it rains, each takes its own heading,
-    and they drift across the world over ~10-22s, swelling and fading — so a
-    cloud bank keeps roaming even after you've walked past the lava. A dense
-    column also boils straight off the vent whenever it's on screen. State
-    lives on the west map (cosmetic, regenerated on load — never saved)."""
-    gm = state.west
-    if gm is None:
-        return
-    raining = state.weather in ("Rain", "Storm")
-    storm = state.weather == "Storm"
-
-    blobs = getattr(gm, "_steam_blobs", None)
-    if blobs is None:
-        blobs = gm._steam_blobs = []
-    lava = getattr(gm, "_steam_lava", None)
-    if lava is None:
-        lava = gm._steam_lava = np.argwhere(gm.tiles == tile.LAVA)
-
-    # Real-time delta (anim_time is monotonic wall-clock seconds). Clamp so the
-    # first frame / a pause doesn't spawn or teleport a burst.
-    last = getattr(gm, "_steam_t", t)
-    dt = t - last
-    gm._steam_t = t
-    if not (0.0 < dt < 0.5):
-        dt = 0.0
-
-    # Spawn from random points on the caldera while it rains.
-    if raining and len(lava):
-        acc = getattr(gm, "_steam_acc", 0.0) + dt
-        interval = 0.28 if storm else 0.5
-        while acc >= interval and len(blobs) < 72:
-            acc -= interval
-            lx, ly = lava[_STEAM_RNG.randrange(len(lava))]
-            ang = _STEAM_RNG.uniform(0.0, 6.2832)          # a random heading
-            spd = _STEAM_RNG.uniform(0.8, 2.7)
-            blobs.append([float(lx) + _STEAM_RNG.uniform(-1.5, 1.5),
-                          float(ly) + _STEAM_RNG.uniform(-1.5, 1.5),
-                          math.cos(ang) * spd,
-                          math.sin(ang) * spd - 0.5,       # a faint buoyant rise
-                          0.0, _STEAM_RNG.uniform(10.0, 22.0),
-                          _STEAM_RNG.uniform(3.0, 5.5)])
-        gm._steam_acc = acc
-
-    # Advance and cull (blobs keep drifting and fading even once the rain stops).
-    if dt and blobs:
-        for b in blobs:
-            b[_S_AGE] += dt
-            b[_S_X] += b[_S_VX] * dt
-            b[_S_Y] += b[_S_VY] * dt
-        blobs = gm._steam_blobs = [b for b in blobs if b[_S_AGE] < b[_S_LIFE]]
-
-    hot_mask = (view == tile.LAVA) if raining else None
-    lava_vis = hot_mask is not None and bool(hot_mask.any())
-    if not blobs and not lava_vis:
-        return
-
-    field = np.zeros((vw, vh), np.float32)
-
-    # The dense column straight off the vent, when the lava is on screen.
-    if lava_vis:
-        hot = hot_mask.astype(np.float32)
-        base = hot.copy()
-        for k in range(1, 22):
-            base = np.maximum(base, _shift2d(hot, int(round(k * 0.6)), -k) * (0.94 ** k))
-        for _ in range(3):
-            base = np.maximum(base, np.maximum(_shift2d(base, 1, 0),
-                                               _shift2d(base, -1, 0)) * 0.82)
-        turb = _hash01(np.floor(xs * 0.45 - t * 2.4), np.floor(ys * 0.45 - t * 3.2))
-        field = np.maximum(field, base * (0.6 + 0.7 * turb))
-
-    # The roaming blobs, each drawn in its own small window for speed.
-    for b in blobs:
-        sx, sy = b[_S_X] - ox, b[_S_Y] - oy
-        age = b[_S_AGE] / b[_S_LIFE]
-        r = b[_S_R] + 4.0 * age                            # swells as it travels
-        if sx < -r - 2 or sx > vw + r + 2 or sy < -r - 2 or sy > vh + r + 2:
-            continue
-        op = max(0.0, math.sin(math.pi * age)) * 0.85      # fade in, then out
-        x0, x1 = max(0, int(sx - r - 2)), min(vw, int(sx + r + 3))
-        y0, y1 = max(0, int(sy - r - 2)), min(vh, int(sy + r + 3))
-        if x0 >= x1 or y0 >= y1:
-            continue
-        lx = np.arange(x0, x1, dtype=np.float32)[:, None]
-        ly = np.arange(y0, y1, dtype=np.float32)[None, :]
-        field[x0:x1, y0:y1] += op * np.exp(
-            -((lx - sx) ** 2 + (ly - sy) ** 2) / (2.0 * r * r))
-
-    # Break up the blocky look. One blur rounds off the square cell-grid edges;
-    # then drifting turbulence at two frequencies mottles the interior so a bank
-    # of overlapping blobs reads as roiling cloud, not one flat grey slab. No
-    # blur *after* the mottle — that would smooth the texture straight back into
-    # squares (which is exactly what read as blocky before).
-    field = _blur5(field)
-    #   shape: cloud-scale mottle (drifts smoothly);  grain: a per-cell stipple
-    #   (distinct every cell so it actually breaks the grid) that slides across
-    #   the cells over time. floor() only on the coarse term — a sub-cell floor
-    #   on the fine one would just make new little squares.
-    shape = _hash01(np.floor(xs * 0.3 - t * 1.4), np.floor(ys * 0.3 - t * 1.9))
-    grain = _hash01(xs + np.floor(t * 3.0), ys - np.floor(t * 2.0))
-    field = field * (0.22 + 0.34 * shape + 0.6 * grain)
-
-    # Steam is translucent — keep the cap below full so even the dense core
-    # never saturates into one flat slab; the grain then mottles right through
-    # it and terrain glimmers faintly behind, reading as vapour, not a wall.
-    gain = 1.5 if storm else 1.3
-    a = np.clip(field * gain, 0.0, 0.8)
-    if lava_vis:
-        a *= (1.0 - 0.5 * hot_mask.astype(np.float32))     # lava glows through its steam
-    a = a[..., None]
-    steam = np.array([212.0, 215.0, 218.0], np.float32)
-    fgc = con.rgb["fg"][:vw, :vh].astype(np.float32)
-    bgc = con.rgb["bg"][:vw, :vh].astype(np.float32)
-    con.rgb["fg"][:vw, :vh] = (fgc * (1 - a) + steam * a).astype(np.uint8)
-    con.rgb["bg"][:vw, :vh] = (bgc * (1 - a * 0.85) + steam * 0.8 * a).astype(np.uint8)
-
-
-def _westreach_ambience(con, state: GameState, view, ox: int, oy: int, t: float) -> None:
-    """Weather theatre for the volcano country, painted over the composed view
-    (the player is drawn after, so you never vanish into your own weather)."""
-    vw, vh = C.VIEW_W, C.VIEW_H
-    xs = (ox + np.arange(vw, dtype=np.float32))[:, None]
-    ys = (oy + np.arange(vh, dtype=np.float32))[None, :]
-
-    # Rain on the caldera flashes to steam: a thick column boils off the vent,
-    # and blobs of it keep detaching and drifting across the reach on their own
-    # headings (see _steam) — so cloud banks roam even where no lava is in view.
-    _steam(con, state, view, ox, oy, t, vw, vh, xs, ys)
-
-    # Ashfall: on snow-weather days (it never snows white here) and on the
-    # mountain's own restless days, grey flakes sift down the view.
-    ashy = state.weather == "Snow" or (state.day * 7919 + state.seed) % 3 == 0
-    if ashy and state.weather not in ("Rain", "Storm"):
-        for i in range(44):
-            h1 = (i * 2654435761) % 1000 / 1000.0
-            h2 = (i * 40503 + 977) % 1000 / 1000.0
-            x = int((h1 * vw + t * (1.5 + h2)) % vw)
-            y = int((h2 * vh + t * (5.0 + 3.0 * h1)) % vh)
-            con.rgb["ch"][x, y] = ord("∙" if (i % 3) else "·")
-            con.rgb["fg"][x, y] = (158, 152, 148)
-
-    # The eruption: every so often the caldera spits a fountain of sparks —
-    # loud, bright, and entirely uninterested in you.
-    if _eruption_age(t, state.seed) is not None:
-        lava = np.argwhere(view == tile.LAVA)
-        if len(lava):
-            cx, cy = int(lava[:, 0].mean()), int(lava[:, 1].mean())
-            for i in range(12):
-                rise = (t * 6.0 + i * 1.31) % 7.0
-                sx = cx + int(round(3.0 * np.sin(i * 2.4 + t * 0.9) * (rise / 7.0)))
-                sy = cy - 1 - int(rise)
-                if 0 <= sx < vw and 0 <= sy < vh:
-                    heat = max(0.25, 1.0 - rise / 7.0)
-                    con.rgb["ch"][sx, sy] = ord("*" if rise < 3 else "·")
-                    con.rgb["fg"][sx, sy] = (255, int(120 + 120 * heat), int(50 * heat))
-
-
 # Precedence when a mob carries more than one affliction — the most vivid wins
 # the tile's background tint. Kept small; the log carries the detail.
 _STATUS_TINT_ORDER = ("burn", "bleed", "poison")
@@ -467,9 +208,28 @@ def _status_bg(m, default):
     return default
 
 
-def render_world(con: tcod.console.Console, state: GameState, anim_time: float = 0.0) -> None:
-    w = state.world
+def render_world(con: tcod.console.Console, state: GameState, anim_time: float = 0.0) -> set:
+    """Draw the world view (without the overlays); returns the screen cells the
+    creatures and the player hold."""
+    f = _frame(con, state, anim_time)
+    _draw_world(f)
+    return f.occupied
+
+
+def _frame(con, state: GameState, anim_time: float) -> anim.Frame:
     ox, oy = camera_origin(state)
+    return anim.Frame(con=con, state=state, t=anim_time, ox=ox, oy=oy,
+                      vw=C.VIEW_W, vh=C.VIEW_H, daylight=daylight_mul(state.time_minutes))
+
+
+def _draw_world(f: anim.Frame) -> None:
+    """The world view, in order: the ground's static shading, the animation
+    engine's ground layers, crops, trees and machines, its late ground layer,
+    lighting, the creatures, its veil layer, then the player. (The overlay
+    layer is drawn over all of it by render_all.)"""
+    con, state = f.con, f.state
+    w = state.world
+    ox, oy = f.ox, f.oy
     view = w.tiles[ox:ox + C.VIEW_W, oy:oy + C.VIEW_H]
 
     ch = _CH[view]
@@ -483,9 +243,10 @@ def render_world(con: tcod.console.Console, state: GameState, anim_time: float =
 
     # World-space coordinate grids for the visible window (so waves flow
     # smoothly across the world, not just the screen).
-    t = anim_time
+    t = f.t
     xs = (ox + np.arange(C.VIEW_W, dtype=np.float32))[:, None]
     ys = (oy + np.arange(C.VIEW_H, dtype=np.float32))[None, :]
+    f.view, f.xs, f.ys = view, xs, ys
 
     # --- Per-tile texture: a stable hash breaks up large flats of identical
     # terrain into organic light/shade. A fine jitter grains each tile; a
@@ -529,115 +290,14 @@ def render_world(con: tcod.console.Console, state: GameState, anim_time: float =
             bg *= sh[..., None]
             fg *= (0.55 + 0.45 * sh)[..., None]
 
-    # --- Cloudy: the whole scene sits a touch dimmer (overcast), and big soft
-    # cloud shadows drift across the land on the wind, with brighter gaps where
-    # the sun breaks through. Smooth low frequencies (not a floored hash) so the
-    # shadows read as broad passing clouds, not a grid.
-    if not w.is_dungeon and state.weather == "Cloudy":
-        cs = (np.sin(xs * 0.11 - t * 0.6) + np.sin(ys * 0.085 + t * 0.40)
-              + 0.6 * np.sin((xs - ys) * 0.07 + t * 0.5))   # several patches across the view
-        cloud = np.clip((cs + 0.2) / 1.4, 0.0, 1.0)      # broad coverage, soft edges
-        dim = (0.05 + 0.32 * cloud)[..., None]           # ~5% overcast .. ~37% under a cloud
-        fg *= (1 - dim)
-        bg *= (1 - dim)
-
-    fg_mul = np.ones((C.VIEW_W, C.VIEW_H), dtype=np.float32)
-    bg_mul = np.ones((C.VIEW_W, C.VIEW_H), dtype=np.float32)
-
-    # Wind gusts. A narrow bright band — a line perpendicular to the wind
-    # direction — sweeps across the map periodically, like a gust rippling over
-    # a real field, brightening grass (and, more gently, trees) as it passes.
-    grass = np.isin(view, _GRASS_IDS)
-    trees = np.isin(view, _TREE_IDS)
-    if grass.any() or trees.any():
-        dirx, diry = 0.96, 0.28                 # wind direction (front is perpendicular)
-        proj = xs * dirx + ys * diry            # distance along the wind
-        perp = -xs * diry + ys * dirx           # distance across the front
-        proj = proj + 2.0 * np.sin(perp * 0.12 + t * 0.25)   # semi-straight: gentle waver
-        speed, period, width = 11.0, 70.0, 3.0  # tiles/s · gap between gusts · band half-width
-        phase = (proj - speed * t) % period
-        gust = np.exp(-(phase ** 2) / (2 * width ** 2))
-        gust = np.maximum(gust, np.exp(-((phase - period) ** 2) / (2 * width ** 2)))
-        ambient = 0.04 * np.sin((xs * 0.4 + ys * 0.25) - t * 1.1)
-        # grass sways most; tree canopies rustle more subtly.
-        fg_mul = np.where(grass, 1.0 + 0.27 * gust + ambient, fg_mul)
-        fg_mul = np.where(trees, 1.0 + 0.17 * gust + 0.5 * ambient, fg_mul)
-
-    # Water: two interfering wave trains shimmer the surface (fg + a little bg).
-    water = np.isin(view, _WATER_IDS)
-    if water.any():
-        wave = (np.sin((xs * 0.70 - ys * 0.50) - t * 2.6)
-                + 0.5 * np.sin((xs * 0.25 + ys * 0.60) - t * 1.5))
-        fg_mul = np.where(water, 1.0 + 0.17 * wave, fg_mul)
-        bg_mul = np.where(water, 1.0 + 0.10 * wave, bg_mul)
-
-    # Ore: each vein twinkles independently — a short, bright shimmer at its
-    # own pseudo-random time, so only a few flash at once.
-    ore = np.isin(view, _ORE_IDS)
-    if ore.any():
-        offset = _hash01(xs, ys)                          # per-tile phase offset
-        cycle = 12.0 + 16.0 * _hash01(xs + 5.2, ys + 1.3) # 12..28s between shimmers
-        tau = (t / cycle + offset)
-        tau = (tau - np.floor(tau)) * cycle               # seconds into this cycle
-        pw = 0.13                                         # ~0.3s shimmer, fixed
-        pulse = np.exp(-(tau ** 2) / (2 * pw * pw))
-        pulse = np.maximum(pulse, np.exp(-((tau - cycle) ** 2) / (2 * pw * pw)))
-        fg_mul = np.where(ore, 1.0 + 1.2 * pulse, fg_mul)
-
-    # Campfire: a restless warm flicker so the flames never sit still.
-    fire = view == tile.CAMPFIRE
-    if fire.any():
-        flick = (np.sin(t * 6.3 + xs * 2.1) + 0.6 * np.sin(t * 11.0 + ys * 1.7))
-        fg_mul = np.where(fire, 1.0 + 0.22 * flick, fg_mul)
-
-    fg *= fg_mul[..., None]
-    bg *= bg_mul[..., None]
-
-    # Coastal foam: SEA cells (not the river) that lap against land carry a
-    # bright surf line that surges and recedes, so coasts read as living edges.
-    sea = view == tile.WATER
-    if not w.is_dungeon and sea.any():
-        land = ~water                                    # water = sea|river; land = neither
-        adj = np.zeros_like(sea)
-        adj[1:, :] |= land[:-1, :]; adj[:-1, :] |= land[1:, :]
-        adj[:, 1:] |= land[:, :-1]; adj[:, :-1] |= land[:, 1:]
-        shore = sea & adj
-        if shore.any():
-            surge = np.clip(0.30 + 0.70 * np.sin((xs * 0.7 - ys * 0.5) - t * 2.6), 0.0, 1.0)
-            f = (shore.astype(np.float32) * surge)[..., None]
-            foam = np.array([224.0, 238.0, 246.0], np.float32)
-            fg = fg * (1.0 - f * 0.72) + foam * (f * 0.72)
-            bg = bg * (1.0 - f * 0.45) + foam * (f * 0.45)
-
-    # Rain wets the world: still, cool puddles sit in fixed low spots on open
-    # ground (they don't wander), and ripple rings spread from drops striking
-    # any open water — river included.
-    if not w.is_dungeon and state.weather in ("Rain", "Storm"):
-        wet = _hash01(np.floor(xs * 0.5), np.floor(ys * 0.5))    # fixed patches, no drift
-        puddle = (wet > 0.63) & _TEX_BY_ID[view]                 # only on open ground
-        if puddle.any():
-            for ci, mul in ((0, 0.66), (1, 0.78), (2, 1.02)):    # darker, cooler, faint sheen
-                fac = np.where(puddle, mul, 1.0)
-                fg[..., ci] *= fac
-                bg[..., ci] = np.minimum(255.0, bg[..., ci] * fac)
-        if water.any():
-            wc = np.argwhere(water)                              # drops land ON water
-            X = np.arange(C.VIEW_W, dtype=np.float32)[:, None]
-            Y = np.arange(C.VIEW_H, dtype=np.float32)[None, :]
-            rings = np.zeros((C.VIEW_W, C.VIEW_H), np.float32)
-            r_max = 1.8                                          # tiny drop-splash rings
-            for i in range(22 if state.weather == "Storm" else 14):
-                per = 1.1 + _h1(i, 2.0)
-                phase = t / per + _h1(i, 5.0)
-                cyc = math.floor(phase)
-                cx, cy = wc[int(_h1(i * 13 + cyc, 3.0) * len(wc)) % len(wc)]
-                rr = (phase - cyc) * r_max
-                d = np.sqrt((X - cx) ** 2 + (Y - cy) ** 2)
-                rings = np.maximum(rings, np.exp(-((d - rr) ** 2) / 0.5) * max(0.0, 1.0 - rr / r_max))
-            rm = (water.astype(np.float32) * rings)[..., None]
-            drop = np.array([206.0, 230.0, 250.0], np.float32)
-            fg = fg * (1.0 - rm * 0.75) + drop * (rm * 0.75)
-            bg = bg * (1.0 - rm * 0.45) + drop * (rm * 0.45)
+    # The animation engine's ground layers: passing cloud shadows; wind in the
+    # grass and trees, water shimmer, ore twinkle and campfire flicker; coastal
+    # foam, puddles and rain ripples (engine/effects.py).
+    f.fg, f.bg = fg, bg
+    anim.run(anim.SHADE, f)
+    anim.run(anim.TINT, f)
+    anim.run(anim.GROUND, f)
+    fg, bg = f.fg, f.bg
 
     # Biome-edge dither: soften the hard seam between terrain families (grass ↔
     # sand ↔ water ↔ forest ↔ rock) by mixing a neighbour's colour into a
@@ -693,7 +353,7 @@ def render_world(con: tcod.console.Console, state: GameState, anim_time: float =
             if status == "done":
                 # ready: pulse between bright gold and white — pollable at a
                 # glance across the whole farm, not a subtle tint
-                pulse = _machine_lit(t, mx, my)        # each on its own beat
+                pulse = anim.machine_lit(t, mx, my)    # each on its own beat
                 fg[sx, sy] = (255, 255, 220) if pulse else (250, 220, 110)
                 bg[sx, sy] = (60, 50, 26)
             elif status == "working":
@@ -703,38 +363,10 @@ def render_world(con: tcod.console.Console, state: GameState, anim_time: float =
                 fg[sx, sy] = mdef.color
                 bg[sx, sy] = (44, 38, 32)
 
-    # Gems glitter: each a stable random colour (red/blue/orange/green/white)
-    # with an occasional sparkle.
-    gem_mask = view == tile.GEM_VEIN
-    if gem_mask.any():
-        idx = np.clip((_hash01(xs, ys) * 5).astype(np.int32), 0, 4)
-        base = _GEM_PALETTE[idx]
-        cyc = 2.0 + 3.0 * _hash01(xs + 9.0, ys + 2.0)
-        ph = (t / cyc + _hash01(xs + 3.1, ys + 1.7))
-        ph = ph - np.floor(ph)
-        spark = np.maximum(np.exp(-(ph * ph) / 0.005),
-                           np.exp(-((ph - 1.0) ** 2) / 0.005))
-        gemfg = np.clip(base * (0.7 + 0.55 * spark)[..., None], 0, 255)
-        fg = np.where(gem_mask[..., None], gemfg, fg)
-
-    # The caldera breathes: lava pulses between ember-red and furnace-orange
-    # (each tile on its own phase), and throws a warm halo on the rock beside it.
-    lava_mask = view == tile.LAVA
-    if lava_mask.any():
-        lph = _hash01(xs + 5.0, ys + 8.0)
-        pulse = (0.72 + 0.28 * np.sin(t * 2.4 + lph * 6.28)).astype(np.float32)
-        bg = np.where(lava_mask[..., None],
-                      np.stack([205 * pulse, 62 * pulse, 10 + 8 * pulse], axis=-1), bg)
-        fg = np.where(lava_mask[..., None],
-                      np.stack([np.full_like(pulse, 255.0), 140 + 80 * pulse, 30 + 30 * pulse],
-                               axis=-1), fg)
-        halo = np.zeros_like(lava_mask)
-        halo[1:, :] |= lava_mask[:-1, :]; halo[:-1, :] |= lava_mask[1:, :]
-        halo[:, 1:] |= lava_mask[:, :-1]; halo[:, :-1] |= lava_mask[:, 1:]
-        halo &= ~lava_mask
-        if halo.any():
-            warm = np.array([64.0, 20.0, 4.0], np.float32) * (0.5 + 0.5 * pulse)[..., None]
-            bg = np.where(halo[..., None], np.minimum(255.0, bg + warm), bg)
+    # The engine's late ground layer: gem glitter and the breathing lava.
+    f.fg, f.bg = fg, bg
+    anim.run(anim.GROUND_LATE, f)
+    fg, bg = f.fg, f.bg
 
     if w.is_dungeon and w.visible is not None:
         from ..world.dungeon import FOV_RADIUS
@@ -749,7 +381,7 @@ def render_world(con: tcod.console.Console, state: GameState, anim_time: float =
         Y = np.arange(C.VIEW_H, dtype=np.float32)[None, :]
         d = np.sqrt((X - px) ** 2 + (Y - py) ** 2)
         torch = 0.32 + 0.68 * np.clip(1.0 - d / (FOV_RADIUS + 1.0), 0.0, 1.0)
-        flicker = 0.94 + 0.06 * np.sin(t * 6.0 + X * 0.7 + Y * 0.5)
+        flicker = anim.torch_flicker(t, X, Y)
         warm = _glow_from(view, _DUNGEON_WARM_IDS, rad=5, sigma2=10.0)
         cool = _glow_from(view, (tile.GLOWCAP, tile.GLOW_MOSS), rad=3, sigma2=6.0)
         litv = np.clip(torch * flicker + 0.65 * warm + 0.45 * cool, 0.0, 1.15)
@@ -813,14 +445,14 @@ def render_world(con: tcod.console.Console, state: GameState, anim_time: float =
     # --- Dynamic entities, drawn last so nothing overwrites them and tinted to
     # match the time of day (villagers, wildlife and animals dim at night just
     # like the ground). Their cells are returned so weather stays off them. ---
-    occupied: set[tuple[int, int]] = set()
+    occupied = f.occupied
     dr, dg, db = (1.0, 1.0, 1.0) if w.is_dungeon else daylight_mul(state.time_minutes)
 
     def _draw(sx: int, sy: int, glyph: str, color, cell_bg=None) -> None:
         # A faint breathing shimmer on each creature, phased by position so they
         # don't pulse in lockstep — enough that the world looks alive at rest,
         # not so much it distracts.
-        sh = 1.0 + 0.09 * math.sin(t * 3.0 + sx * 1.3 + sy * 0.7)
+        sh = anim.breath(t, sx, sy)
         con.rgb["ch"][sx, sy] = ord(glyph)
         con.rgb["fg"][sx, sy] = (min(255, int(color[0] * dr * sh)),
                                  min(255, int(color[1] * dg * sh)),
@@ -873,21 +505,17 @@ def render_world(con: tcod.console.Console, state: GameState, anim_time: float =
                 col = (250, 240, 170)
             _draw(sx, sy, a.glyph, col)
 
-    # Westreach ambience: rain boils off the caldera as clouds of steam that
-    # blow downwind, ash sifts down on still days, and now and then the caldera
-    # spits a (harmless, glorious) fountain of sparks.
-    if state.west is not None and w is state.west:
-        _westreach_ambience(con, state, view, ox, oy, t)
+    # The engine's veil layer, over the creatures and under the player: the
+    # Westreach's steam, ash and eruption.
+    anim.run(anim.VEIL, f)
 
     # player, centered-ish — always full-bright so you never lose yourself
     px, py = state.player.x - ox, state.player.y - oy
     if 0 <= px < C.VIEW_W and 0 <= py < C.VIEW_H:
-        pb = 0.90 + 0.10 * math.sin(t * 2.2)         # a gentle breathing pulse (dims, never lost)
+        pb = anim.player_pulse(t)                    # a gentle breathing pulse (dims, never lost)
         con.rgb["ch"][px, py] = ord(state.player.glyph)
         con.rgb["fg"][px, py] = tuple(min(255, int(c * pb)) for c in C.PLAYER_FG)
         occupied.add((px, py))
-
-    return occupied
 
 
 def _bar(con, x, y, label, cur, mx, color, width=12, low_frac=0.0):
@@ -1018,263 +646,11 @@ def render_log(con: tcod.console.Console, state: GameState) -> None:
         con.print(1, y0 + 1 + i, text, fg=color)
 
 
-def render_weather(con: tcod.console.Console, state: GameState, t: float, occupied=frozenset()) -> None:
-    """Animated precipitation drawn over the world viewport (surface only).
-
-    ``occupied`` is the set of screen cells holding the player/creatures, which
-    weather skips so their glyphs never flicker under the rain."""
-    if state.world.is_dungeon:
-        return
-    w = state.weather
-    if w == "Fog":
-        # Fog closes in: a clearish bubble around you fades to heavy grey toward
-        # the edges, so you genuinely can't see far — not just a flat haze.
-        veil = np.array([150, 156, 164], dtype=np.float32)
-        ox, oy = camera_origin(state)
-        px, py = state.player.x - ox, state.player.y - oy
-        X = np.arange(C.VIEW_W, dtype=np.float32)[:, None]
-        Y = np.arange(C.VIEW_H, dtype=np.float32)[None, :]
-        d = np.sqrt((X - px) ** 2 + (Y - py) ** 2)
-        kbg = np.clip((d - 4.0) / 12.0, 0.12, 0.74)[..., None]     # near clear, far socked in
-        for chan, mul in (("bg", 1.0), ("fg", 0.7)):
-            buf = con.rgb[chan][:C.VIEW_W, :C.VIEW_H].astype(np.float32)
-            k = kbg * mul
-            con.rgb[chan][:C.VIEW_W, :C.VIEW_H] = (buf * (1 - k) + veil * k).astype(np.uint8)
-    if w == "Storm":
-        # Occasional lightning: a brief, near-white flash over the whole view at
-        # irregular moments (a double-strike for that thunderclap feel).
-        flash = _lightning(t, state.seed)
-        if flash > 0.03:
-            add = np.array([min(130.0, flash * 150.0)] * 2 + [min(140.0, flash * 165.0)], np.float32)
-            for chan in ("bg", "fg"):
-                buf = con.rgb[chan][:C.VIEW_W, :C.VIEW_H].astype(np.float32)
-                con.rgb[chan][:C.VIEW_W, :C.VIEW_H] = np.clip(buf + add, 0, 255).astype(np.uint8)
-    if w in ("Rain", "Storm"):
-        n, speed, drift = (95, 30, 0.5) if w == "Storm" else (55, 17, 0.25)
-        glyph, color = ord("/"), (130, 160, 215)
-        for i in range(n):
-            cx = int(i * 37 + t * speed * drift) % C.VIEW_W
-            cy = int(i * 0.139 * C.VIEW_H + t * speed) % C.VIEW_H
-            if (cx, cy) in occupied:
-                continue
-            con.rgb["ch"][cx, cy] = glyph
-            con.rgb["fg"][cx, cy] = color
-    elif w == "Snow":
-        glyph, color = ord("*"), (228, 234, 245)
-        for i in range(48):
-            cx = int(i * 53 + 2.2 * np.sin(t * 0.5 + i)) % C.VIEW_W
-            cy = int(i * 0.17 * C.VIEW_H + t * 4.0) % C.VIEW_H
-            if (cx, cy) in occupied:
-                continue
-            con.rgb["ch"][cx, cy] = glyph
-            con.rgb["fg"][cx, cy] = color
-    elif w == "Fog":
-        glyph, color = ord("·"), (175, 180, 188)
-        for i in range(34):
-            cx = int(i * 41 + t * 3.0) % C.VIEW_W
-            cy = int(i * 0.23 * C.VIEW_H + 1.5 * np.sin(t * 0.3 + i)) % C.VIEW_H
-            if (cx, cy) in occupied:
-                continue
-            con.rgb["ch"][cx, cy] = glyph
-            con.rgb["fg"][cx, cy] = color
-
-
-# Tile kinds a gnat cloud won't hang over: indoors, built features, and walls.
-_GNAT_SKIP = frozenset((
-    "house_wall", "house_floor", "door", "bed", "hearth", "table", "counter",
-    "barrel", "stall", "well", "statue", "altar", "grave", "tent",
-    "shipping_bin", "bin", "post_box", "notice_board", "lamp", "wall", "chest",
-    "coop", "coop_small", "coop_big", "barn", "pen",
-))
-
-
-def _wet_tomorrow(state: GameState) -> bool:
-    """Is rain/storm forecast for tomorrow? (Drives the natural weather tells.)"""
-    try:
-        from ..game import farming
-        return farming.forecast(state) in ("Rain", "Storm")
-    except Exception:
-        return False
-
-
-def render_ambient(con: tcod.console.Console, state: GameState, t: float, occupied) -> None:
-    """Drifting seasonal motes over the surface — petals in spring, lazy pollen
-    (and fireflies after dark) in summer, tumbling leaves in autumn. Purely
-    atmospheric; skipped underground and when the weather already fills the air.
-    Winter is left to the snow in render_weather."""
-    if state.world.is_dungeon or state.weather in ("Rain", "Storm", "Snow", "Fog"):
-        return
-    vw, vh = C.VIEW_W, C.VIEW_H
-    season = state.season
-    dr, dg, db = daylight_mul(state.time_minutes)
-    night = (dr + dg + db) / 3.0 < 0.62
-
-    # Nature's own forecast: on a calm day before rain, gnats rise and swarm in
-    # a low, restless cloud over open ground — read it and you'll know the
-    # morning brings wet. They keep out of doors: never inside a building.
-    if season != "Winter" and _wet_tomorrow(state):
-        ox, oy = camera_origin(state)
-        # Density tracks nearby FRESH water — mosquitoes breed in still rivers,
-        # ponds and bogs, not the salt sea. Big cloud by a river, a thin scatter
-        # out on dry ground.
-        gm = state.world
-        px, py = state.player.x, state.player.y
-        r = 11
-        x0, x1 = max(0, px - r), min(gm.width, px + r + 1)
-        y0, y1 = max(0, py - r), min(gm.height, py + r + 1)
-        sub = gm.tiles[x0:x1, y0:y1]
-        fresh = int((sub == tile.RIVER).sum())
-        water = sub == tile.WATER
-        if water.any():
-            coast = getattr(gm, "coast", None)
-            if coast is None:
-                fresh += int(water.sum())            # no sea here (e.g. Westreach)
-            else:
-                cols = coast[x0:x1][:, None]
-                ys = np.arange(y0, y1)[None, :]
-                fresh += int((water & (ys < cols)).sum())   # inland (above coast) = fresh
-        n_gnats = int(3 + 10 * min(1.0, fresh / 22.0))       # 3 far .. 13 by a river
-        cx = vw * 0.5 + 10 * math.sin(t * 0.4)
-        cy = vh * 0.6 + 7 * math.cos(t * 0.33)
-        for i in range(n_gnats):
-            gx = int(cx + 5 * math.sin(t * 3.1 + i * 1.7) + (_h1(i, 3.0) * 6 - 3))
-            gy = int(cy + 4 * math.cos(t * 2.7 + i * 2.3) + (_h1(i, 7.0) * 5 - 2.5))
-            if not (0 <= gx < vw and 0 <= gy < vh) or (gx, gy) in occupied:
-                continue
-            k = state.world.tile_at(ox + gx, oy + gy).kind
-            if k in _GNAT_SKIP:                       # not indoors, not through walls
-                continue
-            con.rgb["ch"][gx, gy] = ord("·")
-            con.rgb["fg"][gx, gy] = (74, 72, 60)       # a dark midge cloud
-
-    if season == "Spring":
-        specs, palette, driftx, drifty, glyphs, sway = (24, [(236, 186, 206), (232, 200, 214),
-            (222, 170, 196)], 0.8, 1.3, "·,'", 2.4)
-    elif season == "Summer" and night:
-        specs, palette, driftx, drifty, glyphs, sway = (20, [(190, 240, 130), (220, 236, 150)],
-            0.5, 0.4, "*·", 3.0)
-    elif season == "Summer":
-        specs, palette, driftx, drifty, glyphs, sway = (20, [(236, 224, 150), (226, 214, 140)],
-            0.6, 0.5, "·", 1.6)
-    elif season == "Fall":
-        specs, palette, driftx, drifty, glyphs, sway = (28, [(214, 150, 70), (206, 108, 50),
-            (190, 84, 62), (224, 188, 96)], 0.7, 2.2, "'°*,", 3.2)
-    else:                                    # Winter clear day: quiet, no motes
-        return
-
-    fireflies = season == "Summer" and night
-    for i in range(specs):
-        h1 = ((i * 2654435761) % 1000) / 1000.0
-        h2 = ((i * 40503 + 977) % 1000) / 1000.0
-        x = int((h1 * vw + t * (driftx + h2) + sway * math.sin(t * 0.7 + i)) % vw)
-        y = int((h2 * vh + t * (drifty + 1.4 * h1)) % vh)
-        if (x, y) in occupied:
-            continue
-        col = palette[i % len(palette)]
-        if fireflies:                        # blink on their own phase
-            b = 0.25 + 0.75 * max(0.0, math.sin(t * 2.2 + i * 1.7))
-            col = (int(col[0] * b), int(col[1] * b), int(col[2] * b))
-        else:
-            col = (int(col[0] * dr), int(col[1] * dg), int(col[2] * db))
-        con.rgb["ch"][x, y] = ord(glyphs[i % len(glyphs)])
-        con.rgb["fg"][x, y] = col
-
-
-def render_fire(con: tcod.console.Console, state: GameState, t: float, occupied) -> None:
-    """Living fire: embers rise and wink out above campfires, hearths and lava,
-    and hearths trail a thin chimney plume — so fires flicker with real motion
-    and villages read as lived-in."""
-    w = state.world
-    ox, oy = camera_origin(state)
-    vw, vh = C.VIEW_W, C.VIEW_H
-    view = w.tiles[ox:ox + vw, oy:oy + vh]
-
-    def lit(lx, ly):        # in a dungeon, only currently-seen fires spark
-        return not w.is_dungeon or (w.visible is not None and w.visible[lx + ox, ly + oy])
-
-    # Embers: (source id, spark count, spawn gate, max rise).
-    for src_id, n, gate, rise_h in ((tile.CAMPFIRE, 3, 1.0, 3.5),
-                                    (tile.HEARTH, 2, 1.0, 3.0),
-                                    (tile.LAVA, 1, 0.30, 2.5)):
-        for lx, ly in np.argwhere(view == src_id):
-            lx, ly = int(lx), int(ly)
-            if not lit(lx, ly):
-                continue
-            for i in range(n):
-                key = lx * 71 + ly * 131 + i
-                if gate < 1.0 and _h1(key, 9.0) > gate:
-                    continue
-                rise = ((t * 2.4 + _h1(key, 2.0) * rise_h) % rise_h)
-                ex = lx + int(round(1.1 * math.sin(t * 3.0 + i + lx * 0.5)))
-                ey = ly - 1 - int(rise)
-                if 0 <= ex < vw and 0 <= ey < vh and (ex, ey) not in occupied:
-                    heat = 1.0 - rise / rise_h
-                    con.rgb["ch"][ex, ey] = ord("*" if rise < rise_h * 0.4 else "·")
-                    con.rgb["fg"][ex, ey] = (255, int(140 + 90 * heat), int(28 + 40 * heat))
-
-    # Chimney smoke from hearths (surface only) — a thin plume leaning downwind.
-    if not w.is_dungeon:
-        for hx, hy in np.argwhere(view == tile.HEARTH):
-            hx, hy = int(hx), int(hy)
-            for j in range(3):
-                key = hx * 53 + hy * 97 + j
-                h = ((t * 1.3 + _h1(key, 5.0) * 6.0) % 6.0)
-                sx = hx + int(round(0.55 * h + math.sin(t * 0.8 + j)))
-                sy = hy - 1 - int(h)
-                if 0 <= sx < vw and 0 <= sy < vh and (sx, sy) not in occupied:
-                    g = int(70 + 130 * max(0.15, 1.0 - h / 6.0))
-                    con.rgb["ch"][sx, sy] = ord("°" if h < 3 else "·")
-                    con.rgb["fg"][sx, sy] = (g, g, max(0, g - 12))
-
-
-def render_crossings(con: tcod.console.Console, state: GameState, t: float, occupied) -> None:
-    """Occasional life crossing the view: a small flock of birds sweeping over
-    by day, butterflies fluttering on clear spring & summer afternoons. Purely
-    atmospheric, on long drifting cycles so it feels happened-upon, not timed."""
-    if state.world.is_dungeon:
-        return
-    vw, vh = C.VIEW_W, C.VIEW_H
-    dr, dg, db = daylight_mul(state.time_minutes)
-    daytime = (dr + dg + db) / 3.0 > 0.72                 # excludes the blue of deep night
-
-    low_flight = _wet_tomorrow(state)                     # birds fly low before rain
-    if daytime and state.weather != "Storm":              # birds shelter in storms
-        for f in range(2):
-            crossing = _flyover(f, t, state.seed)         # now and then, never on a beat
-            if crossing is None:
-                continue
-            travel, cyc = crossing
-            rightward = _h1(f * 7 + cyc, 3.0) < 0.5
-            headx = int(-4 + travel * (vw + 8)) if rightward else int(vw + 4 - travel * (vw + 8))
-            # high across the sky normally; skimming the low third when rain nears
-            row = (int(vh * 0.62 + _h1(f * 7 + cyc, 9.0) * (vh * 0.33)) if low_flight
-                   else int(2 + _h1(f * 7 + cyc, 9.0) * (vh * 0.45)))
-            flap = "v" if int(t * 6) % 2 else "^"
-            for b in range(3 + int(_h1(f * 7 + cyc, 1.0) * 3)):   # a loose 3–5 bird V
-                bx = headx - (1 if rightward else -1) * b * 2
-                by = row + ((b + 1) // 2) * (-1 if b % 2 else 1)
-                by += int(round(0.5 * math.sin(t * 1.5 + b)))
-                if 0 <= bx < vw and 0 <= by < vh and (bx, by) not in occupied:
-                    con.rgb["ch"][bx, by] = ord(flap)
-                    con.rgb["fg"][bx, by] = (64, 60, 70)          # a dark silhouette
-
-    if state.season in ("Spring", "Summer") and state.weather == "Clear" and daytime:
-        for i in range(4):
-            bx = int((_h1(i, 3.0) * vw + 9 * math.sin(t * 0.7 + i) + t * 2.0 * (_h1(i, 4.0) - 0.5)) % vw)
-            by = int((_h1(i, 7.0) * vh + 6 * math.sin(t * 1.1 + i * 2.0)) % vh)
-            if (bx, by) in occupied:
-                continue
-            con.rgb["ch"][bx, by] = ord("*" if int(t * 4 + i) % 2 else "x")
-            con.rgb["fg"][bx, by] = (236, 228, 150) if i % 2 else (240, 200, 220)
-
-
 def render_all(con: tcod.console.Console, state: GameState, anim_time: float = 0.0) -> None:
     con.clear(bg=C.BLACK)
-    occupied = render_world(con, state, anim_time)
-    render_weather(con, state, anim_time, occupied)
-    render_ambient(con, state, anim_time, occupied)
-    render_fire(con, state, anim_time, occupied)
-    render_crossings(con, state, anim_time, occupied)
+    f = _frame(con, state, anim_time)
+    _draw_world(f)
+    anim.run(anim.OVERLAY, f)          # weather, motes, embers, flyovers, happenings
     render_panel(con, state)
     render_log(con, state)
 
@@ -1862,3 +1238,6 @@ render_chargen = _sr.render_chargen
 render_donate = _sr.render_donate
 render_gift = _sr.render_gift
 _JOURNAL_TABS = _sr._JOURNAL_TABS
+
+# Every animation effect registers itself with the engine on import.
+from . import effects as _effects            # noqa: E402,F401

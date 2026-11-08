@@ -239,7 +239,7 @@ Tab  filter or swap    Enter  confirm    Esc  cancel    q  quit    Shift+U  mute
 hearthdelve/
   main.py         # tcod context, the thin main loop
   screens.py      # the screen stack: one class per mode (play, inventory, shop, aim, fishing…)
-  engine/  constants · rendering · screens_render · codex · input · save · audio · font · ui
+  engine/  constants · rendering · anim · effects · screens_render · codex · input · save · audio · font · ui
   world/   tile · gamemap · worldgen · worldlib · westgen · dungeon · dwarftown · crops
   entities/ player · items · monster · npc · animal · machine
   game/    state · commands · turns · actions · farming · crafting · combat · village ·
@@ -250,6 +250,7 @@ hearthdelve/
 
 - **Screen stack, not a mode enum.** The loop only ever talks to the top: `tick` (per-frame real-time work), `render`, `on_raw` (raw events, for held keys and letter namespaces), `handle` (translated commands).
 - **Layering:** `game/` never imports the renderer. Presentation reads from simulation, never the reverse.
+- **One animation engine** (`engine/anim.py`). Everything that moves on screen is an effect drawn in one of a few ordered layers (ground shading and tints, ground blends, late ground, a veil over the creatures, the overlay). *Ongoing* effects — wind, water, weather, motes, embers, flyovers, the volcano — run every frame and decide whether they apply; *one-off* effects play when something happens: the game records a happening on the state (never saved) and the engine plays its effect for a moment. Every effect lives in `engine/effects.py`; every time-varying formula in the engine's timing helpers.
 - **Turn model:** one `advance_time(seconds)`. Time passing steps monsters underground, residents/wildlife/animals above. Machines resolve lazily by completion time.
 - **Save:** JSON. The world is **regenerated from its seed** on load, then the player's changes are overlaid (the tile grid base64-encoded, plus crops, soil, trees, machines, animals, wildlife, buildings, NPC friendships). Persistence is **structural** — gear stores base + material + affixes + gems, never a parsed display name — and record formats are append-only with guarded defaults, so new fields don't break old saves. Tile ids are positional: **only ever append** to the registry in `world/tile.py`.
 - **Determinism:** everything drifting is seeded from `(seed, day)` and salted arithmetically — never `hash()`, which is salted per process.

@@ -142,28 +142,28 @@ class TestTheSkyKeepsNoBeat(unittest.TestCase):
         return {round(b - a, 1) for a, b in zip(onsets, onsets[1:])}
 
     def test_lightning_strikes_at_irregular_moments(self):
-        from hearthdelve.engine import rendering
-        strikes = _onsets(lambda t: rendering._lightning(t, 7) > 0.5, 200)
+        from hearthdelve.engine import anim
+        strikes = _onsets(lambda t: anim.lightning(t, 7) > 0.5, 200)
         self.assertGreater(len(strikes), 15)
         self.assertGreater(len(self._gaps(strikes)), 5)
-        self.assertEqual(strikes, _onsets(lambda t: rendering._lightning(t, 7) > 0.5, 200))
+        self.assertEqual(strikes, _onsets(lambda t: anim.lightning(t, 7) > 0.5, 200))
 
     def test_the_caldera_erupts_at_irregular_moments(self):
-        from hearthdelve.engine import rendering
-        fits = _onsets(lambda t: rendering._eruption_age(t, 7) is not None, 1200, step=0.25)
+        from hearthdelve.engine import anim
+        fits = _onsets(lambda t: anim.eruption_age(t, 7) is not None, 1200, step=0.25)
         self.assertGreater(len(fits), 15)
         self.assertGreater(len(self._gaps(fits)), 5)
 
     def test_flocks_cross_at_irregular_moments(self):
-        from hearthdelve.engine import rendering
-        flights = _onsets(lambda t: rendering._flyover(0, t, 7) is not None, 2400, step=0.25)
+        from hearthdelve.engine import anim
+        flights = _onsets(lambda t: anim.flyover(0, t, 7) is not None, 2400, step=0.25)
         self.assertGreater(len(flights), 20)
         self.assertGreater(len(self._gaps(flights)), 5)
 
     def test_finished_machines_glint_out_of_step(self):
-        from hearthdelve.engine import rendering
+        from hearthdelve.engine import anim
         spots = [(10, 10), (11, 10), (12, 10), (10, 11), (40, 33)]
-        patterns = {tuple(rendering._machine_lit(k * 0.05, x, y) for k in range(60))
+        patterns = {tuple(anim.machine_lit(k * 0.05, x, y) for k in range(60))
                     for x, y in spots}
         self.assertGreater(len(patterns), 1)
 

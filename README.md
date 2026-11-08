@@ -153,7 +153,8 @@ CI runs the suite on every push, and the release binaries aren't built if it fai
 hearthdelve/
   main.py         the tcod context and the main loop
   screens.py      the screen stack: one class per mode (play, pack, shop, aim, fishing…)
-  engine/         rendering, the window kit, the codex, input, saving, audio, the font
+  engine/         rendering, the animation engine and its effects, the window kit, the codex,
+                  input, saving, audio, the font
   world/          tiles, the world and dungeon generators, the map container, crops
   entities/       the player, items, monsters, NPCs, animals, machines
   game/           the simulation: farming, crafting, combat, villages, delving, the economy…
