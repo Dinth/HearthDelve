@@ -62,5 +62,47 @@ class ShopPriceTest(unittest.TestCase):
                                f"counter_price({v}) does not clear the item's worth")
 
 
+class TheMarketsBestDayStillLoses(unittest.TestCase):
+    """The rows above clear an item's *worth*, but the bin pays more than worth
+    when its bonuses stack — a craving on the kind, the Market Cross, a caravan,
+    the Coin sign — and a saint haggles 10% off the counter. Piglets (+161g),
+    every animal, both bows and Willa's silk (+361g) could be bought and posted
+    back at a profit. Every counter must now beat the bin's best."""
+
+    def _best_day(self, item):
+        """A state where the bin pays the most it ever can for ``item``."""
+        from hearthdelve.game import requests
+        st = fresh_state(3)
+        for pr in st.projects:
+            pr["state"] = "done"                            # the Market Cross among them
+        st.event = {"id": "caravan"}
+        st.player.sign = "coin"
+        if item.kind in requests.DEMAND_KINDS:               # the only kinds it ever craves
+            st.demand = {"kind": item.kind, "mult": requests.DEMAND_RANGE[1], "until": st.day + 9}
+        return st
+
+    def test_the_ceiling_is_what_the_bin_really_pays_on_its_best_day(self):
+        from hearthdelve.game import crafting
+        for it in (items.PIGLET, items.SILK_CLOTH, items.COOKIES, items.STONE, items.ARROW):
+            with self.subTest(item=it.name):
+                self.assertEqual(crafting.bin_value(self._best_day(it), it, 0),
+                                 crafting.bin_ceiling(it))
+
+    def test_no_counter_anywhere_can_be_bought_and_posted_at_a_profit(self):
+        from hearthdelve.game import crafting, karma, village
+        st = fresh_state(3)
+        st.player.karma = karma.MAX_KARMA                  # the best haggle there is
+        for pr in st.projects:
+            pr["state"] = "done"                            # every counter fully stocked
+        shops = list(st.surface.npcs) + list(content.dwarf_npcs())
+        rows = [(npc.name, r) for npc in shops if npc.shop or npc.role == "trader"
+                for r in village.shop_entries(npc.shop or "trader", st, npc)
+                if r.kind in ("buy", "tradebuy") and r.item is not None]
+        self.assertGreater(len(rows), 100)
+        pumps = [(who, r.item.name, r.price, crafting.bin_ceiling(r.item))
+                 for who, r in rows if crafting.bin_ceiling(r.item) >= r.price]
+        self.assertEqual(pumps, [])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -310,6 +310,9 @@ DEMAND_KINDS = {
 }
 
 
+DEMAND_RANGE = (1.35, 1.75)     # how hard the market craves a kind (bin multiplier)
+
+
 def _roll_demand(state: GameState, rng) -> None:
     d = state.demand
     if d and state.day >= d.get("until", 0):
@@ -318,7 +321,7 @@ def _roll_demand(state: GameState, rng) -> None:
         d = {}
     if not d and rng.random() < 0.22:
         kind = rng.choice(list(DEMAND_KINDS))
-        mult = round(rng.uniform(1.35, 1.75) * 20) / 20
+        mult = round(rng.uniform(*DEMAND_RANGE) * 20) / 20
         state.demand = {"kind": kind, "mult": mult,
                         "until": state.day + rng.randint(4, 8)}
         pct = int(round((mult - 1) * 100))

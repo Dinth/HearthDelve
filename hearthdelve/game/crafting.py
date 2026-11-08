@@ -1038,6 +1038,10 @@ def ship_all(state: GameState) -> int:
     return len(stacks)
 
 
+MARKET_CROSS_MULT = 1.10    # Saltmere's Market Cross draws the coast trade in
+COIN_SIGN_MULT = 1.03       # born under the Coin, on a market day
+
+
 def bin_value(state: GameState, item, quality: int) -> int:
     """What one unit fetches at the bin right now: quality-scaled, marked up while
     the market craves this kind of goods (requests.demand_mult), and again once
@@ -1045,11 +1049,20 @@ def bin_value(state: GameState, item, quality: int) -> int:
     from . import requests, projects, events
     v = slot_value(item, quality) * requests.demand_mult(state, item)
     if projects.done(state, "market_cross"):
-        v *= 1.10
+        v *= MARKET_CROSS_MULT
     v *= events.ship_mult(state)          # a caravan in the valley buys handsomely
     if state.player.sign == "coin":       # born on a market day
-        v *= 1.03
+        v *= COIN_SIGN_MULT
     return round(v)
+
+
+def bin_ceiling(item) -> int:
+    """The most one plain (unstarred) unit could ever fetch at the bin: a craving
+    on its kind at its height, the Market Cross, a caravan and the Coin sign all
+    at once. A counter must charge more than this, or buy-and-post pays."""
+    from . import requests, events
+    craving = requests.DEMAND_RANGE[1] if item.kind in requests.DEMAND_KINDS else 1.0
+    return round(item.value * craving * MARKET_CROSS_MULT * events.CARAVAN_MULT * COIN_SIGN_MULT)
 
 
 def sell_shipment(state: GameState) -> None:

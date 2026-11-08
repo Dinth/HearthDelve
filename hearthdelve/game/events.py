@@ -65,9 +65,12 @@ def fishing_bonus(state: GameState) -> float:
     return 0.25 if is_active(state, "shoal") else 0.0
 
 
+CARAVAN_MULT = 1.25     # what a caravan in the valley adds at the bin
+
+
 def ship_mult(state: GameState) -> float:
     """Shipping-price multiplier while a caravan is buying."""
-    return 1.25 if is_active(state, "caravan") else 1.0
+    return CARAVAN_MULT if is_active(state, "caravan") else 1.0
 
 
 def friendship_mult(state: GameState) -> int:

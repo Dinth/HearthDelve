@@ -680,17 +680,26 @@ _PAY_KINDS = {"buy", "meal", "recipe", "tradebuy", "upgrade"}
 def shop_entries(shop: str, state: GameState | None = None,
                  npc: NPC | None = None) -> list[ShopRow]:
     """The rows on a shop's counter, priced with the player's standing folded in
-    (a hero haggles well; a villain pays over the odds)."""
+    (a hero haggles well; a villain pays over the odds).
+
+    Whatever the list price and however good the haggle, a good for sale costs
+    more than the bin could ever pay for it (crafting.bin_ceiling): list prices
+    cleared the item's worth, but not a craving, a caravan, the Market Cross and
+    the Coin sign stacked, nor a saint's discount on top — a bought piglet
+    posted straight back paid 161g, Willa's silk 361g."""
     rows = _shop_entries(shop, state, npc)
     if state is None:
         return rows
     import dataclasses
-    from . import karma
+    from . import crafting, karma
     bm, sm = karma.buy_mult(state.player.karma), karma.sell_mult(state.player.karma)
     out = []
     for r in rows:
         if r.price > 0 and r.kind in _PAY_KINDS:
-            r = dataclasses.replace(r, price=max(1, round(r.price * bm)))
+            price = max(1, round(r.price * bm))
+            if r.kind in ("buy", "tradebuy") and r.item is not None:
+                price = max(price, crafting.bin_ceiling(r.item) + 1)
+            r = dataclasses.replace(r, price=price)
         elif r.price > 0 and r.kind == "sellto":
             r = dataclasses.replace(r, price=max(1, round(r.price * sm)))
         out.append(r)
