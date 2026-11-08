@@ -242,6 +242,50 @@ def penalize(state, x: int, y: int, desc: str = "property") -> None:
                   (210, 150, 120))
 
 
+# --- giving claims back ------------------------------------------------------
+def _still_worked(state) -> set:
+    """Every claimed tile you still have a use for: tilled ground and fences
+    themselves, anything growing or standing on it (a crop, a tree, a
+    machine), the footprint of a building you raised, and the plot of every
+    fence run still standing."""
+    surf = _surf(state)
+    kept = set()
+    fence_tiles = []
+    for (x, y) in state.claims:
+        if not surf.in_bounds(x, y):
+            continue
+        kind = tile.TILES[surf.tiles[x, y]].kind
+        if kind == "soil" or (x, y) in surf.crops or (x, y) in surf.trees or (x, y) in surf.machines:
+            kept.add((x, y))
+        elif kind == "fence":
+            kept.add((x, y))
+            fence_tiles.append((x, y))
+    for b in getattr(surf, "buildings", ()):
+        if not b.get("owner") and not b.get("village"):          # one you raised
+            kept.update((x, y) for x in range(b["x"], b["x"] + b["w"])
+                        for y in range(b["y"], b["y"] + b["h"]))
+    seen = set()
+    for f in fence_tiles:
+        if f in seen:
+            continue
+        seen |= _fence_run(surf, f)
+        kept |= enclosed_tiles(state, f)
+    return kept
+
+
+def release_abandoned(state) -> int:
+    """Give back every claimed tile you no longer work: the fence that bounded
+    it is down, the soil gone back to grass, the building gone. A claim used to
+    be forever — one L of fencing put a 30x30 box on the tax roll for good, and
+    pulling the fence up changed nothing. Returns how many were released."""
+    gone = state.claims - _still_worked(state)
+    if gone:
+        state.claims -= gone
+        state.log.add(f"The Bailiff strikes {len(gone)} tile{'s' if len(gone) != 1 else ''} "
+                      "you no longer work from your claim.", (200, 210, 180))
+    return len(gone)
+
+
 # --- weekly land tax ---------------------------------------------------------
 def _post_tax_notice(state) -> None:
     """Refresh the single standing tax notice in the post box."""
@@ -264,6 +308,7 @@ def weekly_tax(state) -> None:
     if state.day - state.last_tax_day < TAX_INTERVAL:
         return
     state.last_tax_day = state.day
+    release_abandoned(state)               # untended ground goes back before the bill
     if state.tax_owed > 0:                 # last week's bill went unpaid
         karma.adjust(state, -KARMA_DRIP)
         state.bump("tax_arrears_weeks")

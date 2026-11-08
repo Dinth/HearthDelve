@@ -99,6 +99,8 @@ def build_codex_pages(state: GameState):
         ("      wilderness. A notice arrives at your post box — open it", C.DIM),
         ("      (g at the box) to settle up. Ignoring the bill costs a", C.DIM),
         ("      little karma each week, but your gold and land are safe.", C.DIM),
+        ("      Ground you stop working (the fence pulled up, the soil", C.DIM),
+        ("      gone back to grass) is struck off at the next bill.", C.DIM),
     ]
     pages.append(("Land & Home", landpg))
 

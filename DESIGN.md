@@ -180,7 +180,7 @@ Every surface tile has an owner, resolved on demand and cached per map:
 
 - **Village land** — building footprints, farmhouse fields and cottage gardens belong to a named resident, or to the village. You may *take* from it — theft and vandalism cost karma and the owner's regard, after one warning — but you may not build on it.
 - **The homestead grant** — a radius of 20 around your spawn. Yours, and never taxed.
-- **Your claims** — wilderness you improved by tilling, building or fencing in. Yours to use, but the crown levies **2g per tile per week**. Unpaid balances only cost a drip of karma; gold and land are never seized.
+- **Your claims** — wilderness you improved by tilling, building or fencing in. Yours to use, but the crown levies **2g per tile per week**. Unpaid balances only cost a drip of karma; gold and land are never seized. Ground you stop working — the fence pulled up, the soil gone back to grass, the building gone — is struck off the claim at the next weekly assessment.
 - **Wilderness** — everything else is ownerless.
 
 ## 13. Combat (deliberately light, but real)
