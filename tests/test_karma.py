@@ -106,12 +106,13 @@ class TestAPredatorIsAFightNotACruelty(unittest.TestCase):
         self.assertEqual(sorted(set(content.MONSTER_DROPS) - foes), [])
 
 
-class TestEachForesterSpeaksForThemselves(unittest.TestCase):
-    """The weekly forest gift keyed on the forester role but spoke in Yew's
-    rhymes under Yew's name, so the camp's woodcutters handed over their planks
-    and coal as 'Yew tucks a timber plank into your pack'."""
+class TestTheWeeklyForestGiftIsYewsAlone(unittest.TestCase):
+    """The weekly forest gift keyed on the forester role, so the camp's
+    woodcutters — foresters too — handed over planks and coal every week as
+    well, in Yew's rhymes under Yew's name. It is Yew's alone; the woodcutters
+    give the two friendship keepsakes, like everyone else."""
 
-    def _gift_from(self, name):
+    def _gifts_from(self, name, tries=200):
         import random
         from hearthdelve.game import village
         st = fresh_state(1)
@@ -119,23 +120,24 @@ class TestEachForesterSpeaksForThemselves(unittest.TestCase):
         npc.friendship = 10 ** 4                            # a close friend
         for th in (5, 8):                                   # keepsakes already given,
             st.stats[f"heartgift_{name}_{th}"] = 1          # so only the weekly gift speaks
-        for seed in range(200):
+        lines = []
+        for seed in range(tries):
             random.seed(seed)
             st.stats.pop(f"forestgift_day_{name}", None)
             line = village._heart_reward(st, npc)
             if line:
-                return line
-        self.fail(f"{name} never shared")
+                lines.append(line)
+        return lines
 
-    def test_a_woodcutter_gives_in_their_own_name(self):
+    def test_a_woodcutter_has_no_weekly_gift(self):
         for name in ("Burl", "Rowan", "Holt"):
-            line = self._gift_from(name)
             with self.subTest(name=name):
-                self.assertIn(name, line)
-                self.assertNotIn("Yew", line)
+                self.assertEqual(self._gifts_from(name), [])
 
-    def test_yew_keeps_his_rhymes(self):
-        self.assertIn("Yew", self._gift_from("Yew"))
+    def test_yew_still_shares_in_rhyme(self):
+        lines = self._gifts_from("Yew")
+        self.assertTrue(lines)
+        self.assertTrue(all("Yew" in line for line in lines))
 
 
 if __name__ == "__main__":

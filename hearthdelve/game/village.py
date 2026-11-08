@@ -360,17 +360,19 @@ def _festival_treat(state: GameState, npc: NPC):
 
 def _heart_reward(state: GameState, npc: NPC):
     """A good friend may give the player something from their OWN, in-character
-    gift pool. The forester's rare bee queen recurs at high friendship; other
-    folk give a one-time token at 5 hearts and again at 8."""
+    gift pool. Yew's rare bee queen recurs at high friendship; other folk give
+    a one-time token at 5 hearts and again at 8."""
     import random
     from ..entities import items
     p = state.player
     if not npc.gifts:
         return None
 
-    # The forester passes on a bee queen (or a sapling) now and then, once close
-    # — but the wood shares at its own pace, not every morning you drop by.
-    if npc.role == "forester" and npc.hearts >= 6 and random.random() < 0.30:
+    # Yew, warden of the Wildwood, passes on a bee queen (or a sapling) now and
+    # then, once close — but the wood shares at its own pace, not every morning
+    # you drop by. The camp's woodcutters share the forester role (they read the
+    # sky like him) but not this: theirs are the two keepsakes below.
+    if npc.name == "Yew" and npc.hearts >= 6 and random.random() < 0.30:
         key = f"forestgift_day_{npc.name}"
         if state.day - state.stats.get(key, -99) < 7:
             return None
@@ -378,11 +380,6 @@ def _heart_reward(state: GameState, npc: NPC):
         gift = random.choice(npc.gifts)
         p.inventory.add(gift, 1)
         state.log.add(f"{npc.name} gives you a {gift.name.lower()}.", (200, 220, 160))
-        # The rhymes are Yew's own; the camp's woodcutters are foresters too, and
-        # used to hand over their planks and coal in Yew's voice, under his name.
-        if npc.name != "Yew":
-            return (f"{npc.name} tucks a {gift.name.lower()} into your pack:\n"
-                    "\"Spare from the camp's stock. You've more than earned it.\"")
         if gift is items.BEE_QUEEN:
             return ("Yew cups his hands and hums low; something within them stirs:\n"
                     "\"A queen for a friend — go raise her a hall of gold!\"")
