@@ -279,5 +279,132 @@ class TestTodaysFloorsSurviveASave(unittest.TestCase):
         self.assertEqual(again.floor_cache, {})
 
 
+
+def _lived_in():
+    """A state that has been played a little: a crop, a beast, claimed and
+    tilled ground, starred goods and gear, the chest, a letter with a gift,
+    friendships, a finished project and a night's sleep behind it."""
+    import random
+    from hearthdelve.data import content
+    from hearthdelve.entities import items
+    from hearthdelve.entities.animal import Animal
+    from hearthdelve.game import farming, husbandry, land, projects
+    from hearthdelve.world import tile
+    from hearthdelve.world.crops import CropPlot
+    random.seed(1)
+    st = fresh_state(3)
+    p = st.player
+    p.gold, p.status = 777, {"poison": 3}
+    st.donated, st.seen_events = {"Ruby", "Chamomile"}, {"Hollis:4"}
+    st.surface.soil[(50, 50)] = 3
+    st.surface.crops[(51, 50)] = CropPlot(crop=content.CROPS[0], days_grown=1, thirst=2,
+                                          fertilized=True)
+    spec = husbandry.SPECIES["chicken"]
+    st.surface.animals.append(Animal(kind="chicken", name="RoundTrip", glyph=spec.glyph,
+                                     color=spec.color, x=52, y=50, home=(52, 50),
+                                     age_days=9, happiness=64))
+    for xy in ((400, 400), (401, 400)):
+        st.surface.tiles[xy] = tile.TILLED
+    land.claim(st, [(400, 400), (401, 400)])
+    p.inventory.add(items.PANACEA, 2)
+    p.inventory.add(items.HONEY, 3, quality=4)
+    p.inventory.add(content.make_gear("Armour", "steel", gems=("topaz",)), 1)
+    st.storage.add(items.WOOD, 30)
+    st.mail.append({"sender": "Ivo", "body": "For you.", "items": [(items.HONEY, 1, 2)],
+                    "until": 9})
+    for n in st.surface.npcs[:5]:
+        n.friendship += 250
+        n.met = True
+    projects.get(st, "shrine")["state"] = "done"
+    farming.new_day(st)
+    return st
+
+
+class TestEveryFieldSurvivesASave(unittest.TestCase):
+    """The save is hand-written field by field, so a field added to the game
+    and forgotten in save.py is lost on reload with nothing to say so. Every
+    field of GameState must be classed here as saved or deliberately not,
+    and every saved one must come back exactly as it was — down through the
+    villagers, beasts, crops and maps it holds."""
+
+    NOT_SAVED = {
+        "log",          # the message history starts afresh with each session
+        "cheats",       # the hidden cheat menu's toggles are a session's play
+        "cam_focus",    # where Look or aim mode points the camera
+        "warned",       # "press again to take it" warnings, for this sitting
+        "aim_target",   # the aim cursor
+    }
+    # Rebuilt from the world on demand, so never saved.
+    CACHES = {"_owner_cache", "route"}
+
+    def _differences(self, a, b, path="", depth=0):
+        import dataclasses
+        import numpy as np
+        from hearthdelve.entities import items
+        if a is b or depth > 8:
+            return []
+        if isinstance(a, items.Item) and isinstance(b, str):      # a letter's gift, by name
+            return [] if a.name == b else [path]
+        if isinstance(a, np.ndarray) or isinstance(b, np.ndarray):
+            ok = (isinstance(a, np.ndarray) and isinstance(b, np.ndarray)
+                  and a.shape == b.shape and np.array_equal(a, b))
+            return [] if ok else [path]
+        if isinstance(a, (list, tuple)) and isinstance(b, (list, tuple)):
+            if len(a) != len(b):
+                return [f"{path} (length {len(a)} -> {len(b)})"]
+            return [d for i, (u, v) in enumerate(zip(a, b))
+                    for d in self._differences(u, v, f"{path}[{i}]", depth + 1)]
+        if type(a) is not type(b):
+            return [f"{path} ({type(a).__name__} -> {type(b).__name__})"]
+        if isinstance(a, dict):
+            if set(map(repr, a)) != set(map(repr, b)):
+                return [f"{path} (keys)"]
+            bk = {repr(k): v for k, v in b.items()}
+            return [d for k, v in a.items()
+                    for d in self._differences(v, bk[repr(k)], f"{path}[{k!r}]", depth + 1)]
+        if dataclasses.is_dataclass(a) and type(a).__dataclass_params__.frozen:
+            return [] if a == b else [path]
+        if hasattr(a, "__dict__") and type(a).__module__.startswith("hearthdelve."):
+            return [d for k in sorted(set(vars(a)) | set(vars(b))) if k not in self.CACHES
+                    for d in self._differences(getattr(a, k, None), getattr(b, k, None),
+                                               f"{path}.{k}", depth + 1)]
+        return [] if a == b else [path]
+
+    def test_every_field_is_classed(self):
+        import dataclasses
+        from hearthdelve.engine import save
+        from hearthdelve.game.state import GameState
+        src = open(save.__file__).read()
+        for f in dataclasses.fields(GameState):
+            with self.subTest(field=f.name):
+                if f.name not in self.NOT_SAVED:
+                    self.assertIn(f"state.{f.name}", src,
+                                  f"GameState.{f.name} is never saved — save it, or class "
+                                  "it as NOT_SAVED here if it's meant to be lost")
+
+    def test_a_lived_in_game_comes_back_exactly(self):
+        import dataclasses
+        from hearthdelve.engine import save
+        from hearthdelve.game.state import GameState
+        st = _lived_in()
+        save.save(st)
+        again = save.load()
+        for f in dataclasses.fields(GameState):
+            if f.name in self.NOT_SAVED:
+                continue
+            with self.subTest(field=f.name):
+                self.assertEqual(self._differences(getattr(st, f.name), getattr(again, f.name),
+                                                   f.name), [])
+
+    def test_save_load_save_writes_the_same_file(self):
+        from hearthdelve.engine import save
+        save.save(_lived_in())
+        with open(save.default_path()) as f:
+            first = f.read()
+        save.save(save.load())
+        with open(save.default_path()) as f:
+            self.assertEqual(f.read(), first, "something was lost or changed on the way through")
+
+
 if __name__ == "__main__":
     unittest.main()
