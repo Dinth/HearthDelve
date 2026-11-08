@@ -859,7 +859,7 @@ class ContestScreen(Screen):
             self.sel = (self.sel + action[2]) % len(goods)
         elif cmd == "confirm":
             it, _q, ql = goods[min(self.sel, len(goods) - 1)]
-            line = village.enter_contest(state, it, ql)
+            line = village.enter_contest(state, it, ql, judge=self.npc)
             ui.pop()                          # the contest chooser…
             ui.pop()                          # …and the shop behind it
             ui.push(DialogueScreen(self.npc, line))

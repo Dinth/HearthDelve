@@ -152,5 +152,85 @@ class TestTheFairSurvivesAReload(unittest.TestCase):
         self.assertEqual(again.surface.npcs[0].friendship, st.surface.npcs[0].friendship)  # …and it was kept
 
 
+class TestTheContestThanksItsOwnJudge(unittest.TestCase):
+    """Every surface inn holds the produce contest, its innkeeper judging —
+    but a ribbon warmed Mossford's folk and a 2nd or 3rd place Mossford's
+    innkeeper, whoever had judged. And the rival said to edge the field was
+    simply the first one drawn, not the one who scored best."""
+
+    def _fair(self, day=FESTIVAL_DAY):
+        from hearthdelve.game import projects
+        st = fresh_state(11)
+        st.day = day
+        projects.get(st, "grange_hall")["state"] = "done"
+        return st
+
+    def _enter_until(self, st, judge, places):
+        """Enter goods of rising quality until one lands in `places`; returns
+        (place, friendship before by name, the line)."""
+        from hearthdelve.entities import items
+        from hearthdelve.game import village
+        for ql in range(6):
+            for it in (items.PARSNIP, items.STRAWBERRY, items.CHEESE, items.TRUFFLE):
+                st.stats.pop(village._contest_key(st), None)
+                st.player.inventory.add(it, 1, quality=ql)
+                before = {n.name: n.friendship for n in st.surface.npcs}
+                won = st.stats.get("contests_won", 0)
+                gifts = st.player.inventory.count(items.FAIR_RIBBON)
+                line = village.enter_contest(st, it, ql, judge=judge)
+                place = 1 if st.player.inventory.count(items.FAIR_RIBBON) > gifts else (
+                    2 if "place —" in line else 4)
+                if place in places:
+                    return place, before, line
+                for n in st.surface.npcs:            # undo, and try a finer entry
+                    n.friendship = before[n.name]
+                st.stats["contests_won"] = won
+        self.skipTest(f"no entry placed {places} on this fair")
+
+    def _innkeeper(self, st, village_name):
+        return next(n for n in st.surface.npcs
+                    if n.role == "innkeeper" and n.village == village_name)
+
+    def test_a_placing_warms_the_innkeeper_who_judged(self):
+        st = self._fair()
+        judge = self._innkeeper(st, "Saltmere")
+        mossford = self._innkeeper(st, "Mossford")
+        _place, before, _line = self._enter_until(st, judge, (2, 3))
+        self.assertGreater(judge.friendship, before[judge.name])
+        self.assertEqual(mossford.friendship, before[mossford.name])
+
+    def test_a_ribbon_warms_the_judges_own_village(self):
+        st = self._fair()
+        judge = self._innkeeper(st, "Saltmere")
+        _place, before, _line = self._enter_until(st, judge, (1,))
+        for n in st.surface.npcs:
+            with self.subTest(npc=n.name):
+                if n.village == "Saltmere":
+                    self.assertGreater(n.friendship, before[n.name])
+                elif n.village == "Mossford":
+                    self.assertEqual(n.friendship, before[n.name])
+
+    def test_the_rival_named_is_the_one_who_scored_best(self):
+        import random
+        from hearthdelve.entities import items
+        from hearthdelve.game import village
+        for day in range(FESTIVAL_DAY, FESTIVAL_DAY + 112 * 4, 112):   # the same fair, years on
+            st = self._fair(day)
+            rng = random.Random((st.seed * 42_589 + st.day * 631) & 0x7FFFFFFF)
+            grown = [n for n in st.surface.npcs if n.role != "child"]
+            rivals = rng.sample(grown, min(3, len(grown)))
+            scores = [rng.uniform(2.5, 5.5) for _ in rivals]
+            best = rivals[scores.index(max(scores))]
+            if best is rivals[0]:
+                continue                                 # the old code would name them too
+            st.player.inventory.add(items.PARSNIP, 1)
+            line = village.enter_contest(st, items.PARSNIP, 0,
+                                         judge=self._innkeeper(st, "Mossford"))
+            self.assertIn(best.name, line)
+            self.assertNotIn(rivals[0].name, line)
+            return
+        self.skipTest("the first-drawn rival led every year checked")
+
+
 if __name__ == "__main__":
     unittest.main()

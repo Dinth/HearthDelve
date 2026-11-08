@@ -513,11 +513,15 @@ def contest_items(state: GameState) -> list:
             and it.kind in ("crop", "artisan", "food", "fish", "animal")]
 
 
-def enter_contest(state: GameState, item, ql: int) -> str:
+def enter_contest(state: GameState, item, ql: int, judge: NPC | None = None) -> str:
     """Judge one entry at the Grange fair. The rivals and their scores are fixed
     the moment the festival dawns (seeded from seed+day — no re-rolling), and
     the field stiffens gently with the years. Prizes are prestige, not gold:
-    the contest is where a 5-star good goes to mean something."""
+    the contest is where a 5-star good goes to mean something.
+
+    ``judge`` is the innkeeper who took the entry (every surface tavern holds
+    the contest); the warmth goes to them and their village. It used to go
+    to Mossford whoever judged, and the field's leader was named at random."""
     import random as _random
     from . import karma, requests as gamereq, skills
     fest = content.festival_on(state.season, state.day_of_season)
@@ -527,8 +531,14 @@ def enter_contest(state: GameState, item, ql: int) -> str:
     rng = _random.Random((state.seed * 42_589 + state.day * 631) & 0x7FFFFFFF)
     grown = [n for n in state.surface.npcs if n.role != "child"]
     rivals = rng.sample(grown, min(3, len(grown)))
-    rival_scores = sorted((rng.uniform(2.5, 5.5) + 0.35 * max(0, state.year - 1)
-                           for _ in rivals), reverse=True)
+    field = sorted(((rng.uniform(2.5, 5.5) + 0.35 * max(0, state.year - 1), n)
+                    for n in rivals), key=lambda e: e[0], reverse=True)
+    rival_scores = [score for score, _n in field]
+    leader = field[0][1]                         # the best of the rest, by name
+    if judge is None:                            # (no innkeeper in hand: the Grange's own)
+        judge = next((n for n in state.surface.npcs
+                      if n.role == "innkeeper" and n.village == "Mossford"), None)
+    home = getattr(judge, "village", "") or "Mossford"
     mine = ql * 1.6 + min(3.5, item.value / 140.0) + rng.uniform(0.0, 1.2)
     place = 1 + sum(1 for s in rival_scores if s > mine)
     star = (" " + skills.stars(ql)) if ql else ""
@@ -538,7 +548,7 @@ def enter_contest(state: GameState, item, ql: int) -> str:
         state.bump("contests_won")
         state.player.inventory.add(items.FAIR_RIBBON, 1)
         for n in state.surface.npcs:
-            if getattr(n, "village", "") == "Mossford":
+            if getattr(n, "village", "") == home:
                 n.friendship = min(MAX_HEARTS * 100, n.friendship + 100)
         karma.adjust(state, 3)
         extra = ""
@@ -557,8 +567,6 @@ def enter_contest(state: GameState, item, ql: int) -> str:
                 f"\"FIRST PRIZE! Finest thing the Grange has seen in years.\"\n"
                 f"A fair ribbon is pinned on you, to warm applause.{extra}")
     if place <= 3:
-        judge = next((n for n in state.surface.npcs
-                      if n.role == "innkeeper" and n.village == "Mossford"), None)
         if judge is not None:
             judge.friendship = min(MAX_HEARTS * 100, judge.friendship + 45)
         karma.adjust(state, 1)
@@ -567,11 +575,11 @@ def enter_contest(state: GameState, item, ql: int) -> str:
                       (200, 220, 160))
         return (f"\"{place}{'nd' if place == 2 else 'rd'} place — well grown!\" says the judge,\n"
                 f"pressing a {fest[3].name.lower()} into your hands.\n"
-                f"{rivals[0].name}'s entry edges the field this year.")
+                f"{leader.name}'s entry edges the field this year.")
     karma.adjust(state, 1)
     state.log.add("No ribbon this year — but the entering's half the fun.", C.DIM)
     return (f"The judge nods kindly over your {entry}.\n"
-            f"\"Good, honest work — but {rivals[0].name}'s entry is a marvel.\n"
+            f"\"Good, honest work — but {leader.name}'s entry is a marvel.\n"
             "Bring me your finest next fair, eh?\"")
 
 
