@@ -187,5 +187,40 @@ class TestTheBowSharesTheFightersEdge(unittest.TestCase):
         self.assertEqual(shot1 - shot0, 2)
 
 
+class TestStatusArrowsWaitToBeReadied(unittest.TestCase):
+    """Fire and venom arrows are fletched to be readied deliberately, but with
+    nothing readied a shot spent the 'best' arrow by damage — and their +1 put
+    them above plain wood and level with copper tips, so a bow burned through
+    your sulphur arrows on a rabbit."""
+
+    def _shot_spends(self, carried, readied=None):
+        from hearthdelve.data import content
+        from hearthdelve.game import combat
+        st = fresh_state(1)
+        for it in carried:
+            st.player.inventory.add(it, 10)
+        if readied is not None:
+            st.player.equipment["ammo"] = readied
+        bow = content.ranged_stat(content.make_ranged("Short Bow", "birch"))
+        return combat.chosen_ammo(st, bow)
+
+    def test_a_plain_or_tipped_arrow_goes_first(self):
+        from hearthdelve.data import content
+        from hearthdelve.entities import items
+        copper = content.ARROW_FROM_ORE[items.COPPER_ORE]
+        self.assertIs(self._shot_spends([items.ARROW, items.FIRE_ARROW]), items.ARROW)
+        self.assertIs(self._shot_spends([items.VENOM_ARROW, items.ARROW]), items.ARROW)
+        self.assertIs(self._shot_spends([items.FIRE_ARROW, items.ARROW, copper]), copper)
+
+    def test_readied_status_arrows_are_loosed(self):
+        from hearthdelve.entities import items
+        self.assertIs(self._shot_spends([items.ARROW, items.FIRE_ARROW],
+                                        readied=items.FIRE_ARROW), items.FIRE_ARROW)
+
+    def test_with_nothing_else_left_they_still_fly(self):
+        from hearthdelve.entities import items
+        self.assertIs(self._shot_spends([items.VENOM_ARROW]), items.VENOM_ARROW)
+
+
 if __name__ == "__main__":
     unittest.main()

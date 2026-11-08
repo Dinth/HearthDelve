@@ -757,12 +757,16 @@ def ammo_family(stat: RangedStat) -> str:
 def best_ammo(inv, family: str):
     """The strongest ammo of a family the inventory holds (by +dmg, then +to-hit),
     or None. A bow thus spends your finest arrows first — crafting better ones
-    pays off immediately."""
+    pays off immediately. Status arrows (fire, venom) are made to be readied
+    deliberately, so they're spent unasked only when nothing plainer is left —
+    their +1 used to rank them above plain wood and level with copper tips."""
+    def rank(st):
+        return (not st.inflicts, st.dmg, st.to_hit)
     best = None
     for e in inv.slots:
         st = AMMO.get(e[0])
         if st and st.family == family and e[1] > 0:
-            if best is None or (st.dmg, st.to_hit) > (AMMO[best].dmg, AMMO[best].to_hit):
+            if best is None or rank(st) > rank(AMMO[best]):
                 best = e[0]
     return best
 
