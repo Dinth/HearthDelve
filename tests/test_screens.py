@@ -314,5 +314,44 @@ class TestLookSeesOnlyWhatYouSee(unittest.TestCase):
         self.assertNotIn("dormouse", rendering.describe(st, x, y).lower())
 
 
+class TestRestingBesideTheBin(unittest.TestCase):
+    """Rest checked its surroundings as if arriving: beside the shipping bin, the
+    stairs or any villager, it stopped after its first half-minute."""
+
+    def _rest_by_the_bin(self):
+        from hearthdelve import screens
+        st = fresh_state(6)
+        bx, by = st.surface.bin
+        st.player.x, st.player.y = next((bx + dx, by + dy) for dx, dy in
+                                        ((1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (-1, 1))
+                                        if st.surface.walkable(bx + dx, by + dy))
+        ui = screens.UI(st)
+        play = ui.top
+        play.handle(ui, "runprefix", ("runprefix",))
+        play.handle(ui, "wait", ("wait",))
+        return st, ui, play
+
+    def test_a_rest_beside_the_bin_and_a_neighbour_carries_on(self):
+        st, ui, play = self._rest_by_the_bin()
+        npc = st.surface.npcs[0]
+        npc.x, npc.y = st.player.x, st.player.y + 1        # someone already at your side…
+        play.handle(ui, "runprefix", ("runprefix",))
+        play.handle(ui, "wait", ("wait",))                 # …when you settle down
+        self.assertIn(id(npc), play.rest_ack)
+        for _ in range(6):
+            play.tick(ui)
+        self.assertGreater(play.rest_left, 0)
+
+    def test_a_beast_that_wanders_up_still_wakes_you(self):
+        from hearthdelve.entities.monster import Mob
+        st, ui, play = self._rest_by_the_bin()
+        play.tick(ui)
+        self.assertGreater(play.rest_left, 0)
+        st.world.monsters.append(Mob("Wolf", "w", (150, 150, 150), 10, 10, 2, "chase",
+                                     st.player.x + 1, st.player.y + 1, hostile=True))
+        play.tick(ui)
+        self.assertEqual(play.rest_left, 0)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -91,6 +91,7 @@ class PlayScreen(Screen):
         self.awaiting_run = False   # 'w' pressed, waiting for a direction or '.'
         self.run_ctx: dict | None = None
         self.rest_left = 0          # seconds left in an active rest
+        self.rest_ack: frozenset = frozenset()   # friendlies already about when it began
         self.busy_ctx: dict | None = None   # active long tool action (chop/mine)
 
     # --- auto-actions ---------------------------------------------------
@@ -120,7 +121,7 @@ class PlayScreen(Screen):
             if state.world.is_dungeon:
                 delve.update_fov(state)
             self.rest_left -= C.MOVE_SECONDS
-            note = cmds._notable_nearby(state)
+            note = cmds._notable_nearby(state, self.rest_ack, tiles=False)
             if note or self.rest_left <= 0:
                 self.rest_left = 0
                 state.log.add(f"You stop resting — {note}." if note else "You rest a while.",
@@ -159,6 +160,7 @@ class PlayScreen(Screen):
                     state.log.add("You can't run that way.", C.DIM)
             elif cmd == "wait":
                 self.rest_left = cmds.REST_MAX_SECONDS
+                self.rest_ack = cmds.start_rest(state)
             return
         if cmd == "runprefix":
             self.awaiting_run = True

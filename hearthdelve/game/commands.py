@@ -1241,11 +1241,14 @@ def _nearby_friendlies(state: GameState) -> set:
     return ack
 
 
-def _notable_nearby(state: GameState, ignore: frozenset = frozenset()) -> str:
+def _notable_nearby(state: GameState, ignore: frozenset = frozenset(),
+                    tiles: bool = True) -> str:
     """A reason a run/rest should stop — someone close by or an interesting tile
     underfoot — or '' if nothing of note (so it stays usable as a boolean).
     Friendly creatures whose id is in `ignore` are passed over: they were already
-    beside us when the run began, so we don't want to halt at them each step."""
+    beside us when the run (or rest) began, so we don't want to halt at them each
+    step. ``tiles=False`` skips the "you reach the bin/stairs" check, which only
+    means something when you're moving."""
     p = state.player
     rng = _notice_range(state)
     for npc in state.world.npcs:
@@ -1261,6 +1264,8 @@ def _notable_nearby(state: GameState, ignore: frozenset = frozenset()) -> str:
         if _is_friendly(state, m) and id(m) in ignore:
             continue                                   # a grazing beast we ran past
         return f"a {m.name.lower()} is nearby"
+    if not tiles:
+        return ""
     for dx in (-1, 0, 1):
         for dy in (-1, 0, 1):
             x, y = p.x + dx, p.y + dy
@@ -1269,6 +1274,13 @@ def _notable_nearby(state: GameState, ignore: frozenset = frozenset()) -> str:
                 if kind in _NOTABLE_TILE:
                     return f"you reach {_NOTABLE_TILE[kind]}"
     return ""
+
+
+def start_rest(state: GameState) -> frozenset:
+    """Begin resting: note who's already about, so only a newcomer (or anything
+    unfriendly) breaks the rest. Rest used to stop after its first half-minute
+    beside the bin, the stairs or any villager — it checked them as if arriving."""
+    return frozenset(_nearby_friendlies(state))
 
 
 def _blocker_name(state: GameState, x: int, y: int) -> str:
