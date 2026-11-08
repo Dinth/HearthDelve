@@ -142,6 +142,37 @@ class NoMachineTurnsBoughtGoodsIntoProfit(unittest.TestCase):
         self.assertEqual(pumps, [])
 
 
+class TheSmithsUpgradeFeeAnswersToKarma(unittest.TestCase):
+    """Every counter charges a hero 10% less and a villain 10% more — except
+    the smith's tool upgrades, his biggest fees, which carried no list price
+    for shop_entries to haggle over and so ignored karma entirely."""
+
+    def _fee(self, karma_value, tier=2):
+        from hearthdelve.game import village
+        st = fresh_state(3)
+        st.player.karma = karma_value
+        return village.upgrade_price(st, tier)[0]
+
+    def test_a_hero_pays_less_and_a_villain_more(self):
+        from hearthdelve.game import karma
+        plain = self._fee(0)
+        self.assertEqual(self._fee(karma.MAX_KARMA), round(plain * 0.9))
+        self.assertEqual(self._fee(-karma.MAX_KARMA), round(plain * 1.1))
+
+    def test_the_upgrade_charges_what_the_counter_shows(self):
+        from hearthdelve.entities import items
+        from hearthdelve.game import karma, village
+        st = fresh_state(3)
+        st.player.karma = karma.MAX_KARMA
+        tool = items.TIERED_TOOLS[0]
+        gold, bar, count = village.upgrade_price(st, st.player.tool_tier.get(tool, 0))
+        st.player.gold = gold
+        st.player.inventory.add(bar, count)
+        village.upgrade_tool(st, tool)
+        self.assertEqual(st.player.gold, 0)
+        self.assertEqual(st.player.tool_tier.get(tool, 0), 1)
+
+
 class TheSmithsDeepBarsRunOut(unittest.TestCase):
     """A master smith's forge averaged well over what bought bars cost (an
     adamantium greatsword cleared ~990g at baseline), and the counter never ran

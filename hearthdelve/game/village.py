@@ -923,11 +923,15 @@ def purchase(state: GameState, row: ShopRow) -> None:
 
 def upgrade_price(state: GameState, tier: int):
     """(gold, bar, count) for a tool upgrade — the Deep Forge, once raised,
-    takes a fifth off Bron's labour."""
-    from . import projects
+    takes a fifth off Bron's labour, and the smith's fee answers to your name
+    like every other counter's (the ±10% karma haggle). Upgrade rows carry no
+    list price, so shop_entries never priced them and the smith's dearest work
+    ignored karma altogether. The screen and the purchase both price here."""
+    from . import karma, projects
     gold, bar, count = content.upgrade_cost(tier)
     if projects.done(state, "deep_forge"):
         gold = round(gold * 0.8)
+    gold = max(1, round(gold * karma.buy_mult(state.player.karma)))
     return gold, bar, count
 
 
