@@ -109,5 +109,83 @@ class TestInflictions(unittest.TestCase):
         self.assertEqual(content.ammo_stat(items.VENOM_ARROW).inflicts, "poison")
 
 
+class TestTheBowSharesTheFightersEdge(unittest.TestCase):
+    """Melee and the bow summed their bonuses by hand, separately, and every
+    bonus that comes from the fighter rather than the weapon went into melee
+    only: jewellery's to-hit, crit and damage, the Clarity Draught, the wolf's
+    birth sign and the Hall's Trophies wing never reached a loosed arrow."""
+
+    def _fight(self):
+        from hearthdelve.data import content
+        from hearthdelve.entities.monster import Mob
+        st = fresh_state(1)
+        bow = content.ranged_stat(content.make_ranged("Short Bow", "birch"))
+        px, py = st.player.x, st.player.y
+        fx, fy = next((px + dx, py + dy) for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1),
+                                                         (1, 1), (-1, -1), (1, -1), (-1, 1))
+                      if st.world.walkable(px + dx, py + dy))        # open ground to shoot across
+        foe = Mob("Target", "T", (200, 200, 200), 99, 99, 1, "chase", fx, fy, dv=0, pv=0)
+        st.world.monsters.append(foe)
+        return st, bow, foe
+
+    def _edge_on(self, st):
+        from unittest import mock
+        from hearthdelve.game import collection, jewelry
+        st.player.buff, st.player.buff_until = "clarity", st.abs_minutes + 600
+        st.player.sign = "wolf"
+        real = jewelry.combat_bonus(st)
+        ring = {**real, "to_hit": real["to_hit"] + 3, "crit": real["crit"] + 0.05,
+                "dmg": real["dmg"] + 2}
+        return [mock.patch.object(jewelry, "combat_bonus", return_value=ring),
+                mock.patch.object(collection, "perk_earned", return_value=True)]
+
+    def test_to_hit_and_crit_rise_alike_for_sword_and_bow(self):
+        from hearthdelve.game import combat
+        st, bow, _foe = self._fight()
+        before = (combat.player_to_hit(st), combat._ranged_to_hit(st, bow),
+                  combat.player_crit(st), combat.ranged_crit(st, bow))
+        patches = self._edge_on(st)
+        for pt in patches:
+            pt.start()
+        try:
+            after = (combat.player_to_hit(st), combat._ranged_to_hit(st, bow),
+                     combat.player_crit(st), combat.ranged_crit(st, bow))
+        finally:
+            for pt in patches:
+                pt.stop()
+        self.assertEqual(after[0] - before[0], 6)                 # ring 3, draught 2, wolf 1
+        self.assertEqual(after[1] - before[1], after[0] - before[0])
+        self.assertAlmostEqual(after[2] - before[2], 0.20)        # ring, Trophies, draught
+        self.assertAlmostEqual(after[3] - before[3], after[2] - before[2])
+
+    def test_a_rings_damage_rides_the_arrow_too(self):
+        from unittest import mock
+        from hearthdelve.data import content
+        from hearthdelve.entities import items
+        from hearthdelve.game import combat
+        st, bow, foe = self._fight()
+        seen = []
+
+        def record(to_hit, dmg_range, dmg_bonus, *a, **k):
+            seen.append(dmg_bonus)
+            return None                                            # a miss; we only want the sum
+        astat = content.ammo_stat(items.ARROW)
+        with mock.patch.object(combat, "_resolve", side_effect=record):
+            combat.player_attack(st, foe)
+            combat._resolve_shot(st, bow, items.ARROW, astat, foe.x, foe.y)
+            patches = self._edge_on(st)
+            for pt in patches:
+                pt.start()
+            try:
+                combat.player_attack(st, foe)
+                combat._resolve_shot(st, bow, items.ARROW, astat, foe.x, foe.y)
+            finally:
+                for pt in patches:
+                    pt.stop()
+        melee0, shot0, melee1, shot1 = seen
+        self.assertEqual(melee1 - melee0, 2)
+        self.assertEqual(shot1 - shot0, 2)
+
+
 if __name__ == "__main__":
     unittest.main()

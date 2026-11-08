@@ -276,12 +276,13 @@ def player_pv(state: GameState) -> int:
             + (3 if skills.active_buff(state) == "stoneskin" else 0))   # Stoneskin Draught
 
 
-def player_to_hit(state: GameState) -> int:
+# What the fighter brings, whatever they fight with: jewellery, a draught in the
+# blood, the stars they were born under, the Hall's Trophies wing. Melee and the
+# bow both draw on these. (The bow used to add none of them — a Clarity Draught,
+# a ring of precision or a wolf's birth sharpened the sword arm only.)
+def _fighter_to_hit(state: GameState) -> int:
     from . import skills, jewelry
-    prof = held_profile(state)
-    lvl = skills.mastery_level(state, prof.category)
-    bonus = prof.to_hit + skills.skill_level(state, "Combat") // 2 + skills.mastery_to_hit(lvl)
-    bonus += round(jewelry.combat_bonus(state)["to_hit"])
+    bonus = round(jewelry.combat_bonus(state)["to_hit"])
     buff = skills.active_buff(state)
     if buff == "hearty":
         bonus += 2
@@ -292,13 +293,31 @@ def player_to_hit(state: GameState) -> int:
     return bonus
 
 
-def player_crit(state: GameState) -> float:
+def _fighter_crit(state: GameState) -> float:
     from . import skills, jewelry, collection
-    lvl = skills.mastery_level(state, held_profile(state).category)
-    return (0.03 + skills.skill_level(state, "Combat") * 0.01 + skills.mastery_crit(lvl)
-            + jewelry.combat_bonus(state)["crit"]
+    return (jewelry.combat_bonus(state)["crit"]
             + (0.05 if collection.perk_earned(state, "Trophies") else 0.0)   # Hall's Trophies wing
             + (0.10 if skills.active_buff(state) == "clarity" else 0.0))   # Clarity Draught
+
+
+def _fighter_dmg(state: GameState) -> int:
+    from . import jewelry
+    return round(jewelry.combat_bonus(state)["dmg"])
+
+
+def player_to_hit(state: GameState) -> int:
+    from . import skills
+    prof = held_profile(state)
+    lvl = skills.mastery_level(state, prof.category)
+    return (prof.to_hit + skills.skill_level(state, "Combat") // 2 + skills.mastery_to_hit(lvl)
+            + _fighter_to_hit(state))
+
+
+def player_crit(state: GameState) -> float:
+    from . import skills
+    lvl = skills.mastery_level(state, held_profile(state).category)
+    return (0.03 + skills.skill_level(state, "Combat") * 0.01 + skills.mastery_crit(lvl)
+            + _fighter_crit(state))
 
 
 # Protection turns aside up to two thirds of a blow outright, then keeps paying at
@@ -339,14 +358,14 @@ def _resolve(to_hit: int, dmg_range, dmg_bonus: int, crit_chance: float,
 
 # --- player attacks ----------------------------------------------------------
 def player_attack(state: GameState, m) -> None:
-    from . import skills, jewelry
+    from . import skills
     p = state.player
     prof = held_profile(state)
     # deep-floor fatigue: fighting in the airless dark costs more the further down
     p.energy = max(0, p.energy - C.ATTACK_COST[0] - state.world.depth // 3)
     from . import attrs
     dmg_bonus = skills.mastery_dmg(skills.mastery_level(state, prof.category))
-    dmg_bonus += round(jewelry.combat_bonus(state)["dmg"]) + attrs.mod(state, "St") // 3
+    dmg_bonus += _fighter_dmg(state) + attrs.mod(state, "St") // 3
     res = _resolve(player_to_hit(state), prof.dmg, dmg_bonus, player_crit(state), m.dv, m.pv, min_dmg=1)
     wild = getattr(m, "kind", "monster") == "wildlife"
 
@@ -783,11 +802,16 @@ def aim_start(state: GameState) -> tuple[int, int]:
 def _ranged_to_hit(state: GameState, stat) -> int:
     from . import skills, attrs
     lvl = skills.mastery_level(state, stat.category)
-    bonus = (stat.to_hit + skills.skill_level(state, "Combat") // 2
-             + skills.mastery_to_hit(lvl) + attrs.mod(state, "Dx") // 3)
-    if skills.active_buff(state) == "hearty":
-        bonus += 2
-    return bonus
+    return (stat.to_hit + skills.skill_level(state, "Combat") // 2
+            + skills.mastery_to_hit(lvl) + attrs.mod(state, "Dx") // 3
+            + _fighter_to_hit(state))
+
+
+def ranged_crit(state: GameState, stat) -> float:
+    from . import skills
+    return (0.03 + skills.skill_level(state, "Combat") * 0.01
+            + skills.mastery_crit(skills.mastery_level(state, stat.category))
+            + _fighter_crit(state))
 
 
 def fire_ranged_at(state: GameState, tx: int, ty: int) -> bool:
@@ -832,11 +856,10 @@ def _resolve_shot(state: GameState, stat, ammo, astat, tx: int, ty: int) -> None
         return
     state.aim_target = m                       # re-aim onto this foe next time (until it dies)
 
-    dmg_bonus = skills.mastery_dmg(skills.mastery_level(state, stat.category)) + astat.dmg
-    crit = 0.03 + skills.skill_level(state, "Combat") * 0.01 + skills.mastery_crit(
-        skills.mastery_level(state, stat.category))
-    res = _resolve(_ranged_to_hit(state, stat) + astat.to_hit, stat.dmg, dmg_bonus, crit,
-                   m.dv, m.pv, min_dmg=1)
+    dmg_bonus = (skills.mastery_dmg(skills.mastery_level(state, stat.category)) + astat.dmg
+                 + _fighter_dmg(state))
+    res = _resolve(_ranged_to_hit(state, stat) + astat.to_hit, stat.dmg, dmg_bonus,
+                   ranged_crit(state, stat), m.dv, m.pv, min_dmg=1)
     wild = getattr(m, "kind", "monster") == "wildlife"
     m.awake = True
     if wild and m.behavior == "defensive":
