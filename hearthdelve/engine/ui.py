@@ -66,6 +66,20 @@ def wrap(text: str, width: int, indent: int = 0) -> list[str]:
     return lines
 
 
+def wrap_speech(text: str, width: int) -> list[str]:
+    """Spoken lines for a window: each of the text's own lines (verse keeps
+    its breaks) as it is when it fits, else word-wrapped under its own
+    indent — never cut at the window's edge."""
+    out: list[str] = []
+    for part in text.split("\n"):
+        if len(part) <= width:
+            out.append(part)
+            continue
+        lead = len(part) - len(part.lstrip(" "))
+        out += [" " * lead + line for line in wrap(part.strip(), width - lead)]
+    return out
+
+
 def wrap_parts(parts, width: int, sep: str = "  ") -> list[str]:
     """Join `parts` with `sep` into rows no wider than `width`, never breaking
     a part across rows (a tally like "Angler's 0/28" stays whole)."""

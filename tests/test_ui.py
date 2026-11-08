@@ -261,6 +261,62 @@ class TestTheCodexWrapsInsteadOfCutting(unittest.TestCase):
         self.assertIn("Shift+D drops the stack)", _rows(con, 9, 71, 0, 50))
 
 
+def _framed_words(con) -> list[str]:
+    """Every word written inside a window's side borders, top to bottom."""
+    words = []
+    for y in range(con.ch.shape[1]):
+        row = "".join(chr(c) for c in con.ch[:, y])
+        if row.count("│") >= 2:
+            words += row[row.index("│") + 1:row.rindex("│")].split()
+    return words
+
+
+def _contains(words, sub) -> bool:
+    n = len(sub)
+    return any(words[i:i + n] == sub for i in range(len(words) - n + 1))
+
+
+class TestSpeechWrapsInsteadOfCutting(unittest.TestCase):
+    """Dialogue was cut at 68 characters (the swarm-day line, and seven of the
+    villagers' own lines), and a shopkeeper's greeting at 52 — 53 of their
+    lines lost their ends on the counter."""
+
+    def _speech(self):
+        from hearthdelve.data import content
+        from hearthdelve.game import events
+        from tests.common import fresh_state
+        st = fresh_state(1)
+        omens = list(events._OMENS.values())            # the weather-wise's foretellings
+        for npc in list(st.surface.npcs) + list(content.dwarf_npcs()):
+            texts = list(npc.blurbs) + [t for _h, t in npc.heart_blurbs]
+            for text in texts + omens:
+                yield st, npc, text
+
+    def test_a_conversation_shows_every_word(self):
+        from hearthdelve.engine import rendering
+        for st, npc, text in self._speech():
+            con = _con()
+            rendering.render_dialogue(con, st, npc, text)
+            with self.subTest(npc=npc.name, text=text[:30]):
+                self.assertTrue(_contains(_framed_words(con), text.split()))
+
+    def test_a_shopkeepers_greeting_shows_every_word(self):
+        from hearthdelve.engine import rendering
+        from hearthdelve.game import village
+        for st, npc, text in self._speech():
+            if not village.npc_shop(st, npc):
+                continue
+            con = _con()
+            rendering.render_shop(con, st, npc, 0, text)
+            with self.subTest(npc=npc.name, text=text[:30]):
+                self.assertTrue(_contains(_framed_words(con), text.split()))
+
+    def test_verse_keeps_its_line_breaks(self):
+        from hearthdelve.engine import ui
+        verse = "Hey dol! merry dol! Yew am I, the warden —\nboughs for my rafters!"
+        self.assertEqual(ui.wrap_speech(verse, 60), verse.split("\n"))
+
+
 class TestEveryWindowStaysInsideItsFrame(unittest.TestCase):
     """Four windows printed past their frames: the intro page (the first
     thing a new player sees) by 4 cells, the pack's footer by 9 onto the side

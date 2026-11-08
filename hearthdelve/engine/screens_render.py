@@ -913,12 +913,14 @@ def render_character(con: tcod.console.Console, state: GameState) -> None:
 def render_dialogue(con: tcod.console.Console, state: GameState, npc, line: str) -> None:
     parts = line.split("\n")                          # blurbs may be multi-line verse
     w = min(72, max(54, max((len(p) for p in parts), default=0) + 6))
-    h = len(parts) + 7
+    # Wrapped, not cut: a line longer than the widest window lost its end.
+    lines = ui.wrap_speech(line, w - 4)
+    h = len(lines) + 7
     m = ui.Modal(con, w, h, f"{npc.name}")
     hearts = "♥" * npc.hearts + "·" * (10 - npc.hearts)
     m.text(2, 2, hearts, fg=(220, 130, 150))
-    for i, part in enumerate(parts):
-        m.text(2, 4 + i, part[:w - 4], fg=C.WHITE)
+    for i, part in enumerate(lines):
+        m.text(2, 4 + i, part, fg=C.WHITE)
     m.footer("f to gift · any key to close")
 
 
@@ -932,14 +934,16 @@ def render_shop(con: tcod.console.Console, state: GameState, npc, sel: int, line
     title = {"general": "General Store", "blacksmith": "Blacksmith",
              "tavern": "Tavern", "carpenter": "Carpentry",
              "trader": "Wagon"}.get(shop, "Shop")
-    header = line.split("\n") if line else []             # the keeper's greeting
     w = 68 if shop == "carpenter" else 56
+    # The keeper's greeting, wrapped to the counter's width — cut, most of the
+    # shopkeepers' longer lines lost their ends here.
+    header = ui.wrap_speech(line, w - 4) if line else []
     h = min(C.SCREEN_H - 4, len(entries) + 6 + len(header))
     m = ui.Modal(con, w, h, f"{npc.name}'s {title}")
     p = state.player
     top = 2
     for hl in header:                                     # innkeeper's greeting
-        m.text(2, top, hl[:w - 4], fg=(210, 205, 190))
+        m.text(2, top, hl, fg=(210, 205, 190))
         top += 1
     body = (h - 2) - top                                  # rows for the (scrolling) list
 
