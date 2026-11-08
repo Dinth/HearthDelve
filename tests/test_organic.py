@@ -59,5 +59,35 @@ class TestTheScriptoriumsLessonDrifts(unittest.TestCase):
         self.assertLess(hits, 10)
 
 
+class TestVillagersDontRecite(unittest.TestCase):
+    """A villager walked their lines in one fixed order, round after round,
+    in every world."""
+
+    def _lines(self, seed, rounds=4):
+        from hearthdelve.game import village
+        st = fresh_state(seed)
+        npc = next(n for n in st.surface.npcs
+                   if len(n.blurbs) >= 3 and n.role not in ("fisher", "forager", "forester", "elder"))
+        out = []
+        for _ in range(len(npc.blurbs) * rounds):
+            npc.talked_today = True                  # just the chat, no first-talk extras
+            out.append(village.talk(st, npc))
+        return npc, out
+
+    def test_every_line_gets_its_turn_each_round_in_a_drifting_order(self):
+        npc, lines = self._lines(3)
+        n = len(npc.blurbs)
+        rounds = [lines[k * n:(k + 1) * n] for k in range(4)]
+        for r in rounds:
+            self.assertEqual(sorted(r), sorted(npc.blurbs))
+        self.assertTrue(any(r != list(npc.blurbs) for r in rounds))
+        self.assertGreater(len({tuple(r) for r in rounds}), 1)
+        self.assertTrue(all(a != b for a, b in zip(lines, lines[1:])), "a line twice running")
+
+    def test_the_same_world_says_the_same_and_another_differs(self):
+        self.assertEqual(self._lines(3)[1], self._lines(3)[1])
+        self.assertNotEqual(self._lines(3)[1], self._lines(5)[1])
+
+
 if __name__ == "__main__":
     unittest.main()

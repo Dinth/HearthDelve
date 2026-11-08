@@ -257,7 +257,7 @@ def talk(state: GameState, npc: NPC) -> str:
         saying = farming.weather_saying(farming.forecast(state))
         om = events.omen(state)                 # the weather-wise read more than sky
         return saying + ("\n" + om if om else "")
-    return npc.speak()
+    return npc.speak(state.seed)
 
 
 def _heart_event(state: GameState, npc: NPC):

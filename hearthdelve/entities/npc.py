@@ -58,13 +58,36 @@ class NPC:
     def hearts(self) -> int:
         return min(MAX_HEARTS, self.friendship // HEART_POINTS)
 
-    def speak(self) -> str:
+    def speak(self, seed: int | None = None) -> str:
         """Next line from the pool that's unlocked at the current friendship —
-        deeper, more personal lines surface as hearts rise."""
+        deeper, more personal lines surface as hearts rise.
+
+        Every line gets its turn, but each round of them comes in an order
+        shuffled from the world's ``seed`` (and the count of lines spoken,
+        which is saved, so a reload never re-rolls it). They used to come in
+        the same fixed order, round after round, in every world."""
         pool = list(self.blurbs) + [t for (th, t) in self.heart_blurbs if self.hearts >= th]
-        line = pool[self._blurb_i % len(pool)]
+        i = self._blurb_i
         self._blurb_i += 1
-        return line
+        if seed is None or len(pool) < 2:
+            return pool[i % len(pool)]
+        return self._round(pool, seed, i // len(pool))[i % len(pool)]
+
+    def _round(self, pool: list, seed: int, n: int) -> list:
+        """The order of the ``n``-th round of lines: a seeded shuffle, never
+        opening on the line the previous round closed with."""
+        import random
+        import zlib
+
+        def shuffled(k):
+            order = list(pool)
+            random.Random((seed * 92_821 + zlib.crc32(self.name.encode()) * 7 + k)
+                          & 0x7FFFFFFF).shuffle(order)
+            return order
+        order = shuffled(n)
+        if n > 0 and order[0] == shuffled(n - 1)[-1]:
+            order[0], order[1] = order[1], order[0]
+        return order
 
     def next_blurb(self) -> str:      # kept for compatibility
         return self.speak()
