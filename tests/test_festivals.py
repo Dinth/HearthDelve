@@ -59,6 +59,58 @@ class TestFairStalls(unittest.TestCase):
         self.assertEqual(village._warmth(st), 2)
 
 
+class TestAFairIsATreatNotATrade(unittest.TestCase):
+    """The 15g treat hands out a dish worth 215-284g at the bin and a 25g spin's
+    prizes average ~106g, with no limit: 100 treats posted back made ~24,000g.
+    The prices stay cosy; each guest gets one treat and three spins a fair."""
+
+    def _at_the_fair(self, day=FESTIVAL_DAY):
+        st = fresh_state(11)
+        st.day = day
+        st.player.gold = 1000
+        return st
+
+    def _pack(self, st):
+        return sum(q for _i, q, _ql in st.player.inventory.slots)
+
+    def test_one_treat_a_fair(self):
+        from hearthdelve.game import crafting
+        st = self._at_the_fair()
+        before = self._pack(st)
+        crafting._buy_treat(st)
+        crafting._buy_treat(st)
+        self.assertEqual(st.player.gold, 1000 - crafting._TREAT_COST)
+        self.assertEqual(self._pack(st), before + 1)
+
+    def test_three_spins_a_fair_and_a_fresh_go_at_the_next(self):
+        from hearthdelve.data import content
+        from hearthdelve.engine import constants as C
+        from hearthdelve.game import crafting
+        st = self._at_the_fair()
+        for _ in range(5):
+            crafting._play_tombola(st)
+        self.assertEqual(st.player.gold, 1000 - 3 * crafting._TOMBOLA_COST)
+        nxt = next(d for d in range(FESTIVAL_DAY + 1, FESTIVAL_DAY + 4 * C.SEASON_LEN)
+                   if content.festival_on(C.SEASONS[(d // C.SEASON_LEN) % 4], d % C.SEASON_LEN + 1))
+        st.day = nxt
+        crafting._play_tombola(st)
+        self.assertEqual(st.player.gold, 1000 - 4 * crafting._TOMBOLA_COST)
+
+    def test_a_reload_does_not_hand_out_more_goes(self):
+        from hearthdelve.engine import save
+        from hearthdelve.game import crafting
+        st = self._at_the_fair()
+        crafting._buy_treat(st)
+        for _ in range(3):
+            crafting._play_tombola(st)
+        save.save(st)
+        again = save.load()
+        gold = again.player.gold
+        crafting._buy_treat(again)
+        crafting._play_tombola(again)
+        self.assertEqual(again.player.gold, gold)
+
+
 class TestTheFairSurvivesAReload(unittest.TestCase):
     """new_day autosaved, and only afterwards did the morning raise the stalls
     and pay out the fireworks: reload on a fair day and there was no fair, and

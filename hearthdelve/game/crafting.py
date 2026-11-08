@@ -330,17 +330,38 @@ def stint_cost(state: GameState, kind: str) -> int:
 
 _TOMBOLA_COST = 25
 _TREAT_COST = 15
+# A fair is a treat, not a trade: its prices are kept cosy and its prizes kind
+# (a treat off the griddle is worth far more at the bin than the 15g it costs,
+# and a spin's prizes average well over the 25g ticket), so each guest gets a
+# few goes per fair rather than an open till — uncapped, 100 treats posted
+# back for ~24,000g.
+_TREATS_PER_FAIR = 1
+_SPINS_PER_FAIR = 3
+
+
+def _fair_key(state: GameState, what: str) -> str:
+    """The stat counting this guest's goes at today's fair (each fair afresh)."""
+    fest = content.festival_on(state.season, state.day_of_season)
+    when = f"{state.season}_{fest[0]}" if fest else f"day{state.day}"
+    return f"fair_{what}_{state.year}_{when}"
 
 
 def _play_tombola(state: GameState) -> bool:
     """A festival spin: 25g, every ticket wins something — usually small, now
-    and then a gasp from the crowd. Seeded per spin, so no scumming."""
+    and then a gasp from the crowd. Seeded per spin, so no scumming; three
+    tickets a guest per fair."""
     import random as _r
     p = state.player
+    goes = _fair_key(state, "spins")
+    if state.stats.get(goes, 0) >= _SPINS_PER_FAIR:
+        state.log.add(f"\"{_SPINS_PER_FAIR} tickets a guest, love — the wheel's for "
+                      "everyone. Come back next fair!\"", C.DIM)
+        return True
     if p.gold < _TOMBOLA_COST:
         state.log.add(f"The tombola is {_TOMBOLA_COST}g a spin — you're short.", C.DIM)
         return True
     p.gold -= _TOMBOLA_COST
+    state.stats[goes] = state.stats.get(goes, 0) + 1
     spins = state.stats["tombola_spins"] = state.stats.get("tombola_spins", 0) + 1
     rng = _r.Random(state.seed * 6421 + state.day * 977 + spins)
     roll = rng.random()
@@ -367,13 +388,20 @@ def _play_tombola(state: GameState) -> bool:
 
 
 def _buy_treat(state: GameState) -> bool:
-    """Festival fare off the griddle: 15g for a warm treat into the pack."""
+    """Festival fare off the griddle: 15g for a warm treat into the pack — one
+    a guest per fair."""
     import random as _r
     p = state.player
+    goes = _fair_key(state, "treats")
+    if state.stats.get(goes, 0) >= _TREATS_PER_FAIR:
+        state.log.add("\"You've had your treat, dear — save some for the little ones!\"",
+                      C.DIM)
+        return True
     if p.gold < _TREAT_COST:
         state.log.add(f"Treats are {_TREAT_COST}g — you're short.", C.DIM)
         return True
     p.gold -= _TREAT_COST
+    state.stats[goes] = state.stats.get(goes, 0) + 1
     buys = state.stats["fair_treats"] = state.stats.get("fair_treats", 0) + 1
     rng = _r.Random(state.seed * 3319 + state.day * 613 + buys)
     treat = rng.choice((items.CANDIED_FRUIT, items.COOKIES, items.SAUSAGE_ROLL))
