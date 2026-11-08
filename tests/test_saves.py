@@ -374,7 +374,8 @@ class TestEveryFieldSurvivesASave(unittest.TestCase):
         import dataclasses
         from hearthdelve.engine import save
         from hearthdelve.game.state import GameState
-        src = open(save.__file__).read()
+        with open(save.__file__, encoding="utf-8") as f:
+            src = f.read()
         for f in dataclasses.fields(GameState):
             with self.subTest(field=f.name):
                 if f.name not in self.NOT_SAVED:

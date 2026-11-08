@@ -92,6 +92,15 @@ def main() -> None:
     state = load_or_new()
     console = tcod.console.Console(C.SCREEN_W, C.SCREEN_H, order="F")
 
+    # Headless smoke test, for build machines with no display: the font and
+    # every module the packaged build bundles load, a world is generated and
+    # one frame is drawn — the parts a broken package fails at — without
+    # opening a window.
+    if os.environ.get("HEARTHDELVE_SMOKETEST") == "headless":
+        rendering.render_all(console, state, 0.0)
+        print("smoketest ok")
+        return
+
     with tcod.context.new(
         columns=C.SCREEN_W,
         rows=C.SCREEN_H,
