@@ -412,6 +412,7 @@ def player_attack(state: GameState, m) -> None:
     if wild and m.behavior == "defensive":
         m.hostile = True
     m.hp -= dmg
+    state.happen("hit", m.x, m.y, amount=dmg, crit=crit, on="foe")
     if m.hp <= 0:
         _on_kill(state, m)
         return
@@ -541,6 +542,7 @@ def _attack_player(state: GameState, m) -> None:
         return
     dmg, _crit = res
     state.player.hp -= dmg
+    state.happen("hit", state.player.x, state.player.y, amount=dmg, on="you")
     # If armour turned most of the blow aside, say so — but it still stings.
     if dmg <= max(1, hi // 3) and player_pv(state) > 0:
         state.log.add(f"The {m.name.lower()} strikes — your armour holds, but it still bites for {dmg}.",
@@ -575,6 +577,7 @@ def _ranged_attack(state: GameState, m) -> None:
         return
     dmg, _crit = res
     state.player.hp -= dmg
+    state.happen("hit", state.player.x, state.player.y, amount=dmg, on="you")
     state.log.add(f"The {m.name.lower()} strikes you from afar for {dmg}!", (224, 150, 130))
     _maybe_inflict(state, m)
 
@@ -901,6 +904,7 @@ def _resolve_shot(state: GameState, stat, ammo, astat, tx: int, ty: int) -> None
     dmg, was_crit = res
     skills.gain_mastery(state, stat.category, 3)
     m.hp -= dmg
+    state.happen("hit", m.x, m.y, amount=dmg, crit=was_crit, on="foe")
     if m.hp <= 0:
         _on_kill(state, m)
         return

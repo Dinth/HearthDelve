@@ -120,5 +120,83 @@ class TestOneOffEffects(unittest.TestCase):
         self.assertEqual(self.st.fx[-1].x, gs.MAX_HAPPENINGS + 29)
 
 
+
+def _foe_beside(st, hp=99):
+    from hearthdelve.entities.monster import Mob
+    p = st.player
+    foe = Mob("Target", "T", (200, 200, 200), hp, hp, 1, "chase", p.x + 3, p.y, dv=0, pv=0)
+    st.world.monsters.append(foe)
+    return foe
+
+
+class TestAHitShows(unittest.TestCase):
+    """A blow landing was only a log line. Now the struck cell flashes and the
+    damage floats up from it."""
+
+    def _strike(self, crit=False):
+        from unittest import mock
+        from hearthdelve.game import combat
+        st = fresh_state(2)
+        foe = _foe_beside(st)
+        with mock.patch.object(combat, "_resolve", return_value=(17, crit)):
+            combat.player_attack(st, foe)
+        return st, foe
+
+    def _cells(self, st, t):
+        from hearthdelve.engine import rendering
+        con = _con()
+        rendering.render_all(con, st, t)
+        return con
+
+    def test_the_blow_is_recorded_with_its_damage(self):
+        st, foe = self._strike(crit=True)
+        (h,) = [h for h in st.fx if h.kind == "hit"]
+        self.assertEqual((h.x, h.y, h.data["amount"], h.data["crit"], h.data["on"]),
+                         (foe.x, foe.y, 17, True, "foe"))
+
+    def test_the_number_floats_up_from_the_struck_cell(self):
+        from hearthdelve.engine import rendering
+        st, foe = self._strike()
+        ox, oy = rendering.camera_origin(st)
+        sx, sy = foe.x - ox, foe.y - oy
+        plain = self._cells(fresh_state(2), 50.0)
+        first = self._cells(st, 50.0)
+        text = "".join(chr(first.ch[x, sy - 1]) for x in (sx - 1, sx))
+        self.assertEqual(text, "17")
+        self.assertNotEqual(tuple(first.bg[sx, sy]), tuple(plain.bg[sx, sy]))   # the flash
+        later = self._cells(st, 50.7)                  # two rows higher by now
+        self.assertEqual("".join(chr(later.ch[x, sy - 3]) for x in (sx - 1, sx)), "17")
+
+    def test_your_own_wounds_show_red(self):
+        from unittest import mock
+        from hearthdelve.engine import rendering
+        from hearthdelve.game import combat
+        st = fresh_state(2)
+        foe = _foe_beside(st)
+        with mock.patch.object(combat, "_resolve", return_value=(6, False)):
+            combat._attack_player(st, foe)
+        ox, oy = rendering.camera_origin(st)
+        con = self._cells(st, 3.0)
+        px, py = st.player.x - ox, st.player.y - oy
+        self.assertEqual(chr(con.ch[px, py - 1]), "6")
+        r, g, b = con.fg[px, py - 1]
+        self.assertGreater(int(r), int(g) + 80)
+
+    def test_a_blow_out_of_sight_underground_shows_nothing(self):
+        from hearthdelve.engine import anim
+        from hearthdelve.game import delve
+        st = fresh_state(2)
+        mouth = sorted(q for q, k in st.surface.dungeon_kind.items() if k == "mine")[0]
+        st.player.x, st.player.y = mouth
+        delve.enter(st, "mine")
+        w = st.world
+        dark = next((x, y) for x in range(w.width) for y in range(w.height)
+                    if not w.visible[x, y] and abs(x - st.player.x) < 20
+                    and abs(y - st.player.y) < 15)
+        f = anim.Frame(con=_con(), state=st, t=0.0, ox=st.player.x - 29, oy=st.player.y - 22,
+                       vw=58, vh=44, daylight=(1.0, 1.0, 1.0))
+        self.assertIsNone(f.cell(*dark))
+
+
 if __name__ == "__main__":
     unittest.main()

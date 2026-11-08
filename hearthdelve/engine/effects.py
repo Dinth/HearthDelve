@@ -660,3 +660,44 @@ def crossings(f: anim.Frame) -> None:
                 continue
             con.rgb["ch"][bx, by] = ord("*" if int(t * 4 + i) % 2 else "x")
             con.rgb["fg"][bx, by] = (236, 228, 150) if i % 2 else (240, 200, 220)
+
+
+# ==============================================================================
+# One-off effects — things that happen, played for a moment
+# ==============================================================================
+def _blend(con, sx: int, sy: int, chan: str, colour, k: float) -> None:
+    """Mix `colour` into a cell's fg or bg by `k` (0..1)."""
+    cur = con.rgb[chan][sx, sy].astype(np.float32)
+    con.rgb[chan][sx, sy] = (cur * (1.0 - k) + np.array(colour, np.float32) * k).astype(np.uint8)
+
+
+def _write(f: anim.Frame, x: int, y: int, text: str, colour) -> None:
+    """Print `text` into the view from screen cell (x, y), clipped to it."""
+    for i, ch in enumerate(text):
+        cx = x + i
+        if 0 <= cx < f.vw and 0 <= y < f.vh:
+            f.con.rgb["ch"][cx, y] = ord(ch)
+            f.con.rgb["fg"][cx, y] = colour
+
+
+_HIT_FLASH = 0.22          # seconds the struck cell flashes
+
+
+@anim.one_off("hit", life=0.9)
+def hit(f: anim.Frame, h, age: float) -> None:
+    """A blow or shot lands: the struck cell flashes (gold on a critical, red
+    when it's you), and the damage floats up from it and fades."""
+    cell = f.cell(h.x, h.y)
+    if cell is None:
+        return
+    sx, sy = cell
+    crit, yours = h.data.get("crit", False), h.data.get("on") == "you"
+    if age < _HIT_FLASH:
+        k = 1.0 - age / _HIT_FLASH
+        flash = (255, 236, 150) if crit else (230, 70, 60) if yours else (245, 245, 240)
+        _blend(f.con, sx, sy, "bg", flash, (0.85 if crit else 0.6) * k)
+    text = f"{h.data.get('amount', 0)}" + ("!" if crit else "")
+    colour = (255, 120, 100) if yours else (255, 226, 110) if crit else (245, 242, 232)
+    fade = 1.0 if age < 0.5 else max(0.35, 1.0 - (age - 0.5) / 0.4)
+    _write(f, sx - len(text) // 2, sy - 1 - int(age / 0.3),
+           text, tuple(int(c * fade) for c in colour))
