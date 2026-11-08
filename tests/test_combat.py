@@ -289,6 +289,59 @@ class TestJewellerySparesYourStrengthInAFight(unittest.TestCase):
             self.assertEqual(combat.fight_stamina(st), 1)
 
 
+class TestTheDiceHaveTheLastWord(unittest.TestCase):
+    """Monster accuracy grows with depth without limit, and a hit was simply
+    d20 + to-hit against DV: past about depth 25 nothing missed you at all,
+    and dart traps — growing with depth too — ignored armour entirely. As in
+    ADOM, a natural 1 now always misses and a natural 20 always hits, and
+    armour soaks a dart as it soaks a blow."""
+
+    def test_a_natural_1_always_misses(self):
+        from unittest import mock
+        from hearthdelve.game import combat
+        with mock.patch.object(combat.random, "randint", side_effect=[1, 5]):
+            self.assertIsNone(combat._resolve(999, (5, 5), 0, 0.0, 0, 0))
+
+    def test_a_natural_20_always_hits(self):
+        from unittest import mock
+        from hearthdelve.game import combat
+        with mock.patch.object(combat.random, "randint", side_effect=[20, 5]), \
+                mock.patch.object(combat.random, "random", return_value=0.99):
+            self.assertIsNotNone(combat._resolve(-999, (5, 5), 0, 0.0, 999, 0))
+
+    def test_a_deep_monster_misses_now_and_then(self):
+        from hearthdelve.game import combat
+        random.seed(4)
+        misses = sum(combat._resolve(60, (5, 9), 0, 0.0, 12, 4) is None for _ in range(4000))
+        self.assertGreater(misses, 4000 * 0.03)
+        self.assertLess(misses, 4000 * 0.08)          # one roll in twenty, near enough
+
+    def _dart(self, armour):
+        from unittest import mock
+        from hearthdelve.data import content
+        from hearthdelve.game import commands, delve
+        st = fresh_state(1)
+        mouth = sorted(p for p, k in st.surface.dungeon_kind.items() if k == "mine")[0]
+        st.player.x, st.player.y = mouth
+        delve.enter(st, "mine")
+        st.world.depth = 20
+        if armour:
+            for base, slot in (("Armour", "body"), ("Helm", "head"), ("Leggings", "legs"),
+                               ("Shield", "shield")):
+                st.player.equipment[slot] = content.make_gear(base, "steel")
+        before = st.player.hp
+        with mock.patch.object(commands.random, "random", return_value=0.0), \
+                mock.patch.object(commands.random, "randint", return_value=4):
+            commands._spring_trap(st)
+        return before - st.player.hp
+
+    def test_armour_soaks_a_dart(self):
+        bare, plated = self._dart(False), self._dart(True)
+        self.assertEqual(bare, 24)                     # 4 + depth 20, nothing in the way
+        self.assertLess(plated, bare)
+        self.assertGreaterEqual(plated, 1)
+
+
 class TestStatusArrowsWaitToBeReadied(unittest.TestCase):
     """Fire and venom arrows are fletched to be readied deliberately, but with
     nothing readied a shot spent the 'best' arrow by damage — and their +1 put

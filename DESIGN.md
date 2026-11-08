@@ -185,7 +185,7 @@ Every surface tile has an owner, resolved on demand and cached per map:
 
 ## 13. Combat (deliberately light, but real)
 
-ADOM's model: a to-hit roll against the target's **DV**, then damage minus its **PV** (Protection soaks at most ~⅔ of any blow, so armour is never total immunity and a weak weapon is never useless).
+ADOM's model: a d20 to-hit roll against the target's **DV**, where a natural 1 always misses and a natural 20 always hits, then damage minus its **PV** (Protection soaks at most ~⅔ of any blow, so armour is never total immunity and a weak weapon is never useless). Armour soaks a dart trap the same way.
 
 - **Gear is composed, not enumerated:** a **base** (9 weapons, 10 armour slots, 2 bows) × a **material** (7 forge metals, plus leather, cloths, bow woods and beast scales) × optional **prefix/suffix affixes** × **embedded gems**. Stats and value derive from all of it; the item saves by its structured identity, so a piece can always be rebuilt.
 - **Gems** carry one themed effect each, powering both worn jewellery (scaled by metal and star quality) and sockets in gear and tools.

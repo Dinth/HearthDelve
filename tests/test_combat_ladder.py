@@ -145,11 +145,16 @@ class ProtectionLadderTest(unittest.TestCase):
                 last = dpt
 
     def test_armour_is_never_total_immunity(self):
-        """min_dmg does the work the soak cap used to: a blow always lands for >= 1."""
+        """min_dmg does the work the soak cap used to: a blow that lands always
+        deals >= 1. (A natural 1 misses whatever the odds, so not every one lands.)"""
+        landed = 0
         for _ in range(500):
             r = combat._resolve(99, (10, 20), 0, 0.0, 0, 9999)
-            self.assertIsNotNone(r)
+            if r is None:
+                continue
+            landed += 1
             self.assertGreaterEqual(r[0], 1)
+        self.assertGreater(landed, 400)
 
 
 class MidFightHealTest(unittest.TestCase):

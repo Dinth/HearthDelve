@@ -345,23 +345,35 @@ SOAK_CAP_NUM, SOAK_CAP_DEN = 2, 3     # soak ceiling: two thirds of the blow
 SOAK_SURPLUS_DIV = 3                  # each 3 points of PV beyond it turns aside 1 more
 
 
+def soak(dmg: int, pv: int, min_dmg: int = 1) -> int:
+    """What a blow (or a dart) deals through Protection: armour turns aside up
+    to two thirds of it, and a little more for every 3 points of PV beyond,
+    but never all of it."""
+    cap = dmg * SOAK_CAP_NUM // SOAK_CAP_DEN
+    turned = min(pv, cap) + max(0, pv - cap) // SOAK_SURPLUS_DIV
+    return max(min_dmg, dmg - turned)
+
+
 def _resolve(to_hit: int, dmg_range, dmg_bonus: int, crit_chance: float,
              target_dv: int, target_pv: int, min_dmg: int = 1):
     """One attack. Returns (damage, crit) if it lands, or None on a miss. A crit
     doubles the damage and ignores Protection.
 
+    As in ADOM, the d20 has the last word at both ends: a natural 1 always
+    misses and a natural 20 always hits. Monster accuracy grows with depth
+    without limit, so past about depth 25 nothing used to miss you at all.
+
     Heavy armour is a huge advantage but never total immunity: ``min_dmg`` floors
     a landed hit at 1, so a fully plated hero still takes real chip damage from a
     deep monster, and a stoutly armoured foe is slow to fell rather than
     invulnerable to a weak weapon."""
-    if random.randint(1, 20) + to_hit < target_dv:
+    roll = random.randint(1, 20)
+    if roll == 1 or (roll != 20 and roll + to_hit < target_dv):
         return None
     dmg = random.randint(dmg_range[0], dmg_range[1]) + dmg_bonus
     if random.random() < crit_chance:
         return dmg * 2, True
-    cap = dmg * SOAK_CAP_NUM // SOAK_CAP_DEN
-    soak = min(target_pv, cap) + max(0, target_pv - cap) // SOAK_SURPLUS_DIV
-    return max(min_dmg, dmg - soak), False
+    return soak(dmg, target_pv, min_dmg), False
 
 
 # --- player attacks ----------------------------------------------------------

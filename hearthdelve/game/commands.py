@@ -340,9 +340,13 @@ def _spring_trap(state: GameState) -> None:
     w.tiles[p.x, p.y] = _floor_of(w)
     roll = random.random()
     if roll < 0.34:
-        dmg = random.randint(2, 4) + w.depth
+        # Armour turns a dart as it turns a blow; it used to pass straight
+        # through, and grows with the depth.
+        raw = random.randint(2, 4) + w.depth
+        dmg = combat.soak(raw, combat.player_pv(state))
         p.hp -= dmg
-        state.log.add(f"A dart trap fires — you take {dmg} damage!", (228, 120, 110))
+        spared = f" (your armour turns {raw - dmg} aside)" if dmg < raw else ""
+        state.log.add(f"A dart trap fires — you take {dmg} damage!{spared}", (228, 120, 110))
     elif roll < 0.67:
         loss = random.randint(4, 8)
         p.energy = max(0, p.energy - loss)
