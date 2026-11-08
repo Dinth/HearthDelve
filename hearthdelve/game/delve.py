@@ -67,12 +67,35 @@ def _site(state: GameState) -> tuple:
 
 
 def _floor_seed(state: GameState, depth: int) -> int:
+    return _seed_for(state, state.dungeon_kind, _site(state), depth)
+
+
+def _seed_for(state: GameState, kind: str, site: tuple, depth: int) -> int:
     # hash() is salted per process (PYTHONHASHSEED), which would re-roll floors
     # on every reload — combine the inputs arithmetically instead. The mouth is
     # part of it, so two sites of the same kind never roll the same floor.
-    where, x, y = _site(state)
-    site_id = zlib.crc32(f"{state.dungeon_kind}@{where}:{x},{y}".encode())
+    where, x, y = site
+    site_id = zlib.crc32(f"{kind}@{where}:{x},{y}".encode())
     return (state.seed * 1_000_003 + depth * 7919 + state.day * 104_729 + site_id) & 0x7FFFFFFF
+
+
+def build_floor(state: GameState, kind: str, site: tuple, depth: int):
+    """Generate today's floor ``depth`` below the ``kind`` mouth at ``site`` —
+    exactly as it first rolled, so a save can rebuild it and lay what changed
+    on top. Khazgrim and the Underriver are world-seeded: the same every day."""
+    from ..world import dwarftown
+    if kind == "dwarfhold" and depth == dwarftown.TOWN_DEPTH:
+        # Khazgrim: the living town — seeded from the world alone, so its halls
+        # never re-roll, and its folk are the same folk every visit.
+        if state.dwarves is None:
+            from ..data import content
+            state.dwarves = content.dwarf_npcs()
+        return dwarftown.generate(state.seed, state.dwarves)
+    if kind == "dwarfhold" and depth == dwarftown.UNDERRIVER_DEPTH:
+        # The Underriver: world-seeded like the town, so the same river every
+        # time — a persistent stake you return to and pan for ore & gems.
+        return dungeon.generate_underriver(state.seed)
+    return dungeon.generate(_seed_for(state, kind, site, depth), kind, depth)
 
 
 def _go_to_floor(state: GameState, depth: int, descending: bool) -> None:
@@ -87,20 +110,12 @@ def _go_to_floor(state: GameState, depth: int, descending: bool) -> None:
     gm = state.floor_cache.get(key)
     if gm is None:
         from ..world import dwarftown
+        gm = build_floor(state, state.dungeon_kind, _site(state), depth)
         if state.dungeon_kind == "dwarfhold" and depth == dwarftown.TOWN_DEPTH:
-            # Khazgrim: the living town — seeded from the world alone, so its
-            # halls never re-roll, and its folk are the same folk every visit.
-            if state.dwarves is None:
-                from ..data import content
-                state.dwarves = content.dwarf_npcs()
-            gm = dwarftown.generate(state.seed, state.dwarves)
             state.log.add("Braziers. Voices. Ale-smell. This level is LIVED IN — "
                           "you've found Khazgrim, the dwarves' town under the mountain.",
                           (232, 200, 120))
         elif state.dungeon_kind == "dwarfhold" and depth == dwarftown.UNDERRIVER_DEPTH:
-            # The Underriver: world-seeded like the town, so the same river every
-            # time — a persistent stake you return to and pan for ore & gems.
-            gm = dungeon.generate_underriver(state.seed)
             first = not state.stats.get("found_underriver")
             state.stats["found_underriver"] = 1
             state.log.add(
@@ -109,8 +124,6 @@ def _go_to_floor(state: GameState, depth: int, descending: bool) -> None:
                  if first else
                  "The Underriver runs on, black and cold. Cast a line to pan its gravel."),
                 (150, 200, 224))
-        else:
-            gm = dungeon.generate(_floor_seed(state, depth), state.dungeon_kind, depth)
         state.floor_cache[key] = gm
     state.world = gm
     state.stats["deepest_depth"] = max(state.stats.get("deepest_depth", 0), depth)

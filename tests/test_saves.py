@@ -188,5 +188,96 @@ class TestTheSuiteNeverTouchesARealSave(unittest.TestCase):
         self.assertEqual((stamp(save.SAVE_PATH), stamp(save.SAVE_PATH + ".bak")), real)
 
 
+class TestTodaysFloorsSurviveASave(unittest.TestCase):
+    """Dungeon floors lived only in memory: a save made below put the player at
+    the mouth and the next load rolled every floor afresh — opened chests full
+    again, slain monsters back — and quitting was a free escape from a losing
+    fight. Today's floors are now saved, and a save made below resumes there."""
+
+    def setUp(self):
+        from hearthdelve.engine import save
+        save.delete()
+
+    def _below(self):
+        import numpy as np
+        from hearthdelve.game import delve
+        from hearthdelve.world import tile
+        st = fresh_state(1)
+        mouth = sorted(p for p, k in st.surface.dungeon_kind.items() if k == "mine")[0]
+        st.player.x, st.player.y = mouth
+        delve.enter(st, "mine")
+        f1 = st.world
+        chest = next(zip(*np.nonzero(f1.tiles == tile.CHEST)))
+        f1.tiles[chest] = f1.floor_tile                    # loot a chest
+        f1.monsters.pop(0)                                 # slay one
+        f1.monsters[0].hp, f1.monsters[0].awake = 1, True  # and wound another
+        delve.descend(st)
+        return st, mouth, f1, chest
+
+    def test_a_save_made_below_resumes_on_the_same_floor(self):
+        import numpy as np
+        from hearthdelve.engine import save
+        st, mouth, _f1, _chest = self._below()
+        st.player.x, st.player.y = st.world.stairs_up[0], st.world.stairs_up[1]
+        here = st.world
+        save.save(st)
+        again = save.load()
+        self.assertEqual((again.depth, again.dungeon_kind), (2, "mine"))
+        self.assertTrue(again.world.is_dungeon)
+        self.assertEqual((again.player.x, again.player.y), (st.player.x, st.player.y))
+        self.assertTrue(np.array_equal(again.world.tiles, here.tiles))
+        self.assertEqual(again.return_pos, mouth)          # and the way out is the way in
+        self.assertTrue(again.world.visible[again.player.x, again.player.y])
+
+    def test_a_looted_floor_stays_looted_after_a_reload(self):
+        import numpy as np
+        from hearthdelve.engine import save
+        from hearthdelve.game import delve
+        from hearthdelve.world import tile
+        st, mouth, f1, chest = self._below()
+        save.save(st)
+        again = save.load()
+        g1 = again.floor_cache[("mine", ("vale", *mouth), 1)]
+        self.assertTrue(np.array_equal(g1.explored, f1.explored))   # the map you'd drawn
+        delve.ascend(again)                                # back up to floor 1
+        self.assertIs(again.world, g1)
+        self.assertNotEqual(g1.tiles[chest], tile.CHEST)   # the chest is still empty
+        self.assertTrue(np.array_equal(g1.tiles, f1.tiles))
+        self.assertEqual(g1.hidden_traps, f1.hidden_traps)
+        self.assertEqual([(m.name, m.hp, m.x, m.y, m.awake, m.elite, m.base, m.boss)
+                          for m in g1.monsters],
+                         [(m.name, m.hp, m.x, m.y, m.awake, m.elite, m.base, m.boss)
+                          for m in f1.monsters])
+
+    def test_yesterdays_floors_are_not_kept(self):
+        from hearthdelve.engine import save
+        from hearthdelve.game import delve
+        st, _mouth, _f1, _chest = self._below()
+        delve.leave_to_surface(st)
+        st.day += 1                                        # a new dawn re-rolls them
+        save.save(st)
+        again = save.load()
+        self.assertEqual(again.floor_cache, {})
+        self.assertEqual(again.depth, 0)
+
+    def test_an_older_save_wakes_at_the_mouth(self):
+        import json
+        from hearthdelve.engine import save
+        st, mouth, _f1, _chest = self._below()
+        save.save(st)
+        with open(save.default_path()) as f:
+            raw = json.load(f)
+        raw.pop("delve")
+        for rec in raw["wildlife"]:
+            del rec[23:]                                   # and the shorter monster record
+        with open(save.default_path(), "w") as f:
+            json.dump(raw, f)
+        again = save.load()
+        self.assertEqual(again.depth, 0)
+        self.assertFalse(again.world.is_dungeon)
+        self.assertEqual((again.player.x, again.player.y), mouth)
+        self.assertEqual(again.floor_cache, {})
+
+
 if __name__ == "__main__":
     unittest.main()

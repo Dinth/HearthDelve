@@ -3,8 +3,9 @@
 The world is regenerated from its seed on load (roads, villages, NPCs, dungeon
 sites), then the player's changes are restored exactly: the surface tile grid
 (base64-encoded), planted crops, placed machines, NPC friendships, and the full
-player state. Dungeons are ephemeral (re-rolled), so a save always resolves the
-player onto the surface.
+player state. Dungeon floors re-roll each dawn, but today's are kept: each is
+rebuilt from its seed and overlaid with what the player changed, and a save made
+underground resumes there.
 """
 from __future__ import annotations
 
@@ -56,7 +57,10 @@ def _mob_to_rec(m) -> list:
     return [m.name, m.glyph, list(m.color), m.hp, m.max_hp, m.speed, m.behavior,
             m.x, m.y, m.dv, m.pv, m.to_hit, list(m.dmg), m.awake,
             m.kind, m.diet, m.hostile, list(m.seasons),
-            m.level, m.energy, m.boss, m.inflicts, dict(m.status)]
+            m.level, m.energy, m.boss, m.inflicts, dict(m.status),
+            # dungeon monsters (saved with today's floors): their elite affix,
+            # template, ranged reach, summoning and a boss's enrage
+            m.elite, m.base, m.reach, m.summons, m.summon_cd, m.enrage, m.enraged]
 
 
 def _item_key(it):
@@ -124,7 +128,70 @@ def _mob_from_rec(rec: list, Mob) -> object:
                hostile=g(16, False), seasons=tuple(g(17, ())),
                level=g(18, 1), energy=g(19, 0), boss=g(20, False),
                inflicts=g(21, ""),
-               status={str(k): int(v) for k, v in g(22, {}).items()})
+               status={str(k): int(v) for k, v in g(22, {}).items()},
+               elite=g(23, ""), base=g(24, ""), reach=g(25, 0), summons=g(26, ""),
+               summon_cd=g(27, 0), enrage=g(28, False), enraged=g(29, False))
+
+
+def _b64(arr) -> str:
+    return base64.b64encode(np.ascontiguousarray(arr).tobytes()).decode("ascii")
+
+
+def _delve_to_rec(state: GameState):
+    """Today's dungeon floors as the player left them — tiles (opened chests,
+    scooped gold, mined veins), what they've explored, the monsters still
+    about, the traps still hidden — and where underground they stand, if they
+    do. Without it a save made below rolled every floor afresh: chests refilled,
+    and quitting was a free way out of a losing fight. None when there's
+    nothing of today's to keep (floors re-roll at dawn anyway)."""
+    floors = []
+    if state.floor_cache_day == state.day:
+        for (kind, site, depth), gm in state.floor_cache.items():
+            floors.append({
+                "kind": kind, "site": list(site), "depth": depth,
+                "tiles": _b64(gm.tiles),
+                "explored": _b64(np.packbits(np.asarray(gm.explored, dtype=bool))),
+                "monsters": [_mob_to_rec(m) for m in gm.monsters],
+                "traps": sorted([x, y] for x, y in gm.hidden_traps),
+            })
+    here = None
+    if state.depth > 0:
+        from ..game import delve
+        here = {"kind": state.dungeon_kind, "site": list(delve._site(state)),
+                "depth": state.depth, "x": state.player.x, "y": state.player.y}
+    return {"floors": floors, "here": here} if (floors or here) else None
+
+
+def _delve_from_rec(state: GameState, rec) -> None:
+    """Rebuild each saved floor from its seed, lay the saved state over it, and
+    put the player back where they stood underground."""
+    from ..entities.monster import Mob as _Mob
+    from ..game import delve
+    state.floor_cache.clear()
+    state.floor_cache_day = state.day
+    for f in rec.get("floors", []):
+        site = tuple(f["site"])
+        gm = delve.build_floor(state, f["kind"], site, f["depth"])
+        w, h = gm.tiles.shape
+        gm.tiles = np.frombuffer(base64.b64decode(f["tiles"]), dtype=np.uint8).reshape(w, h).copy()
+        bits = np.frombuffer(base64.b64decode(f["explored"]), dtype=np.uint8)
+        gm.explored = np.unpackbits(bits)[:w * h].reshape(w, h).astype(bool)
+        gm.monsters = [_mob_from_rec(r, _Mob) for r in f.get("monsters", [])]
+        gm.hidden_traps = {(x, y) for x, y in f.get("traps", [])}
+        state.floor_cache[(f["kind"], site, f["depth"])] = gm
+    here = rec.get("here")
+    if not here:
+        return
+    key = (here["kind"], tuple(here["site"]), here["depth"])
+    gm = state.floor_cache.get(key)
+    if gm is None:
+        return                         # nothing to stand on: wake at the mouth, as before
+    where, sx, sy = key[1]
+    state.dungeon_kind, state.depth = key[0], key[2]
+    state.return_pos, state.return_west = (sx, sy), where == "west"
+    state.world = gm
+    state.player.x, state.player.y = here["x"], here["y"]
+    delve.update_fov(state)
 
 
 def exists(path: str | None = None) -> bool:
@@ -238,6 +305,7 @@ def save(state: GameState, path: str | None = None) -> None:
         # Khazgrim's folk remember a friend across saves.
         "dwarves": None if state.dwarves is None else {
             n.name: _npc_to_rec(n) for n in state.dwarves},
+        "delve": _delve_to_rec(state),
         "mail": [{"sender": m["sender"], "body": m["body"],
                   "items": [[(it.name if hasattr(it, "name") else it), q, ql]
                             for it, q, ql in m.get("items", [])],
@@ -483,4 +551,8 @@ def load(path: str | None = None) -> GameState:
     state.claims = {tuple(map(int, k.split(","))) for k in data.get("claims", [])}
     state.tax_owed = data.get("tax_owed", 0)
     state.last_tax_day = data.get("last_tax_day", state.day)
+    # Today's floors, and the player back underground if they saved there.
+    # (Older saves have none: they wake at the mouth, as they always did.)
+    if data.get("delve"):
+        _delve_from_rec(state, data["delve"])
     return state
