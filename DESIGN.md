@@ -96,7 +96,7 @@ Raw goods are cheap; **crafted goods are the money and the upgrades.**
 - **Season character:** spring gentle & rainy · summer long and lively · fall the peak harvest · **winter** the cozy indoor season (three hardy crops outdoors, and ice-fishing).
 - **Weather** (per dawn, season-weighted, deterministic from the seed): Clear · Cloudy · Rain · Storm · Fog · Snow. Rain waters crops; fog closes your sight right in; storms keep villagers indoors and rattle the animals.
 - **Tomorrow is knowable.** The weather-wise (fishers, foragers, foresters, the dwarf elder) foretell it in folk lore, a weathervane points to it, and gnats rise before rain. Deterministic from `seed + day`, so the omens are true.
-- **Festivals** (6 a year, on fitting days, each scripting its own weather): the Spring Equinox · the Summer Solstice · the Harvest Fair · Hallows' Eve · the Winter Solstice · Yuletide. The village gathers in the square; stalls go up (a tombola and a treat stand); the last festival of the year is fireworks night if you filled the order.
+- **Festivals** (6 a year, on fitting days, each scripting its own weather): the Spring Equinox · the Summer Solstice · the Harvest Fair · Hallows' Eve · the Winter Solstice · Yuletide. The village gathers in the square; stalls go up (a treat stand, one treat a guest, and a tombola, three spins a guest); the last festival of the year is fireworks night if you filled the order.
 
 ## 8. The world
 
@@ -158,7 +158,7 @@ Which body of water you cast into decides the catch, derived from the world rath
 
 Each village dreams of one great work. You fund it in freeform instalments — gold and materials, any amount, at that village's notice board. Once funded, a site is staked near the square and raised over days into a standing landmark with a **lasting perk**. Nine of them; a village hosts several over the game's life, the next stepping up as one is finished.
 
-Mossford's **Grange Hall** (festival produce contests), **Shrine of the Seasons** (a daily blessing at the altar) and **Hall of Wonders**; Cinderhope's **Deep Forge** (deep-metal stock, cheaper upgrades, a public furnace and anvil) and **Scriptorium** (study out a recipe); Saltmere's **Lighthouse** (better sea fishing, and moonfish) and **Market Cross** (+10% shipped); Fenwick's **Causeway** (opens Willa's wagon, paves and lights the fen road) and **Bathhouse**.
+Mossford's **Grange Hall** (festival produce contests), **Shrine of the Seasons** (a daily blessing at the altar) and **Hall of Wonders**; Cinderhope's **Deep Forge** (deep-metal stock, eight of each deep bar a week, cheaper upgrades, a public furnace and anvil) and **Scriptorium** (study out a recipe); Saltmere's **Lighthouse** (better sea fishing, and moonfish) and **Market Cross** (+10% shipped); Fenwick's **Causeway** (opens Willa's wagon, paves and lights the fen road) and **Bathhouse**.
 
 Nothing is ever locked behind a project — perks make the world cheaper or richer, never newly permitted.
 
@@ -192,7 +192,7 @@ ADOM's model: a to-hit roll against the target's **DV**, then damage minus its *
 - **Afflictions come on two clocks.** A **wound** — poison, bleed, burn — bites once per action, counts down in actions, and a night's rest sweats it out. A **disease** keeps a calendar: it does nothing turn to turn, but each dawn you wake short of health and with only three-quarters of a day's rest in you, and it counts down one day. Sleeping does *not* shake it off; it runs its course over 5–8 days (drifting, never a fixed week), or you physick it away with a charcoal tincture, a panacea, or a soak at the Fenwick bathhouse. Damage on either clock scales with the victim's max HP so it never fades to a rounding error, and an illness can never be lethal.
 - The fen's miasma is the common way to catch one — a low per-step chance out in the wet marsh, warded off by a Warding Tea. Fenwick sits in that fen, and Fenwick is where the bathhouse gets built.
 - **Monsters:** 15 kinds + 5 bosses, filtered by dungeon kind and depth, each scaled by the levels it stands *above* its intro floor. Behaviours: chase, erratic, charge, ranged (kites you), summon (raises the dead while it stands), and bosses that enrage below half health. Deeper floors roll **elite** variants — prefixed, brighter, tougher, worth more.
-- **Ranged:** bows and a sling, with **tiered ammo** (plain wood → metal-tipped by ore → brimstone and venom tips). A shot spends your best arrow first.
+- **Ranged:** bows and a sling, with **tiered ammo** (plain wood → metal-tipped by ore → brimstone and venom tips). A shot spends your best plain or metal-tipped arrow first; the status tips wait until you ready them in the ammo slot (or until nothing else is left).
 - **The Bomb** and the gunpowder **Blast Charge** harm monsters *and* shatter rock and ore — useful to a pacifist miner. Firecrackers are all noise, and scare crop-raiders off your land for days.
 - **Surface wildlife** is peaceful (skittish or defensive); killing it costs karma but fills the larder and the tanning rack. The Westreach's beasts are **predators** that hunt on sight.
 - **Faint** → carried to your bed, wake next dawn, lose loose loot and some gold (scaled by depth). No death screen.
