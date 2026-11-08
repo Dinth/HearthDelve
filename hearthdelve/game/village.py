@@ -654,8 +654,11 @@ def trader_entries(state: GameState, npc: NPC) -> list:
     gem = rng.choice(sorted(content.CUT_GEM.values(), key=lambda i: i.name))
     slots.append((gem, content._round5(gem.value * 2.0)))
     slots.append((items.GEODE, content._round5(items.GEODE.value * 1.5)))
+    # Every general store sells every sapling, so the wagon's is a convenience
+    # for a farmer far from one, at the store's own price — it used to ask
+    # 1,050g for the cherry the store sells at 600.
     sap = rng.choice((items.CHERRY_SAPLING, items.APPLE_SAPLING, items.PEACH_SAPLING))
-    slots.append((sap, content._round5(700 * 1.5)))
+    slots.append((sap, dict(content.GENERAL_STOCK)[sap]))
     if deep:
         bar = rng.choice((items.GOLD_BAR, items.PLATINUM_BAR))
         slots.append((bar, content._round5(bar.value * 2.0)))

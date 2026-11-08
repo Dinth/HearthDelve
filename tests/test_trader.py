@@ -102,6 +102,27 @@ class TestTraderWindow(unittest.TestCase):
                         f"day-20000 lookup {late * 1e6:.1f}us vs day-5 {early * 1e6:.1f}us")
 
 
+class TestTheWagonsSaplingIsTheStoresPrice(unittest.TestCase):
+    """Every general store sells every sapling, all year; the wagons asked a
+    flat 1,050g for the cherry, peach or apple the store sells for 600-700."""
+
+    def test_no_wagon_asks_more_than_the_store_for_a_sapling(self):
+        from hearthdelve.data import content
+        from hearthdelve.game import village
+        st = fresh_state(1337)
+        traders = [n for n in st.surface.npcs if n.role == "trader"]
+        store = {r.item: r.price for r in village.shop_entries("general", st)}
+        seen = 0
+        for day in range(0, 120, 3):                  # many windows, every wagon
+            st.day = day
+            for npc in traders:
+                for r in village.shop_entries("trader", st, npc):
+                    if r.item in content.SAPLING_TO_TREE:
+                        seen += 1
+                        self.assertLessEqual(r.price, store[r.item], (npc.name, r.label))
+        self.assertGreater(seen, 0)
+
+
 class TestWillaGatedOnTheCauseway(unittest.TestCase):
     def test_her_wagon_opens_only_once_the_causeway_stands(self):
         from hearthdelve.game import projects, village
