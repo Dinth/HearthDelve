@@ -133,6 +133,11 @@ def _mob_from_rec(rec: list, Mob) -> object:
                summon_cd=g(27, 0), enrage=g(28, False), enraged=g(29, False))
 
 
+def _season_of(day: int) -> str:
+    from ..engine import constants as C
+    return C.SEASONS[(day // C.SEASON_LEN) % len(C.SEASONS)]
+
+
 def _b64(arr) -> str:
     return base64.b64encode(np.ascontiguousarray(arr).tobytes()).decode("ascii")
 
@@ -313,7 +318,8 @@ def save(state: GameState, path: str | None = None) -> None:
                  for m in state.mail],
         "tiles_shape": [surf.width, surf.height],
         "tiles": base64.b64encode(np.ascontiguousarray(surf.tiles).tobytes()).decode("ascii"),
-        "crops": {f"{x},{y}": [pl.crop.name, pl.days_grown, pl.watered, pl.dead, pl.fertilized, pl.thirst]
+        "crops": {f"{x},{y}": [pl.crop.name, pl.days_grown, pl.watered, pl.dead, pl.fertilized,
+                               pl.thirst, pl.season_ended]
                   for (x, y), pl in surf.crops.items()},
         "soil": {f"{x},{y}": lvl for (x, y), lvl in surf.soil.items() if lvl > 0},
         "trees": {f"{x},{y}": [t.name, t.age, t.has_fruit, t.refruit_in]
@@ -386,11 +392,18 @@ def load(path: str | None = None) -> GameState:
         cname, days, watered, dead = rec[:4]
         fert = rec[4] if len(rec) > 4 else False
         thirst = rec[5] if len(rec) > 5 else 0
+        # older saves don't say why a plot died: a dead crop that's now out of
+        # season most likely ran its season out, so grandfather it as one — any
+        # doubt (it may have withered first) goes the player's way
+        ended = rec[6] if len(rec) > 6 else None
         x, y = map(int, key.split(","))
         crop = content.CROP_BY_NAME.get(cname)
         if crop:
+            if ended is None:
+                ended = bool(dead) and crop.season != _season_of(data["day"])
             world.crops[(x, y)] = CropPlot(crop=crop, days_grown=days, watered=watered,
-                                           dead=dead, fertilized=fert, thirst=thirst)
+                                           dead=dead, fertilized=fert, thirst=thirst,
+                                           season_ended=ended)
 
     world.soil = {}
     for key, lvl in data.get("soil", {}).items():

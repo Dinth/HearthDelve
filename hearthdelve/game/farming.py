@@ -181,11 +181,16 @@ def harvest(state: GameState, x: int, y: int) -> bool:
         return False
     if plot.dead:
         del state.world.crops[(x, y)]
-        # neglect leaches the ground: a plant left to wither costs enrichment
-        soil = state.world.soil
-        if soil.get((x, y), 0) > 0:
-            soil[(x, y)] -= 1
-        state.log.add("You clear away the withered plant.", C.DIM)
+        if plot.season_ended:
+            # its season ran out — the natural end of a regrower's year, or a crop
+            # still standing when the weather turned: no neglect, no lost loam
+            state.log.add("You clear away the spent plant — its season is over.", C.DIM)
+        else:
+            # neglect leaches the ground: a plant left to wither costs enrichment
+            soil = state.world.soil
+            if soil.get((x, y), 0) > 0:
+                soil[(x, y)] -= 1
+            state.log.add("You clear away the withered plant.", C.DIM)
         turns.advance_time(state, C.HARVEST_COST[1])
         return True
     if not plot.mature:

@@ -215,5 +215,56 @@ class TestTodaysRainWatersTodaysSowing(unittest.TestCase):
         self.assertFalse(plot.dead)
 
 
+class TestTheSeasonsEndIsNotNeglect(unittest.TestCase):
+    """Clearing any dead plot cost a point of soil ("neglect leaches the
+    ground") — including a regrower that simply reached the end of its season,
+    which every patch of berries does once a year."""
+
+    def _patch(self):
+        from hearthdelve.data import content
+        from hearthdelve.world.crops import CropPlot
+        st = fresh_state(4)
+        x, y = st.player.x + 2, st.player.y + 2
+        crop = next(c for c in content.CROPS if c.regrows and c.season == st.season)
+        st.surface.crops[(x, y)] = CropPlot(crop=crop, days_grown=crop.days_to_mature)
+        st.surface.soil[(x, y)] = 3
+        return st, x, y
+
+    def test_a_crop_whose_season_ended_clears_without_costing_soil(self):
+        from hearthdelve.engine import constants as C
+        from hearthdelve.game import farming
+        st, x, y = self._patch()
+        st.day = C.SEASON_LEN - 1                          # the season's last day
+        farming.new_day(st)                                # and it turns
+        plot = st.surface.crops[(x, y)]
+        self.assertTrue(plot.dead and plot.season_ended)
+        farming.harvest(st, x, y)                          # clear it away
+        self.assertEqual(st.surface.soil[(x, y)], 3)
+
+    def test_a_plant_left_to_wither_still_costs_soil(self):
+        from hearthdelve.game import farming
+        st, x, y = self._patch()
+        plot = st.surface.crops[(x, y)]
+        plot.dead = True                                   # withered in its own season
+        farming.harvest(st, x, y)
+        self.assertEqual(st.surface.soil[(x, y)], 2)
+
+    def test_the_cause_survives_a_save_and_old_saves_are_read_kindly(self):
+        import json
+        from hearthdelve.engine import constants as C
+        from hearthdelve.engine import save
+        from hearthdelve.game import farming
+        st, x, y = self._patch()
+        st.day = C.SEASON_LEN - 1
+        farming.new_day(st)                                # autosaves the season death
+        self.assertTrue(save.load().surface.crops[(x, y)].season_ended)
+        with open(save.default_path()) as f:
+            raw = json.load(f)
+        raw["crops"][f"{x},{y}"] = raw["crops"][f"{x},{y}"][:6]     # an older record
+        with open(save.default_path(), "w") as f:
+            json.dump(raw, f)
+        self.assertTrue(save.load().surface.crops[(x, y)].season_ended)
+
+
 if __name__ == "__main__":
     unittest.main()

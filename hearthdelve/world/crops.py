@@ -24,6 +24,7 @@ class CropPlot:
     dead: bool = False
     fertilized: bool = False   # nitre-fed soil: the harvest comes up a star finer
     thirst: int = 0            # consecutive unwatered days; a crop withers at the limit
+    season_ended: bool = False  # died because its season was over, not of neglect
 
     @property
     def mature(self) -> bool:
@@ -64,6 +65,7 @@ def advance_growth(plot: CropPlot, season: str, wither_days: int = 999) -> None:
         return
     if plot.crop.season != season:
         plot.dead = True
+        plot.season_ended = True           # a life run out, not a plant let wither
         return
     if plot.watered or plot.crop.paddy:
         if not plot.mature:
