@@ -114,10 +114,21 @@ def render_requests(con: tcod.console.Console, state: GameState, sel: int,
                    fg=(200, 220, 160), bg=bg)
         else:
             gold_left, mats_left = gameproj.remaining(state, proj)
-            need = " · ".join([f"{q} {it.name}" for it, q in mats_left[:3]]
-                              + ([f"{gold_left}g"] if gold_left else []))
-            m.text(2, 2 + row, ui.cur(i == sel)
-                   + f"Contribute — needs {need}"[:w - 4], fg=C.WHITE, bg=bg)
+            parts = [f"{q} {it.name}" for it, q in mats_left[:3]] + (
+                [f"{gold_left}g"] if gold_left else [])
+            # As many whole needs as the row holds, then "…" — it used to be
+            # cut mid-word, its last letter printed over the frame.
+            room = w - 6 - len("Contribute — needs ")
+            need = ""
+            for k, part in enumerate(parts):
+                more = " · …" if k < len(parts) - 1 else ""
+                step = f"{need} · {part}" if need else part
+                if len(step) + len(more) > room:
+                    need = f"{need} · …" if need else "…"
+                    break
+                need = step
+            m.text(2, 2 + row, ui.cur(i == sel) + f"Contribute — needs {need}",
+                   fg=C.WHITE, bg=bg)
         row += 1
         m.text(4, 2 + row, d.perk[:w - 8], fg=(232, 200, 120))
         row += 1
@@ -232,7 +243,7 @@ def render_intro(con: tcod.console.Console, state: GameState) -> None:
     """The opening page shown when a new game begins — the premise and the
     handful of controls a new farmer needs before their first morning."""
     gold, key = (236, 226, 180), (150, 200, 230)
-    w = min(C.SCREEN_W - 2, 68)
+    w = min(C.SCREEN_W - 2, 76)          # wide enough for its longest line, inside the frame
     h = min(C.SCREEN_H - 2, 27)
     m = ui.Modal(con, w, h, "Hearthdelve — Hollowmere Vale")
     y = 2
@@ -281,7 +292,7 @@ def render_storage(con: tcod.console.Console, state: GameState, side: str, sel: 
     from ..game import skills
     pack = state.player.inventory.slots
     store = state.storage.slots
-    w = 66
+    w = 70                               # the footer's keys fit inside the frame
     body = min(C.SCREEN_H - 7, max(6, len(pack), len(store)))
     m = ui.Modal(con, w, body + 5, "Storage Chest")
     colw = (w - 5) // 2
@@ -399,7 +410,7 @@ def render_inventory(con: tcod.console.Console, state: GameState, sel: int = 0,
             prev = cat
         rows.append(("item", v))
 
-    w, h = 62, min(C.SCREEN_H - 2, max(11, len(rows) + 6))
+    w, h = 76, min(C.SCREEN_H - 2, max(11, len(rows) + 6))   # the footer fits inside the frame
     body = h - 6
     m = ui.Modal(con, w, h, "PACK" + (f" — {filt}" if filt else ""))
     total = sum(q for _it, q, _ql in slots)
@@ -1127,8 +1138,14 @@ def render_donate(con: tcod.console.Console, state: GameState, sel: int) -> None
     from ..game import collection, skills
     items_ = collection.donatable(state)
     have, tot = collection.total_progress(state)
-    w, h = 54, min(C.SCREEN_H - 4, max(9, len(items_) + 6))
-    body = h - 5
+    w = 54
+    # Each wing's tally, kept whole and wrapped onto as many rows as it needs:
+    # on one row it ran 13 cells past the frame.
+    prog = collection.wing_progress(state)
+    tally = ui.wrap_parts([f"{wing.split()[0]} {d}/{t}" for wing, (d, t) in prog.items()],
+                          w - 4, sep="   ")
+    h = min(C.SCREEN_H - 4, max(9, len(items_) + 5 + len(tally)))
+    body = h - 4 - len(tally)
     m = ui.Modal(con, w, h, f"Hall of Wonders  —  {have}/{tot} catalogued")
     if not items_:
         m.text(2, 2, "Nothing new to present. Bring finds: fish, gems,", fg=C.DIM)
@@ -1140,10 +1157,9 @@ def render_donate(con: tcod.console.Console, state: GameState, sel: int) -> None
         star = (" " + skills.stars(ql)) if ql else ""
         m.text(2, dy, ui.cur(selected) + f"{it.name}{star}  · {wing}", fg=C.WHITE, bg=bg)
 
-    m.list(2, body, len(items_), sel, row, arrow_top=2, arrow_bottom=h - 4)
-    prog = collection.wing_progress(state)
-    parts = [f"{wing.split()[0]} {d}/{t}" for wing, (d, t) in prog.items()]
-    m.text(2, h - 3, "   ".join(parts), fg=(190, 180, 140))
+    m.list(2, body, len(items_), sel, row, arrow_top=2, arrow_bottom=1 + body)
+    for k, line in enumerate(tally):
+        m.text(2, h - 2 - len(tally) + k, line, fg=(190, 180, 140))
     m.footer("↑↓ select   Enter present   Esc close")
 
 

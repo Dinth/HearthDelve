@@ -66,6 +66,22 @@ def wrap(text: str, width: int, indent: int = 0) -> list[str]:
     return lines
 
 
+def wrap_parts(parts, width: int, sep: str = "  ") -> list[str]:
+    """Join `parts` with `sep` into rows no wider than `width`, never breaking
+    a part across rows (a tally like "Angler's 0/28" stays whole)."""
+    rows: list[str] = []
+    cur = ""
+    for part in parts:
+        if cur and len(cur) + len(sep) + len(part) > width:
+            rows.append(cur)
+            cur = part
+        else:
+            cur = f"{cur}{sep}{part}" if cur else part
+    if cur:
+        rows.append(cur)
+    return rows
+
+
 def wrap_messages(messages, width: int, indent: int = 2) -> list[tuple]:
     """Log messages as (line, colour) rows, each wrapped to `width` with its
     continuation lines indented — so no message is cut off at the edge."""

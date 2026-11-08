@@ -162,5 +162,82 @@ class TestTheWorldMapLegendIsReadable(unittest.TestCase):
         self.assertTrue(any(row == "m / Esc close" for row in text))
 
 
+class TestEveryWindowStaysInsideItsFrame(unittest.TestCase):
+    """Four windows printed past their frames: the intro page (the first
+    thing a new player sees) by 4 cells, the pack's footer by 9 onto the side
+    panel, the chest's by 1 and the Hall's wing tally by 13. The notice
+    board's project line and two intro lines ran into the frame itself.
+    Every window is drawn here with a crowded pack and chest, onto a screen
+    of sentinels: nothing may change outside a frame, and no text may land
+    on its sides or bottom."""
+
+    SENTINEL = ord("¤")
+
+    @classmethod
+    def setUpClass(cls):
+        from hearthdelve.entities import items
+        from tests.common import fresh_state
+        cls.st = fresh_state(6)
+        goods = [it for it in items.BY_NAME.values() if it.stackable]
+        for it in goods[:120]:
+            cls.st.player.inventory.add(it, 3, quality=2)
+        for it in goods[120:160]:
+            cls.st.storage.add(it, 2)
+
+    def _check(self, draw):
+        from unittest import mock
+        from hearthdelve.engine import ui
+        rects, real = [], ui.Modal.__init__
+
+        def record(modal, con, w, h, title):
+            real(modal, con, w, h, title)
+            rects.append((modal.x, modal.y, w, h))
+        con = _con()
+        con.ch[:] = self.SENTINEL
+        with mock.patch.object(ui.Modal, "__init__", record):
+            draw(con)
+        self.assertTrue(rects)
+        inside = np.zeros(con.ch.shape, bool)
+        for x, y, w, h in rects:
+            inside[max(0, x):x + w, max(0, y):y + h] = True
+            sides = "".join(chr(con.ch[cx, cy]) for cy in range(y + 1, y + h - 1)
+                            for cx in (x, x + w - 1))
+            bottom = "".join(chr(con.ch[cx, y + h - 1]) for cx in range(x + 1, x + w - 1))
+            self.assertEqual(set(sides), {"│"}, "text on a frame's side")
+            self.assertEqual(set(bottom), {"─"}, "text on a frame's bottom")
+        spilled = (con.ch != self.SENTINEL) & ~inside
+        self.assertFalse(spilled.any(), f"{int(spilled.sum())} cells drawn outside the frame")
+
+    def test_every_window(self):
+        from hearthdelve.engine import codex, rendering as R
+        st = self.st
+        windows = {
+            "intro": lambda c: R.render_intro(c, st),
+            "chest, pack side": lambda c: R.render_storage(c, st, "pack", 0),
+            "chest, chest side": lambda c: R.render_storage(c, st, "chest", 0),
+            "pack": lambda c: R.render_inventory(c, st, 0, None),
+            "equipment": lambda c: R.render_equipment(c, st),
+            "character": lambda c: R.render_character(c, st),
+            "relations": lambda c: R.render_relationships(c, st, 0),
+            "craft": lambda c: R.render_craft(c, st, 0),
+            "ship": lambda c: R.render_ship(c, st, 0),
+            "eat": lambda c: R.render_eat(c, st, 0),
+            "hall": lambda c: R.render_donate(c, st, 0),
+            "log": lambda c: R.render_message_log(c, st, 0),
+            "mail": lambda c: R.render_mail(c, st, 0),
+            "quit": lambda c: R.render_quit(c, st),
+            "world map": lambda c: R.render_world_map(c, st),
+        }
+        for t in range(len(R._JOURNAL_TABS)):
+            windows[f"journal {t}"] = lambda c, t=t: R.render_journal(c, st, t)
+        for v in ("Mossford", "Cinderhope", "Saltmere", "Fenwick"):
+            windows[f"board {v}"] = lambda c, v=v: R.render_requests(c, st, 0, v)
+        for pg in range(12):
+            windows[f"codex {pg}"] = lambda c, pg=pg: codex.render_codex(c, st, pg, 0)
+        for name, draw in windows.items():
+            with self.subTest(window=name):
+                self._check(draw)
+
+
 if __name__ == "__main__":
     unittest.main()
