@@ -86,9 +86,11 @@ def _sym_to_action(event: tcod.event.KeyDown):
         return ("cancel",)
     # Letters and digits by character value (version-proof across tcod builds).
     ch = chr(int(sym)) if 0x20 <= int(sym) <= 0x7E else ""
-    if ch and ch in "123456789":
+    # A shifted digit is a symbol ('@', '#', '"' …), not a hotbar slot: the
+    # keysym is the digit either way, so Shift+2 used to pick slot 2.
+    if ch and ch in "123456789" and not shift:
         return ("slot", int(ch) - 1)
-    if ch == "0":
+    if ch == "0" and not shift:
         return ("slot", 9)          # 10th hotbar slot / 10th equipment paperdoll slot
     if ch == "c" and shift:
         return ("talk",)             # Shift+C: chat with a villager / open a shop

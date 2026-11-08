@@ -31,6 +31,22 @@ class TestTheStairKeysOnEveryLayout(unittest.TestCase):
         self.assertEqual(_press(K.PERIOD), ("wait",))
 
 
+class TestAShiftedDigitIsNotASlot(unittest.TestCase):
+    """The digit's keysym is the same with Shift held, so '@' (Shift+2 on a
+    US board) picked hotbar slot 2 and '!' slot 1."""
+
+    def test_digits_pick_slots(self):
+        K = tcod.event.KeySym
+        self.assertEqual(_press(K.N2), ("slot", 1))
+        self.assertEqual(_press(K.N0), ("slot", 9))
+
+    def test_shifted_digits_do_not(self):
+        K = tcod.event.KeySym
+        for sym in (K.N1, K.N2, K.N9, K.N0):
+            with self.subTest(sym=sym):
+                self.assertIsNone(_press(sym, shift=True))
+
+
 class TestTheCodexListsEveryKey(unittest.TestCase):
     """The codex's Controls page had drifted from the key map: no hotbar
     slot 0, no q, no Shift+U, no Tab in aim mode, and the farming page sent
