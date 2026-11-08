@@ -430,6 +430,11 @@ def generate(seed: int, kind: str, depth: int, river_seed: int | None = None) ->
                 tiles[x, y] = deco
     room_centers = {r.center for r in rooms}
     need = {down} | room_centers
+    # A blocking piece must leave every floor tile you could reach still
+    # reachable, not just the stairs and room centres: a pit-prop across a mine
+    # chamber's narrow end used to seal a sliver of floor off, and the
+    # monsters and chests placed later could land in it, out of anyone's reach.
+    reach = _connected(up)
     for name, dens in spec.get("block", ()):
         deco = tile.tid(name)
         interior = [(x, y) for r in rooms[1:]
@@ -443,10 +448,13 @@ def generate(seed: int, kind: str, depth: int, river_seed: int | None = None) ->
             if budget <= 0:
                 break
             tiles[x, y] = deco
-            if need.issubset(_connected(up)):       # still all reachable?
+            after = _connected(up)
+            # Still all reachable — the rooms, and every tile but this one?
+            if need.issubset(after) and len(after) == len(reach) - 1:
+                reach = after
                 budget -= 1
             else:
-                tiles[x, y] = tile.DUNGEON_FLOOR     # would seal a room off — undo
+                tiles[x, y] = tile.DUNGEON_FLOOR     # would seal floor off — undo
 
     # Hidden traps — never in the entry room; more on deeper floors. Recorded as
     # coordinates (not a distinct tile) so the per-kind floor re-skin below can't

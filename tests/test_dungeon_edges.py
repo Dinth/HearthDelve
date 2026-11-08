@@ -55,5 +55,58 @@ class TestEveryFloorKeepsItsEdge(unittest.TestCase):
                 self.assertTrue((gm.tiles[_ring(gm.tiles.shape)] == gm.wall_tile).all())
 
 
+def _within_reach(gm) -> set:
+    """Every tile a player standing on the up-stairs can get to: walking in
+    eight directions, and opening chests or digging rock and veins on the
+    way (all ordinary work — only walls, water and lava truly bar the way)."""
+    from hearthdelve.world import tile
+    passable = [t.walkable or t.name in ("chest", "rock", "ore_vein", "gem_vein", "ruins_wall",
+                                         "sulphur_deposit", "nitre_deposit")
+                for t in tile.TILES]
+    w, h = gm.tiles.shape
+    start = tuple(gm.stairs_up)
+    seen, stack = {start}, [start]
+    while stack:
+        x, y = stack.pop()
+        for dx in (-1, 0, 1):
+            for dy in (-1, 0, 1):
+                n = (x + dx, y + dy)
+                if 0 <= n[0] < w and 0 <= n[1] < h and n not in seen and passable[gm.tiles[n]]:
+                    seen.add(n)
+                    stack.append(n)
+    return seen
+
+
+class TestNothingIsSealedAwayByDecor(unittest.TestCase):
+    """Blocking décor (a mine's pit-props, a cave's stalagmites, a crypt's
+    pillars) was only checked against the stairs and the room centres. A
+    pit-prop across a chamber's narrow end could seal off a sliver of floor,
+    and the monsters placed afterwards could land in it — beyond reach, and
+    unable to come out — on about one mine floor in seven hundred."""
+
+    # Floors where a monster was sealed behind a pit-prop.
+    SEALED = ((190066, "mine", 10), (316763, "mine", 3), (324680, "mine", 1),
+              (411802, "mine", 14))
+
+    def _assert_all_within_reach(self, seed, kind, depth):
+        from hearthdelve.world import dungeon
+        gm = dungeon.generate(seed, kind, depth)
+        reach = _within_reach(gm)
+        stranded = [(m.name, (m.x, m.y)) for m in gm.monsters if (m.x, m.y) not in reach]
+        self.assertEqual(stranded, [], (seed, kind, depth))
+
+    def test_the_floors_that_sealed_a_monster_away(self):
+        for seed, kind, depth in self.SEALED:
+            with self.subTest(seed=seed):
+                self._assert_all_within_reach(seed, kind, depth)
+
+    def test_a_sweep_of_every_kind_with_blocking_decor(self):
+        for kind in ("mine", "grotto", "sea cave", "cavern", "crypt", "tomb", "dwarfhold"):
+            for seed in range(12):
+                for depth in (1, 6, 10):
+                    with self.subTest(kind=kind, seed=seed, depth=depth):
+                        self._assert_all_within_reach(seed * 7919 + depth, kind, depth)
+
+
 if __name__ == "__main__":
     unittest.main()
