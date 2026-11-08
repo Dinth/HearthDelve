@@ -94,5 +94,30 @@ class NpcNearStackTest(unittest.TestCase):
         self.assertIs(village.npc_near(st), a)
 
 
+class TestNobodySleepsOnTheSquare(unittest.TestCase):
+    """When cramped ground left a village a cottage short, the resident's home
+    fell back to the square's centre tile — 13 residents across 8 of 16 worlds
+    slept on the paving every night. They now take a room at the inn, or lodge
+    in a corner of a neighbour's cottage; the village's tiles don't change."""
+
+    def test_every_resident_has_a_real_home_of_their_own(self):
+        from collections import Counter
+        for seed in (2024, 12345):                 # Cinderhope, and an inn-less Mossford
+            gm = worldgen.generate(seed)
+            with self.subTest(seed=seed):
+                self.assertEqual([n.name for n in gm.npcs
+                                  if n.home == gm.village_centers.get(n.village)], [])
+                homes = Counter(n.home for n in gm.npcs)
+                self.assertEqual([h for h, k in homes.items() if k > 1], [])
+                for n in gm.npcs:
+                    if any(b.get("kind") == "tent" and abs(b["x"] - n.home[0]) <= 1
+                           and abs(b["y"] - n.home[1]) <= 1 for b in gm.buildings):
+                        continue                   # the camp sleeps by its tents, by design
+                    b = next((b for b in gm.buildings          # any roof: cottage, inn, hut…
+                              if b["x"] <= n.home[0] < b["x"] + b["w"]
+                              and b["y"] <= n.home[1] < b["y"] + b["h"]), None)
+                    self.assertIsNotNone(b, f"{n.name} has no roof over their head")
+
+
 if __name__ == "__main__":
     unittest.main()

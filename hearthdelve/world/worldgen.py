@@ -467,8 +467,10 @@ def _furnish_inn(gm: GameMap, b: dict, rng) -> dict:
     _furnish_room(gm, back, [(tile.BED, 3)], rng, keep)
     free = _interior_floor(gm, b)
     seats = [c for c in free if _in_rect(c, front)]
-    return {"home": _pick_home(back, free) or b["inner"], "work": b["front"],
-            "seats": seats or free}
+    home = _pick_home(back, free) or b["inner"]
+    # the guest rooms' floor, for anyone the village couldn't raise a cottage for
+    guest = [c for c in free if _in_rect(c, back) and c != home]
+    return {"home": home, "work": b["front"], "seats": seats or free, "guest": guest}
 
 
 def _in_rect(c, rect):
@@ -868,6 +870,11 @@ def _carve_villages(gm: GameMap, seed: int, coast: np.ndarray) -> dict:
         # 4. assign residents to buildings and daytime anchors
         temple_seats = buildings.get("temple") and buildings["temple"][1].get("seats") or []
         inn_seats = buildings.get("inn") and buildings["inn"][1].get("seats") or []
+        lodgings = list(buildings["inn"][1].get("guest", ())) if buildings.get("inn") else []
+        # failing a room at the inn, a corner of a neighbour's cottage — spread one
+        # lodger per house before any house takes a second
+        corners = [(cell, cb) for rnd in range(4) for cb in cottages
+                   for cell in [c for c in cb[1].get("seats", ()) if c != cb[1]["home"]][rnd:rnd + 1]]
         cot_iter = iter(cottages)
         farm_iter = iter(farmhouses)
         si = 0
@@ -897,6 +904,14 @@ def _carve_villages(gm: GameMap, seed: int, coast: np.ndarray) -> dict:
                 cb = next(cot_iter, None)
                 if cb:
                     home = cb[1]["home"]; work = cb[0]["front"]; owner_b = cb[0]
+            if home is None and lodgings:
+                # Cramped ground can leave a village a cottage short. Rather than
+                # sleep on the square's paving (several did, every night), they
+                # take a room at the inn…
+                home = lodgings.pop(0); work = buildings["inn"][0]["front"]
+            if home is None and corners:
+                home, host = corners.pop(0)          # …or lodge with a neighbour
+                work = host[0]["front"]
             if home is None:
                 home = work = (vx, vy)
             if npc.role == "fisher" and piers:      # coastal fishers work the piers
