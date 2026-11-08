@@ -93,44 +93,45 @@ class Material:
     r_rng: int = 0         # ranged (bow wood): range delta
     value_mult: float = 1.0
     bar: object = None     # the bar it's forged from (metals); None = not forgeable
+    density: float = 0.0   # armour: carry weight per unit of body covered (0 = by kind)
 
 
 # The metal ladder — deeper & rarer is stronger and pricier. Leather is the base
 # soft armour; the woods (birch/willow/yew/composite) are bow materials.
 MATERIALS: dict[str, Material] = {
-    "hide":       Material("hide",       0, a_pv=1.5, value_mult=0.4),
-    "leather":    Material("leather",    1, a_pv=2.0, value_mult=0.6),
-    "copper":     Material("copper",     2, w_to_hit=-1, w_dmg=-2, a_pv=3.0, value_mult=0.6, bar=items.COPPER_BAR),
-    "bronze":     Material("bronze",     3, w_to_hit=-1, w_dmg=-1, a_pv=4.0, value_mult=0.9, bar=items.BRONZE_BAR),
-    "iron":       Material("iron",       4,                        a_pv=5.0, value_mult=1.0, bar=items.IRON_BAR),
-    "steel":      Material("steel",      5, w_to_hit=1,  w_dmg=2,  a_dv=-1, a_pv=6.0, value_mult=1.9, bar=items.STEEL_BAR),
-    "silver":     Material("silver",     6, w_to_hit=1,  w_dmg=2,  a_pv=6.0, value_mult=2.6, bar=items.SILVER_BAR),
-    "mithril":    Material("mithril",    7, w_to_hit=2,  w_dmg=3,  w_dv=1,  a_pv=7.0, value_mult=4.5, bar=items.MITHRIL_BAR),
-    "adamantium": Material("adamantium", 8, w_to_hit=2,  w_dmg=4,  a_dv=-1, a_pv=7.5, value_mult=6.5, bar=items.ADAMANTIUM_BAR),
+    "hide":       Material("hide",       0, a_pv=1.5, density=2.0, value_mult=0.4),
+    "leather":    Material("leather",    1, a_pv=2.0, density=2.5, value_mult=0.6),
+    "copper":     Material("copper",     2, w_to_hit=-1, w_dmg=-2, a_pv=3.0, density=7.0, value_mult=0.6, bar=items.COPPER_BAR),
+    "bronze":     Material("bronze",     3, w_to_hit=-1, w_dmg=-1, a_pv=4.0, density=7.5, value_mult=0.9, bar=items.BRONZE_BAR),
+    "iron":       Material("iron",       4,                        a_pv=5.0, density=8.0, value_mult=1.0, bar=items.IRON_BAR),
+    "steel":      Material("steel",      5, w_to_hit=1,  w_dmg=2,  a_dv=-1, a_pv=6.0, density=7.5, value_mult=1.9, bar=items.STEEL_BAR),
+    "silver":     Material("silver",     6, w_to_hit=1,  w_dmg=2,  a_pv=6.0, density=7.0, value_mult=2.6, bar=items.SILVER_BAR),
+    "mithril":    Material("mithril",    7, w_to_hit=2,  w_dmg=3,  w_dv=1,  a_pv=7.0, density=3.5, value_mult=4.5, bar=items.MITHRIL_BAR),
+    "adamantium": Material("adamantium", 8, w_to_hit=2,  w_dmg=4,  a_dv=-1, a_pv=7.5, density=11.0, value_mult=6.5, bar=items.ADAMANTIUM_BAR),
     # Precious metals — soft, so never forged into gear (not in FORGE_METALS), but
     # prized for jewellery. Tiers overlap the forge ladder harmlessly (only
     # FORGE_METALS is indexed by tier for gear loot).
-    "gold":       Material("gold",       6, value_mult=3.2, bar=items.GOLD_BAR),
-    "platinum":   Material("platinum",   8, value_mult=5.0, bar=items.PLATINUM_BAR),
+    "gold":       Material("gold",       6, density=9.0, value_mult=3.2, bar=items.GOLD_BAR),
+    "platinum":   Material("platinum",   8, density=10.0, value_mult=5.0, bar=items.PLATINUM_BAR),
     # Bow woods (ranged only): a lighter ladder, better wood = truer & farther.
     "birch":      Material("birch",      1, value_mult=1.0),
     "willow":     Material("willow",     2, w_dmg=1, r_rng=1, value_mult=1.4),
     "yew":        Material("yew",        3, w_to_hit=1, w_dmg=1, r_rng=1, value_mult=1.8),
     "composite":  Material("composite",  4, w_to_hit=1, w_dmg=2, r_rng=2, value_mult=2.8),
     # Cloth & straw (hats & cloaks): feather-light, little protection, silk evades.
-    "straw":      Material("straw",      1, a_pv=2.0, value_mult=0.3),
-    "cotton":     Material("cotton",     2, a_pv=3.0, value_mult=0.5),
-    "wool":       Material("wool",       3, a_pv=3.0, value_mult=0.8),
-    "linen":      Material("linen",      3, a_pv=3.0, value_mult=1.0),
-    "silk":       Material("silk",       4, a_dv=1, a_pv=4.0, value_mult=2.5),
-    "fur":        Material("fur",        4, a_pv=4.0, value_mult=1.4),   # wolf-pelt warmth
+    "straw":      Material("straw",      1, a_pv=2.0, density=0.4, value_mult=0.3),
+    "cotton":     Material("cotton",     2, a_pv=3.0, density=0.6, value_mult=0.5),
+    "wool":       Material("wool",       3, a_pv=3.0, density=0.8, value_mult=0.8),
+    "linen":      Material("linen",      3, a_pv=3.0, density=0.6, value_mult=1.0),
+    "silk":       Material("silk",       4, a_dv=1, a_pv=4.0, density=0.3, value_mult=2.5),
+    "fur":        Material("fur",        4, a_pv=4.0, density=1.5, value_mult=1.4),   # wolf-pelt warmth
     # Beast scales (armour only): a combat-earned path that rivals mined metal —
     # forged at the anvil from the scale drops themselves (see SCALE_FORGE), not
     # from bars. Drake hide is tough yet supple (it evades); wyrm scale is the
     # hardest armour there is, level with adamantium. The "bar" IS the drop.
-    "lurkerscale": Material("lurkerscale", 5, a_pv=5.5, value_mult=2.2, bar=items.LURKER_SCALE),
-    "drakescale":  Material("drakescale",  6, a_dv=1, a_pv=6.5, value_mult=3.8, bar=items.DRAKE_SCALE),
-    "wyrmscale":   Material("wyrmscale",   7, a_dv=-1, a_pv=7.5, value_mult=5.0, bar=items.WYRM_SCALE),
+    "lurkerscale": Material("lurkerscale", 5, a_pv=5.5, density=4.5, value_mult=2.2, bar=items.LURKER_SCALE),
+    "drakescale":  Material("drakescale",  6, a_dv=1, a_pv=6.5, density=4.0, value_mult=3.8, bar=items.DRAKE_SCALE),
+    "wyrmscale":   Material("wyrmscale",   7, a_dv=-1, a_pv=7.5, density=7.0, value_mult=5.0, bar=items.WYRM_SCALE),
 }
 # Scale materials the anvil can forge armour from (armour bases only, never
 # weapons — you don't knap a sword from a scale). Kept out of FORGE_METALS so
@@ -380,6 +381,9 @@ def make_gear(base: str, material: str, prefix: str = "", suffix: str = "",
         WEAPON_STATS[it] = CombatProfile(cat, to_hit, (max(1, lo + db), max(1, hi + db)), wdv)
     else:
         slot, bdv, weight, bval = ARMOR_BASES[base]
+        # Carry weight: how much of you it covers times how heavy its stuff is.
+        # Every piece used to weigh 3.0, from a straw hat to adamantium plate.
+        heft = round(max(0.1, weight * mat.density), 1) if mat.density else 0.0
         pv = round(weight * mat.a_pv) + (pfx.pv if pfx else 0) + (sfx.pv if sfx else 0)
         dv = bdv + mat.a_dv + (pfx.dv if pfx else 0) + (sfx.dv if sfx else 0)
         for g in gems:                           # embedded gems add their armour bonus
@@ -391,9 +395,11 @@ def make_gear(base: str, material: str, prefix: str = "", suffix: str = "",
         if it is None:                           # literal can drift off the curve (or be forge-flipped)
             it = items.register(items.Item(name, "]", "armor", f"Armour worn on the {slot}.",
                                             stackable=False, value=val, material=material,
-                                            prefix=prefix, suffix=suffix, gems=gems))
+                                            prefix=prefix, suffix=suffix, gems=gems,
+                                            weight=heft))
         else:
             object.__setattr__(it, "value", val)
+            object.__setattr__(it, "weight", heft)
         ARMOR_STATS[it] = (dv, max(0, pv))
         ARMOR_SLOT[it] = slot
     _GEAR[key] = it

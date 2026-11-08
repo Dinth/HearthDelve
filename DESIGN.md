@@ -171,7 +171,7 @@ Nothing is ever locked behind a project — perks make the world cheaper or rich
 - **Character level** 1–15 on its own track — every deed feeds it and it keeps growing after a skill has capped. Each level: +8 max HP, +12 max stamina.
 - **Weapon mastery** per category (blade, axe, blunt, polearm, archery, unarmed), learned by doing: to-hit, damage, crit and parry.
 - **Karma**, −100 (villainous) to +100 (saintly), moved by kindness and cruelty. It scales how fast the world warms to you, and what you pay and are paid at a counter (±10%, soft — never a lock).
-- **Encumbrance.** Carry weight comes from item kind. Over capacity you tire faster and move slower; well over, much more so. Never a wall — always a cost gradient. Crafted satchels raise the ceiling; the home chest takes weight off your back entirely.
+- **Encumbrance.** Carry weight comes from item kind, except armour, which weighs what it covers times its material's density: a full iron suit about 25, mithril about 11 (its lightness is its edge), adamantium 34, cloth next to nothing. Over capacity you tire faster and move slower; well over, much more so. Never a wall — always a cost gradient. Crafted satchels raise the ceiling; the home chest takes weight off your back entirely.
 - **Buffs** from cooked dishes and brewed draughts (hearty, green thumb, keen forager, brisk, warded, stoneskin, swift, firebrand, clarity, envenomed, phantom).
 
 ## 12. Land
