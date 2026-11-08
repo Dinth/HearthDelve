@@ -1496,8 +1496,18 @@ def describe(state: GameState, x: int, y: int) -> str:
         return "yourself, the new farmer of Hollowmere Vale."
     if not state.world.in_bounds(x, y):
         return "the edge of the known Vale."
+    # Look reads what the screen shows, no more. It used to name a monster — HP,
+    # DV, elite and all — anywhere on a dungeon floor, unexplored rooms included,
+    # and describe surface critters that were hibernating out of season.
+    w = state.world
+    seen = True
+    if w.is_dungeon and w.explored is not None:
+        if not w.explored[x, y]:
+            return "darkness you haven't explored."
+        seen = w.visible is None or bool(w.visible[x, y])   # remembered, not watched
     for m in state.world.monsters:
-        if m.alive and (m.x, m.y) == (x, y):
+        if (m.alive and (m.x, m.y) == (x, y) and seen
+                and not (m.seasons and state.season not in m.seasons)):
             aff = _afflictions(m)
             afftail = f" Currently {aff}." if aff else ""
             infl = (f" Its hits can leave you {_STATUS_ADJ.get(m.inflicts, m.inflicts)}."
@@ -1514,7 +1524,7 @@ def describe(state: GameState, x: int, y: int) -> str:
             return (f"a {m.name.lower()}{tier} — HP {m.hp}/{m.max_hp}, DV {m.dv}, PV {m.pv}."
                     f"{elite}{infl}{afftail} Bump it to attack.")
     for npc in state.world.npcs:
-        if (npc.x, npc.y) == (x, y):
+        if (npc.x, npc.y) == (x, y) and seen:
             role = {"general": "shopkeeper", "blacksmith": "blacksmith"}.get(npc.shop, "villager")
             return f"{npc.name}, the {role}. {'♥' * npc.hearts}{'·' * (10 - npc.hearts)} (Shift+C talk, f gift)"
     from ..game.husbandry import animal_at, SPECIES, _is_adult

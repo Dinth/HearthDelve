@@ -270,5 +270,49 @@ class TestPackLetters(unittest.TestCase):
         ui.top.render(ui, _con())
 
 
+class TestLookSeesOnlyWhatYouSee(unittest.TestCase):
+    """Look named any monster on a dungeon floor — HP, DV, elite and all — even
+    in rooms you had never entered, and described surface critters hibernating
+    out of season, which the game itself treats as not there."""
+
+    def _floor(self):
+        from hearthdelve.game import delve
+        st = fresh_state(6)
+        mouth = next(p for p, k in st.surface.dungeon_kind.items() if k == "grotto")
+        st.player.x, st.player.y = mouth
+        delve.enter(st, "grotto")
+        return st
+
+    def test_an_unexplored_monster_is_just_darkness(self):
+        from hearthdelve.engine import rendering
+        st = self._floor()
+        gm = st.world
+        m = next(m for m in gm.monsters if not gm.explored[m.x, m.y])
+        text = rendering.describe(st, m.x, m.y)
+        self.assertNotIn(m.name.lower(), text.lower())
+        self.assertIn("haven't explored", text)
+
+    def test_a_remembered_room_shows_no_one_in_it(self):
+        from hearthdelve.engine import rendering
+        st = self._floor()
+        gm = st.world
+        m = gm.monsters[0]
+        gm.explored[m.x, m.y] = True
+        gm.visible[m.x, m.y] = False                       # seen once, not in sight now
+        self.assertNotIn(m.name.lower(), rendering.describe(st, m.x, m.y).lower())
+        gm.visible[m.x, m.y] = True                        # and once it's in sight
+        self.assertIn(m.name.lower(), rendering.describe(st, m.x, m.y).lower())
+
+    def test_a_hibernating_critter_is_not_there(self):
+        from hearthdelve.engine import rendering
+        from hearthdelve.entities.monster import Mob
+        st = fresh_state(6)
+        x, y = st.player.x + 3, st.player.y
+        other = next(s for s in ("Spring", "Summer", "Fall", "Winter") if s != st.season)
+        st.world.monsters.append(Mob("Dormouse", "r", (180, 160, 140), 3, 3, 1, "skittish",
+                                     x, y, kind="wildlife", seasons=(other,)))
+        self.assertNotIn("dormouse", rendering.describe(st, x, y).lower())
+
+
 if __name__ == "__main__":
     unittest.main()
