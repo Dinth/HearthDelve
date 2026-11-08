@@ -152,6 +152,46 @@ class TestTheFairSurvivesAReload(unittest.TestCase):
         self.assertEqual(again.surface.npcs[0].friendship, st.surface.npcs[0].friendship)  # …and it was kept
 
 
+class TestPastInvitationsAreCleared(unittest.TestCase):
+    """A festival invitation arrives the day before and was kept forever, so
+    unread ones piled up: 39 letters in the post box after 120 days."""
+
+    def _invites(self, st):
+        return [m for m in st.mail if m.get("until") is not None or "invited" in m["body"]]
+
+    def test_a_year_of_post_leaves_at_most_the_next_invitation(self):
+        import random
+        from hearthdelve.game import farming
+        st = fresh_state(11)
+        random.seed(3)
+        most = 0
+        for day in range(0, 112):
+            st.day = day
+            farming._deliver_mail(st)
+            most = max(most, len(self._invites(st)))
+        self.assertEqual(most, 1)
+
+    def test_a_letter_with_a_gift_waits_to_be_taken(self):
+        from hearthdelve.entities import items
+        from hearthdelve.game import farming
+        st = fresh_state(11)
+        st.mail.append({"sender": "Marda", "body": "For you.", "items": [(items.HONEY, 1, 0)],
+                        "until": 0})
+        st.day = 40
+        farming._deliver_mail(st)
+        self.assertTrue(any(m["sender"] == "Marda" for m in st.mail))
+
+    def test_the_date_survives_a_save_and_older_letters_load_as_they_were(self):
+        from hearthdelve.engine import save
+        st = fresh_state(11)
+        st.mail = [{"sender": "Ivo", "body": "Come to the fair.", "items": [], "until": 11},
+                   {"sender": "Ivo", "body": "An older letter.", "items": []}]
+        save.save(st)
+        again = save.load()
+        self.assertEqual(again.mail[0].get("until"), 11)
+        self.assertIsNone(again.mail[1].get("until"))
+
+
 class TestTheContestThanksItsOwnJudge(unittest.TestCase):
     """Every surface inn holds the produce contest, its innkeeper judging —
     but a ribbon warmed Mossford's folk and a 2nd or 3rd place Mossford's

@@ -510,6 +510,12 @@ def _deliver_mail(state: GameState) -> None:
     npcs = surf.npcs if surf else []
     arrived = 0
 
+    # Letters only good until a day (an invitation, once its festival is past)
+    # are cleared away with the old news; anything with a gift in it stays
+    # until it's taken. Unread invitations used to pile up a year at a time.
+    state.mail = [m for m in state.mail
+                  if m.get("items") or m.get("until") is None or m["until"] >= state.day]
+
     # Festival invitation, delivered the day before.
     fest = content.festival_on(state.season, state.day_of_season + 1)
     if fest is not None and npcs:
@@ -520,6 +526,7 @@ def _deliver_mail(state: GameState) -> None:
                      f"in the square — {fest[2]}.\n"
                      "Come and join us. There'll be more than enough to go round!"),
             "items": [],
+            "until": state.day + 1,                   # the festival's own day
         })
         arrived += 1
 

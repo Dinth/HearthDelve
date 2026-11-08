@@ -334,7 +334,8 @@ def save(state: GameState, path: str | None = None) -> None:
         "mail": [{"sender": m["sender"], "body": m["body"],
                   "items": [[(it.name if hasattr(it, "name") else it), q, ql]
                             for it, q, ql in m.get("items", [])],
-                  **({"tax": True} if m.get("tax") else {})}
+                  **({"tax": True} if m.get("tax") else {}),
+                  **({"until": m["until"]} if m.get("until") is not None else {})}
                  for m in state.mail],
         "tiles_shape": [surf.width, surf.height],
         "tiles": base64.b64encode(np.ascontiguousarray(surf.tiles).tobytes()).decode("ascii"),
