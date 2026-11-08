@@ -1015,10 +1015,22 @@ def run_sprinklers(state: GameState) -> None:
     for (mx, my), m in state.world.machines.items():
         if m.kind != "sprinkler":
             continue
-        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+        for dx, dy in _SPRAY:
             plot = state.world.crops.get((mx + dx, my + dy))
             if plot is not None and not plot.dead:
                 plot.watered = True
+
+
+_SPRAY = ((1, 0), (-1, 0), (0, 1), (0, -1))      # the four plots a sprinkler waters
+
+
+def sprinkler_reaches(world, x: int, y: int) -> bool:
+    """Is the plot at (x, y) within a sprinkler's spray?"""
+    for dx, dy in _SPRAY:
+        m = world.machines.get((x - dx, y - dy))
+        if m is not None and m.kind == "sprinkler":
+            return True
+    return False
 
 
 def sellable_items(state: GameState):

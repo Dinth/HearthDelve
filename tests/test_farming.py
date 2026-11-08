@@ -172,5 +172,48 @@ class TestRegrowHarvestKeepsItsWater(unittest.TestCase):
         self.assertTrue(st.surface.crops[pos].watered)
 
 
+class TestTodaysRainWatersTodaysSowing(unittest.TestCase):
+    """Rain and sprinklers soak the plots at dawn only, so a seed sown into
+    the day's rain (or right beside a sprinkler) started dry, and the next dawn
+    counted it as neglected."""
+
+    def _sow(self, weather="Clear", sprinkler=False):
+        from hearthdelve.data import content
+        from hearthdelve.entities.machine import Machine
+        from hearthdelve.game import farming
+        from hearthdelve.world import tile
+        st = fresh_state(4)
+        st.weather = weather
+        x, y = st.player.x + 2, st.player.y + 2
+        st.surface.tiles[x, y] = tile.TILLED
+        st.surface.crops.pop((x, y), None)
+        st.surface.machines.pop((x, y), None)
+        if sprinkler:
+            st.surface.tiles[x + 1, y] = tile.TILLED
+            st.surface.machines[(x + 1, y)] = Machine(kind="sprinkler")
+        seed, crop = next((sd, c) for sd, c in farming.SEED_TO_CROP.items()
+                          if c.season == st.season)
+        st.player.inventory.add(seed, 1)
+        farming.plant(st, x, y, seed)
+        return st, st.surface.crops[(x, y)]
+
+    def test_a_seed_sown_in_the_rain_is_watered(self):
+        self.assertTrue(self._sow("Rain")[1].watered)
+        self.assertTrue(self._sow("Storm")[1].watered)
+
+    def test_a_seed_sown_beside_a_sprinkler_is_watered(self):
+        self.assertTrue(self._sow("Clear", sprinkler=True)[1].watered)
+
+    def test_a_dry_day_sowing_still_needs_the_can(self):
+        self.assertFalse(self._sow("Clear")[1].watered)
+
+    def test_it_grows_overnight_without_a_trip_with_the_can(self):
+        from hearthdelve.game import farming
+        st, plot = self._sow("Rain")
+        farming.new_day(st)
+        self.assertEqual(plot.days_grown, 1)
+        self.assertFalse(plot.dead)
+
+
 if __name__ == "__main__":
     unittest.main()

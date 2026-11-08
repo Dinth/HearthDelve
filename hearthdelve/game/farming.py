@@ -110,7 +110,14 @@ def plant(state: GameState, x: int, y: int, seed: Item) -> None:
         return
 
     state.player.inventory.remove(seed, 1)
-    world.crops[(x, y)] = CropPlot(crop=crop)
+    plot = world.crops[(x, y)] = CropPlot(crop=crop)
+    # Rain and sprinklers soak the plots at dawn; a seed sown into today's rain
+    # or within a sprinkler's spray is watered too, rather than facing tomorrow
+    # dry and losing a day (or withering) through no fault of the sower.
+    from . import crafting
+    if ((is_wet_weather(state.weather) and not in_greenhouse(world, x, y))
+            or crafting.sprinkler_reaches(world, x, y)):
+        plot.watered = True
     turns.advance_time(state, C.PLANT_COST[1])
     state.player.energy = max(0, state.player.energy - C.PLANT_COST[0])
     state.log.add(f"You plant {crop.name.lower()} seeds.")
