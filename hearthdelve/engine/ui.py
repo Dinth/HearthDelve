@@ -25,6 +25,18 @@ def window(sel: int, total: int, height: int) -> tuple[int, int]:
     return start, start + height
 
 
+def frame(con, x: int, y: int, w: int, h: int, title: str = "") -> None:
+    """A single-line frame with its title centred on the top edge in inverted
+    colours. tcod's own ``draw_frame(title=…)`` is deprecated — once it goes,
+    every window would raise — so the title is printed here, cell for cell as
+    tcod drew it (and a title too long for the frame no longer eats its
+    corners)."""
+    con.draw_frame(x, y, w, h, fg=HDR, bg=BASE_BG)
+    if title:
+        label = f" {title} "[:max(0, w - 2)]
+        con.print(x + (w - len(label)) // 2, y, label, fg=BASE_BG, bg=HDR)
+
+
 def cur(selected: bool) -> str:
     """The selection cursor prefix every list row carries."""
     return "▸ " if selected else "  "
@@ -40,7 +52,7 @@ class Modal:
         self.x = (C.SCREEN_W - w) // 2
         self.y = (C.SCREEN_H - h) // 2
         con.draw_rect(self.x, self.y, w, h, ch=ord(" "), fg=C.WHITE, bg=BASE_BG)
-        con.draw_frame(self.x, self.y, w, h, title=title, fg=HDR, bg=BASE_BG)
+        frame(con, self.x, self.y, w, h, title)
 
     def text(self, dx: int, dy: int, s: str, fg=None, bg=None) -> None:
         self.con.print(self.x + dx, self.y + dy, s, fg=fg, bg=bg)
