@@ -198,5 +198,47 @@ class TestAHitShows(unittest.TestCase):
         self.assertIsNone(f.cell(*dark))
 
 
+
+class TestAMonsterNoticesYou(unittest.TestCase):
+    """A monster waking showed only as it starting to move. Now a "!" shows
+    over it the moment it sees you."""
+
+    def _below(self):
+        from hearthdelve.game import delve
+        st = fresh_state(2)
+        mouth = sorted(q for q, k in st.surface.dungeon_kind.items() if k == "mine")[0]
+        st.player.x, st.player.y = mouth
+        delve.enter(st, "mine")
+        return st
+
+    def test_it_shows_over_a_monster_that_sees_you(self):
+        from hearthdelve.engine import rendering
+        from hearthdelve.game import combat
+        st = self._below()
+        w, p = st.world, st.player
+        spot = next((x, y) for x in range(p.x - 4, p.x + 5) for y in range(p.y - 4, p.y + 5)
+                    if (x, y) != (p.x, p.y) and w.walkable(x, y) and w.visible[x, y]
+                    and abs(x - p.x) > 1)
+        foe = _foe_beside(st)
+        foe.x, foe.y, foe.awake = spot[0], spot[1], False
+        w.monsters[:] = [foe]
+        combat.monsters_act(st)
+        self.assertTrue(foe.awake)
+        self.assertEqual([h.kind for h in st.fx], ["wake"])
+        con = _con()
+        rendering.render_all(con, st, 2.0)
+        ox, oy = rendering.camera_origin(st)
+        self.assertEqual(chr(con.ch[spot[0] - ox, spot[1] - oy - 1]), "!")
+
+    def test_one_already_awake_doesnt_announce_itself_again(self):
+        from hearthdelve.game import combat
+        st = self._below()
+        foe = _foe_beside(st)
+        foe.awake = True
+        st.world.monsters[:] = [foe]
+        combat.monsters_act(st)
+        self.assertEqual([h for h in st.fx if h.kind == "wake"], [])
+
+
 if __name__ == "__main__":
     unittest.main()

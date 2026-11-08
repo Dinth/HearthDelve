@@ -701,3 +701,16 @@ def hit(f: anim.Frame, h, age: float) -> None:
     fade = 1.0 if age < 0.5 else max(0.35, 1.0 - (age - 0.5) / 0.4)
     _write(f, sx - len(text) // 2, sy - 1 - int(age / 0.3),
            text, tuple(int(c * fade) for c in colour))
+
+
+@anim.one_off("wake", life=0.9)
+def wake(f: anim.Frame, h, age: float) -> None:
+    """A monster notices you: a "!" over it, steady for a moment, then
+    blinking out."""
+    cell = f.cell(h.x, h.y)
+    if cell is None:
+        return
+    if age > 0.45 and int(age * 10) % 2:
+        return                                    # blinking out
+    sx, sy = cell
+    _write(f, sx, sy - 1, "!", (255, 214, 72))

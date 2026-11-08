@@ -453,6 +453,7 @@ def monsters_act(state: GameState) -> None:
                 state.log.add(f"The {m.name.lower()}'s wounds close.", C.DIM)
         if not m.awake and w.visible is not None and w.visible[m.x, m.y]:
             m.awake = True
+            state.happen("wake", m.x, m.y)       # it has seen you
         if not m.awake:
             continue
         # an enrager erupts once its wounds run deep — a hard second wind
