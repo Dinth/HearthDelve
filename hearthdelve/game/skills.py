@@ -180,9 +180,27 @@ def smith_speed_mult(state: GameState) -> float:
     return 1.0 - 0.03 * skill_level(state, "Smithing")
 
 
+def _chain_intermediates() -> frozenset:
+    """Goods made only to be made into something else, which must carry their
+    input's stars through to it: every spun yarn and thread (fibre -> yarn ->
+    cloth) and the keg's grain mash (grain -> mash -> vodka). As plain materials
+    they dropped the stars mid-chain — a 5-star cotton crop wove 0-star cloth."""
+    from ..data import content
+    from ..entities import items
+    return frozenset(it.name for it in content.SPIN_RECIPES.values()) | {items.GRAIN_MASH.name}
+
+
+_CHAIN = None
+
+
 def has_quality(item) -> bool:
     """Whether an item carries a 0-5 star quality rating."""
-    return item.kind in _QUALITY_KINDS or item.name in _QUALITY_NAMES
+    global _CHAIN
+    if item.kind in _QUALITY_KINDS or item.name in _QUALITY_NAMES:
+        return True
+    if _CHAIN is None:
+        _CHAIN = _chain_intermediates()
+    return item.name in _CHAIN
 
 
 def stars(q: int) -> str:
