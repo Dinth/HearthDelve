@@ -1,10 +1,12 @@
 # Hearthdelve
 
-A cozy farming & crafting life-sim with the soul of a surface roguelike, built in
-Python 3 + [tcod](https://python-tcod.readthedocs.io). Tend a homestead in
-Hollowmere Vale by day; wander the procedurally-generated wilds when you choose.
+A cozy farming & crafting life-sim with the soul of a classical roguelike, built
+in Python 3 + [tcod](https://python-tcod.readthedocs.io). Farm a homestead in
+Hollowmere Vale by day, delve the dark below when you choose, and trade it all
+back into the villages.
 
-See [`DESIGN.md`](DESIGN.md) for the full design (frozen at v5).
+See [`DESIGN.md`](DESIGN.md) for the full design — a living document that
+describes the game as built.
 
 ## Download
 
@@ -36,6 +38,13 @@ python3 -m venv .venv
 
 A window titled *"Hearthdelve — Hollowmere Vale"* opens.
 
+## Saves
+
+The game **auto-saves each morning and when you quit**, to
+`~/.hearthdelve_save.json` (with the previous save kept beside it as
+`.bak`), and **continues it** on the next launch. Pass `--new` to start a new
+life instead. Set `HEARTHDELVE_SAVE` to keep the save somewhere else.
+
 ## Sharing it with testers
 
 **Option A — double-click launcher (testers have Python 3).** Zip the project
@@ -66,31 +75,38 @@ tcod, SDL, numpy, and the font are all bundled.
 
 ## Controls
 
-The in-game encyclopedia (`?`) is the authoritative, always-current reference.
+The keymap follows ADOM: movement on the arrows and numeric keypad (there are
+deliberately no vi-keys), letters for commands. The in-game codex (`?`) is the
+always-current reference.
 
 | Key | Action |
 |-----|--------|
 | Arrow keys | move (up / down / left / right) |
 | Numpad `1`–`9` | move, including diagonals |
-| Numpad `5` / `.` | wait a turn |
+| Numpad `5` / `.` | wait a moment |
 | `w` then a direction / `.` | run until something happens / rest a while |
-| `Space` | use the active tool / plant the selected seed on the faced tile |
-| `1`–`9` (top row) | select hotbar tool or seed |
-| `g` | gather / harvest, load/collect a machine, or use a notice board / post box |
+| `Space` | use the active tool, or plant the selected seed, on the tile you face |
+| `1`–`9`, `0` (top row) | pick a hotbar slot (tool or seed) |
+| `g` | gather / harvest, load or collect a machine, open a chest, read a notice board or post box |
+| `>` / `<` | go down / up stairs |
 | `c` | craft, build machines, cook |
-| `p` | site a carpenter building |
-| `x` | eat (restore stamina & health) |
+| `p` | site a building ordered from the carpenter |
+| `x` | eat (restores stamina & health) |
 | `b` | shipping bin — sell goods (stand beside it) |
-| `t` | aim & fire a readied bow/sling, or throw a bomb |
+| `t` | aim & loose a readied bow or sling, or throw a bomb (`Tab` swaps between them, `Enter`/`Space` fires) |
 | `Shift`+`C` | talk to a villager / open their shop |
 | `f` | give a villager a gift |
-| `s` | sleep (in or beside your bed) → next day |
-| `i` | inventory · `e` equipment · `v` character sheet |
+| `s` | sleep in your bed → next day |
+| `i` | pack · `e` equipment · `v` character sheet |
 | `j` | journal (goals, favours, projects, collection) · `r` relationships |
-| `m` | world map · `h` message-log scrollback |
+| `m` | world map · `h` or `Shift`+`M` message history (`PgUp`/`PgDn` page through it) |
 | `l` | look around (move a cursor, read what's there) |
-| `?` | help + encyclopedia (← → pages, ↑ ↓ scroll) |
-| `Esc` | quit / close a screen |
+| `?` | codex: help & encyclopedia (← → pages, ↑ ↓ scroll) |
+| `Shift`+`U` | mute / unmute the music |
+| `q` / `Esc` | quit: the prompt saves and quits on `Enter`, quits without saving on `Backspace` · `Esc` also closes a screen |
+
+**In the pack:** press an item's letter to pick it, `Enter` to use or equip
+it, `Shift`+`D` to drop the stack, `Tab` to filter by category.
 
 **Using tools:** tools act on the tile you face (the last direction you moved),
 which is **always highlighted** — it glows **green** when the active tool can
@@ -99,103 +115,47 @@ without moving, so you can line up a chop or a dig. Then press `Space`:
 the **Hoe** tills grass into soil, the **Axe** fells trees, the **Pickaxe**
 breaks rock and ore veins, the **Machete** clears foliage and shrubs, the
 **Watering Can** waters soil, the **Fishing Rod** casts at water. Each use costs
-energy. Tools start at **Wooden** tier (later upgradeable: Bronze → Iron → Steel
-→ Adamantium → Mithril).
+stamina and time. Tools start at **Wooden** and a blacksmith upgrades them:
+Bronze → Iron → Steel → Adamantium → Mithril, each tier cheaper to use.
 
-**The wild flora:** individual trees (oak, maple, birch, poplar, willow, pine,
-spruce) are passable — you walk among them. Dense groves choke with impassable
-**foliage**; **shrubs** also block. Both are cleared with the machete (dropping
-fibre). Rare **berry shrubs** (raspberry, gooseberry, currant) drop fruit when
-cleared — and fruit is what the keg and jar turn into wine and jam.
+## What's in the Vale
 
-## Status — Milestones 1–4 ✅ (vertical slice complete)
+- **A 1024×1024 world** generated from a seed: four regions (deep wildwood,
+  fen, rocky hills, open plains) meeting at your homestead, a river and a
+  southern sea — and, past the western edge, the **Westreach**, a wilder land of
+  ash and a live volcano.
+- **Farming** across four 28-day seasons: 26 crops with 0–5 star quality,
+  orchard trees, six kinds of livestock, sprinklers and a greenhouse.
+- **Crafting** at 31 machines — furnace, anvil, keg, loom, apothecary, cellar
+  and more — where a product's value grows from what went into it.
+- **Villages and folk:** Mossford, Cinderhope, Saltmere and Fenwick, a
+  woodcutters' camp, a forester's hut and the dwarf town of Khazgrim — 42
+  residents with schedules, tastes, friendships, favours and festivals.
+- **Dungeons** of six kinds, themed to their ground, re-rolled daily, with a
+  boss and a vault in every tenth-floor Deep Sanctum. Combat follows ADOM
+  (to-hit against DV, damage against PV), and is always optional.
+- **No permadeath, no game over.** Faint and you wake in your bed, short some
+  loose loot and gold; the land, tools and friendships stay.
 
-**M4 — the wilds:**
-- **Dungeons**: procedural floors (rooms + corridors) with fog-of-war, reached via
-  themed surface sites (a boulder-strewn mine, a ruin). Stairs `>` / `<` to
-  descend/ascend; sparse ore/gem **veins** to mine.
-- **Light combat**: bump-attack gentle monsters (slime, bat, boar) that wake in
-  your FOV and chase. Throw a **Bomb** (`a`, craft from coal + fiber) to hit a
-  group and shatter rock/ore. Faint (0 HP / 0 energy / past 2 AM) → hauled home,
-  minus loose loot and 10% gold; sleep heals.
-- **Fishing**: cast the rod at water for a **season-specific** catch (12 species);
-  fish sell, gift, and cook.
-- **Save/Load**: the game **auto-saves each morning and on quit** to
-  `~/.hearthdelve_save.json`, and **auto-continues** on launch. Run with
-  `--new` to start over.
+## Development
 
-## Status — Milestones 1, 2, 3a & 3b ✅
+```bash
+./.venv/bin/python -m unittest discover -s tests       # the test suite (headless)
+HEARTHDELVE_SMOKETEST=1 ./.venv/bin/python -m hearthdelve   # one-frame render check
+```
 
-**M3b — Villages, NPCs & trading:**
-- Two villages — **Mossford** (the hamlet, far east) and **Cinderhope** (the
-  outpost, far west) — with six residents who keep a daily schedule. **Roads**
-  link them through your farm (with **bridges** over rivers); travelling a road
-  is twice as fast as crossing open country.
-- **Talk** (`t`) and **gift** (`f`) raise **friendship hearts**; each villager has
-  loved/liked/disliked items (your crops & crafts are the currency of friendship).
-- **General Store** (Marda) sells seeds for all crops; the **Blacksmith** (Bron)
-  **upgrades tools** up the ladder Wooden → Bronze → Iron → Steel → Adamantium →
-  Mithril (gold + copper bars), each tier cutting the tool's energy cost.
-
-## Status — Milestones 1, 2 & 3a ✅
-
-**M3a — Make & trade (crafting + selling):**
-- **Gather** raw materials: chop trees → Wood, mine rock → Stone, mine ore veins
-  → Copper Ore + Coal.
-- **Shipping bin** (`b` beside it): drop crops/goods in; they sell for gold
-  overnight.
-- **Crafting** (`c`): build machines & sprinklers, and cook dishes that restore
-  energy.
-- **Machines** (load/collect with `g`): the **Furnace** smelts ore → bars, the
-  **Preserves Jar** turns crops → jam, the **Keg** ferments crops → wine — each
-  processing over in-game time. The **value ladder** (raw < jam < wine) is the
-  money. **Sprinklers** auto-water adjacent soil each morning.
-
-## Status — Milestones 1 & 2 ✅
-
-**M2 — Hearth & seasons (farming loop):**
-- Till soil (Hoe) → select seeds (`6`) → `Space` to plant → water daily (Can)
-  → `s` to sleep → crops advance a growth stage each watered day → `g` to
-  harvest when ripe. Crops render on the soil through their growth stages.
-- **Seasons** (28-day Spring/Summer/Fall/Winter): crops are season-bound and
-  wither when the season turns; planting out of season is refused.
-- **Weather** rolled each dawn (clear / rain / storm / fog / snow), shown in the
-  HUD, with animated **rain and snow**; rain auto-waters your crops.
-- **Day/night light**: the whole valley tints cool at night, warm at dawn/dusk,
-  bright at midday as the (slowed) clock advances.
-- **Energy & collapse**: tools cost energy; hit 0 (or stay up past 02:00) and you
-  faint, waking the next morning with reduced energy.
-
-**M1 — walking skeleton:**
-
-- Procedurally-generated 200×200 surface world: homestead carved at center
-  (house, bed, shipping bin, fenced tilled plot), with meadow / woods / river /
-  rocky-ore / moor / ruins biomes radiating outward by "wildness" distance.
-- Scrolling camera viewport, right-hand status panel (date/season, time,
-  HP / energy / stamina / gold), and a bottom message log.
-- 8-direction movement with tile collision; the in-game clock advances per step.
-- Two dungeon entrances placed out in the wilds (enterable in a later milestone).
-- **Ambient animation**: wind gusts ripple through the grass, waves shimmer
-  across water, and ore veins glint — subtle time-based brightness/colour shifts.
-- **Look** mode (`l`): move a cursor and read a description of any tile.
-- **Help** overlay (`?`), **inventory** (`i`) and **equipment** (`e`) screens.
-- **Hotbar** (`1`–`9`): quick-select among the starter tools (Hoe, Watering Can,
-  Axe, Pickaxe, Fishing Rod); starting inventory holds 15 parsnip seeds.
-
-### Roadmap
-
-- **M2** ✅ — farming loop (till/plant/water/grow/harvest) + season & weather clock
-- **M3** ✅ — crafting (bench + machines + cooking), two villages, NPCs, trading
-- **M4** ✅ — the wilds: dungeons, light combat, fishing, save/load
+CI runs the suite on every push, and the release binaries aren't built if it fails.
 
 ## Project layout
 
 ```
 hearthdelve/
-  main.py            entry point + main loop
-  engine/            constants, font loading, rendering, input
-  world/             tile types, worldgen, the map container
-  entities/          player (monsters/npcs to come)
-  game/              state, turn scheduler (actions/crafting/economy to come)
-  data/              content tables (to come)
+  main.py         the tcod context and the main loop
+  screens.py      the screen stack: one class per mode (play, pack, shop, aim, fishing…)
+  engine/         rendering, the window kit, the codex, input, saving, audio, the font
+  world/          tiles, the world and dungeon generators, the map container, crops
+  entities/       the player, items, monsters, NPCs, animals, machines
+  game/           the simulation: farming, crafting, combat, villages, delving, the economy…
+  data/           content.py — every table: crops, recipes, machines, monsters, NPCs, projects
+tests/            the unittest suite
 ```
