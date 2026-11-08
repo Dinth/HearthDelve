@@ -240,5 +240,54 @@ class TestAMonsterNoticesYou(unittest.TestCase):
         self.assertEqual([h for h in st.fx if h.kind == "wake"], [])
 
 
+
+class TestAHarvestSparkles(unittest.TestCase):
+    """A harvest showed only as a log line. Now it bursts into sparks coloured
+    by the crop's stars."""
+
+    def _sparks(self, quality):
+        from hearthdelve.engine import effects, rendering
+        st = fresh_state(2)
+        p = st.player
+        st.happen("harvest", p.x + 2, p.y, quality=quality)
+        con = _con()
+        rendering.render_all(con, st, 7.0)            # it starts…
+        rendering.render_all(con, st, 7.3)            # …and 0.3 s in, the burst is open
+        before = _con()
+        plain = fresh_state(2)
+        rendering.render_all(before, plain, 7.3)
+        ox, oy = rendering.camera_origin(st)
+        sx, sy = p.x + 2 - ox, p.y - oy
+        changed = [(x, y) for x in range(sx - 4, sx + 5) for y in range(sy - 3, sy + 4)
+                   if 0 <= x < 58 and 0 <= y < 44
+                   and (con.ch[x, y] != before.ch[x, y]
+                        or tuple(con.fg[x, y]) != tuple(before.fg[x, y]))]
+        colours = {tuple(int(c) for c in con.fg[x, y]) for x, y in changed}
+        return changed, colours, effects._QUALITY_SPARK
+
+    def test_a_harvest_is_recorded_with_its_quality(self):
+        from hearthdelve.game import farming
+        from hearthdelve.world.crops import CropPlot
+        from hearthdelve.data import content
+        st = fresh_state(2)
+        crop = content.CROPS[0]
+        x, y = st.player.x + 1, st.player.y
+        st.surface.crops[(x, y)] = CropPlot(crop=crop, days_grown=crop.days_to_mature)
+        farming.harvest(st, x, y)
+        (h,) = [h for h in st.fx if h.kind == "harvest"]
+        self.assertEqual((h.x, h.y), (x, y))
+        self.assertIn(h.data["quality"], range(6))
+
+    def test_the_sparks_take_the_crops_colour(self):
+        for q in (0, 3):
+            changed, colours, palette = self._sparks(q)
+            with self.subTest(stars=q):
+                self.assertGreaterEqual(len(changed), 3)
+                self.assertIn(palette[q], colours)
+
+    def test_finer_crops_throw_more_sparks(self):
+        self.assertGreater(len(self._sparks(4)[0]), len(self._sparks(0)[0]))
+
+
 if __name__ == "__main__":
     unittest.main()

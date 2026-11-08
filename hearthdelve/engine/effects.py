@@ -714,3 +714,35 @@ def wake(f: anim.Frame, h, age: float) -> None:
         return                                    # blinking out
     sx, sy = cell
     _write(f, sx, sy - 1, "!", (255, 214, 72))
+
+
+# A harvest's sparkle, by star quality: pale leaf, green, sky, gold, amber —
+# and a 5-star crop runs through every one of them.
+_QUALITY_SPARK = ((210, 226, 190), (170, 225, 130), (140, 210, 245),
+                  (250, 214, 100), (255, 160, 80))
+
+
+@anim.one_off("harvest", life=0.8)
+def harvest(f: anim.Frame, h, age: float) -> None:
+    """A crop is harvested or fruit picked: a burst of sparks flies out from
+    it, more of them and brighter the finer it is, coloured by its stars."""
+    cell = f.cell(h.x, h.y)
+    if cell is None:
+        return
+    sx, sy = cell
+    q = max(0, min(5, int(h.data.get("quality", 0))))
+    n = 4 + q
+    life = 0.8
+    r = 1.0 + 2.0 * (age / life)
+    fade = 1.0 if age < 0.4 else max(0.3, 1.0 - (age - 0.4) / 0.4)
+    spin = anim.h1(h.x * 31 + h.y, 1.7) * 6.2832
+    for i in range(n):
+        ang = spin + i * 6.2832 / n
+        ri = r * (0.8 + 0.4 * anim.h1(i, 3.3))             # not one perfect ring
+        x = sx + int(round(math.cos(ang) * ri * 1.3))     # cells are taller than wide
+        y = sy + int(round(math.sin(ang) * ri * 0.8))
+        if (x, y) == (sx, sy) or (x, y) in f.occupied:
+            continue
+        colour = _QUALITY_SPARK[(i + int(age * 10)) % 5] if q == 5 else _QUALITY_SPARK[q]
+        glyph = ("*" if q >= 3 else "+") if age < 0.35 else "·"
+        _write(f, x, y, glyph, tuple(int(c * fade) for c in colour))

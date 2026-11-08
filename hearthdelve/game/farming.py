@@ -159,7 +159,9 @@ def pick_tree(state: GameState, x: int, y: int) -> bool:
         state.log.add(f"The {tree.name.lower()} tree has no ripe fruit right now.", C.DIM)
         return False
     from . import skills
-    state.player.inventory.add(tree.fruit, 1, quality=skills.roll_quality(state, "Farming"))
+    q = skills.roll_quality(state, "Farming")
+    state.player.inventory.add(tree.fruit, 1, quality=q)
+    state.happen("harvest", x, y, quality=q)
     tree.has_fruit = False
     tree.refruit_in = random.randint(4, 6)          # bears again in a few days (jittered)
     skills.gain(state, "Foraging", 10)
@@ -210,6 +212,7 @@ def harvest(state: GameState, x: int, y: int) -> bool:
     soil_lvl = state.world.soil.get((x, y), 0)
     q = min(5, q + soil_lvl // 2)             # rich, long-worked loam bears finer still
     state.player.inventory.add(crop.produce, 1, quality=q)
+    state.happen("harvest", x, y, quality=q)
     # every harvest works the ground a little richer (care compounds)
     state.world.soil[(x, y)] = min(4, soil_lvl + 1)
     state.bump("crops_harvested")
