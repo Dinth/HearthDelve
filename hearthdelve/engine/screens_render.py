@@ -831,12 +831,11 @@ def render_relationships(con: tcod.console.Console, state: GameState, scroll: in
         m.text(2, 2, "You haven't met anyone yet.", C.WHITE)
         m.text(2, 3, "Visit a village and talk (Shift+C).", C.DIM)
     body = h - 4
-    hour = (state.time_minutes // 60) % 24
     lines: list[tuple[int, str, tuple]] = []
     for n in met:
         hearts = "♥" * n.hearts + "·" * (10 - n.hearts)
-        spot = village.scheduled_spot(n, hour, state.weather, state.season,
-                                      state.day_of_season)
+        spot = village.scheduled_spot(n, village.npc_hour(state, n), state.weather,
+                                      state.season, state.day_of_season)
         where = _SPOT_LABEL.get(spot, "out and about")
         prog = "" if n.hearts >= 10 else f" {n.friendship % 100:>2d}%"
         tag = "  ✓ gift" if getattr(n, "gifted_today", False) else ""

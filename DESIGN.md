@@ -138,7 +138,7 @@ Which body of water you cast into decides the catch, derived from the world rath
 
 ## 9. Villages & folk
 
-**42 residents** across four villages and three smaller places. Each has a home and a work anchor, an hourly schedule (home ↔ work ↔ inn ↔ temple ↔ square, bent by weather, season and festivals), and children who roam and chase each other about the square.
+**42 residents** across four villages and three smaller places. Each has a home and a work anchor, an hourly schedule (home ↔ work ↔ inn ↔ temple ↔ square, bent by weather, season and festivals, and kept loosely: each resident runs up to 45 minutes early or late, differently each day), and children who roam and chase each other about the square.
 
 - **Mossford** (SE plains, 10) — the farming town: general store, carpenter, chapel, inn.
 - **Cinderhope** (SW hills, 9) — the mining outpost: blacksmith, chapel, taproom, a trader.

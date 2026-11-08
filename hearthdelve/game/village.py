@@ -88,12 +88,29 @@ def scheduled_spot(npc, hour: int, weather: str, season: str, day_of_season: int
     return "square"
 
 
+SCHEDULE_DRIFT = 45     # minutes a resident runs early or late on any given day
+
+
+def npc_hour(state: GameState, npc) -> int:
+    """The hour by a resident's own clock today. Each runs up to SCHEDULE_DRIFT
+    minutes early or late, drawn from the seed, the day and their name — so the
+    village doesn't all down tools and head home on the stroke of 13:00 and
+    turn up at the inn on the stroke of 19:00, the same in every world."""
+    import random
+    import zlib
+    rng = random.Random((state.seed * 48_271 + state.day * 16_807
+                         + zlib.crc32(npc.name.encode())) & 0x7FFFFFFF)
+    drift = rng.randint(-SCHEDULE_DRIFT, SCHEDULE_DRIFT)
+    return ((state.time_minutes + drift) // 60) % 24
+
+
 def update_npcs(state: GameState) -> None:
-    """Move each resident toward their scheduled anchor for the hour. Adults
-    teleport to their spot; children roam and play around the square by day."""
-    hour = (state.time_minutes // 60) % 24
+    """Move each resident toward their scheduled anchor for the hour by their
+    own clock. Adults go straight to their spot; children roam and play
+    around the square by day."""
     for npc in state.world.npcs:
-        key = scheduled_spot(npc, hour, state.weather, state.season, state.day_of_season)
+        key = scheduled_spot(npc, npc_hour(state, npc), state.weather, state.season,
+                             state.day_of_season)
         if key == "square":
             _child_roam(state, npc)          # mill about (kids also chase to play)
         else:

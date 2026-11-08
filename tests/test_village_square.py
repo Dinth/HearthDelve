@@ -29,9 +29,9 @@ def _walk_the_morning(st, until_hour: int):
 
 def _square_goers(st):
     from hearthdelve.game import village
-    hour = (st.time_minutes // 60) % 24
     return [n for n in st.world.npcs
-            if village.scheduled_spot(n, hour, st.weather, st.season, st.day_of_season) == "square"]
+            if village.scheduled_spot(n, village.npc_hour(st, n), st.weather, st.season,
+                                      st.day_of_season) == "square"]
 
 
 def _off_square(n):

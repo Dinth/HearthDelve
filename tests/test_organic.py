@@ -89,5 +89,37 @@ class TestVillagersDontRecite(unittest.TestCase):
         self.assertNotEqual(self._lines(3)[1], self._lines(5)[1])
 
 
+class TestTheVillageKeepsLooseHours(unittest.TestCase):
+    """Every adult downed tools and went home on the stroke of 13:00 (and to
+    the inn on the stroke of 19:00), the same in every world."""
+
+    def _lunch_minutes(self, seed, day):
+        """The minute of the day each working adult heads home for lunch."""
+        from hearthdelve.game import village
+        st = fresh_state(seed)
+        st.day, st.weather = day, "Clear"
+        from hearthdelve.engine import constants as C
+
+        def spot(n, minute):
+            st.clock = (minute - C.DAY_START_MIN) * 60      # the clock counts from 06:00
+            return village.scheduled_spot(n, village.npc_hour(st, n), st.weather, st.season,
+                                          st.day_of_season)
+        working = [n for n in st.surface.npcs
+                   if n.role != "child" and spot(n, 11 * 60) != "home"]
+        went = {}
+        for n in working:
+            went[n.name] = next(m for m in range(11 * 60, 15 * 60) if spot(n, m) == "home")
+        return went
+
+    def test_folk_head_home_at_their_own_times(self):
+        went = self._lunch_minutes(3, 2)
+        self.assertGreater(len(set(went.values())), 10)
+        self.assertTrue(all(12 * 60 + 15 <= m <= 13 * 60 + 45 for m in went.values()))
+
+    def test_the_hours_shift_with_the_day(self):
+        self.assertEqual(self._lunch_minutes(3, 2), self._lunch_minutes(3, 2))
+        self.assertNotEqual(self._lunch_minutes(3, 2), self._lunch_minutes(3, 3))
+
+
 if __name__ == "__main__":
     unittest.main()
