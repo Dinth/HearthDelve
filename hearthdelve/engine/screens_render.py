@@ -1091,7 +1091,9 @@ def render_world_map(con: tcod.console.Console, state: GameState) -> None:
     # you
     mark(px, py, "@", (255, 255, 255))
 
-    m.text(x0, y0 + MH + 1, "@ you   ⌂ farm   ■ village   ▼ delve (by kind)   · road",
+    # The legend sits on the row just under the map; it used to share the
+    # footer's row and was printed over ("m / Esc closem ■ village").
+    m.text(x0, y0 + MH, "@ you   ⌂ farm   ■ village   ▼ delve (by kind)   · road",
            fg=C.DIM)
     m.footer("m / Esc close")
 

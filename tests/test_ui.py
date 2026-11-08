@@ -146,5 +146,21 @@ class TestTheAimBannerStaysReadable(unittest.TestCase):
         self.assertTrue(np.array_equal(con.fg[C.VIEW_W:], panel[1]))
 
 
+class TestTheWorldMapLegendIsReadable(unittest.TestCase):
+    """The map's legend and its footer were both printed on row 48, so the
+    footer overwrote the legend's start: 'm / Esc closem ■ village …'."""
+
+    def test_legend_and_footer_both_read_in_full(self):
+        from hearthdelve.engine import rendering
+        from tests.common import fresh_state
+        st = fresh_state(1)
+        con = _con()
+        rendering.render_world_map(con, st)
+        text = [_rows(con, 1, 79, y, y + 1) for y in range(50)]
+        legend = "@ you   ⌂ farm   ■ village   ▼ delve (by kind)   · road"
+        self.assertTrue(any(legend in row for row in text))
+        self.assertTrue(any(row == "m / Esc close" for row in text))
+
+
 if __name__ == "__main__":
     unittest.main()
