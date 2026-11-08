@@ -121,5 +121,52 @@ class TestTheVillageKeepsLooseHours(unittest.TestCase):
         self.assertNotEqual(self._lunch_minutes(3, 2), self._lunch_minutes(3, 3))
 
 
+def _onsets(signal, seconds, step=0.02):
+    """The moments `signal(t)` switches on, sampled over `seconds`."""
+    out, was = [], False
+    for k in range(int(seconds / step)):
+        t = k * step
+        now = signal(t)
+        if now and not was:
+            out.append(round(t, 2))
+        was = now
+    return out
+
+
+class TestTheSkyKeepsNoBeat(unittest.TestCase):
+    """Lightning struck every 6.5 s, the caldera erupted every 41 s, flocks
+    crossed on a fixed period each, and every finished machine glinted on one
+    shared 1-second beat."""
+
+    def _gaps(self, onsets):
+        return {round(b - a, 1) for a, b in zip(onsets, onsets[1:])}
+
+    def test_lightning_strikes_at_irregular_moments(self):
+        from hearthdelve.engine import rendering
+        strikes = _onsets(lambda t: rendering._lightning(t, 7) > 0.5, 200)
+        self.assertGreater(len(strikes), 15)
+        self.assertGreater(len(self._gaps(strikes)), 5)
+        self.assertEqual(strikes, _onsets(lambda t: rendering._lightning(t, 7) > 0.5, 200))
+
+    def test_the_caldera_erupts_at_irregular_moments(self):
+        from hearthdelve.engine import rendering
+        fits = _onsets(lambda t: rendering._eruption_age(t, 7) is not None, 1200, step=0.25)
+        self.assertGreater(len(fits), 15)
+        self.assertGreater(len(self._gaps(fits)), 5)
+
+    def test_flocks_cross_at_irregular_moments(self):
+        from hearthdelve.engine import rendering
+        flights = _onsets(lambda t: rendering._flyover(0, t, 7) is not None, 2400, step=0.25)
+        self.assertGreater(len(flights), 20)
+        self.assertGreater(len(self._gaps(flights)), 5)
+
+    def test_finished_machines_glint_out_of_step(self):
+        from hearthdelve.engine import rendering
+        spots = [(10, 10), (11, 10), (12, 10), (10, 11), (40, 33)]
+        patterns = {tuple(rendering._machine_lit(k * 0.05, x, y) for k in range(60))
+                    for x, y in spots}
+        self.assertGreater(len(patterns), 1)
+
+
 if __name__ == "__main__":
     unittest.main()

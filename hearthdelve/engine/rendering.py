@@ -152,6 +152,63 @@ def _h1(i: int, s: float) -> float:
     return v - math.floor(v)
 
 
+# --- irregular rhythms --------------------------------------------------------
+# Lightning, the eruption and the bird flyovers each ran on one fixed period
+# (6.5s, 41s, ~40s), and every ready machine glinted on the same 1-second beat:
+# a world that ticked. Each now happens at an unpredictable moment within its
+# own window of time (salted by the world's seed), sometimes not at all, and
+# each machine keeps its own beat. Pure functions of time, so they're testable.
+def _burst_age(t: float, window: float, chance: float, span: float, salt: float):
+    """Seconds since the burst in this window of time began, or None if this
+    window has none (or it hasn't started yet). A burst lands somewhere in
+    the window, early enough to finish inside it (`span` long), on a
+    `chance` of windows."""
+    k = math.floor(t / window)
+    if _h1(k, salt + 0.37) >= chance:
+        return None
+    start = k * window + _h1(k, salt + 0.71) * max(0.0, window - span)
+    age = t - start
+    return age if 0.0 <= age < span else None
+
+
+def _lightning(t: float, seed: int) -> float:
+    """The storm's flash brightness at time `t`: a double strike at irregular
+    moments, 0 most of the time."""
+    age = _burst_age(t, 6.5, 0.8, 0.6, (seed % 1009) + 0.11)
+    if age is None:
+        return 0.0
+    return float(np.exp(-(age ** 2) / 0.010) + 0.6 * np.exp(-((age - 0.22) ** 2) / 0.010))
+
+
+def _eruption_age(t: float, seed: int):
+    """Seconds into the caldera's current spitting fit, or None while it's quiet."""
+    span = 4.0 + 3.0 * _h1(math.floor(t / 41.0), (seed % 1009) + 0.53)
+    return _burst_age(t, 41.0, 0.85, span, (seed % 1009) + 0.29)
+
+
+def _machine_lit(t: float, mx: int, my: int) -> bool:
+    """A finished machine's glint: on its own phase and a beat of its own
+    (0.8-1.2s), so a yard of them twinkles rather than flashing as one."""
+    h = mx * 7 + my * 13
+    beat = 0.8 + 0.4 * _h1(h, 6.7)
+    return ((t / beat + _h1(h, 4.1)) % 1.0) < 0.5
+
+
+def _flyover(f: int, t: float, seed: int):
+    """How far flock `f` is across the view (0..1), or None while none is
+    crossing: a crossing takes 40% of its window, starts somewhere within it,
+    and some windows pass without birds. Returns (travel, window index)."""
+    per = 34.0 + 14.0 * _h1(f, 2.0)
+    phase = t / per + _h1(f, 5.0)
+    cyc = math.floor(phase)
+    if _h1(f * 7 + cyc, (seed % 1009) + 11.0) >= 0.75:
+        return None
+    local = (phase - cyc) - 0.55 * _h1(f * 7 + cyc, (seed % 1009) + 13.0)
+    if not 0.0 <= local <= 0.40:
+        return None
+    return local / 0.40, cyc
+
+
 def _shift2d(a: np.ndarray, sx: int, sy: int) -> np.ndarray:
     """A copy of `a` translated by (sx, sy), vacated cells left at zero (no
     wrap). Used to stack a rising, drifting steam plume off the caldera."""
@@ -377,7 +434,7 @@ def _westreach_ambience(con, state: GameState, view, ox: int, oy: int, t: float)
 
     # The eruption: every so often the caldera spits a fountain of sparks —
     # loud, bright, and entirely uninterested in you.
-    if (t % 41.0) < 5.5:
+    if _eruption_age(t, state.seed) is not None:
         lava = np.argwhere(view == tile.LAVA)
         if len(lava):
             cx, cy = int(lava[:, 0].mean()), int(lava[:, 1].mean())
@@ -636,7 +693,7 @@ def render_world(con: tcod.console.Console, state: GameState, anim_time: float =
             if status == "done":
                 # ready: pulse between bright gold and white — pollable at a
                 # glance across the whole farm, not a subtle tint
-                pulse = (t % 1.0) < 0.5
+                pulse = _machine_lit(t, mx, my)        # each on its own beat
                 fg[sx, sy] = (255, 255, 220) if pulse else (250, 220, 110)
                 bg[sx, sy] = (60, 50, 26)
             elif status == "working":
@@ -984,10 +1041,9 @@ def render_weather(con: tcod.console.Console, state: GameState, t: float, occupi
             k = kbg * mul
             con.rgb[chan][:C.VIEW_W, :C.VIEW_H] = (buf * (1 - k) + veil * k).astype(np.uint8)
     if w == "Storm":
-        # Occasional lightning: a brief, near-white flash over the whole view on
-        # a slow cycle (a double-strike for that thunderclap feel).
-        cyc = t % 6.5
-        flash = np.exp(-(cyc ** 2) / 0.010) + 0.6 * np.exp(-((cyc - 0.22) ** 2) / 0.010)
+        # Occasional lightning: a brief, near-white flash over the whole view at
+        # irregular moments (a double-strike for that thunderclap feel).
+        flash = _lightning(t, state.seed)
         if flash > 0.03:
             add = np.array([min(130.0, flash * 150.0)] * 2 + [min(140.0, flash * 165.0)], np.float32)
             for chan in ("bg", "fg"):
@@ -1184,13 +1240,10 @@ def render_crossings(con: tcod.console.Console, state: GameState, t: float, occu
     low_flight = _wet_tomorrow(state)                     # birds fly low before rain
     if daytime and state.weather != "Storm":              # birds shelter in storms
         for f in range(2):
-            per = 34.0 + 14.0 * _h1(f, 2.0)               # a flyover every ~34–48s…
-            phase = t / per + _h1(f, 5.0)
-            cyc = math.floor(phase)
-            frac = phase - cyc
-            if frac > 0.40:                               # …on-screen only while crossing
+            crossing = _flyover(f, t, state.seed)         # now and then, never on a beat
+            if crossing is None:
                 continue
-            travel = frac / 0.40
+            travel, cyc = crossing
             rightward = _h1(f * 7 + cyc, 3.0) < 0.5
             headx = int(-4 + travel * (vw + 8)) if rightward else int(vw + 4 - travel * (vw + 8))
             # high across the sky normally; skimming the low third when rain nears
