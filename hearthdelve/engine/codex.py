@@ -412,7 +412,7 @@ _codex_cache: list | None = None
 _codex_sig: tuple | None = None
 
 
-def render_codex(con: tcod.console.Console, state: GameState, page: int, scroll: int) -> None:
+def render_codex(con: tcod.console.Console, state: GameState, page: int, scroll: int) -> int:
     # The pages are almost entirely static content; only the Villagers page moves
     # (friendship hearts). Rebuild solely when that signature changes, rather than
     # re-walking every crop/tool/recipe/machine on every frame the help is open.
@@ -440,6 +440,7 @@ def render_codex(con: tcod.console.Console, state: GameState, page: int, scroll:
         m.text(2, 2 + i, text[:w - 4], fg=color)
     m.arrows(scroll > 0, scroll < max_scroll, 2, h - 3)
     m.footer(f" ← → page {page + 1}/{len(pages)}   ↑ ↓ scroll   Esc close ")
+    return scroll                        # clamped, for the screen to keep (see ui.Modal.list)
 
 
 # Inventory categories, in the order they're listed (ADOM-style grouping).

@@ -453,7 +453,9 @@ class HelpScreen(Screen):
         self.scroll = 0
 
     def render(self, ui: UI, con) -> None:
-        codex.render_codex(con, ui.state, self.page, self.scroll)
+        # The renderer knows how far the page scrolls; keep its clamped value,
+        # or presses past the end pile up and take as many to come back.
+        self.scroll = codex.render_codex(con, ui.state, self.page, self.scroll)
 
     def handle(self, ui: UI, cmd: str, action: tuple) -> None:
         if cmd in ("help", "cancel", "quit"):
@@ -933,7 +935,7 @@ class RelationsScreen(Screen):
         self.scroll = 0
 
     def render(self, ui: UI, con) -> None:
-        rendering.render_relationships(con, ui.state, self.scroll)
+        self.scroll = rendering.render_relationships(con, ui.state, self.scroll)   # clamped
 
     def handle(self, ui: UI, cmd: str, action: tuple) -> None:
         if cmd in ("cancel", "relations", "quit"):
@@ -958,7 +960,7 @@ class LogScreen(Screen):
         self.scroll = 0
 
     def render(self, ui: UI, con) -> None:
-        rendering.render_message_log(con, ui.state, self.scroll)
+        self.scroll = rendering.render_message_log(con, ui.state, self.scroll)     # clamped
 
     def handle(self, ui: UI, cmd: str, action: tuple) -> None:
         if cmd in ("cancel", "messages", "quit"):

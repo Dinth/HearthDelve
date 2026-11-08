@@ -19,7 +19,7 @@ _HDR = ui.HDR
 _KEY = (150, 200, 230)
 
 
-def render_message_log(con: tcod.console.Console, state: GameState, scroll: int) -> None:
+def render_message_log(con: tcod.console.Console, state: GameState, scroll: int) -> int:
     """Full scrollback of the message log (newest at the bottom), every message
     word-wrapped to the window; ``scroll`` counts lines back from the newest."""
     w, h = 72, C.SCREEN_H - 6
@@ -34,6 +34,7 @@ def render_message_log(con: tcod.console.Console, state: GameState, scroll: int)
         m.text(2, 2 + i, text, fg=color)
     m.arrows(scroll < max_scroll, scroll > 0, 2, h - 3)
     m.footer("↑↓ scroll · Esc close")
+    return scroll                        # clamped, for the screen to keep
 
 
 def render_mail(con: tcod.console.Console, state: GameState, sel: int) -> None:
@@ -819,7 +820,7 @@ _SPOT_LABEL = {"home": "at home", "work": "at work", "inn": "at the inn",
                "temple": "at the temple", "square": "about the square"}
 
 
-def render_relationships(con: tcod.console.Console, state: GameState, scroll: int = 0) -> None:
+def render_relationships(con: tcod.console.Console, state: GameState, scroll: int = 0) -> int:
     from ..data import content
     from ..game import village
     met = [n for n in state.surface.npcs if n.met] if state.surface else []
@@ -860,6 +861,7 @@ def render_relationships(con: tcod.console.Console, state: GameState, scroll: in
             m.text(2 + indent, 2 + row, text, fg=color)
     m.arrows(scroll > 0, scroll + body < len(lines), 2, h - 3)
     m.footer("r / Esc to close")
+    return scroll                        # clamped, for the screen to keep
 
 
 def render_character(con: tcod.console.Console, state: GameState) -> None:

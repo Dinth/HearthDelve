@@ -162,6 +162,49 @@ class TestTheWorldMapLegendIsReadable(unittest.TestCase):
         self.assertTrue(any(row == "m / Esc close" for row in text))
 
 
+class TestScrollingStopsAtTheEnd(unittest.TestCase):
+    """The codex, the relations list and the message log clamped their scroll
+    only while drawing, never the stored value: after 200 presses past the
+    end it read 200, and took 200 presses back before the view moved."""
+
+    PRESSES = 2000                                      # past the end of the longest page
+
+    def _overscroll(self, screen, older):
+        """Press far past the end (a frame drawn after each, as in play),
+        then once back. Returns the scroll before and after."""
+        from hearthdelve import screens
+        from hearthdelve.entities import items
+        from tests.common import fresh_state
+        from hearthdelve.engine import codex
+        st = fresh_state(6)
+        for i in range(100):                            # a history longer than the window
+            st.log.add(f"Note {i}: the wind turns over the {items.WHEAT.name.lower()}.")
+        for npc in st.surface.npcs:                     # a relations list longer than it
+            npc.met = True
+        if isinstance(screen, screens.HelpScreen):      # the codex's longest page
+            pages = codex.build_codex_pages(st)
+            screen.page = max(range(len(pages)), key=lambda k: len(pages[k][1]))
+        ui = screens.UI(st)
+        ui.push(screen)
+        con = _con()
+        for _ in range(self.PRESSES):
+            screen.handle(ui, "move", ("move", 0, older))
+            screen.render(ui, con)
+        end = screen.scroll
+        screen.handle(ui, "move", ("move", 0, -older))
+        screen.render(ui, con)
+        return end, screen.scroll
+
+    def test_one_press_back_moves_the_view(self):
+        from hearthdelve import screens
+        for make, older in ((screens.HelpScreen, 1), (screens.RelationsScreen, 1),
+                            (screens.LogScreen, -1)):
+            with self.subTest(screen=make.__name__):
+                end, back = self._overscroll(make(), older)
+                self.assertTrue(0 < end < self.PRESSES, end)   # it scrolls, and stops at the end
+                self.assertEqual(back, end - 1)
+
+
 class TestEveryWindowStaysInsideItsFrame(unittest.TestCase):
     """Four windows printed past their frames: the intro page (the first
     thing a new player sees) by 4 cells, the pack's footer by 9 onto the side
