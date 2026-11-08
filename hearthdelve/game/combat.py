@@ -139,6 +139,14 @@ def morning_status(state: GameState) -> None:
                       info["color"])
 
 
+# What the log says when the held weapon's status takes on a struck foe. A
+# Venom Draught's hit used to report the ruby's flames.
+_BLADE_LINE = {
+    "burn": "Your blade sears the {} — it catches fire!",
+    "poison": "Your venomed blade bites the {} — the poison takes!",
+}
+
+
 def weapon_inflict(state: GameState) -> str:
     """A status the held weapon leaves on a struck foe: a ruby-set blade burns,
     and so does any weapon while a Firebrand Elixir is in the blood. (Melee only —
@@ -385,11 +393,11 @@ def player_attack(state: GameState, m) -> None:
     if m.hp <= 0:
         _on_kill(state, m)
         return
-    kind = weapon_inflict(state)                 # a ruby-set blade sets foes alight
+    kind = weapon_inflict(state)                 # a ruby or a draught on the blade
     if kind and kind not in m.status and random.random() < STATUS[kind]["chance"]:
         apply_status(state, kind, target=m)
-        state.log.add(f"Your blade sears the {m.name.lower()} — it catches fire!",
-                      STATUS[kind]["color"])
+        state.log.add(_BLADE_LINE.get(kind, "Your blade marks the {} — it takes hold!")
+                      .format(m.name.lower()), STATUS[kind]["color"])
     if wild and not m.hostile:
         state.log.add(f"You hit the {m.name.lower()} for {dmg} — it bolts!", C.DIM)
     else:

@@ -187,6 +187,38 @@ class TestTheBowSharesTheFightersEdge(unittest.TestCase):
         self.assertEqual(shot1 - shot0, 2)
 
 
+class TestTheBladeSaysWhatItLeaves(unittest.TestCase):
+    """A Venom Draught poisons what you strike, but the log always read 'Your
+    blade sears the … — it catches fire!', the ruby's line."""
+
+    def _strike(self, buff="", gems=()):
+        from unittest import mock
+        from hearthdelve.data import content
+        from hearthdelve.entities.monster import Mob
+        from hearthdelve.game import combat
+        st = fresh_state(1)
+        st.player.hotbar[st.player.active_slot] = content.make_gear("Sword", "iron", gems=gems)
+        if buff:
+            st.player.buff, st.player.buff_until = buff, st.abs_minutes + 600
+        foe = Mob("Target", "T", (200, 200, 200), 99, 99, 1, "chase",
+                  st.player.x + 1, st.player.y, dv=0, pv=0)
+        with mock.patch.object(combat, "_resolve", return_value=(5, False)), \
+                mock.patch.object(combat.random, "random", return_value=0.0):
+            combat.player_attack(st, foe)
+        return foe, " ".join(t for t, _c in st.log.messages)
+
+    def test_a_venom_draught_poisons_and_says_so(self):
+        foe, log = self._strike(buff="venomed")
+        self.assertIn("poison", foe.status)
+        self.assertNotIn("fire", log)
+        self.assertIn("poison", log)
+
+    def test_a_ruby_still_burns_in_its_own_words(self):
+        foe, log = self._strike(gems=("ruby",))
+        self.assertIn("burn", foe.status)
+        self.assertIn("catches fire", log)
+
+
 class TestStatusArrowsWaitToBeReadied(unittest.TestCase):
     """Fire and venom arrows are fletched to be readied deliberately, but with
     nothing readied a shot spent the 'best' arrow by damage — and their +1 put
