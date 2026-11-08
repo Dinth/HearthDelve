@@ -188,7 +188,9 @@ SUGAR       = Item("Sugar",       "▪", "material", "Milled from pressed cane; 
 SALT_LUMP   = Item("Salt Lump",   "○", "material", "A crust of sea salt scraped from the strand — mill it fine.", value=12)
 SEA_SALT    = Item("Sea Salt",    "▪", "material", "Finely milled sea salt; seasons a dish.", value=20)
 CHARCOAL    = Item("Charcoal",    "♦", "material", "Wood charred in a kiln; a modest, self-sufficient fuel.", value=10)
-COKE        = Item("Coke",        "♦", "material", "Coal baked in a kiln; the hottest fuel — smelts the deepest metals fast.", value=28)
+# Coke is worth coal's 12 plus the 25% a processed good earns; at 28 a lump of
+# coal bought at the smith's and kilned sold back for more than it cost.
+COKE        = Item("Coke",        "♦", "material", "Coal baked in a kiln; the hottest fuel — smelts the deepest metals fast.", value=15)
 # Dungeon reagents: foraged fungus and creature drops (cook/sell/gift).
 CAVE_MUSHROOM = Item("Cave Mushroom", "τ", "material", "An earthy cave fungus — good in a stew.", value=30)
 SLIME_GEL     = Item("Slime Gel",     "*", "material", "Sticky residue from a cave slime.",       value=15)

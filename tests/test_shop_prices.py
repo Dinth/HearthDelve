@@ -104,6 +104,44 @@ class TheMarketsBestDayStillLoses(unittest.TestCase):
         self.assertEqual(pumps, [])
 
 
+class NoMachineTurnsBoughtGoodsIntoProfit(unittest.TestCase):
+    """The counter beats the bin for every good it sells — but not for what a
+    machine makes of it. Coal at the smith's (22g at the best haggle) kilned
+    into coke worth 28 posted back for up to 40g. Every machine recipe that
+    can be fed wholly from a counter that never runs dry must lose at the
+    bin's best. (The smiths' deep bars are counted out by the week, so what
+    an anvil makes of them is bounded by design.)"""
+
+    def test_no_unlimited_counter_good_crafts_into_a_profit(self):
+        from hearthdelve.game import crafting, karma, village
+        st = fresh_state(3)
+        st.player.karma = karma.MAX_KARMA
+        for pr in st.projects:
+            pr["state"] = "done"
+        shops = list(st.surface.npcs) + list(content.dwarf_npcs())
+        cheapest = {}
+        for npc in shops:
+            if not (npc.shop or npc.role == "trader"):
+                continue
+            for r in village.shop_entries(npc.shop or "trader", st, npc):
+                if r.kind in ("buy", "tradebuy") and r.item is not None and r.left < 0:
+                    cheapest[r.item] = min(r.price, cheapest.get(r.item, r.price))
+        self.assertIn(items.COAL, cheapest)
+        for it in cheapest:
+            st.player.inventory.add(it, 50)
+        pumps = []
+        for kind, mdef in content.MACHINES.items():
+            for o in crafting.machine_load_options(st, mdef) or []:
+                ins = o.get("inputs") or []
+                if not ins or not all(it in cheapest for it, _q in ins):
+                    continue
+                cost = sum(cheapest[it] * q for it, q in ins)
+                best = crafting.bin_ceiling(o["output"]) * o.get("out_qty", 1)
+                if best >= cost:
+                    pumps.append((kind, o["output"].name, cost, best))
+        self.assertEqual(pumps, [])
+
+
 class TheSmithsDeepBarsRunOut(unittest.TestCase):
     """A master smith's forge averaged well over what bought bars cost (an
     adamantium greatsword cleared ~990g at baseline), and the counter never ran
