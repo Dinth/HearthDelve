@@ -106,5 +106,37 @@ class TestAPredatorIsAFightNotACruelty(unittest.TestCase):
         self.assertEqual(sorted(set(content.MONSTER_DROPS) - foes), [])
 
 
+class TestEachForesterSpeaksForThemselves(unittest.TestCase):
+    """The weekly forest gift keyed on the forester role but spoke in Yew's
+    rhymes under Yew's name, so the camp's woodcutters handed over their planks
+    and coal as 'Yew tucks a timber plank into your pack'."""
+
+    def _gift_from(self, name):
+        import random
+        from hearthdelve.game import village
+        st = fresh_state(1)
+        npc = next(n for n in st.surface.npcs if n.name == name)
+        npc.friendship = 10 ** 4                            # a close friend
+        for th in (5, 8):                                   # keepsakes already given,
+            st.stats[f"heartgift_{name}_{th}"] = 1          # so only the weekly gift speaks
+        for seed in range(200):
+            random.seed(seed)
+            st.stats.pop(f"forestgift_day_{name}", None)
+            line = village._heart_reward(st, npc)
+            if line:
+                return line
+        self.fail(f"{name} never shared")
+
+    def test_a_woodcutter_gives_in_their_own_name(self):
+        for name in ("Burl", "Rowan", "Holt"):
+            line = self._gift_from(name)
+            with self.subTest(name=name):
+                self.assertIn(name, line)
+                self.assertNotIn("Yew", line)
+
+    def test_yew_keeps_his_rhymes(self):
+        self.assertIn("Yew", self._gift_from("Yew"))
+
+
 if __name__ == "__main__":
     unittest.main()

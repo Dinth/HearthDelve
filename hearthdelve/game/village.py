@@ -378,6 +378,11 @@ def _heart_reward(state: GameState, npc: NPC):
         gift = random.choice(npc.gifts)
         p.inventory.add(gift, 1)
         state.log.add(f"{npc.name} gives you a {gift.name.lower()}.", (200, 220, 160))
+        # The rhymes are Yew's own; the camp's woodcutters are foresters too, and
+        # used to hand over their planks and coal in Yew's voice, under his name.
+        if npc.name != "Yew":
+            return (f"{npc.name} tucks a {gift.name.lower()} into your pack:\n"
+                    "\"Spare from the camp's stock. You've more than earned it.\"")
         if gift is items.BEE_QUEEN:
             return ("Yew cups his hands and hums low; something within them stirs:\n"
                     "\"A queen for a friend — go raise her a hall of gold!\"")
