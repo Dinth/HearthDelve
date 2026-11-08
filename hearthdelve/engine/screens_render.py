@@ -935,7 +935,8 @@ def render_shop(con: tcod.console.Console, state: GameState, npc, sel: int, line
             m.text(w - 20, dy, gains, fg=(150, 210, 150), bg=rowbg)
             m.text(w - 8, dy, f"{e.price}g", fg=C.GOLD_COLOR if afford else C.DIM, bg=rowbg)
         elif e.kind == "buy":
-            m.text(2, dy, pre + e.item.name, fg=C.WHITE if afford else C.DIM, bg=rowbg)
+            name = e.item.name + (f" ({e.left} left this week)" if e.left >= 0 else "")
+            m.text(2, dy, pre + name, fg=C.WHITE if afford else C.DIM, bg=rowbg)
             m.text(w - 10, dy, f"{e.price}g", fg=C.GOLD_COLOR if afford else C.DIM, bg=rowbg)
         elif e.kind == "contest":
             m.text(2, dy, pre + f"Enter the produce contest ({e.name})"[:w - 12],

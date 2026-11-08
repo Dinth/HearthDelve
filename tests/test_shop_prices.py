@@ -104,5 +104,67 @@ class TheMarketsBestDayStillLoses(unittest.TestCase):
         self.assertEqual(pumps, [])
 
 
+class TheSmithsDeepBarsRunOut(unittest.TestCase):
+    """A master smith's forge averaged well over what bought bars cost (an
+    adamantium greatsword cleared ~990g at baseline), and the counter never ran
+    dry, so bars could be flipped through the anvil without end. Each smith now
+    sells only so many of each deep bar a week — enough for a tool upgrade."""
+
+    def setUp(self):
+        from hearthdelve.game import village
+        self.st = fresh_state(3)
+        self.st.player.gold = 10 ** 6
+        for pr in self.st.projects:
+            if pr["id"] == "deep_forge":
+                pr["state"] = "done"
+        self.bron = next(n for n in self.st.surface.npcs if n.shop == "blacksmith")
+        self.thrunn = next(n for n in content.dwarf_npcs() if n.shop == "blacksmith")
+        self.per_week = village.DEEP_BARS_PER_WEEK
+
+    def _row(self, npc, bar):
+        from hearthdelve.game import village
+        return next((r for r in village.shop_entries("blacksmith", self.st, npc)
+                     if r.kind == "buy" and r.item is bar), None)
+
+    def _buy_all(self, npc, bar):
+        from hearthdelve.game import village
+        bought = 0
+        while (r := self._row(npc, bar)) is not None and bought < 50:
+            village.purchase(self.st, r)
+            bought += 1
+        return bought
+
+    def test_a_week_holds_a_set_number_and_the_next_week_restocks(self):
+        bar = items.ADAMANTIUM_BAR
+        self.assertEqual(self._row(self.bron, bar).left, self.per_week)
+        self.assertEqual(self._row(self.bron, bar).label, bar.name)
+        self.assertEqual(self._buy_all(self.bron, bar), self.per_week)
+        self.assertEqual(self.st.player.inventory.count(bar), self.per_week)
+        self.assertIsNone(self._row(self.bron, bar))
+        self.assertIsNotNone(self._row(self.bron, items.MITHRIL_BAR))   # each bar its own stock
+        self.st.day += 7
+        self.assertEqual(self._buy_all(self.bron, bar), self.per_week)
+
+    def test_enough_for_the_dearest_tool_upgrade(self):
+        dearest = max(content.upgrade_cost(t)[2] for t in range(len(content.TIER_BAR)))
+        self.assertGreaterEqual(self.per_week, dearest)
+
+    def test_each_smith_keeps_their_own_stock_and_a_reload_keeps_the_count(self):
+        from hearthdelve.engine import save
+        bar = items.SILVER_BAR
+        self._buy_all(self.bron, bar)
+        self.assertIsNotNone(self._row(self.thrunn, bar))               # Khazgrim's forge
+        save.save(self.st)
+        self.st = save.load()
+        self.assertIsNone(self._row(self.bron, bar))
+
+    def test_the_common_bars_never_run_out(self):
+        from hearthdelve.game import village
+        r = self._row(self.bron, items.IRON_BAR)
+        for _ in range(self.per_week + 3):
+            village.purchase(self.st, r)
+        self.assertIsNotNone(self._row(self.bron, items.IRON_BAR))
+
+
 if __name__ == "__main__":
     unittest.main()

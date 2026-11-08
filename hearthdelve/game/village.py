@@ -32,7 +32,8 @@ class ShopRow:
     hp: int = 0                # …and heal
     quality: int = 0           # star quality of the unit sold (sellto)
     name: str = ""             # recipe name / festival name
-    key: str = ""              # stats key marking a trader slot sold
+    key: str = ""              # stats key: a trader slot sold / a smith's weekly bar stock
+    left: int = -1             # units left in a counted stock (-1: the counter never runs dry)
 
 
 # --- schedule ---------------------------------------------------------------
@@ -726,9 +727,7 @@ def _shop_entries(shop: str, state: GameState | None = None,
             from . import projects
             if (projects.done(state, "deep_forge")
                     or (npc is not None and getattr(npc, "village", "") == "Khazgrim")):
-                buys += [ShopRow("buy", label=b.name, item=b,
-                                 price=content._round5(b.value * 2.0))
-                         for b in content.DEEP_FORGE_BARS]
+                buys += _deep_bar_rows(state, npc)
                 buys += [ShopRow("buy", label=it.name, item=it,
                                  price=content._round5(it.value * 2.8))
                          for m in content.DEEP_FORGE_METALS
@@ -768,6 +767,27 @@ def _shop_entries(shop: str, state: GameState | None = None,
     return []
 
 
+# Each smith sells only so many deep bars a week. Enough for a tool upgrade (the
+# dearest takes six), but a master smith's forge averaged well over what the
+# bars cost — an adamantium greatsword cleared ~990g on an ordinary day — so an
+# open till let bought bars be flipped through the anvil without end.
+DEEP_BARS_PER_WEEK = 8
+
+
+def _deep_bar_rows(state: GameState, npc) -> list[ShopRow]:
+    """This week's deep bars on a smith's counter, each row counting down its
+    stock (a sold-out bar leaves the counter until the week turns)."""
+    who = npc.name if npc is not None else "smith"
+    rows = []
+    for b in content.DEEP_FORGE_BARS:
+        key = f"deepbars_{who}_{state.day // 7}_{b.name}"
+        left = DEEP_BARS_PER_WEEK - state.stats.get(key, 0)
+        if left > 0:
+            rows.append(ShopRow("buy", label=b.name, item=b,
+                                price=content._round5(b.value * 2.0), key=key, left=left))
+    return rows
+
+
 def _job_for(kind: str):
     """The (label, gold, mats) of a carpenter job by its build kind, or None."""
     for label, k, gold, mats in content.CARPENTER_JOBS:
@@ -779,11 +799,16 @@ def _job_for(kind: str):
 def purchase(state: GameState, row: ShopRow) -> None:
     """Perform a shop row's transaction. One dispatch, on named fields."""
     if row.kind == "buy":
+        if row.key and state.stats.get(row.key, 0) >= DEEP_BARS_PER_WEEK:
+            state.log.add("That's all of those until the week turns.", C.DIM)
+            return
         if state.player.gold < row.price:
             state.log.add("You can't afford that.", C.DIM)
             return
         state.player.gold -= row.price
         state.player.inventory.add(row.item, 1)
+        if row.key:                                   # a counted stock (deep bars)
+            state.stats[row.key] = state.stats.get(row.key, 0) + 1
         state.log.add(f"Bought {row.item.name} for {row.price}g.")
     elif row.kind == "meal":
         p = state.player
