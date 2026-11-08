@@ -105,5 +105,29 @@ class TestCollection(unittest.TestCase):
                 self.assertGreater(it.value, 0, f"{it.name} in {wing} is worthless")
 
 
+class TestEveryWineAFavourAsksForCanBeMade(unittest.TestCase):
+    """The diver pinned favours for plain "Wine". Every fruit ferments into its
+    own named wine, so plain Wine is never made — a favour needs the exact item,
+    and the only bottle that could ever fill it was one a villager gave you."""
+
+    def test_no_favour_asks_for_a_wine_the_keg_never_makes(self):
+        from hearthdelve.data import content
+        from hearthdelve.engine import constants as C
+        from hearthdelve.entities import items
+        from hearthdelve.game import requests
+        from tests.common import fresh_state
+        st = fresh_state(1)
+        made = set(content.FRUIT_WINE.values())
+        roles = {n.role for n in st.surface.npcs} | {"diver"}
+        for season_i, season in enumerate(C.SEASONS):
+            st.day = season_i * C.SEASON_LEN
+            for role in sorted(roles):
+                wines = [it for it in requests._request_pool(st, role)
+                         if it is items.WINE or it in made or it.name.endswith(" Wine")]
+                with self.subTest(season=season, role=role):
+                    self.assertNotIn(items.WINE, wines)
+                    self.assertTrue(set(wines) <= made, [w.name for w in wines if w not in made])
+
+
 if __name__ == "__main__":
     unittest.main()
