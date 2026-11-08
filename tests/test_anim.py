@@ -67,5 +67,58 @@ class TestOneEngine(unittest.TestCase):
         self.assertEqual(offenders, [])
 
 
+
+class TestOneOffEffects(unittest.TestCase):
+    """Things that happen are recorded by the game (state.happen, never
+    saved) and played by the engine for their short life, then dropped."""
+
+    def setUp(self):
+        from hearthdelve.engine import anim
+        self.drawn = []
+        anim.one_off("probe", life=1.0)(lambda f, h, age: self.drawn.append(round(age, 2)))
+        self.st = fresh_state(2)
+
+    def tearDown(self):
+        from hearthdelve.engine import anim
+        anim._ONE_OFFS.pop("probe", None)
+
+    def _frame(self, t):
+        from hearthdelve.engine import rendering
+        rendering.render_all(_con(), self.st, t)
+
+    def test_it_plays_from_the_frame_it_first_shows_on_then_goes(self):
+        p = self.st.player
+        self.st.happen("probe", p.x, p.y)
+        for t in (10.0, 10.5, 10.99, 11.2, 12.0):
+            self._frame(t)
+        self.assertEqual(self.drawn, [0.0, 0.5, 0.99])
+        self.assertEqual(self.st.fx, [])
+
+    def test_a_happening_long_past_when_the_screen_gets_to_it_never_shows(self):
+        p = self.st.player
+        self.st.happen("probe", p.x, p.y)
+        self.st.clock += 60 * 60                     # an hour's rest went by unseen
+        self._frame(5.0)
+        self.assertEqual(self.drawn, [])
+        self.assertEqual(self.st.fx, [])
+
+    def test_it_shows_only_on_the_map_it_happened_on(self):
+        from hearthdelve.game import delve
+        p = self.st.player
+        mouth = sorted(q for q, k in self.st.surface.dungeon_kind.items() if k == "mine")[0]
+        p.x, p.y = mouth
+        self.st.happen("probe", p.x, p.y)            # on the surface…
+        delve.enter(self.st, "mine")                 # …then straight down the stairs
+        self._frame(1.0)
+        self.assertEqual(self.drawn, [])
+
+    def test_the_record_stays_short_with_no_screen_to_play_it(self):
+        from hearthdelve.game import state as gs
+        for i in range(gs.MAX_HAPPENINGS + 30):
+            self.st.happen("probe", i, 0)
+        self.assertEqual(len(self.st.fx), gs.MAX_HAPPENINGS)
+        self.assertEqual(self.st.fx[-1].x, gs.MAX_HAPPENINGS + 29)
+
+
 if __name__ == "__main__":
     unittest.main()

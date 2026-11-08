@@ -77,6 +77,16 @@ class Frame:
         sx, sy = x - self.ox, y - self.oy
         return (sx, sy) if 0 <= sx < self.vw and 0 <= sy < self.vh else None
 
+    def cell(self, x: int, y: int):
+        """Where a world position shows — or None when it's off screen, or
+        underground and out of your sight (a happening you can't see stays
+        unseen)."""
+        pos = self.screen(x, y)
+        w = self.state.world
+        if pos is None or (w.is_dungeon and w.visible is not None and not w.visible[x, y]):
+            return None
+        return pos
+
 
 @dataclass(frozen=True)
 class _OneOff:

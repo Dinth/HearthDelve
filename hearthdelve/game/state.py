@@ -45,6 +45,23 @@ def _fresh_projects() -> list:
 
 
 @dataclass
+class Happening:
+    """Something that just happened in the world, for the screen to show for a
+    moment — a blow landing, a monster waking, a harvest (the animation engine
+    plays it; see engine/effects.py). The game only ever records these."""
+    kind: str
+    x: int
+    y: int
+    world: object = field(repr=False, compare=False)   # the map it happened on
+    at: int = 0                                        # game minute it happened
+    data: dict = field(default_factory=dict)
+    start: float | None = None                         # set by the engine: when it first showed
+
+
+MAX_HAPPENINGS = 64        # kept short: with no screen to play them, the oldest go
+
+
+@dataclass
 class GameState:
     world: GameMap
     player: Player
@@ -121,6 +138,16 @@ class GameState:
     # don't respawn; cleared each new day so floors still re-roll daily. Transient.
     floor_cache: dict = field(default_factory=dict)
     floor_cache_day: int = -1
+    # what just happened, for the screen to show for a moment (never saved)
+    fx: list = field(default_factory=list, repr=False)
+
+    def happen(self, kind: str, x: int, y: int, **data) -> None:
+        """Record that something happened at (x, y) on the current map — a hit,
+        a monster waking, a harvest — for the screen to show for a moment. The
+        game never reads these back; the animation engine plays and drops them."""
+        self.fx.append(Happening(kind, x, y, self.world, self.abs_minutes, data))
+        if len(self.fx) > MAX_HAPPENINGS:
+            del self.fx[:-MAX_HAPPENINGS]
 
     def bump(self, key: str, amount: int = 1) -> None:
         self.stats[key] = self.stats.get(key, 0) + amount

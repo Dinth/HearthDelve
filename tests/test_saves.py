@@ -333,6 +333,7 @@ class TestEveryFieldSurvivesASave(unittest.TestCase):
         "cam_focus",    # where Look or aim mode points the camera
         "warned",       # "press again to take it" warnings, for this sitting
         "aim_target",   # the aim cursor
+        "fx",           # what just happened, played on screen for a moment
     }
     # Rebuilt from the world on demand, so never saved.
     CACHES = {"_owner_cache", "route"}
