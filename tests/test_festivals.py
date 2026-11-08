@@ -51,12 +51,13 @@ class TestFairStalls(unittest.TestCase):
     def test_festival_warmth_doubles_friendship(self):
         from hearthdelve.game import village
         st = fresh_state(11)
+        npc = st.surface.npcs[0]
         st.day = 2                                   # an ordinary day
-        self.assertEqual(village._warmth(st), 1)
+        self.assertEqual(village._warmth(st, npc), 1)
         st.day = FESTIVAL_DAY
-        self.assertEqual(village._warmth(st), 2)
-        st.event = {"id": "fete"}                    # never stacks past double
-        self.assertEqual(village._warmth(st), 2)
+        self.assertEqual(village._warmth(st, npc), 2)
+        st.event = {"id": "fete", "village": npc.village}   # never stacks past double
+        self.assertEqual(village._warmth(st, npc), 2)
 
 
 class TestAFairIsATreatNotATrade(unittest.TestCase):

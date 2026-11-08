@@ -55,10 +55,30 @@ class TestEventEffects(unittest.TestCase):
         village.talk(st, npc)
         plain_gain = npc.friendship - f0
         npc2 = next(n for n in st.surface.npcs if n is not npc)
-        st.event = {"id": "fete"}
+        st.event = {"id": "fete", "village": npc2.village}
         f0 = npc2.friendship
         village.talk(st, npc2)
         self.assertEqual(npc2.friendship - f0, plain_gain * 2)
+
+    def test_a_fete_warms_only_its_own_village(self):
+        """A fete is declared by one village but used to double friendship
+        with everyone in the Vale."""
+        from hearthdelve.game import village
+        st = fresh_state(9)
+        host = next(n for n in st.surface.npcs if n.village == "Mossford")
+        guest = next(n for n in st.surface.npcs if n.village == "Saltmere")
+        st.event = {}
+        f0 = guest.friendship
+        village.talk(st, guest)
+        plain = guest.friendship - f0
+        for n in (host, guest):
+            n.talked_today = False
+        st.event = {"id": "fete", "village": "Mossford"}
+        h0, g0 = host.friendship, guest.friendship
+        village.talk(st, host)
+        village.talk(st, guest)
+        self.assertEqual(guest.friendship - g0, plain)
+        self.assertEqual(host.friendship - h0, plain * 2)
 
     def test_starfall_stamps_minable_crags(self):
         import random

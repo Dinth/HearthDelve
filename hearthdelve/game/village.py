@@ -234,7 +234,7 @@ def talk(state: GameState, npc: NPC) -> str:
     if first:
         npc.talked_today = True
         from . import attrs
-        gain = karma.scale(state.player.karma, 10) * _warmth(state)
+        gain = karma.scale(state.player.karma, 10) * _warmth(state, npc)
         gain = round(gain * (1 + 0.04 * attrs.mod(state, "Ch")))   # easy company
         npc.friendship = min(MAX_HEARTS * 100, npc.friendship + gain)
     scene = _heart_event(state, npc)         # a once-per-tier scripted moment
@@ -291,11 +291,12 @@ def _teach_recipe(state: GameState, npc: NPC):
     return None
 
 
-def _warmth(state: GameState) -> int:
-    """Friendship-gain multiplier: doubled on a fete-day or a festival (the two
+def _warmth(state: GameState, npc: NPC) -> int:
+    """Friendship-gain multiplier with `npc`: doubled at their own village's
+    fete, or on a festival day (every village keeps the festivals; the two
     never stack — a warm day is a warm day)."""
     from . import events
-    mult = events.friendship_mult(state)
+    mult = events.friendship_mult(state, npc)
     if content.festival_on(state.season, state.day_of_season):
         mult = max(mult, 2)
     return mult
@@ -415,7 +416,7 @@ def gift(state: GameState, npc: NPC, item, quality: int = 0) -> None:
     points = karma.scale(state.player.karma, points)
     if points > 0:                       # a fete or festival warms a kind gift double
         from . import attrs
-        points = round(points * _warmth(state) * (1 + 0.04 * attrs.mod(state, "Ap")))
+        points = round(points * _warmth(state, npc) * (1 + 0.04 * attrs.mod(state, "Ap")))
     npc.friendship = max(0, min(MAX_HEARTS * 100, npc.friendship + points))
     npc.gifted_today = True
     if points > 0:

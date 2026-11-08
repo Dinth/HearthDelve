@@ -73,9 +73,13 @@ def ship_mult(state: GameState) -> float:
     return CARAVAN_MULT if is_active(state, "caravan") else 1.0
 
 
-def friendship_mult(state: GameState) -> int:
-    """Friendship gains double on a fete-day."""
-    return 2 if is_active(state, "fete") else 1
+def friendship_mult(state: GameState, npc=None) -> int:
+    """Friendship gains double on a fete-day — with the folk of the village
+    keeping it. It is announced for one village, but used to warm everyone in
+    the Vale."""
+    if not is_active(state, "fete") or npc is None:
+        return 1
+    return 2 if getattr(npc, "village", "") == state.event.get("village") else 1
 
 
 def hive_queen_chance(state: GameState) -> float:
