@@ -56,10 +56,14 @@ def _sym_to_action(event: tcod.event.KeyDown):
     if sym in _MOVE:
         dx, dy = _MOVE[sym]
         return ("move", dx, dy)
-    # '>' / '<' (shift+period / shift+comma) — must precede the wait handler
-    if (sym == K.PERIOD and shift) or sym == getattr(K, "GREATER", object()):
+    # '>' / '<' — must precede the wait handler. On a US/UK board they are
+    # shift+period / shift+comma; on German, French and most ISO boards one
+    # key of its own gives '<' and, shifted, '>'. Its keysym is LESS either
+    # way, so the shift decides (unshifted, it used to climb for both).
+    less = sym == getattr(K, "LESS", object())
+    if (sym == K.PERIOD and shift) or sym == getattr(K, "GREATER", object()) or (less and shift):
         return ("descend",)
-    if (sym == K.COMMA and shift) or sym == getattr(K, "LESS", object()):
+    if (sym == K.COMMA and shift) or less:
         return ("ascend",)
     if sym in _WAIT:
         return ("wait",)
