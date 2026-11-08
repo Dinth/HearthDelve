@@ -219,6 +219,31 @@ class TestTheBladeSaysWhatItLeaves(unittest.TestCase):
         self.assertIn("catches fire", log)
 
 
+class TestABlastedGemVeinKnowsItsDepth(unittest.TestCase):
+    """The pickaxe draws a vein's gem from the depth's band; a bomb drew from
+    the flat table used for gifts. At depth 1 a bomb could give diamonds the
+    pick never can, and at depth 10 it gave a seventh as many."""
+
+    def _blast(self, depth, n=400):
+        from hearthdelve.entities import items
+        from hearthdelve.game import combat
+        from hearthdelve.world import tile
+        st = fresh_state(1)
+        st.world.depth = depth
+        x, y = st.player.x, st.player.y
+        random.seed(depth)
+        vein = tile.TILES[tile.GEM_VEIN]
+        for _ in range(n):                              # the blast reads the vein it's given
+            combat._shatter(st, x, y, vein)
+        return st.player.inventory.count(items.DIAMOND) / n
+
+    def test_no_diamonds_in_the_shallows(self):
+        self.assertEqual(self._blast(1), 0.0)
+
+    def test_deep_veins_give_deep_stones(self):
+        self.assertGreater(self._blast(10), 0.2)
+
+
 class TestStatusArrowsWaitToBeReadied(unittest.TestCase):
     """Fire and venom arrows are fletched to be readied deliberately, but with
     nothing readied a shot spent the 'best' arrow by damage — and their +1 put

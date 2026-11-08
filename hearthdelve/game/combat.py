@@ -899,10 +899,12 @@ def _resolve_shot(state: GameState, stat, ammo, astat, tx: int, ty: int) -> None
 
 
 def _shatter(state: GameState, x: int, y: int, t) -> None:
-    """A bomb breaks rock/ore/gem, dropping materials."""
+    """A bomb breaks rock/ore/gem, dropping materials — by the depth's band,
+    as the pickaxe does (a blasted vein used to draw from the flat gift table,
+    so it gave diamonds at depth 1 and too few of them at depth 10)."""
     inv = state.player.inventory
     if t.name == "gem_vein":
-        inv.add(content.random_gem(random), 1)
+        inv.add(content.gem_for_depth(state.world.depth, random), 1)
     elif t.name == "ore_vein":
         inv.add(content.ore_for_depth(state.world.depth, random), 1)
         if random.random() < 0.5:
