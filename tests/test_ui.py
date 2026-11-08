@@ -205,6 +205,28 @@ class TestScrollingStopsAtTheEnd(unittest.TestCase):
                 self.assertEqual(back, end - 1)
 
 
+class TestTheCodexKnowsTheVillagersUnderground(unittest.TestCase):
+    """The codex's Villagers page listed the current map's folk: underground
+    that was 5 rows against 81 on the surface."""
+
+    def _villagers(self, st):
+        from hearthdelve.engine import codex
+        pages = dict(codex.build_codex_pages(st))
+        return [text for text, _c in pages["Villagers"]]
+
+    def test_the_page_reads_the_same_below_as_above(self):
+        from hearthdelve.game import delve
+        from tests.common import fresh_state
+        st = fresh_state(6)
+        above = self._villagers(st)
+        mouth = sorted(p for p, k in st.surface.dungeon_kind.items() if k == "mine")[0]
+        st.player.x, st.player.y = mouth
+        delve.enter(st, "mine")
+        self.assertTrue(st.world.is_dungeon)
+        self.assertGreater(len(above), 40)
+        self.assertEqual(self._villagers(st), above)
+
+
 class TestEveryWindowStaysInsideItsFrame(unittest.TestCase):
     """Four windows printed past their frames: the intro page (the first
     thing a new player sees) by 4 cells, the pack's footer by 9 onto the side

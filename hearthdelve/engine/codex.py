@@ -395,7 +395,7 @@ def build_codex_pages(state: GameState):
 
     # --- Page: Villagers ----------------------------------------------------
     vp = [("Folk of Hollowmere Vale", _HDR), ("", C.WHITE)]
-    for npc in state.world.npcs:
+    for npc in _vale_folk(state):
         role = {"general": "General Store", "blacksmith": "Blacksmith"}.get(npc.shop, "villager")
         vp.append((f" {npc.glyph}  {npc.name} — {role}", _KEY))
         loves = ", ".join(i.name for i in npc.loves) or "—"
@@ -408,6 +408,13 @@ def build_codex_pages(state: GameState):
     return pages
 
 
+def _vale_folk(state: GameState) -> list:
+    """The Vale's villagers, wherever you stand. The page read the current
+    map's folk, so below ground (or across the Westreach) it listed a
+    handful of strangers instead of the friends on the Relationships screen."""
+    return state.surface.npcs if state.surface is not None else state.world.npcs
+
+
 _codex_cache: list | None = None
 _codex_sig: tuple | None = None
 
@@ -418,7 +425,7 @@ def render_codex(con: tcod.console.Console, state: GameState, page: int, scroll:
     # re-walking every crop/tool/recipe/machine on every frame the help is open.
     global _codex_cache, _codex_sig
     # rebuild when friendships move (Villagers page) or a kill lands (Bestiary page)
-    sig = (tuple((n.name, n.friendship) for n in state.world.npcs),
+    sig = (tuple((n.name, n.friendship) for n in _vale_folk(state)),
            sum(state.bestiary.values()), len(state.bestiary))
     if _codex_cache is None or sig != _codex_sig:
         _codex_cache, _codex_sig = build_codex_pages(state), sig
