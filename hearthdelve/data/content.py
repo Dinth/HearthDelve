@@ -3355,3 +3355,15 @@ def _enforce_recipe_margins() -> None:
 
 
 _enforce_recipe_margins()
+
+
+# --- what a faint never costs you ----------------------------------------------
+# Fainting in the dark drops the loose loot you were carrying (ore, crops,
+# goods), but not your medicine chest: every remedy and potion (anything brewed
+# as a remedy or at the apothecary, or that cures an affliction) and the rare
+# attribute treats. A Panacea kept for an emergency used to go with the ore.
+FAINT_KEEPS: frozenset = frozenset(
+    [r.output for r in RECIPES if r.kind == "remedy" and r.output is not None]
+    + [out for _inputs, out, *_rest in APOTHECARY_POTIONS]
+    + [it for it in vars(items).values() if isinstance(it, items.Item) and it.cures]
+    + list(ATTRIBUTE_TREATS))

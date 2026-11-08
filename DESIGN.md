@@ -46,7 +46,7 @@ If a choice trades coziness for challenge, **coziness wins.**
 3. **One world, no mode switch.** Same renderer, scheduler, player and inventory at the workbench or in a grotto.
 4. **Optional danger, by distance.** Wilds and dungeons when you want them; homestead and villages always safe.
 5. **Every wild thing has a home use.** Loot is reagents, seeds, ingredients — it feeds the farm and the workbench.
-6. **Soft losses, persistent gains.** Faint → wake in your bed, lose loose loot and a little gold; land, tools and relationships persist. **No permadeath, no game over, no win — you just live here.**
+6. **Soft losses, persistent gains.** Faint → wake in your bed, lose loose loot and a little gold (never your remedies and potions); land, tools and relationships persist. **No permadeath, no game over, no win — you just live here.**
 7. **The seasons are the clock.** Spring planting, summer growth, fall harvest, winter craft-and-cozy.
 8. **Organic, not mechanical.** Spawns, regrowth, requests, market cravings and gifts drift on seeded randomness — never fixed spots or metronome cadences. The world should breathe, not tick.
 9. **Data-driven content.** Crops, recipes, machines, monsters, items, NPCs are table entries in `data/content.py`.
@@ -195,7 +195,7 @@ ADOM's model: a to-hit roll against the target's **DV**, then damage minus its *
 - **Ranged:** bows and a sling, with **tiered ammo** (plain wood → metal-tipped by ore → brimstone and venom tips). A shot spends your best plain or metal-tipped arrow first; the status tips wait until you ready them in the ammo slot (or until nothing else is left).
 - **The Bomb** and the gunpowder **Blast Charge** harm monsters *and* shatter rock and ore — useful to a pacifist miner. Firecrackers are all noise, and scare crop-raiders off your land for days.
 - **Surface wildlife** is peaceful (skittish or defensive); killing it costs karma but fills the larder and the tanning rack. The Westreach's beasts are **predators** that hunt on sight.
-- **Faint** → carried to your bed, wake next dawn, lose loose loot and some gold (scaled by depth). No death screen.
+- **Faint** → carried to your bed, wake next dawn, lose the loose loot you carried below (ore, crops, goods — never your remedies, potions or attribute treats) and some gold (scaled by depth). No death screen.
 
 ## 14. Tunables
 
@@ -214,7 +214,7 @@ ADOM's model: a to-hit roll against the target's **DV**, then damage minus its *
 | Carry capacity | 50 base + 4/level + satchels + Strength |
 | Land tax | 2g per claimed tile per week |
 | Crafted-good margin floor | ingredients + 25% |
-| Faint penalty | loose loot + 10% gold + 15/depth |
+| Faint penalty | loose loot (not remedies, potions or treats) + 10% gold + 15g per floor |
 
 ## 15. Controls
 

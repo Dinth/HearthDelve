@@ -298,5 +298,37 @@ class TestSaplingsArePlantedAtHome(unittest.TestCase):
         self.assertIn((x, y), st.surface.trees)
 
 
+class TestFaintingKeepsYourMedicine(unittest.TestCase):
+    """Fainting below drops the loose loot you carried — and every remedy went
+    with it, being kind 'material': a 440g Panacea kept for an emergency, the
+    potions, and the attribute treats (kind 'food')."""
+
+    def _faint_below(self, *carried):
+        from hearthdelve.game import delve, farming
+        st = fresh_state(1)
+        mouth = sorted(p for p, k in st.surface.dungeon_kind.items() if k == "mine")[0]
+        st.player.x, st.player.y = mouth
+        delve.enter(st, "mine")
+        for it in carried:
+            st.player.inventory.add(it, 2)
+        farming.collapse(st, "You collapse.")
+        return st
+
+    def test_remedies_potions_and_treats_stay_in_your_pack(self):
+        from hearthdelve.entities import items
+        kept = (items.PANACEA, items.by_name("Greater Healing Potion"), items.by_name("Sulphur Salve"),
+                items.by_name("Firebrand Elixir"), items.TITAN_MARROW, items.by_name("Warding Tea"))
+        st = self._faint_below(*kept)
+        for it in kept:
+            with self.subTest(item=it.name):
+                self.assertEqual(st.player.inventory.count(it), 2)
+
+    def test_the_loose_loot_is_still_lost(self):
+        from hearthdelve.entities import items
+        st = self._faint_below(items.COPPER_ORE, items.BREAD)
+        self.assertEqual(st.player.inventory.count(items.COPPER_ORE), 0)
+        self.assertEqual(st.player.inventory.count(items.BREAD), 0)
+
+
 if __name__ == "__main__":
     unittest.main()
