@@ -168,7 +168,12 @@ def route_event(ui, event, konami: list) -> bool:
     batch of events should be dropped. (Out of the loop so tests can press
     real keys through the same path.)"""
     state = ui.state
-    if isinstance(event, tcod.event.WindowEvent) and event.type == "WINDOWCLOSE":
+    # The window's close button stops the game and saves it on the way out.
+    # tcod 21 names this event "WindowClose" (older builds said "WINDOWCLOSE"),
+    # and checking only the old name meant it never matched: closing the window
+    # fell through to the OS quit that follows it, which leaves WITHOUT saving,
+    # and the day since the morning's autosave was lost.
+    if isinstance(event, tcod.event.WindowEvent) and event.type in ("WindowClose", "WINDOWCLOSE"):
         ui.running = False
         return False
 

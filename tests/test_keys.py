@@ -130,6 +130,22 @@ class TestRealKeysThroughTheGame(unittest.TestCase):
         self.assertFalse(self.ui.running)
         self.assertFalse(self.ui.save_on_exit)
 
+    def test_closing_the_window_stops_the_game_and_saves_it(self):
+        """tcod 21 calls the close button's event "WindowClose"; the loop
+        looked only for "WINDOWCLOSE", so it never matched, and the OS quit
+        that follows left without saving."""
+        from hearthdelve import main
+        ev = tcod.event.WindowEvent(type="WindowClose", window_id=0, data=(0, 0))
+        self.assertFalse(main.route_event(self.ui, ev, self.konami))
+        self.assertFalse(self.ui.running)
+        self.assertTrue(self.ui.save_on_exit)
+
+    def test_cmd_q_still_leaves_at_once_without_saving(self):
+        from hearthdelve import main
+        self.assertFalse(main.route_event(self.ui, tcod.event.Quit(), self.konami))
+        self.assertFalse(self.ui.running)
+        self.assertFalse(self.ui.save_on_exit)
+
     def test_a_held_key_does_not_repeat_a_one_off_action(self):
         from hearthdelve import screens
         self._key("i")

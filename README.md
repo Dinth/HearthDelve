@@ -40,7 +40,8 @@ A window titled *"Hearthdelve — Hollowmere Vale"* opens.
 
 ## Saves
 
-The game **auto-saves each morning and when you quit**, to
+The game **auto-saves each morning and when you quit** (with `q` or the window's close
+button; Cmd+Q leaves at once without saving), to
 `~/.hearthdelve_save.json` (with the previous save kept beside it as
 `.bak`), and **continues it** on the next launch. Pass `--new` to start a new
 life instead. Set `HEARTHDELVE_SAVE` to keep the save somewhere else.
