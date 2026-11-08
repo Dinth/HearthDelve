@@ -129,5 +129,28 @@ class TestEveryWineAFavourAsksForCanBeMade(unittest.TestCase):
                     self.assertTrue(set(wines) <= made, [w.name for w in wines if w not in made])
 
 
+class TestTheCellarIsTheQuickerWayToAgeMead(unittest.TestCase):
+    """The keg could age mead from before the cellar existed, and at its own
+    40-hour pace it beat the 3,500g cellar's 72 hours to the same bottle."""
+
+    def _ages_in(self, kind):
+        from hearthdelve.data import content
+        from hearthdelve.entities import items
+        from hearthdelve.entities.machine import Machine
+        from hearthdelve.game import crafting
+        from tests.common import fresh_state
+        st = fresh_state(2)
+        st.player.inventory.add(items.MEAD, 1)
+        mdef = content.MACHINES[kind]
+        opt = next(o for o in crafting.machine_load_options(st, mdef)
+                   if o["output"] is items.AGED_MEAD)
+        m = Machine(kind=kind)
+        crafting.load_machine_choice(st, m, mdef, opt)
+        return m.ready_at - st.abs_minutes
+
+    def test_the_keg_still_can_but_the_cellar_is_quicker(self):
+        self.assertGreater(self._ages_in("keg"), self._ages_in("cellar"))
+
+
 if __name__ == "__main__":
     unittest.main()

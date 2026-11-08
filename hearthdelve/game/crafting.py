@@ -14,6 +14,10 @@ from ..entities.machine import Machine
 from ..world import tile
 from .state import GameState
 
+# Mead laid down in a keg ages half again as slowly as in the cellar, so the
+# cellar is the better way to age it, not the only one.
+KEG_AGEING_MINUTES = MACHINES["cellar"].minutes * 3 // 2
+
 
 # --- helpers ----------------------------------------------------------------
 def _resolve_any(inv, it, qty):
@@ -642,7 +646,11 @@ def machine_load_options(state: GameState, mdef) -> list:
         if inv.count(items.HONEY) > 0:
             opts.append({"inputs": [(items.HONEY, 1)], "output": items.MEAD, "quality_from": items.HONEY})
         if inv.count(items.MEAD) > 0:
-            opts.append({"inputs": [(items.MEAD, 1)], "output": items.AGED_MEAD, "quality_from": items.MEAD})
+            # A barrel can lay mead down too (it could before there was a
+            # cellar), but slower than the cellar built for it — at the keg's
+            # own pace it used to beat the 3,500g cellar to the same bottle.
+            opts.append({"inputs": [(items.MEAD, 1)], "output": items.AGED_MEAD, "quality_from": items.MEAD,
+                         "minutes": KEG_AGEING_MINUTES})
         for it in {e[0] for e in inv.slots if e[0].kind == "crop" and content.is_fruit(e[0])}:
             out = content.FRUIT_WINE.get(it, items.WINE)      # wine inherits the fruit's value
             opts.append({"inputs": [(it, 1)], "output": out, "quality_from": it})
