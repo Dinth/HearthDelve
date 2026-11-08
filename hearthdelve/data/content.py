@@ -7,9 +7,15 @@ M2-M4 they get appended here.
 """
 from __future__ import annotations
 
+import math
+
 from dataclasses import dataclass
 
 from ..engine import constants as C
+
+# Every crafted good is worth at least its ingredients plus this (the design's
+# ≥25% rule; see _enforce_recipe_margins at the end of this module).
+CRAFT_MARGIN = 1.25
 from ..entities import items
 from ..entities.items import Item
 from ..entities.npc import NPC
@@ -283,6 +289,37 @@ _GEAR: dict[tuple, Item] = {}   # (base, material, prefix, suffix, gems) -> Item
 _GEAR_BASE: dict[Item, str] = {}   # gear item -> its base type (for re-embedding gems)
 
 
+def _tailored_floor(base: str, material: str, pfx=None, sfx=None) -> int:
+    """A garment tailored at the loom is worth its bolt of cloth plus a
+    craft's 25%, like every other made thing (times any affix it carries).
+    Valued as gear, a 160g bolt of wool made a 24g hat. 0 for anything that
+    isn't a cloth garment, or before the tables it reads exist (see the
+    pass at the end of this module)."""
+    if base not in _SOFT_BASES or "CLOTH_MATERIAL" not in globals():
+        return 0
+    cloth = next((c for c, m in CLOTH_MATERIAL.items() if m == material), None)
+    if cloth is None:
+        return 0
+    v = cloth.value * CRAFT_MARGIN
+    for affix in (pfx, sfx):
+        if affix:
+            v *= affix.value_mult
+    return math.ceil(v)
+
+
+def _jewel_floor(metal: str, gemkey: str) -> int:
+    """A ring or amulet is worth its bar and its cut stone plus a craft's 25%;
+    priced from a fraction of the gem's worth, every piece came out below what
+    went into it. 0 before the tables it reads exist."""
+    if "CUT_GEM" not in globals():
+        return 0
+    bar = MATERIALS[metal].bar
+    cut = next((c for c in CUT_GEM.values() if GEM_KEY.get(c) == gemkey), None)
+    if bar is None or cut is None:
+        return 0
+    return math.ceil((bar.value + cut.value) * CRAFT_MARGIN)
+
+
 def _affix_value(base_val: float, mat: Material, pfx, sfx) -> int:
     v = base_val * mat.value_mult
     if pfx:
@@ -349,7 +386,8 @@ def make_gear(base: str, material: str, prefix: str = "", suffix: str = "",
             d = gem_embed_delta(g, "armor")
             dv += d.get("dv", 0)
             pv += d.get("pv", 0)
-        val = _affix_value(bval, mat, pfx, sfx) + round(_gem_worth(gems))
+        val = max(_affix_value(bval, mat, pfx, sfx), _tailored_floor(base, material, pfx, sfx)) \
+            + round(_gem_worth(gems))
         if it is None:                           # literal can drift off the curve (or be forge-flipped)
             it = items.register(items.Item(name, "]", "armor", f"Armour worn on the {slot}.",
                                             stackable=False, value=val, material=material,
@@ -467,7 +505,8 @@ def make_jewel(base: str, metal: str, gem, prefix: str = "") -> Item:
     glyph, bval, bmult = JEWELRY_BASES[base]
     mat = MATERIALS[metal]
     name = f"{metal.capitalize()} {GEM_TITLE.get(gemkey, gemkey.capitalize())} {base}"
-    val = max(1, round(bval * mat.value_mult + GEM_WORTH.get(gemkey, 0) * 0.8))
+    val = max(1, round(bval * mat.value_mult + GEM_WORTH.get(gemkey, 0) * 0.8),
+              _jewel_floor(metal, gemkey))
     it = items.register(items.Item(
         name, glyph, "jewelry", f"A {metal} {base.lower()} set with a {gemkey}.",
         stackable=False, value=val, material=metal, gems=(gemkey,)))
@@ -2745,9 +2784,14 @@ GENERAL_STOCK: list[tuple[Item, int]] = [
     (items.LAMB, counter_price(items.LAMB)), (items.DUCKLING, counter_price(items.DUCKLING)),
     (items.GOAT_KID, counter_price(items.GOAT_KID)), (items.PIGLET, counter_price(items.PIGLET)),
     # a little soft-goods rack: hats, cloaks & robes (cloth, no forging needed)
-    (make_gear("Hat", "straw"), 20), (make_gear("Hat", "wool"), 45),
-    (make_gear("Cloak", "wool"), 70), (make_gear("Cloak", "linen"), 110),
-    (make_gear("Robe", "wool"), 60), (make_gear("Robe", "linen"), 100),
+    # Garments are priced off their worth (a bolt of cloth plus a tailor's 25%),
+    # not literals that drift below it.
+    (make_gear("Hat", "straw"), 20),
+    (make_gear("Hat", "wool"), counter_price(make_gear("Hat", "wool"))),
+    (make_gear("Cloak", "wool"), counter_price(make_gear("Cloak", "wool"))),
+    (make_gear("Cloak", "linen"), counter_price(make_gear("Cloak", "linen"))),
+    (make_gear("Robe", "wool"), counter_price(make_gear("Robe", "wool"))),
+    (make_gear("Robe", "linen"), counter_price(make_gear("Robe", "linen"))),
 ]
 # Blacksmith sells fuel/metal, weapons, and armour: (item, buy price)
 # The smith sells iron & steel of each weapon (forge finer metals yourself, or
@@ -3311,7 +3355,8 @@ items.register_resolver(_resolve_cooked_dish)
 
 
 # --- Value floor: every crafted good is worth its ingredients + 25% ----------
-CRAFT_MARGIN = 1.25
+# (CRAFT_MARGIN itself is defined at the top of this module, so the gear
+# factory can floor a tailored garment the moment it's made.)
 
 
 def _enforce_recipe_margins() -> None:
@@ -3367,3 +3412,18 @@ FAINT_KEEPS: frozenset = frozenset(
     + [out for _inputs, out, *_rest in APOTHECARY_POTIONS]
     + [it for it in vars(items).values() if isinstance(it, items.Item) and it.cures]
     + list(ATTRIBUTE_TREATS))
+
+
+def _floor_worn_crafts() -> None:
+    """Garments and jewellery made while this module was still loading (the
+    smith's and traders' stock) were valued before the cloth, gem and margin
+    tables existed; lift them to their ingredients' floor now."""
+    for (base, material, prefix, suffix, gems), it in list(_GEAR.items()):
+        floor = _tailored_floor(base, material, PREFIXES.get(prefix), SUFFIXES.get(suffix))
+        if floor:
+            object.__setattr__(it, "value", max(it.value, floor + round(_gem_worth(gems))))
+    for (base, metal, gemkey), it in list(_JEWEL.items()):
+        object.__setattr__(it, "value", max(it.value, _jewel_floor(metal, gemkey)))
+
+
+_floor_worn_crafts()

@@ -152,5 +152,41 @@ class TestTheCellarIsTheQuickerWayToAgeMead(unittest.TestCase):
         self.assertGreater(self._ages_in("keg"), self._ages_in("cellar"))
 
 
+
+class TestTailoringAndJewelleryKeepTheirIngredientsWorth(unittest.TestCase):
+    """Garments and jewellery were valued as gear, not as crafts: the loom made
+    a 160g bolt of wool into a 24g hat, and every ring and amulet came out
+    below its bar and cut stone. Both now clear their inputs by a craft's 25%."""
+
+    def test_every_garment_clears_its_cloth(self):
+        import math
+        from hearthdelve.data import content
+        from tests.common import fresh_state
+        from hearthdelve.game import crafting
+        st = fresh_state(2)
+        for cloth in content.CLOTH_MATERIAL:
+            st.player.inventory.add(cloth, 2)
+        opts = crafting.machine_load_options(st, content.MACHINES["loom"])
+        garments = [o for o in opts if o["output"].kind == "armor"]
+        self.assertEqual(len(garments), 12)
+        for o in garments:
+            (cloth, qty), = o["inputs"]
+            with self.subTest(garment=o["output"].name):
+                self.assertGreaterEqual(o["output"].value,
+                                        math.ceil(cloth.value * qty * content.CRAFT_MARGIN))
+
+    def test_every_ring_and_amulet_clears_its_bar_and_stone(self):
+        import math
+        from hearthdelve.data import content
+        for metal in content.JEWELRY_METALS:
+            bar = content.MATERIALS[metal].bar
+            for cut in content.CUT_GEM.values():
+                for base in ("Ring", "Amulet"):
+                    piece = content.make_jewel(base, metal, content.gem_key(cut))
+                    with self.subTest(piece=piece.name):
+                        self.assertGreaterEqual(
+                            piece.value, math.ceil((bar.value + cut.value) * content.CRAFT_MARGIN))
+
+
 if __name__ == "__main__":
     unittest.main()
