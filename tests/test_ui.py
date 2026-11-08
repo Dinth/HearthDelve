@@ -261,6 +261,32 @@ class TestTheCodexWrapsInsteadOfCutting(unittest.TestCase):
         self.assertIn("Shift+D drops the stack)", _rows(con, 9, 71, 0, 50))
 
 
+class TestTheCameraComesHomeWhenOverlaysClose(unittest.TestCase):
+    """Look and aim mode point the camera at their cursor and hand it back on
+    close. The cheat menu opened over them (the Konami code is all arrows,
+    which move a cursor) and dropped every overlay at once, so the view
+    stayed fixed on the old cursor instead of following you."""
+
+    def test_closing_the_cheats_over_look_mode_frees_the_camera(self):
+        from hearthdelve import screens
+        from hearthdelve.engine import rendering
+        from tests.common import fresh_state
+        st = fresh_state(1)
+        ui = screens.UI(st)
+        p = st.player
+        ui.push(screens.LookScreen([p.x, p.y]))
+        for _ in range(15):
+            ui.top.handle(ui, "move", ("move", 1, 0))   # the cursor roams off east
+        self.assertIsNotNone(st.cam_focus)
+        ui.open_cheats()
+        ui.top.handle(ui, "cancel", ("cancel",))
+        self.assertIs(ui.top, ui.stack[0])
+        self.assertIsNone(st.cam_focus)
+        before = rendering.camera_origin(st)
+        p.x += 3                                       # walk on; the view follows you
+        self.assertNotEqual(rendering.camera_origin(st), before)
+
+
 def _framed_words(con) -> list[str]:
     """Every word written inside a window's side borders, top to bottom."""
     words = []

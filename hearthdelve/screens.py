@@ -57,8 +57,12 @@ class UI:
         self.push(screen)
 
     def close_overlays(self) -> None:
-        """Drop every overlay, back to the bare world."""
+        """Drop every overlay, back to the bare world — and the camera with
+        them: Look and aim mode point it at their cursor and hand it back when
+        they close, but dropped from under (the cheat menu opened over Look,
+        say) they never did, and the view stayed stuck on the old cursor."""
         del self.stack[1:]
+        self.state.cam_focus = None
 
     def open_cheats(self) -> None:
         if not isinstance(self.top, CheatScreen):
