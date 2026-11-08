@@ -74,7 +74,11 @@ def _wildness(w: int, h: int, seed: int) -> np.ndarray:
     return np.clip(field, 0.0, 1.0)
 
 
-def generate(seed: int = 1337) -> GameMap:
+def generate(seed: int = 1337, sites=None, legacy_ties: bool = False) -> GameMap:
+    """The Vale for `seed`. A loaded save passes the dungeon mouths it recorded
+    (`sites`: (x, y, kind) in placement order) so they're rebuilt exactly
+    where they were; a save older than that record passes `legacy_ties` to
+    break ties the way its world was first built (see _place_dungeons)."""
     w, h = C.WORLD_W, C.WORLD_H
     cx, cy = C.WORLD_CENTER
     tiles = np.full((w, h), tile.GRASS, dtype=np.uint8)
@@ -261,7 +265,7 @@ def generate(seed: int = 1337) -> GameMap:
     gm.coast = coast                     # per-column first sea row (salt vs fresh water)
     _carve_homestead(gm, seed)
     centers = _carve_villages(gm, seed, coast)
-    _place_dungeons(gm, wild, flora, region, centers)
+    _place_dungeons(gm, wild, flora, region, centers, sites=sites, legacy_ties=legacy_ties)
     forest_track = _carve_forest(gm, seed)
     camp = _carve_camp(gm, seed)                     # woodcutters' camp in the NW wood
     if camp is not None:
@@ -1230,23 +1234,41 @@ def _carve_homestead(gm: GameMap, seed: int) -> None:
 
 
 def _place_dungeons(gm: GameMap, wild: np.ndarray, flora: np.ndarray,
-                    region: np.ndarray, centers: dict) -> None:
+                    region: np.ndarray, centers: dict, sites=None,
+                    legacy_ties: bool = False) -> None:
     """Root a dungeon mouth in each region that suits it: a mine in the rocky
     hills beside Cinderhope, a grotto deep in the NW wood, and a barrow out in
     the fen. Each picks the nearest fitting tile to its anchor (past a small
-    stand-off), with a walkable neighbour to descend from."""
+    stand-off), with a walkable neighbour to descend from.
+
+    Many tiles lie at exactly the same distance, and which of them comes first
+    used to be left to NumPy's default sort — not stable, and run by different
+    CPU-specific code on Intel and Apple chips — so one seed put its mouths in
+    different places on different machines. Ties now go to the first tile in
+    grid order everywhere. `legacy_ties` keeps the old order for saves made
+    before their mouths were recorded; `sites` places recorded mouths as-is."""
     t = gm.tiles
     cx, cy = C.WORLD_CENTER
 
     _SPREAD = 14        # keep two dungeon mouths from crowding each other
+    recorded = list(sites) if sites is not None else None
 
     def _drop(mask, kind, anchor, min_d):
+        if recorded is not None:
+            # A save's own mouths, in the order they were placed; a call whose
+            # kind isn't next placed nothing in that world, as here.
+            if recorded and recorded[0][2] == kind:
+                x, y, _k = recorded.pop(0)
+                _carve_dungeon_site(gm, x, y, kind)
+                gm.dungeons.append((x, y))
+                gm.dungeon_kind[(x, y)] = kind
+            return
         xs, ys = np.where(mask)          # (w,h) array -> (x_index, y_index)
         if len(xs) == 0:
             return
         ax, ay = anchor
         d = (xs - ax) ** 2 + (ys - ay) ** 2
-        for i in np.argsort(d):
+        for i in (np.argsort(d) if legacy_ties else np.argsort(d, kind="stable")):
             x, y = int(xs[i]), int(ys[i])
             if d[i] < (min_d ** 2):      # a stand-off from the anchor
                 continue

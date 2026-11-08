@@ -338,6 +338,10 @@ def save(state: GameState, path: str | None = None) -> None:
                   **({"until": m["until"]} if m.get("until") is not None else {})}
                  for m in state.mail],
         "tiles_shape": [surf.width, surf.height],
+        # The Vale's dungeon mouths, in placement order — rebuilt from these on
+        # load rather than re-picked, so the world comes back the same on any
+        # machine (see worldgen._place_dungeons).
+        "sites": [[x, y, surf.dungeon_kind[(x, y)]] for x, y in surf.dungeons],
         "tiles": base64.b64encode(np.ascontiguousarray(surf.tiles).tobytes()).decode("ascii"),
         "crops": {f"{x},{y}": [pl.crop.name, pl.days_grown, pl.watered, pl.dead, pl.fertilized,
                                pl.thirst, pl.season_ended]
@@ -385,7 +389,14 @@ def load(path: str | None = None) -> GameState:
         raise IncompatibleSaveError(
             f"save is format version {ver}, but this build reads version {SAVE_VERSION}")
 
-    world = worldgen.generate(data["seed"])           # rebuild base world
+    # Rebuild the base world. A save that recorded its dungeon mouths gets them
+    # back as they were; an older one is rebuilt with the tie order its world
+    # was first made with, and records them from its next save on.
+    sites = data.get("sites")
+    if sites is not None:
+        world = worldgen.generate(data["seed"], sites=[(int(x), int(y), str(k)) for x, y, k in sites])
+    else:
+        world = worldgen.generate(data["seed"], legacy_ties=True)
 
     w, h = data["tiles_shape"]
     # Keep the freshly-generated grid: worldgen improvements (new boards, the

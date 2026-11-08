@@ -95,8 +95,8 @@ class TestSurface(unittest.TestCase):
 class TestDungeonSitesSpareTheVillages(unittest.TestCase):
     """A mouth's clearing flattened everything within its radius: Cinderhope
     cottages, fences and fields (seed 23), Saltmere's piers and streets (seeds 1,
-    7, 8, 555, 2024). It must go round anything built — without moving the
-    mouths, which existing saves already have carved into their grids."""
+    7, 8, 555, 2024). It must go round anything built, without moving the
+    mouths."""
 
     def test_the_clearing_never_overwrites_anything_built(self):
         from hearthdelve.world import tile, worldgen
@@ -123,12 +123,78 @@ class TestDungeonSitesSpareTheVillages(unittest.TestCase):
             worldgen._carve_dungeon_site = orig
         self.assertGreater(sum(spared), 0, "these seeds do put a mouth beside a village")
 
-    def test_the_mouths_stay_where_existing_saves_have_them(self):
-        st = shared_state(7)
-        self.assertEqual(sorted(st.surface.dungeon_kind.items()), [
-            ((189, 711), "mine"), ((312, 136), "grotto"), ((485, 881), "sea cave"),
-            ((510, 68), "grotto"), ((522, 864), "cavern"), ((578, 654), "mine"),
-            ((812, 196), "barrow"), ((820, 190), "crypt")])
+
+def _another_machine(also_stable=False):
+    """Stand in for a different CPU (or NumPy build): NumPy's default sort
+    isn't stable, and Intel and Apple chips run different code for it, so
+    tied values come out in a different order — here, last index first.
+    `also_stable` reorders stable sorts too, for a world built by rules that
+    have since changed."""
+    from unittest import mock
+    real = np.argsort
+
+    def argsort(a, *args, kind=None, **kw):
+        if kind == "stable" and not also_stable:
+            return real(a, kind="stable")
+        a = np.asarray(a)
+        return np.lexsort((-np.arange(len(a)), a))
+    return mock.patch.object(np, "argsort", argsort)
+
+
+class TestTheSameSeedIsTheSameValeEverywhere(unittest.TestCase):
+    """Where several tiles were the same distance from a mouth's anchor, the
+    one chosen was left to NumPy's default sort, which orders ties
+    differently on Intel and Apple chips: on CI (Linux, Intel) seed 7 put
+    three of its eight mouths elsewhere than on a Mac. Loading a save
+    regenerates the world from its seed, so a save could come back with its
+    mouths re-picked under its saved ground."""
+
+    SEED_7 = [((189, 711), "mine"), ((312, 136), "grotto"), ((462, 864), "cavern"),
+              ((485, 881), "sea cave"), ((510, 68), "grotto"), ((578, 654), "mine"),
+              ((812, 196), "barrow"), ((820, 190), "crypt")]
+
+    def test_a_new_world_places_its_mouths_alike_on_every_machine(self):
+        from hearthdelve.world import worldgen
+        here = sorted(worldgen.generate(7).dungeon_kind.items())
+        with _another_machine():
+            there = sorted(worldgen.generate(7).dungeon_kind.items())
+        self.assertEqual(here, self.SEED_7)
+        self.assertEqual(there, here)
+
+    def test_a_save_brings_its_own_mouths_back(self):
+        from hearthdelve.engine import save
+        st = fresh_state(7)
+        save.save(st)
+        with _another_machine(also_stable=True):
+            again = save.load()
+        self.assertEqual(sorted(again.surface.dungeon_kind.items()),
+                         sorted(st.surface.dungeon_kind.items()))
+        self.assertEqual(again.surface.dungeons, st.surface.dungeons)
+
+    def test_an_older_save_is_rebuilt_as_it_was_made_and_then_records_them(self):
+        import json
+        from hearthdelve.engine import save
+        from hearthdelve.world import tile, worldgen
+        st = fresh_state(7)
+        made = worldgen.generate(7, legacy_ties=True)      # as worlds were built before
+        made.npcs = st.surface.npcs
+        st.world = st.surface = made
+        save.save(st)
+        with open(save.default_path()) as f:
+            raw = json.load(f)
+        raw.pop("sites")                                   # an older save never recorded them
+        with open(save.default_path(), "w") as f:
+            json.dump(raw, f)
+        again = save.load()
+        self.assertEqual(sorted(again.surface.dungeon_kind.items()),
+                         sorted(made.dungeon_kind.items()))
+        for x, y in again.surface.dungeons:
+            self.assertEqual(again.surface.tiles[x, y], tile.DUNGEON_DOWN)
+        save.save(again)
+        with open(save.default_path()) as f:
+            self.assertEqual([tuple(s) for s in json.load(f)["sites"]],
+                             [(x, y, made.dungeon_kind[(x, y)]) for x, y in made.dungeons])
+
 
 
 if __name__ == "__main__":
