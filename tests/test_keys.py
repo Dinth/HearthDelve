@@ -80,5 +80,85 @@ class TestTheCodexListsEveryKey(unittest.TestCase):
                 self.assertNotIn("seeds (6)", text, title)
 
 
+
+class TestRealKeysThroughTheGame(unittest.TestCase):
+    """Key handling lived inside main.py's loop, out of reach of any test, so
+    the cheat code, the keys that work from every screen and the quit prompt
+    were only ever checked by hand. These press real key events through
+    main.route_event, the very path the loop takes."""
+
+    def setUp(self):
+        from hearthdelve import screens
+        from tests.common import fresh_state
+        self.music = _FakeMusic()
+        self.ui = screens.UI(fresh_state(2), self.music)
+        self.konami = []
+
+    def _press(self, sym, shift=False, repeat=False):
+        from hearthdelve import main
+        ev = tcod.event.KeyDown(scancode=tcod.event.Scancode(0), sym=sym,
+                                mod=tcod.event.Modifier.SHIFT if shift else tcod.event.Modifier.NONE,
+                                repeat=repeat)
+        return main.route_event(self.ui, ev, self.konami)
+
+    def _key(self, ch, shift=False, repeat=False):
+        return self._press(tcod.event.KeySym(ord(ch)), shift, repeat)
+
+    def test_the_konami_code_opens_the_cheats(self):
+        from hearthdelve import screens
+        K = tcod.event.KeySym
+        for sym in (K.UP, K.UP, K.DOWN, K.DOWN, K.LEFT, K.RIGHT, K.LEFT, K.RIGHT):
+            self._press(sym)
+        self._key("b")
+        self.ui.top.handle(self.ui, "cancel", ("cancel",))     # 'b' opened the bin; close it
+        self._key("a")
+        self.assertIsInstance(self.ui.top, screens.CheatScreen)
+
+    def test_shift_u_mutes_the_music_from_any_screen(self):
+        from hearthdelve import screens
+        self._key("i")
+        self.assertIsInstance(self.ui.top, screens.InventoryScreen)
+        self._key("u", shift=True)
+        self.assertTrue(self.music.muted)
+        self.assertIsInstance(self.ui.top, screens.InventoryScreen)   # and nothing else moved
+
+    def test_quit_without_saving_from_the_prompt(self):
+        from hearthdelve import screens
+        self._key("q")
+        self.assertIsInstance(self.ui.top, screens.QuitScreen)
+        self._press(tcod.event.KeySym.BACKSPACE)
+        self.assertFalse(self.ui.running)
+        self.assertFalse(self.ui.save_on_exit)
+
+    def test_a_held_key_does_not_repeat_a_one_off_action(self):
+        from hearthdelve import screens
+        self._key("i")
+        self._key("i", repeat=True)                        # OS key-repeat of the same press
+        self.assertIsInstance(self.ui.top, screens.InventoryScreen)
+
+    def test_pack_letters_pick_their_rows_and_shift_d_drops(self):
+        from hearthdelve.engine import rendering
+        from hearthdelve.entities import items
+        p = self.ui.state.player
+        p.inventory.add(items.WOOD, 3)
+        p.inventory.add(items.STONE, 4)
+        self._key("i")
+        screen = self.ui.top
+        rows = [e[0] for e in p.inventory.slots]
+        target = rows.index(items.STONE)
+        self._key(rendering.INV_LETTERS[target])
+        self.assertEqual(screen.sel, target)
+        self._key("d", shift=True)
+        self.assertEqual(p.inventory.count(items.STONE), 0)
+
+
+class _FakeMusic:
+    muted = False
+
+    def toggle_mute(self):
+        self.muted = not self.muted
+        return self.muted
+
+
 if __name__ == "__main__":
     unittest.main()

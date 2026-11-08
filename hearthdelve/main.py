@@ -154,56 +154,72 @@ def _loop(ui, state: GameState, console, context, music) -> None:
         # A short timeout drives the ambient animation: when no key is
         # pressed, wait() returns after ~1/30s and we redraw the next frame.
         for event in tcod.event.wait(timeout=1.0 / 30.0):
-            if isinstance(event, tcod.event.WindowEvent) and event.type == "WINDOWCLOSE":
-                ui.running = False
+            if not route_event(ui, event, konami):
                 break
 
-            # Konami code (↑↑↓↓←→←→ B A) opens the hidden cheat menu.
-            if isinstance(event, tcod.event.KeyDown):
-                konami.append(int(event.sym))
-                del konami[:-len(_KONAMI)]
-                if konami == _KONAMI:
-                    konami.clear()
-                    ui.open_cheats()
-                    state.log.add("A hidden door creaks open...", (250, 230, 140))
-                    continue
 
-            # The screen's raw pre-pass: the fishing rod's held arrows, the
-            # inventory/equipment letter namespaces.
-            if ui.top.on_raw(ui, event):
-                continue
+def route_event(ui, event, konami: list) -> bool:
+    """Route one input event, exactly as the main loop does: the window
+    closing, the Konami code, the top screen's raw pre-pass, the post-fishing
+    lockout, a key press interrupting a run or rest, then the key map's
+    action — the few that work from any screen (quit, mute) here, the rest
+    handed to the top screen. ``konami`` is the loop's rolling buffer of
+    recent keys. Returns False when the game is closing and the rest of this
+    batch of events should be dropped. (Out of the loop so tests can press
+    real keys through the same path.)"""
+    state = ui.state
+    if isinstance(event, tcod.event.WindowEvent) and event.type == "WINDOWCLOSE":
+        ui.running = False
+        return False
 
-            # For a beat after the fishing minigame closes, swallow presses
-            # so a still-held arrow doesn't send the player walking off.
-            if isinstance(event, tcod.event.KeyDown) and time.monotonic() < ui.input_lock_until:
-                continue
+    # Konami code (↑↑↓↓←→←→ B A) opens the hidden cheat menu.
+    if isinstance(event, tcod.event.KeyDown):
+        konami.append(int(event.sym))
+        del konami[:-len(_KONAMI)]
+        if konami == _KONAMI:
+            konami.clear()
+            ui.open_cheats()
+            state.log.add("A hidden door creaks open...", (250, 230, 140))
+            return True
 
-            # A fresh key press interrupts an in-progress run or rest — but
-            # NOT OS key-repeat from still holding the direction that began
-            # the run, which would cancel it almost immediately.
-            if (isinstance(event, tcod.event.KeyDown) and not getattr(event, "repeat", False)
-                    and ui.play.cancel_auto()):
-                continue
+    # The screen's raw pre-pass: the fishing rod's held arrows, the
+    # inventory/equipment letter namespaces.
+    if ui.top.on_raw(ui, event):
+        return True
 
-            action = game_input.event_to_action(event)
-            if action is None:
-                continue
-            cmd = action[0]
+    # For a beat after the fishing minigame closes, swallow presses
+    # so a still-held arrow doesn't send the player walking off.
+    if isinstance(event, tcod.event.KeyDown) and time.monotonic() < ui.input_lock_until:
+        return True
 
-            # OS quit (Cmd+Q / window close via SDL): leave immediately
-            # without saving, from any screen.
-            if cmd == "sysquit":
-                ui.save_on_exit = False
-                ui.running = False
-                break
+    # A fresh key press interrupts an in-progress run or rest — but
+    # NOT OS key-repeat from still holding the direction that began
+    # the run, which would cancel it almost immediately.
+    if (isinstance(event, tcod.event.KeyDown) and not getattr(event, "repeat", False)
+            and ui.play.cancel_auto()):
+        return True
 
-            # Mute / unmute the music from any screen (Shift+U).
-            if cmd == "mutemusic":
-                off = music.toggle_mute()
-                state.log.add("Music muted." if off else "Music on.", C.DIM)
-                continue
+    action = game_input.event_to_action(event)
+    if action is None:
+        return True
+    cmd = action[0]
 
-            ui.top.handle(ui, cmd, action)
+    # OS quit (Cmd+Q / window close via SDL): leave immediately
+    # without saving, from any screen.
+    if cmd == "sysquit":
+        ui.save_on_exit = False
+        ui.running = False
+        return False
+
+    # Mute / unmute the music from any screen (Shift+U).
+    if cmd == "mutemusic":
+        if ui.music is not None:
+            off = ui.music.toggle_mute()
+            state.log.add("Music muted." if off else "Music on.", C.DIM)
+        return True
+
+    ui.top.handle(ui, cmd, action)
+    return True
 
 
 def run_guarded(ui, loop) -> None:
