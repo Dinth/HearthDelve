@@ -45,25 +45,37 @@ def _suit(st, material):
 
 
 def _damage_per_turn(mob, dv, pv, n=20000):
-    total = 0
-    for _ in range(n):
-        r = combat._resolve(mob.to_hit, mob.dmg, 0, 0.0, dv, pv)
-        if r:
-            total += r[0]
-    return total / n
+    """Mean damage a mob's blow deals through this armour, by simulation. On a
+    fixed seed (restoring the global stream after), so a claim sitting close to
+    its threshold can't pass on one run and fail on the next."""
+    saved = random.getstate()
+    random.seed(20000)
+    try:
+        total = 0
+        for _ in range(n):
+            r = combat._resolve(mob.to_hit, mob.dmg, 0, 0.0, dv, pv)
+            if r:
+                total += r[0]
+        return total / n
+    finally:
+        random.setstate(saved)
 
 
 def _mob(depth, name):
-    """A plain, non-elite mob of this kind. make_mob can roll an elite variant
-    with a name prefix and boosted stats, which is not what a ladder test wants
-    to measure against — so match the template exactly and re-roll until the
-    result is the baseline creature."""
+    """A plain, non-elite mob of this kind, at its *median* stat roll.
+
+    make_mob can roll an elite variant with a name prefix and boosted stats,
+    which is not what a ladder test wants to measure against — so only exact
+    template matches count. And a plain mob's to-hit and damage still vary a
+    band either way (a depth-15 Rockjaw Wyrm rolls one of three), so taking
+    whatever the shared random stream produced made these tests flaky: the
+    mid-fight salve claim failed about one run in four. The median of a fixed
+    set of rolls is a reproducible, representative opponent."""
     t = next(x for x in content.MONSTERS if x.name == name)
-    for _ in range(200):
-        m = content.make_mob(t, 5, 5, depth, random)
-        if m.name == name:
-            return m
-    return content.make_mob(t, 5, 5, depth, random)
+    plain = [m for m in (content.make_mob(t, 5, 5, depth, random.Random(seed))
+                         for seed in range(41)) if m.name == name]
+    plain.sort(key=lambda m: (m.to_hit, tuple(m.dmg), m.hp))
+    return plain[len(plain) // 2]
 
 
 class ArmourDodgePenaltyTest(unittest.TestCase):
