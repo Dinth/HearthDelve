@@ -37,6 +37,53 @@ def frame(con, x: int, y: int, w: int, h: int, title: str = "") -> None:
         con.print(x + (w - len(label)) // 2, y, label, fg=BASE_BG, bg=HDR)
 
 
+def wrap(text: str, width: int, indent: int = 0) -> list[str]:
+    """Greedy word-wrap to `width` columns. Continuation lines are indented by
+    `indent` spaces (still within `width`); a word too long for a line is
+    split rather than allowed to run past it."""
+    width = max(1, width)
+    indent = min(indent, width - 1)
+    lines: list[str] = []
+    cur = ""
+
+    def room() -> int:
+        return width if not lines else width - indent
+
+    def push(s: str) -> None:
+        lines.append(s if not lines else " " * indent + s)
+
+    for word in text.split():
+        if cur and len(cur) + 1 + len(word) > room():
+            push(cur)
+            cur = ""
+        while len(word) > room():
+            r = room()
+            push(word[:r])
+            word = word[r:]
+        cur = f"{cur} {word}" if cur else word
+    if cur:
+        push(cur)
+    return lines
+
+
+def wrap_messages(messages, width: int, indent: int = 2) -> list[tuple]:
+    """Log messages as (line, colour) rows, each wrapped to `width` with its
+    continuation lines indented — so no message is cut off at the edge."""
+    return [(line, color) for text, color in messages
+            for line in (wrap(text, width, indent) or [""])]
+
+
+def log_tail(messages, width: int, rows: int, indent: int = 2) -> list[tuple]:
+    """The newest `rows` wrapped lines of a log (wrapping only as far back as
+    the rows need)."""
+    out: list[tuple] = []
+    for text, color in reversed(messages):
+        out[:0] = [(line, color) for line in (wrap(text, width, indent) or [""])]
+        if len(out) >= rows:
+            break
+    return out[-rows:] if rows > 0 else []
+
+
 def cur(selected: bool) -> str:
     """The selection cursor prefix every list row carries."""
     return "▸ " if selected else "  "

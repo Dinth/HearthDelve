@@ -20,17 +20,18 @@ _KEY = (150, 200, 230)
 
 
 def render_message_log(con: tcod.console.Console, state: GameState, scroll: int) -> None:
-    """Full scrollback of the message log (newest at the bottom)."""
-    msgs = state.log.messages
+    """Full scrollback of the message log (newest at the bottom), every message
+    word-wrapped to the window; ``scroll`` counts lines back from the newest."""
     w, h = 72, C.SCREEN_H - 6
+    lines = ui.wrap_messages(state.log.messages, w - 4)
     body = h - 4
     m = ui.Modal(con, w, h, "Message Log")
-    total = len(msgs)
+    total = len(lines)
     max_scroll = max(0, total - body)
     scroll = max(0, min(scroll, max_scroll))
     start = max(0, total - body - scroll)
-    for i, (text, color) in enumerate(msgs[start:start + body]):
-        m.text(2, 2 + i, text[:w - 4], fg=color)
+    for i, (text, color) in enumerate(lines[start:start + body]):
+        m.text(2, 2 + i, text, fg=color)
     m.arrows(scroll < max_scroll, scroll > 0, 2, h - 3)
     m.footer("↑↓ scroll · Esc close")
 

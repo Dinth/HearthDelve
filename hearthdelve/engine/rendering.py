@@ -954,9 +954,11 @@ def render_log(con: tcod.console.Console, state: GameState) -> None:
     y0 = C.VIEW_H
     con.draw_rect(0, y0, C.VIEW_W, 1, ch=ord("─"), fg=C.SEP, bg=C.HUD_BG)
     con.draw_rect(0, y0 + 1, C.VIEW_W, C.LOG_H - 1, ch=ord(" "), bg=C.HUD_BG)
-    lines = state.log.tail(C.LOG_H - 1)
+    # Wrapped, not cut: a long line ("…your armour holds, but it still bites
+    # for N") used to lose its end — the number — at the pane's edge.
+    lines = ui.log_tail(state.log.messages, C.VIEW_W - 2, C.LOG_H - 1)
     for i, (text, color) in enumerate(lines):
-        con.print(1, y0 + 1 + i, text[:C.VIEW_W - 2], fg=color)
+        con.print(1, y0 + 1 + i, text, fg=color)
 
 
 def render_weather(con: tcod.console.Console, state: GameState, t: float, occupied=frozenset()) -> None:
@@ -1459,20 +1461,6 @@ def _signpost_text(state: GameState, x: int, y: int) -> str:
     return "A signpost points the way — " + ", ".join(s for _d, s in ranked) + "."
 
 
-def _wrap(text: str, width: int) -> list[str]:
-    """Greedy word-wrap to `width` columns."""
-    lines, cur = [], ""
-    for word in text.split():
-        if cur and len(cur) + 1 + len(word) > width:
-            lines.append(cur)
-            cur = word
-        else:
-            cur = f"{cur} {word}" if cur else word
-    if cur:
-        lines.append(cur)
-    return lines
-
-
 _STATUS_ADJ = {"burn": "burning", "poison": "poisoned", "bleed": "bleeding", "sick": "sick"}
 
 # How enriched ground reads in look-mode (index = soil level 1..4).
@@ -1675,7 +1663,7 @@ def render_look(con: tcod.console.Console, state: GameState, lx: int, ly: int) -
     # player never wonders why "moving" doesn't move them. Below it, a
     # word-wrapped readout so long descriptions (a signpost's bearings) fit.
     banner = "» LOOK — arrows move the cursor, not you · Esc/l to exit"
-    lines = _wrap(describe(state, lx, ly), C.VIEW_W - 2)[:5]
+    lines = ui.wrap(describe(state, lx, ly), C.VIEW_W - 2)[:5]
     h = len(lines) + 2
     con.draw_rect(0, 0, C.VIEW_W, h, ch=ord(" "), bg=(46, 52, 40))
     con.draw_rect(0, 0, C.VIEW_W, 1, ch=ord(" "), bg=(70, 96, 78))
