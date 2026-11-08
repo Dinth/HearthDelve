@@ -1267,20 +1267,35 @@ def _place_dungeons(gm: GameMap, wild: np.ndarray, flora: np.ndarray,
     _drop(shore, "sea cave", salt, min_d=18)                         # a briny mouth on the coast
 
 
+# What people built — a dungeon site's clearing must go round it, never through.
+# Mouths are anchored a stand-off from each village, but a village can sprawl
+# past that: the clearing used to flatten whatever lay within its radius —
+# Cinderhope cottages and fields, Saltmere's piers and streets.
+_BUILT_KINDS = frozenset((
+    "road", "bridge", "door", "fence", "soil", "well", "stall", "signpost", "board",
+    "bin", "postbox", "bed", "hearth", "counter", "furniture", "barrel", "lamp",
+    "altar", "lectern", "bath", "statue", "exhibit", "scaffold", "grave", "boat",
+    "tent", "campfire"))
+_BUILT = frozenset(i for i, t in enumerate(tile.TILES)
+                   if t.kind in _BUILT_KINDS or t.name in ("house_wall", "house_floor"))
+_SITE_R = 4             # a dungeon site's clearing radius
+
+
 def _carve_dungeon_site(gm: GameMap, ex: int, ey: int, kind: str) -> None:
     """A small themed clearing around a dungeon mouth: a rocky cave (mine) or
-    crumbling ruins (otherwise), with the stairs-down at its heart."""
+    crumbling ruins (otherwise), with the stairs-down at its heart. It leaves
+    the river, the sand and anything built (see _BUILT) as they are."""
     import random
     rng = random.Random(ex * 7349 + ey)
     floor = tile.DIRT_PATH if kind == "mine" else tile.RUINS_FLOOR
     boulder = tile.ROCK if kind == "mine" else tile.RUINS_WALL
-    R = 4
+    R = _SITE_R
     for x in range(ex - R, ex + R + 1):
         for y in range(ey - R, ey + R + 1):
             if not gm.in_bounds(x, y):
                 continue
             d2 = (x - ex) ** 2 + (y - ey) ** 2
-            if d2 > R * R or gm.tiles[x, y] in (tile.RIVER, tile.SAND):
+            if d2 > R * R or gm.tiles[x, y] in (tile.RIVER, tile.SAND) or gm.tiles[x, y] in _BUILT:
                 continue
             gm.tiles[x, y] = floor
             if d2 > (R * R) * 0.5 and (x, y) != (ex, ey):   # scatter on the outer ring

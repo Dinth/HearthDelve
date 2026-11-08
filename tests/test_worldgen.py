@@ -92,5 +92,44 @@ class TestSurface(unittest.TestCase):
         self.assertTrue(300 < standing < 3000, f"herb abundance off: {standing}")
 
 
+class TestDungeonSitesSpareTheVillages(unittest.TestCase):
+    """A mouth's clearing flattened everything within its radius: Cinderhope
+    cottages, fences and fields (seed 23), Saltmere's piers and streets (seeds 1,
+    7, 8, 555, 2024). It must go round anything built — without moving the
+    mouths, which existing saves already have carved into their grids."""
+
+    def test_the_clearing_never_overwrites_anything_built(self):
+        from hearthdelve.world import tile, worldgen
+        orig = worldgen._carve_dungeon_site
+        spared = []
+
+        def watched(gm, ex, ey, kind):
+            R = worldgen._SITE_R
+            built = {(x, y): int(gm.tiles[x, y])
+                     for x in range(ex - R, ex + R + 1) for y in range(ey - R, ey + R + 1)
+                     if gm.in_bounds(x, y) and int(gm.tiles[x, y]) in worldgen._BUILT}
+            orig(gm, ex, ey, kind)
+            for (x, y), t in built.items():
+                self.assertEqual(int(gm.tiles[x, y]), t,
+                                 f"{kind} at {(ex, ey)} overwrote {tile.TILES[t].name} at {(x, y)}")
+            spared.append(len(built))
+            self.assertEqual(gm.tiles[ex, ey], tile.DUNGEON_DOWN)
+
+        worldgen._carve_dungeon_site = watched
+        try:
+            for seed in (23, 8):
+                worldgen.generate(seed)
+        finally:
+            worldgen._carve_dungeon_site = orig
+        self.assertGreater(sum(spared), 0, "these seeds do put a mouth beside a village")
+
+    def test_the_mouths_stay_where_existing_saves_have_them(self):
+        st = shared_state(7)
+        self.assertEqual(sorted(st.surface.dungeon_kind.items()), [
+            ((189, 711), "mine"), ((312, 136), "grotto"), ((485, 881), "sea cave"),
+            ((510, 68), "grotto"), ((522, 864), "cavern"), ((578, 654), "mine"),
+            ((812, 196), "barrow"), ((820, 190), "crypt")])
+
+
 if __name__ == "__main__":
     unittest.main()
