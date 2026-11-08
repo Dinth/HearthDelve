@@ -31,5 +31,38 @@ class TestTheStairKeysOnEveryLayout(unittest.TestCase):
         self.assertEqual(_press(K.PERIOD), ("wait",))
 
 
+class TestTheCodexListsEveryKey(unittest.TestCase):
+    """The codex's Controls page had drifted from the key map: no hotbar
+    slot 0, no q, no Shift+U, no Tab in aim mode, and the farming page sent
+    you to seeds on '6'."""
+
+    def _keys(self):
+        import re
+        from hearthdelve.engine import codex
+        from tests.common import fresh_state
+        pages = dict(codex.build_codex_pages(fresh_state(1)))
+        keys = set()
+        for text, _c in pages["Controls"]:
+            keys.update(t for t in re.split(r"[\s/,]+", text[:19]) if t)
+        return pages, keys
+
+    def test_every_command_key_is_listed(self):
+        from hearthdelve.engine import input as keymap
+        _pages, keys = self._keys()
+        letters = set(keymap._LETTER_CMD) - {"d"}     # 'd' on the map only points to the pack
+        wanted = letters | {"0", "Shift+C", "Shift+M", "Shift+U", ">", "<", "?", "Space", "Esc"}
+        self.assertEqual(sorted(wanted - keys), [])
+
+    def test_tab_in_aim_mode_is_explained(self):
+        pages, _keys = self._keys()
+        self.assertTrue(any("Tab swaps" in t for t, _c in pages["Controls"]))
+
+    def test_no_page_sends_you_to_seeds_on_6(self):
+        pages, _keys = self._keys()
+        for title, rows in pages.items():
+            for text, _c in rows:
+                self.assertNotIn("seeds (6)", text, title)
+
+
 if __name__ == "__main__":
     unittest.main()

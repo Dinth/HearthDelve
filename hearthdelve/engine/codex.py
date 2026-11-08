@@ -39,9 +39,10 @@ def build_codex_pages(state: GameState):
         ("Commands", _HDR),
         ("  Space            use active tool on the highlighted tile", C.WHITE),
         ("                   (it turns green when the tool can act there)", C.DIM),
-        ("  1-9              select hotbar tool / seed", C.WHITE),
+        ("  1-9, 0           pick a hotbar slot (tool / seed)", C.WHITE),
         ("  g                gather / harvest / use a machine", C.WHITE),
         ("  t                aim & fire: a readied bow/sling, else a bomb", C.WHITE),
+        ("                   (Tab swaps bow & bomb; Enter/Space fires)", C.DIM),
         ("  c                craft, build machines, cook dishes", C.WHITE),
         ("  p                site a carpenter building (opens aiming)", C.WHITE),
         ("  x                eat (restores stamina & health)", C.WHITE),
@@ -61,11 +62,13 @@ def build_codex_pages(state: GameState):
         ("  m                world map (the whole region at a glance)", C.WHITE),
         ("  h  /  Shift+M     message history (PgUp/PgDn page, ↑↓ scroll)", C.WHITE),
         ("  v                character sheet (stats, combat numbers & skills)", C.WHITE),
-        ("  j                journal (goals)", C.WHITE),
+        ("  j                journal (goals, favours, projects, collection)", C.WHITE),
         ("  r                relationships", C.WHITE),
         ("  l                look around (read any tile)", C.WHITE),
         ("  ?                this help / encyclopedia", C.WHITE),
-        ("  Esc              quit / close a screen", C.WHITE),
+        ("  Shift+U          mute / unmute the music", C.WHITE),
+        ("  q  /  Esc        quit: Enter saves & quits, Backspace quits", C.WHITE),
+        ("                   without saving (Esc also closes any screen)", C.DIM),
     ]
     pages.append(("Controls", controls))
 
@@ -161,7 +164,7 @@ def build_codex_pages(state: GameState):
         crops.append((f"      from {c.seed.name}.  {c.desc}", C.DIM))
     crops.append(("", C.WHITE))
     crops.append(("How to farm:", _HDR))
-    crops.append(("  Till soil (Hoe) -> select seeds (6) -> Space to plant", C.WHITE))
+    crops.append(("  Till soil (Hoe) -> pick seeds on the hotbar -> Space to plant", C.WHITE))
     crops.append(("  -> water daily (Can) -> sleep -> harvest (g) when ripe.", C.WHITE))
     crops.append(("  Rain waters for you. Crops die out of season.", C.DIM))
     crops.append(("", C.WHITE))
