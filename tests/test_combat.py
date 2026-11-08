@@ -244,6 +244,51 @@ class TestABlastedGemVeinKnowsItsDepth(unittest.TestCase):
         self.assertGreater(self._blast(10), 0.2)
 
 
+class TestJewellerySparesYourStrengthInAFight(unittest.TestCase):
+    """The codex tells you to wear jewellery that spares your strength for the
+    deep's fatigue — but an amethyst's ease only lightened tool work; every
+    blow and shot cost the full 3 + depth/3."""
+
+    def _stamina_spent(self, ring, shoot=False):
+        from unittest import mock
+        from hearthdelve.data import content
+        from hearthdelve.entities import items
+        from hearthdelve.entities.monster import Mob
+        from hearthdelve.game import combat
+        st = fresh_state(1)
+        st.world.depth = 12                       # deep: the blow costs 3 + 4
+        if ring:
+            st.player.equipment["ring1"] = content.make_jewel("Ring", "gold", "amethyst")
+            st.player.equip_quality["ring1"] = 5
+        foe = Mob("Target", "T", (200, 200, 200), 99, 99, 1, "chase",
+                  st.player.x + 1, st.player.y, dv=0, pv=0)
+        st.world.monsters.append(foe)
+        before = st.player.energy
+        with mock.patch.object(combat, "_resolve", return_value=None):   # a miss is enough
+            if shoot:
+                st.player.equipment["ranged"] = content.make_ranged("Short Bow", "birch")
+                st.player.inventory.add(items.ARROW, 5)
+                self.assertTrue(combat.fire_ranged_at(st, foe.x, foe.y))
+            else:
+                combat.player_attack(st, foe)
+        return before - st.player.energy
+
+    def test_a_worn_amethyst_lightens_a_blow(self):
+        self.assertEqual(self._stamina_spent(ring=False), 7)
+        self.assertLess(self._stamina_spent(ring=True), 7)
+
+    def test_and_a_shot(self):
+        self.assertLess(self._stamina_spent(ring=True, shoot=True),
+                        self._stamina_spent(ring=False, shoot=True))
+
+    def test_never_free(self):
+        from unittest import mock
+        from hearthdelve.game import combat, jewelry
+        st = fresh_state(1)
+        with mock.patch.object(jewelry, "cozy_bonus", return_value=50.0):
+            self.assertEqual(combat.fight_stamina(st), 1)
+
+
 class TestStatusArrowsWaitToBeReadied(unittest.TestCase):
     """Fire and venom arrows are fletched to be readied deliberately, but with
     nothing readied a shot spent the 'best' arrow by damage — and their +1 put

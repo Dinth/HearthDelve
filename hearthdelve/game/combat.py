@@ -365,12 +365,22 @@ def _resolve(to_hit: int, dmg_range, dmg_bonus: int, crit_chance: float,
 
 
 # --- player attacks ----------------------------------------------------------
+def fight_stamina(state: GameState) -> int:
+    """Stamina one blow or shot costs: a base, plus the deep's fatigue (a third
+    of the depth), less what worn jewellery spares — the amethyst's ease,
+    which used to lighten only tool work, though the codex promised it in a
+    fight too. Never less than 1."""
+    from . import jewelry
+    cost = C.ATTACK_COST[0] + state.world.depth // 3
+    return max(1, cost - round(jewelry.cozy_bonus(state, "energy")))
+
+
 def player_attack(state: GameState, m) -> None:
     from . import skills
     p = state.player
     prof = held_profile(state)
     # deep-floor fatigue: fighting in the airless dark costs more the further down
-    p.energy = max(0, p.energy - C.ATTACK_COST[0] - state.world.depth // 3)
+    p.energy = max(0, p.energy - fight_stamina(state))
     from . import attrs
     dmg_bonus = skills.mastery_dmg(skills.mastery_level(state, prof.category))
     dmg_bonus += _fighter_dmg(state) + attrs.mod(state, "St") // 3
@@ -842,7 +852,7 @@ def fire_ranged_at(state: GameState, tx: int, ty: int) -> bool:
     ammo = chosen_ammo(state, stat)
     astat = content.ammo_stat(ammo)
     p.inventory.remove(ammo, 1)
-    p.energy = max(0, p.energy - C.ATTACK_COST[0] - state.world.depth // 3)
+    p.energy = max(0, p.energy - fight_stamina(state))
 
     # Resolve the shot against the world as it stands *now* — like a melee blow —
     # and only then let the world take its turn. (Advancing time first let erratic
