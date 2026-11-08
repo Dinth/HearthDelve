@@ -353,5 +353,28 @@ class TestRestingBesideTheBin(unittest.TestCase):
         self.assertEqual(play.rest_left, 0)
 
 
+class TestTheShippingMenuScrolls(unittest.TestCase):
+    """The shipping bin's menu grew a row per stack with no cap and no scroll,
+    so past ~43 stacks it ran off the bottom of the screen with the cursor on
+    rows that were never drawn."""
+
+    def test_a_full_pack_fits_and_the_cursor_stays_in_view(self):
+        from hearthdelve.engine import rendering
+        from hearthdelve.entities import items
+        from hearthdelve.game import crafting
+        st = fresh_state(6)
+        for it in [i for i in items.BY_NAME.values() if i.stackable and i.value > 0][:60]:
+            st.player.inventory.add(it, 1)
+        stacks = crafting.sellable_items(st)
+        self.assertGreater(len(stacks), 50)
+        for sel in (0, len(stacks) // 2, len(stacks) - 1):
+            con = _con()
+            rendering.render_ship(con, st, sel)
+            screen = "\n".join("".join(chr(c) for c in con.ch[:, y]) for y in range(con.height))
+            with self.subTest(sel=sel):
+                self.assertIn(stacks[sel][0].name[:20], screen)
+                self.assertIn("In bin (sells tonight)", screen)
+
+
 if __name__ == "__main__":
     unittest.main()

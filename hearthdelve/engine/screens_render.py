@@ -608,7 +608,9 @@ def render_ship(con: tcod.console.Console, state: GameState, sel: int) -> None:
     items_ = crafting.sellable_items(state)
     pending = sum(crafting.bin_value(state, it, ql) * q for it, q, ql in state.ship_bin.slots)
     boom = state.demand if state.demand and state.day < state.demand.get("until", 0) else {}
-    w, h = 52, max(8, len(items_) + 7 + (1 if boom else 0))
+    # Capped to the screen and scrolled: it used to grow a row per stack, so a
+    # full pack ran it off the bottom with the cursor out of sight.
+    w, h = 52, min(C.SCREEN_H - 2, max(8, len(items_) + 7 + (1 if boom else 0)))
     m = ui.Modal(con, w, h, "Shipping Bin  (sells overnight)")
     top = 2
     if boom:
@@ -619,17 +621,19 @@ def render_ship(con: tcod.console.Console, state: GameState, sel: int) -> None:
 
     if not items_:
         m.text(2, top, "Nothing to sell — grow and gather first.", fg=C.DIM)
-    sel = max(0, min(sel, len(items_) - 1)) if items_ else 0   # keep the cursor on-list as it shrinks
-    for i, (it, q, ql) in enumerate(items_):
-        marker = "▸" if i == sel else " "
-        bg = ui.SEL_BG if i == sel else ui.BASE_BG
-        if i == sel:
-            m.highlight(top + i)
+
+    def row(i, dy, selected, bg):
+        it, q, ql = items_[i]
         star = (" " + skills.stars(ql)) if ql else ""
         hot = boom and it.kind == boom["kind"]
-        m.text(2, top + i, f"{marker} {q:>3}  {it.name}{star}", fg=C.WHITE, bg=bg)
-        m.text(w - 12, top + i, f"{crafting.bin_value(state, it, ql)}g ea",
+        m.text(2, dy, f"{'▸' if selected else ' '} {q:>3}  {it.name}{star}"[:w - 14],
+               fg=C.WHITE, bg=bg)
+        m.text(w - 12, dy, f"{crafting.bin_value(state, it, ql)}g ea",
                fg=(250, 220, 110) if hot else C.GOLD_COLOR, bg=bg)
+
+    body = h - 3 - top                     # rows between the banner and the bin total
+    m.list(top, body, len(items_), sel, row, arrow_top=top, arrow_bottom=top + body - 1,
+           dx_arrow=-2, glyphs=("↑", "↓"))
 
     m.text(2, h - 3, f"In bin (sells tonight): {pending}g", fg=C.GOLD_COLOR)
     m.footer("↑↓ select · Enter stack · Space all · Esc close")
