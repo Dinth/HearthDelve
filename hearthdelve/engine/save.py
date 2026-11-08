@@ -87,14 +87,34 @@ def _item_from_key(tok):
     string is a name — old saves and every non-gear item — resolved the legacy
     way (which for gear still parses the name, the grandfather path)."""
     if isinstance(tok, dict):
-        if "g" in tok:
-            return content.make_gear(tok["g"], tok["m"], tok.get("p", ""),
-                                     tok.get("s", ""), tuple(tok.get("x", ())))
-        if "j" in tok:
-            gems = tok.get("x", ())
-            return content.make_jewel(tok["j"], tok["m"], gems[0]) if gems else None
+        try:
+            if "g" in tok:
+                return content.make_gear(tok["g"], tok["m"], tok.get("p", ""),
+                                         tok.get("s", ""), tuple(tok.get("x", ())))
+            if "j" in tok:
+                gems = tok.get("x", ())
+                return content.make_jewel(tok["j"], tok["m"], gems[0]) if gems else None
+        except (KeyError, ValueError, IndexError):
+            # A base, material, affix or gem this build no longer knows (renamed
+            # or cut). Raising here failed the whole load — and the .bak, which
+            # holds the same piece — so one renamed affix bricked a farm. Lose
+            # that one piece instead (its name is a last hope), and say so.
+            it = _by_name_or_none(tok.get("n", ""))
+            if it is None:
+                _LOST.add(tok.get("n") or "a piece of gear")
+            return it
         return items.by_name(tok.get("n", ""))
     return items.by_name(tok)
+
+
+_LOST: set = set()        # names of saved pieces this build couldn't rebuild (per load)
+
+
+def _by_name_or_none(name: str):
+    try:
+        return items.by_name(name) if name else None
+    except (KeyError, ValueError, IndexError):
+        return None
 
 
 def _npc_to_rec(n) -> list:
@@ -356,6 +376,7 @@ def save(state: GameState, path: str | None = None) -> None:
 
 # --- load --------------------------------------------------------------------
 def load(path: str | None = None) -> GameState:
+    _LOST.clear()
     with open(path or default_path()) as f:
         data = json.load(f)
     ver = data.get("version")
@@ -568,4 +589,7 @@ def load(path: str | None = None) -> GameState:
     # (Older saves have none: they wake at the mouth, as they always did.)
     if data.get("delve"):
         _delve_from_rec(state, data["delve"])
+    if _LOST:
+        state.log.add(f"Some gear from an older version couldn't be recognised and was lost: "
+                      f"{', '.join(sorted(_LOST))}.", (240, 180, 120))
     return state

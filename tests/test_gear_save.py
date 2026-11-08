@@ -81,5 +81,41 @@ class TestStructuredGearSave(unittest.TestCase):
                 pass
 
 
+class TestAnUnknownPieceDoesNotBrickTheSave(unittest.TestCase):
+    """make_gear raised KeyError on a material, affix or base this build didn't
+    know, so one renamed affix made every save holding such a piece unloadable
+    — the rolling .bak too, since it holds the same piece."""
+
+    def test_the_save_loads_without_the_unknown_piece_and_says_so(self):
+        from hearthdelve.data import content
+        from hearthdelve.engine import save
+        from hearthdelve.entities import items
+        st = fresh_state(21)
+        p = st.player
+        odd = content.make_gear("Sword", "steel")
+        fine = content.make_gear("Helm", "iron")
+        p.inventory.add(odd, 1)
+        p.inventory.add(fine, 1)
+        p.inventory.add(items.BREAD, 3)
+        save.save(st)
+        with open(save.default_path()) as f:
+            raw = json.load(f)
+        for rec in raw["player"]["inventory"]:
+            if isinstance(rec[0], dict) and rec[0].get("g") == "Sword":
+                rec[0]["m"] = "unobtainium"                 # a metal since cut
+                rec[0]["n"] = "Unobtainium Sword"
+        if isinstance(raw["player"]["weapon"], dict):
+            raw["player"]["weapon"]["p"] = "gone_affix"     # an affix since renamed
+            raw["player"]["weapon"]["n"] = "Vanished Blade"
+        with open(save.default_path(), "w") as f:
+            json.dump(raw, f)
+        again = save.load()
+        self.assertEqual(again.player.inventory.count(fine), 1)
+        self.assertEqual(again.player.inventory.count(items.BREAD), 3)
+        self.assertFalse(any(it.name == "Unobtainium Sword" for it, _q, _ql in again.player.inventory.slots))
+        lost = [t for t, _c in again.log.messages if "couldn't be recognised" in t]
+        self.assertTrue(lost and "Unobtainium Sword" in lost[0])
+
+
 if __name__ == "__main__":
     unittest.main()
