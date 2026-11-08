@@ -418,6 +418,32 @@ def _vale_folk(state: GameState) -> list:
     return state.surface.npcs if state.surface is not None else state.world.npcs
 
 
+_CODEX_W = 66
+
+
+def wrap_row(text: str, width: int) -> list[str]:
+    """One codex row as lines no wider than `width`. Rows were cut at the
+    page's edge — 145 of them, up to 159 characters, losing their ends. The
+    row's own layout is kept: its leading indent and its key column (the
+    text up to the last run of 2+ spaces in the first 24 columns), with the
+    rest word-wrapped and every continuation hung under it."""
+    import re
+    if len(text) <= width:
+        return [text]
+    gaps = [g.end() for g in re.finditer(r"\S {2,}", text[:24])]
+    hang = gaps[-1] if gaps else len(text) - len(text.lstrip(" "))
+    if hang > width // 2:
+        hang = 0
+    head, body = text[:hang], text[hang:]
+    lines = ui.wrap(body, width - hang) or [""]
+    return [head + lines[0]] + [" " * hang + line for line in lines[1:]]
+
+
+def wrap_rows(rows, width: int) -> list:
+    """A page's (text, colour) rows, each wrapped to `width` (see wrap_row)."""
+    return [(line, color) for text, color in rows for line in wrap_row(text, width)]
+
+
 _codex_cache: list | None = None
 _codex_sig: tuple | None = None
 
@@ -431,12 +457,14 @@ def render_codex(con: tcod.console.Console, state: GameState, page: int, scroll:
     sig = (tuple((n.name, n.friendship) for n in _vale_folk(state)),
            sum(state.bestiary.values()), len(state.bestiary))
     if _codex_cache is None or sig != _codex_sig:
-        _codex_cache, _codex_sig = build_codex_pages(state), sig
+        _codex_cache = [(title, wrap_rows(rows, _CODEX_W - 4))
+                        for title, rows in build_codex_pages(state)]
+        _codex_sig = sig
     pages = _codex_cache
     page %= len(pages)
     title, rows = pages[page]
 
-    w, h = 66, 44
+    w, h = _CODEX_W, 44
     body_h = h - 5
     m = ui.Modal(con, w, h, f"Encyclopedia — {title}")
 
@@ -447,7 +475,7 @@ def render_codex(con: tcod.console.Console, state: GameState, page: int, scroll:
         if idx >= len(rows):
             break
         text, color = rows[idx]
-        m.text(2, 2 + i, text[:w - 4], fg=color)
+        m.text(2, 2 + i, text, fg=color)
     m.arrows(scroll > 0, scroll < max_scroll, 2, h - 3)
     m.footer(f" ← → page {page + 1}/{len(pages)}   ↑ ↓ scroll   Esc close ")
     return scroll                        # clamped, for the screen to keep (see ui.Modal.list)

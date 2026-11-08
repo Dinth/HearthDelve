@@ -227,6 +227,40 @@ class TestTheCodexKnowsTheVillagersUnderground(unittest.TestCase):
         self.assertEqual(self._villagers(st), above)
 
 
+class TestTheCodexWrapsInsteadOfCutting(unittest.TestCase):
+    """The codex cut every row at its page's edge: 145 rows across eight
+    pages lost their ends, some 159 characters long ('Shift+D drops the s')."""
+
+    def test_every_page_fits_and_keeps_every_word(self):
+        from hearthdelve.engine import codex
+        from tests.common import fresh_state
+        st = fresh_state(6)
+        for npc in st.surface.npcs:
+            npc.met = True
+        width = codex._CODEX_W - 4
+        for title, rows in codex.build_codex_pages(st):
+            wrapped = codex.wrap_rows(rows, width)
+            with self.subTest(page=title):
+                self.assertTrue(all(len(text) <= width for text, _c in wrapped))
+                self.assertEqual(" ".join(t for t, _c in wrapped).split(),
+                                 " ".join(t for t, _c in rows).split())
+
+    def test_a_key_row_hangs_its_overflow_under_the_description(self):
+        from hearthdelve.engine import codex
+        row = "  h  /  Shift+M     message history (PgUp/PgDn page, ↑↓ scroll), and more"
+        lines = codex.wrap_row(row, 50)
+        self.assertTrue(lines[0].startswith("  h  /  Shift+M     message"))
+        self.assertTrue(all(line.startswith(" " * 20) and line[20] != " "
+                            for line in lines[1:]))
+
+    def test_the_page_shows_the_whole_row(self):
+        from hearthdelve.engine import codex
+        from tests.common import fresh_state
+        con = _con()
+        codex.render_codex(con, fresh_state(1), 0, 0)    # Controls
+        self.assertIn("Shift+D drops the stack)", _rows(con, 9, 71, 0, 50))
+
+
 class TestEveryWindowStaysInsideItsFrame(unittest.TestCase):
     """Four windows printed past their frames: the intro page (the first
     thing a new player sees) by 4 cells, the pack's footer by 9 onto the side
