@@ -1963,8 +1963,10 @@ WILDLIFE_DROPS: dict[str, list] = {
     "Bear":        [(items.MEAT, 1.0, (2, 4)), (items.RAW_HIDE, 1.0, (1, 2))],
     "Ash Wolf":    [(items.MEAT, 0.5, (1, 1)), (items.WOLF_PELT, 0.9, (1, 1))],
     "Cinder Boar": [(items.MEAT, 1.0, (1, 3)), (items.BOAR_HIDE, 1.0, (1, 1))],
-    "Rock Viper":  [(items.RAW_HIDE, 0.4, (1, 1)), (items.VENOM_GLAND, 0.6, (1, 1))],
-    "Ember Drake": [(items.MEAT, 0.5, (1, 1)), (items.DRAKE_SCALE, 0.8, (1, 2))],
+    "Rock Viper":  [(items.RAW_HIDE, 0.4, (1, 1)), (items.VENOM_GLAND, 0.6, (1, 1)),
+                    (items.SULPHUR, 0.3, (1, 1))],          # crusted from the scree it lies in
+    "Ember Drake": [(items.MEAT, 0.5, (1, 1)), (items.DRAKE_SCALE, 0.8, (1, 2)),
+                    (items.SULPHUR, 0.6, (1, 1))],          # its fire-gland's yellow crust
 }
 
 
@@ -3066,11 +3068,7 @@ MONSTER_DROPS: dict[str, list] = {
     "Cave Slime":   [(items.SLIME_GEL, 0.7)],
     "Bat":          [(items.BAT_WING, 0.6)],
     "Boar":         [(items.BOAR_HIDE, 0.5), (items.PORK, 0.7)],
-    # The Westreach's beasts
-    "Ash Wolf":     [(items.WOLF_PELT, 0.6)],
-    "Cinder Boar":  [(items.BOAR_HIDE, 0.6), (items.PORK, 0.9)],
-    "Rock Viper":   [(items.SULPHUR, 0.3)],
-    "Ember Drake":  [(items.DRAKE_SCALE, 0.8), (items.SULPHUR, 0.6)],
+    # (The Westreach's beasts are wildlife: their yield is in WILDLIFE_DROPS.)
     "Cave Spider":  [(items.SPIDER_SILK, 0.6), (items.VENOM_GLAND, 0.4)],
     "Deep Lurker":  [(items.LURKER_SCALE, 0.6)],
     "Wraith":       [(items.WRAITH_ESSENCE, 0.5)],

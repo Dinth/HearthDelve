@@ -168,15 +168,18 @@ def _on_kill(state: GameState, m, award_combat: bool = True) -> None:
     """Resolve a slain mob: removal, karma/XP, kill-count, and drops.
 
     Shared by the sword (``player_attack``) and the bomb (``throw_bomb``) so
-    both obey the same rules. Peaceful surface wildlife costs karma and yields
-    no XP or loot; a dungeon monster gains Combat XP, bumps the slain count and
-    rolls its reagent drops.
+    both obey the same rules. Wildlife yields its hide and meat; a peaceful
+    creature costs karma and teaches nothing, but a predator — a Westreach beast
+    that hunts on sight — is a fight, not a cruelty: no karma, Combat XP, and a
+    line in the bestiary. A dungeon monster gains Combat XP, bumps the slain
+    count and rolls its reagent drops.
     """
     from . import skills
     p = state.player
     state.world.monsters = [x for x in state.world.monsters if x is not m]
     if getattr(m, "kind", "monster") == "wildlife":
-        if not getattr(m, "hostile", False):
+        hunter = getattr(m, "behavior", "") == "predator"
+        if not hunter and not getattr(m, "hostile", False):
             from . import karma
             karma.adjust(state, -2)  # slaying a peaceful creature is unkind
         state.log.add(f"You put down the {m.name.lower()}.", (200, 180, 150))
@@ -187,6 +190,10 @@ def _on_kill(state: GameState, m, award_combat: bool = True) -> None:
             got = ", ".join(f"{q} {d.name.lower()}" if q > 1 else d.name.lower()
                             for d, q in drops)
             state.log.add(f"  You take {got}.", (200, 180, 150))
+        if hunter:
+            state.bestiary[m.name] = state.bestiary.get(m.name, 0) + 1
+            if award_combat:
+                skills.gain(state, "Combat", 12 + 6 * getattr(m, "level", 1))
     else:
         state.bump("monsters_slain")
         if getattr(m, "boss", False):

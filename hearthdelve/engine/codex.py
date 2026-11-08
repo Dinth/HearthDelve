@@ -340,6 +340,9 @@ def build_codex_pages(state: GameState):
     for c in content.WEST_WILDLIFE:
         mon.append((f" {c.glyph}  {c.name}   {c.behavior}", _KEY))
         mon.append((f"      {c.desc}", C.DIM))
+        n = state.bestiary.get(c.name, 0)                # hunters are counted as foes
+        if n:
+            mon.append((f"      slain {n}×", (196, 176, 130)))
     pages.append(("Bestiary", mon))
 
     # --- Page: Dungeon Sites -------------------------------------------------
