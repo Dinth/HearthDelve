@@ -1075,6 +1075,43 @@ def hearts(f: anim.Frame, h, age: float) -> None:
         _write(f, sx, y, label, tuple(int(c * fade) for c in (255, 170, 196)))
 
 
+# A gain's label, tinted by what kind of thing it is (items carry no colour
+# of their own; the menus list them in white).
+_KIND_TINT = {"crop": (156, 222, 112), "seed": (200, 222, 140), "food": (240, 192, 124),
+              "artisan": (240, 210, 120), "material": (206, 200, 188)}
+
+
+@anim.one_off("pickup", life=1.4, order=150)          # labels over any sparks
+def pickup(f: anim.Frame, h, age: float) -> None:
+    """Something comes into your pack: it hops from where it came to you,
+    and a "+2 Wood" lifts off you and fades. Several at once follow one
+    another up."""
+    p = f.state.player
+    tx, ty = p.x - f.ox, p.y - f.oy
+    colour = _KIND_TINT.get(h.data.get("sort"), (232, 228, 214))
+    src = f.cell(h.x, h.y)
+    if h.data.get("hop", True) and src is not None and src != (tx, ty) and age < 0.3:
+        sx, sy = src
+        u = age / 0.3
+        x = int(round(sx + (tx - sx) * u))
+        y = int(round(sy + (ty - sy) * u - 1.2 * math.sin(math.pi * u)))   # a hop, not a slide
+        if (x, y) != (tx, ty) and (x, y) not in f.occupied:
+            _write(f, x, y, h.data.get("glyph", "*"), colour)
+    if age < 0.2:
+        return
+    a = age - 0.2
+    label = f"+{h.data.get('qty', 1)} {h.data.get('name', '')}"
+    y = ty - 1 - int(a / 0.45)
+    if not 0 <= y < f.vh:
+        return
+    fade = 1.0 if a < 0.7 else max(0.3, 1.0 - (a - 0.7) / 0.5)
+    x0 = tx - len(label) // 2
+    for i in range(len(label)):                      # a dark band behind, to read it
+        if 0 <= x0 + i < f.vw:
+            _blend(f.con, x0 + i, y, "bg", (0, 0, 0), 0.5 * fade)
+    _write(f, x0, y, label, tuple(int(c * fade) for c in colour))
+
+
 @anim.ongoing(anim.OVERLAY, 50)
 def songs_at_the_inn(f: anim.Frame) -> None:
     """Evenings at the inn: now and then a "♪" rises over someone there —

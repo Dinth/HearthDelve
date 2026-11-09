@@ -1,6 +1,7 @@
 """Top-level mutable game state: world, player, clock, calendar, log."""
 from __future__ import annotations
 
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 
 from ..engine import constants as C
@@ -149,6 +150,32 @@ class GameState:
         self.fx.append(Happening(kind, x, y, self.world, self.abs_minutes, data))
         if len(self.fx) > MAX_HAPPENINGS:
             del self.fx[:-MAX_HAPPENINGS]
+
+    MAX_PICKUPS_SHOWN = 4       # a chest's worth of gains shows its first few
+
+    @contextmanager
+    def noting_gains(self, where: list, **data):
+        """Note what a piece of work puts in your pack, for the screen to show
+        hopping into it with a "+2 Wood" (see engine/effects.py). `where` is a
+        one-item list holding the cell the work drew from; the work may settle
+        it as it goes (grabbing tries the faced cell, then underfoot). Any of
+        `data` (a ``delay``, ``hop=False``) goes on each record."""
+        before = self._pack_counts()
+        yield
+        gained = [(it, n - before.get(key, (it, 0))[1])
+                  for key, (it, n) in self._pack_counts().items()]
+        gained = [(it, n) for it, n in gained if n > 0][:self.MAX_PICKUPS_SHOWN]
+        x, y = where[0]
+        for k, (it, n) in enumerate(gained):
+            self.happen("pickup", x, y, glyph=it.glyph, name=it.name, sort=it.kind, qty=n,
+                        **{**data, "delay": data.get("delay", 0.0) + 0.35 * k})
+
+    def _pack_counts(self) -> dict:
+        counts: dict = {}
+        for it, qty, _q in self.player.inventory.slots:
+            seen = counts.get(id(it), (it, 0))[1]
+            counts[id(it)] = (it, seen + qty)
+        return counts
 
     def bump(self, key: str, amount: int = 1) -> None:
         self.stats[key] = self.stats.get(key, 0) + amount

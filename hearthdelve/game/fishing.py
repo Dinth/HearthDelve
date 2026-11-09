@@ -115,7 +115,8 @@ def begin(state: GameState, tx: int, ty: int):
         return None
     p.facing = (max(-1, min(1, tx - p.x)), max(-1, min(1, ty - p.y)))
     if getattr(state.world, "underriver", False):        # pan the ore-river — no minigame
-        _pan_river(state, tx, ty)
+        with state.noting_gains([(tx, ty)]):
+            _pan_river(state, tx, ty)
         return None
     from . import skills
     kind = water_kind(state, tx, ty)
@@ -248,7 +249,8 @@ def resolve(state: GameState, ctx: dict, caught: bool) -> None:
     q = skills.roll_quality(state, "Fishing")
     if ctx["elapsed"] < 6.0:                       # a swift, clean catch lands a finer fish
         q = min(5, q + 1)
-    p.inventory.add(fish, 1, quality=q)
+    with state.noting_gains([at or (p.x, p.y)], hop=False, delay=0.5):   # the leap carries it
+        p.inventory.add(fish, 1, quality=q)
     state.bump("fish_caught")
     skills.gain(state, "Fishing", 24)              # a slow, patient skill — worth more per catch
     star = (" " + skills.stars(q)) if q else ""

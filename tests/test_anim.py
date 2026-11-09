@@ -426,6 +426,73 @@ class TestAHeartWonShows(unittest.TestCase):
         self.assertEqual(offenders, [])
 
 
+class TestGainsHopIntoYourPack(unittest.TestCase):
+    """What you gathered went into your pack unseen, with at most a log line.
+    Now it hops from where it came into you, and a "+2 Wood" lifts off you."""
+
+    def _ripe_crop(self, st):
+        from hearthdelve.data import content
+        from hearthdelve.world import tile
+        from hearthdelve.world.crops import CropPlot
+        p = st.player
+        dx, dy = _clear_line(st, 2)
+        pos = (p.x + dx, p.y + dy)
+        st.world.tiles[pos] = tile.TILLED
+        crop = next(c for c in content.CROPS if c.season == st.season)
+        st.world.crops[pos] = CropPlot(crop=crop, days_grown=crop.days_to_mature, watered=True)
+        p.facing = (dx, dy)
+        return pos, crop
+
+    def _label_row(self, con, st):
+        sx, sy = _screen(st, st.player.x, st.player.y)
+        return " ".join("".join(chr(c) for c in con.ch[max(0, sx - 12):sx + 13, y])
+                        for y in range(sy - 3, sy))
+
+    def test_a_harvest_hops_into_your_pack(self):
+        from hearthdelve.game import commands
+        st = fresh_state(2)
+        pos, crop = self._ripe_crop(st)
+        commands.do_grab(st)
+        (h,) = [h for h in st.fx if h.kind == "pickup"]
+        self.assertEqual((h.x, h.y, h.data["name"]), (*pos, crop.produce.name))
+        n = h.data["qty"]
+        _render(st, 70.0)
+        self.assertIn(f"+{n} {crop.produce.name}", self._label_row(_render(st, 70.5), st))
+
+    def test_a_kill_s_drops_hop_from_where_it_fell(self):
+        from unittest import mock
+        from hearthdelve.data import content
+        from hearthdelve.entities import items
+        from hearthdelve.game import combat
+        st = fresh_state(2)
+        foe = _foe_beside(st, hp=3, reach=1)
+        with mock.patch.object(combat, "_resolve", return_value=(9, False)), \
+                mock.patch.object(content, "monster_drops", return_value=[items.COAL, items.COAL]):
+            combat.player_attack(st, foe)
+        (h,) = [h for h in st.fx if h.kind == "pickup"]
+        self.assertEqual((h.x, h.y, h.data["name"], h.data["qty"]), (foe.x, foe.y, "Coal", 2))
+
+    def test_several_gains_follow_one_another_up(self):
+        from hearthdelve.entities import items
+        st = fresh_state(2)
+        p = st.player
+        with st.noting_gains([(p.x + 1, p.y)]):
+            p.inventory.add(items.WOOD, 2)
+            p.inventory.add(items.STONE, 1)
+        delays = [h.data["delay"] for h in st.fx if h.kind == "pickup"]
+        self.assertEqual(len(delays), 2)
+        self.assertLess(delays[0], delays[1])
+
+    def test_what_you_give_up_isnt_shown_as_a_gain(self):
+        from hearthdelve.entities import items
+        st = fresh_state(2)
+        p = st.player
+        p.inventory.add(items.WOOD, 5)
+        with st.noting_gains([(p.x, p.y)]):
+            p.inventory.remove(items.WOOD, 3)
+        self.assertEqual([h for h in st.fx if h.kind == "pickup"], [])
+
+
 class TestAMonsterNoticesYou(unittest.TestCase):
     """A monster waking showed only as it starting to move. Now a "!" shows
     over it the moment it sees you."""
@@ -828,8 +895,10 @@ class TestFishingShows(unittest.TestCase):
         st.fx.clear()
         fishing.resolve(st, ctx, caught=False)
         fishing.resolve(st, ctx, caught=True)
-        self.assertEqual([h.kind for h in st.fx], ["splash", "catch"])
+        self.assertEqual([h.kind for h in st.fx], ["splash", "catch", "pickup"])
         self.assertEqual(st.fx[1].data["glyph"], ctx["fish"].glyph)
+        self.assertEqual(st.fx[2].data["name"], ctx["fish"].name)       # "+1 Trout" follows it
+        self.assertFalse(st.fx[2].data["hop"])                          # the leap already carried it
 
 
 class TestTransitions(unittest.TestCase):

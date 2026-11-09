@@ -164,7 +164,8 @@ def _finish_busy(state: GameState, b: dict) -> None:
         state.world.tiles[b["tx"], b["ty"]] = b["new_tile"]
     p.energy = max(0, p.energy - b["stamina"])
     state.log.add(b["msg"])
-    _gather_drop(state, b["item"], b["target"])
+    with state.noting_gains([(b["tx"], b["ty"])]):
+        _gather_drop(state, b["item"], b["target"])
     if b.get("steal"):
         from . import land
         land.penalize(state, b["tx"], b["ty"], "growth")
@@ -311,7 +312,8 @@ def try_move(state: GameState, dx: int, dy: int) -> None:
         from . import husbandry
         a = husbandry.animal_at(state, nx, ny)
         if a is not None:
-            husbandry.interact_animal(state, a)
+            with state.noting_gains([(a.x, a.y)]):
+                husbandry.interact_animal(state, a)
             turns.advance_time(state, C.HARVEST_COST[1])
             return
     # bump-attack a creature instead of moving onto it (dungeon monster or
@@ -611,7 +613,8 @@ def use_tool(state: GameState) -> dict | None:
     p.energy = max(0, p.energy - stamina)
     turns.advance_time(state, seconds)
     state.log.add(msg)
-    _gather_drop(state, item, target)
+    with state.noting_gains([(tx, ty)]):
+        _gather_drop(state, item, target)
     if steal:
         land.penalize(state, tx, ty, "growth")
     elif new_tile == tile.TILLED:
@@ -866,12 +869,21 @@ def _beside_sea(state: GameState, x: int, y: int) -> bool:
 
 
 def do_grab(state: GameState) -> None:
-    """Harvest a crop or interact with a machine — faced tile, then underfoot."""
+    """Harvest a crop or interact with a machine — faced tile, then underfoot.
+    Whatever comes away shows hopping into your pack."""
+    p = state.player
+    where = [(p.x + p.facing[0], p.y + p.facing[1])]
+    with state.noting_gains(where):
+        return _grab(state, where)
+
+
+def _grab(state: GameState, where: list):
     from . import land
     p = state.player
     for gx, gy in ((p.x + p.facing[0], p.y + p.facing[1]), (p.x, p.y)):
         if not state.world.in_bounds(gx, gy):
             continue
+        where[0] = (gx, gy)
         tk = state.world.tile_at(gx, gy).kind
 
         # Taking crops/fruit/berries/fungus off another's land is theft: warn

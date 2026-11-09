@@ -173,6 +173,13 @@ def mob_at(state: GameState, x: int, y: int):
 
 # --- kills --------------------------------------------------------------------
 def _on_kill(state: GameState, m, award_combat: bool = True) -> None:
+    """Resolve a slain mob — see :func:`_settle_kill` — with what it leaves
+    you shown hopping into your pack."""
+    with state.noting_gains([(m.x, m.y)]):
+        _settle_kill(state, m, award_combat)
+
+
+def _settle_kill(state: GameState, m, award_combat: bool = True) -> None:
     """Resolve a slain mob: removal, karma/XP, kill-count, and drops.
 
     Shared by the sword (``player_attack``) and the bomb (``throw_bomb``) so
