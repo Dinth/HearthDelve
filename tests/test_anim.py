@@ -408,6 +408,31 @@ class TestAHeartWonShows(unittest.TestCase):
                      for y in range(sy - 4, sy + 4))
         self.assertGreaterEqual(around, 5)
 
+    def test_a_dwarf_s_heart_shows_in_khazgrim(self):
+        """The burst only ever showed on the surface, so a heart won with one of
+        Khazgrim's dwarves never showed at all."""
+        from hearthdelve.data import content
+        from hearthdelve.game import village
+        from hearthdelve.world import dwarftown
+        st = fresh_state(2)
+        st.dwarves = content.dwarf_npcs()
+        st.world = dwarftown.generate(st.seed, st.dwarves)
+        dwarf = st.dwarves[0]
+        dwarf.friendship = 299
+        village.befriend(st, dwarf, 5)
+        self.assertEqual([(h.x, h.y) for h in st.fx if h.kind == "hearts"], [(dwarf.x, dwarf.y)])
+
+    def test_a_villager_s_heart_won_while_you_re_below_doesnt_show_there(self):
+        from hearthdelve.game import delve, village
+        st = fresh_state(2)
+        mouth = sorted(q for q, k in st.surface.dungeon_kind.items() if k == "mine")[0]
+        st.player.x, st.player.y = mouth
+        delve.enter(st, "mine")
+        npc = st.surface.npcs[0]
+        npc.friendship = 299
+        village.befriend(st, npc, 5)
+        self.assertEqual([h for h in st.fx if h.kind == "hearts"], [])
+
     def test_points_within_a_heart_dont_burst(self):
         from hearthdelve.game import village
         st = fresh_state(2)

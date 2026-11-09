@@ -297,8 +297,8 @@ def befriend(state: GameState, npc: NPC, points: int) -> None:
     turning out for a raising."""
     before = npc.hearts
     npc.friendship = max(0, min(MAX_HEARTS * 100, npc.friendship + points))
-    if npc.hearts > before and state.world is state.surface:     # villagers live up top
-        state.happen("hearts", npc.x, npc.y, hearts=npc.hearts)
+    if npc.hearts > before and any(n is npc for n in getattr(state.world, "npcs", ())):
+        state.happen("hearts", npc.x, npc.y, hearts=npc.hearts)   # shown where they are
 
 
 def talk(state: GameState, npc: NPC) -> str:
