@@ -185,6 +185,7 @@ def _on_kill(state: GameState, m, award_combat: bool = True) -> None:
     from . import skills
     p = state.player
     state.world.monsters = [x for x in state.world.monsters if x is not m]
+    state.happen("slain", m.x, m.y, glyph=m.glyph, colour=tuple(m.color))
     if getattr(m, "kind", "monster") == "wildlife":
         hunter = getattr(m, "behavior", "") == "predator"
         if not hunter and not getattr(m, "hostile", False):

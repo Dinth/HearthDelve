@@ -703,6 +703,37 @@ def hit(f: anim.Frame, h, age: float) -> None:
            text, tuple(int(c * fade) for c in colour))
 
 
+# A fallen creature's last moments: the glyph it slumps into, then what
+# crumbles off it, each in turn.
+_FALLING = ("%", ",", "·")
+
+
+@anim.one_off("slain", life=1.0)
+def slain(f: anim.Frame, h, age: float) -> None:
+    """A creature falls: it stands a beat as the blow lands, slumps into a
+    heap, then crumbles away to dust, a few motes drifting off it."""
+    cell = f.cell(h.x, h.y)
+    if cell is None:
+        return
+    sx, sy = cell
+    colour = h.data.get("colour", (200, 200, 200))
+    if (sx, sy) not in f.occupied:
+        if age < 0.12:
+            _write(f, sx, sy, h.data.get("glyph", "?"), colour)
+        else:
+            stage = min(len(_FALLING) - 1, int((age - 0.12) / 0.3))
+            fade = 0.75 * (1.0 - 0.6 * (age - 0.12) / 0.88)
+            _write(f, sx, sy, _FALLING[stage], tuple(int(c * fade) for c in colour))
+    if 0.12 <= age < 0.85:                          # dust drifting off it
+        u = (age - 0.12) / 0.73
+        for i in range(3):
+            ang = -2.6 + i * 1.05 + 0.4 * anim.h1(h.x * 7 + h.y + i, 5.1)   # up and out
+            x = sx + int(round(math.cos(ang) * (0.6 + 1.6 * u) * 1.3))
+            y = sy + int(round(math.sin(ang) * (0.6 + 1.6 * u) * 0.8))
+            if (x, y) != (sx, sy) and (x, y) not in f.occupied:
+                _write(f, x, y, "'", tuple(int(c * (1.0 - 0.7 * u)) for c in (196, 186, 166)))
+
+
 @anim.one_off("wake", life=0.9)
 def wake(f: anim.Frame, h, age: float) -> None:
     """A monster notices you: a "!" over it, steady for a moment, then

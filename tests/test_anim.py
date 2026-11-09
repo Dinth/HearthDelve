@@ -211,6 +211,33 @@ class TestAHitShows(unittest.TestCase):
 
 
 
+class TestAKillCrumbles(unittest.TestCase):
+    """A slain monster vanished the instant it died, the hit's flash playing
+    over an empty cell. Now it slumps into a heap and crumbles to dust."""
+
+    def _kill(self):
+        from unittest import mock
+        from hearthdelve.game import combat
+        st = fresh_state(2)
+        foe = _foe_beside(st, hp=5, reach=1)
+        with mock.patch.object(combat, "_resolve", return_value=(9, False)):
+            combat.player_attack(st, foe)
+        self.assertNotIn(foe, st.world.monsters)
+        return st, foe
+
+    def test_the_fall_is_recorded_with_what_fell(self):
+        st, foe = self._kill()
+        (h,) = [h for h in st.fx if h.kind == "slain"]
+        self.assertEqual((h.x, h.y, h.data["glyph"]), (foe.x, foe.y, "T"))
+
+    def test_it_stands_a_beat_then_slumps_and_crumbles(self):
+        st, foe = self._kill()
+        at = _screen(st, foe.x, foe.y)
+        seen = [chr(_render(st, 30.0 + t).ch[at]) for t in (0.0, 0.3, 0.6, 0.9)]
+        self.assertEqual(seen, ["T", "%", ",", "·"])
+        self.assertNotIn(chr(_render(st, 31.2).ch[at]), "T%,")       # gone
+
+
 class TestAMonsterNoticesYou(unittest.TestCase):
     """A monster waking showed only as it starting to move. Now a "!" shows
     over it the moment it sees you."""
