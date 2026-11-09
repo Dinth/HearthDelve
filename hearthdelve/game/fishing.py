@@ -113,7 +113,7 @@ def bite_odds(state: GameState, kind: str) -> tuple[float, list]:
     from . import collection, events                       # Hall of Wonders — completed Angler's Cabinet
     if collection.perk_earned(state, "Angler's Cabinet"):
         chance += 0.05
-    chance += events.fishing_bonus(state)                  # a shoal run: the sea boils
+    chance += events.fishing_bonus(state, kind)            # a shoal run: the sea boils
     if state.player.sign == "heron":                       # born on a still-water morning
         chance += 0.04
     # The Saltmere lighthouse: the beam steadies the boats and draws the far

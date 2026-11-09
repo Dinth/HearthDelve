@@ -81,9 +81,11 @@ def is_active(state: GameState, eid: str) -> bool:
     return state.event.get("id") == eid
 
 
-def fishing_bonus(state: GameState) -> float:
-    """Extra catch chance while a shoal runs the coast."""
-    return 0.25 if is_active(state, "shoal") else 0.0
+def fishing_bonus(state: GameState, kind: str) -> float:
+    """Extra catch chance on water of `kind` while a shoal runs the coast — the
+    sea only, as the gulls and the dawn say; a bog pool or a cave pond never
+    sees the shoal."""
+    return 0.25 if kind == "sea" and is_active(state, "shoal") else 0.0
 
 
 CARAVAN_MULT = 1.25     # what a caravan in the valley adds at the bin

@@ -36,6 +36,21 @@ class TestEventRoll(unittest.TestCase):
         self.assertEqual(st.event, {})
 
 
+class TestTheShoalRunsTheCoast(unittest.TestCase):
+    """The shoal "runs the coast", but its bite bonus reached every water in
+    the Vale: bog pools, the river, village ponds and cave pools alike."""
+
+    def test_only_the_sea_bites_better(self):
+        from hearthdelve.game import fishing
+        st = fresh_state(9)
+        calm = {k: fishing.bite_odds(st, k)[0] for k in ("sea", "river", "lake", "marsh", "cave")}
+        st.event = {"id": "shoal"}
+        run = {k: fishing.bite_odds(st, k)[0] for k in calm}
+        self.assertAlmostEqual(run["sea"], calm["sea"] + 0.25)
+        for k in ("river", "lake", "marsh", "cave"):
+            self.assertAlmostEqual(run[k], calm[k], msg=k)
+
+
 class TestEventEffects(unittest.TestCase):
     def test_shoal_and_caravan_and_fete_multipliers(self):
         import random
@@ -43,9 +58,9 @@ class TestEventEffects(unittest.TestCase):
         from hearthdelve.entities import items
         st = fresh_state(9)
         base = crafting.bin_value(st, items.WINE, 0)
-        self.assertEqual(events.fishing_bonus(st), 0.0)
+        self.assertEqual(events.fishing_bonus(st, "sea"), 0.0)
         st.event = {"id": "shoal"}
-        self.assertEqual(events.fishing_bonus(st), 0.25)
+        self.assertEqual(events.fishing_bonus(st, "sea"), 0.25)
         st.event = {"id": "caravan"}
         self.assertEqual(crafting.bin_value(st, items.WINE, 0), round(base * 1.25))
         # fete: first talk of the day gains double friendship
