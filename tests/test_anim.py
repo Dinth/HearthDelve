@@ -38,7 +38,8 @@ class TestOneEngine(unittest.TestCase):
         self.assertEqual(names[anim.GROUND_LATE], ["gem_glitter", "lava_breathes"])
         self.assertEqual(names[anim.VEIL], ["westreach_weather"])
         self.assertEqual(names[anim.OVERLAY], ["weather", "fish_rising", "seasonal_motes",
-                                               "living_fire", "crossings", "fireworks",
+                                               "living_fire", "festival_bunting", "crossings",
+                                               "fireworks",
                                                "songs_at_the_inn", "chatter", "afflictions"])
 
     def test_effects_in_a_layer_draw_lowest_order_first(self):
@@ -573,6 +574,68 @@ class TestVillagersChat(unittest.TestCase):
     def test_nothing_in_the_small_hours(self):
         st, a, b = self._pair(hour=2)
         self.assertEqual(self._said_over(st, a), set())
+
+
+class TestFestivalSquaresAreDressed(unittest.TestCase):
+    """A festival or a fete changed nothing you could see on the square. Now
+    bunting runs between its lamp posts, and lanterns hang lit after dark."""
+
+    def _at_square(self, day, hour=11, village=None):
+        from hearthdelve.engine import constants as C
+        st = fresh_state(2)
+        st.day = day
+        st.clock = (hour * 60 - C.DAY_START_MIN) * 60
+        st.weather = "Clear"
+        name, (vx, vy) = village or sorted(st.surface.village_centers.items())[0]
+        st.player.x, st.player.y = vx, vy + 5
+        return st, (vx, vy)
+
+    def _flags(self, st, centre, t=1.0):
+        vx, vy = centre
+        con = _render(st, t)
+        cells = [_screen(st, x, y) for x in range(vx - 3, vx + 4) for y in (vy - 2, vy + 2)]
+        return sum(chr(con.ch[c]) in "▼▾" for c in cells), con, cells
+
+    def _festival_day(self):
+        from hearthdelve.data import content
+        from hearthdelve.engine import constants as C
+        season, fests = next((s, f) for s, f in content.FESTIVALS.items() if f)
+        return C.SEASONS.index(season) * C.SEASON_LEN + fests[0][0] - 1
+
+    def test_a_festival_hangs_bunting_on_the_square(self):
+        st, centre = self._at_square(self._festival_day())
+        self.assertGreater(self._flags(st, centre)[0], 4)
+
+    def test_an_ordinary_day_doesnt(self):
+        st, centre = self._at_square(self._festival_day() + 2)
+        self.assertEqual(self._flags(st, centre)[0], 0)
+
+    def test_the_lanterns_are_lit_after_dark(self):
+        st, centre = self._at_square(self._festival_day(), hour=21)
+        _n, con, cells = self._flags(st, centre)
+        self.assertTrue(any(chr(con.ch[c]) in "o☻" for c in cells))
+
+    def test_a_fete_dresses_its_own_square_from_noon_on_the_eve(self):
+        from unittest import mock
+        from hearthdelve.game import events
+        st, _c = self._at_square(self._festival_day() + 2, hour=15)
+        name = events.fete_village(st, st.day + 1)
+        centre = st.surface.village_centers[name]
+        st.player.x, st.player.y = centre[0], centre[1] + 5
+        with mock.patch.object(events, "peek_tomorrow", return_value="fete"):
+            self.assertGreater(self._flags(st, centre)[0], 4)
+            other = next(c for n, c in st.surface.village_centers.items() if n != name)
+            st.player.x, st.player.y = other[0], other[1] + 5
+            self.assertEqual(self._flags(st, other)[0], 0)
+
+    def test_the_eve_s_village_is_the_one_that_keeps_the_fete(self):
+        import random
+        from hearthdelve.game import events
+        st = fresh_state(2)
+        foretold = events.fete_village(st, st.day)
+        st.event = {"id": "fete"}
+        events._apply_fete(st, random.Random(0))
+        self.assertEqual(st.event["village"], foretold)
 
 
 class TestAMonsterNoticesYou(unittest.TestCase):

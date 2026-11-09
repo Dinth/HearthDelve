@@ -1450,6 +1450,66 @@ def _fireworks_tonight(st) -> bool:
             and (minutes >= 19 * 60 or minutes < 2 * 60))
 
 
+_PENNANTS = ((228, 84, 84), (240, 204, 92), (104, 168, 240), (128, 208, 118), (226, 138, 216))
+
+
+def _decked_squares(st) -> list:
+    """The village squares hung with bunting today: every square on a
+    festival, the fete's own on its day — and from noon on its eve, when the
+    weather-wise say they've seen the bunting going up."""
+    from ..data import content
+    from ..game import events
+    centres = getattr(st.surface, "village_centers", {})
+    if content.festival_on(st.season, st.day_of_season):
+        return list(centres.values())
+    names = set()
+    if events.is_active(st, "fete"):
+        names.add(st.event.get("village"))
+    if st.time_minutes % 1440 >= 12 * 60 and events.peek_tomorrow(st) == "fete":
+        names.add(events.fete_village(st, st.day + 1))
+    return [centres[n] for n in names if n in centres]
+
+
+@anim.ongoing(anim.OVERLAY, 35)
+def festival_bunting(f: anim.Frame) -> None:
+    """A square dressed for a festival: strings of pennants run between its
+    lamp posts, fluttering in the breeze, and after dark lanterns hang lit
+    along them — carved ones grinning on Hallows' Eve, every one lit on the
+    longest night."""
+    st = f.state
+    if st.world.is_dungeon:
+        return
+    squares = _decked_squares(st)
+    if not squares:
+        return
+    from ..data import content
+    fest = content.festival_on(st.season, st.day_of_season)
+    name = fest[1] if fest else ""
+    minutes = st.time_minutes % 1440
+    lit = minutes >= 18 * 60 + 30 or minutes < 60
+    glyph, warm, every = (("☻", (240, 140, 40), 3) if name == "Hallows' Eve"
+                          else ("o", (255, 214, 140), 2) if name == "the Winter Solstice"
+                          else ("o", (255, 200, 120), 3))
+    day = f.daylight
+    for vx, vy in squares:
+        edge = ([(x, vy - 2) for x in range(vx - 2, vx + 3)] + [(vx + 3, y) for y in range(vy - 1, vy + 2)]
+                + [(x, vy + 2) for x in range(vx + 2, vx - 3, -1)] + [(vx - 3, y) for y in range(vy + 1, vy - 2, -1)])
+        for i, (x, y) in enumerate(edge):
+            cell = f.cell(x, y)
+            if cell is None or cell in f.occupied or not st.world.walkable(x, y):
+                continue
+            sx, sy = cell
+            if lit and i % every == 1:
+                glow = 0.3 + 0.08 * math.sin(f.t * 7.0 + i * 1.7)
+                _blend(f.con, sx, sy, "bg", warm, glow)
+                _write(f, sx, sy, glyph, warm)
+                continue
+            c = _PENNANTS[i % len(_PENNANTS)]
+            c = tuple(int(v * max(0.35, m)) for v, m in zip(c, day))
+            flutter = math.sin(f.t * 3.1 + i * 0.9 + vx) > 0.55
+            _write(f, sx, sy, "▾" if flutter else "▼", c)
+
+
 @anim.ongoing(anim.OVERLAY, 45)
 def fireworks(f: anim.Frame) -> None:
     """The year's closing night, if you filled the fireworks order: rockets

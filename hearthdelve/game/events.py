@@ -242,9 +242,15 @@ def _apply_wolves(state: GameState, rng) -> None:
                   "pelts tan into fine leather.", _ANNOUNCE)
 
 
-def _apply_fete(state: GameState, rng) -> None:
+def fete_village(state: GameState, day: int) -> str:
+    """The village that keeps a fete on `day`, if one falls then — the dawn's
+    own draw, so the eve's bunting goes up on the right square."""
     names = _villages(state) or ["the valley"]
-    village = rng.choice(names)
+    return random.Random(state.seed * 9176 + day * 131 + 7).choice(names)
+
+
+def _apply_fete(state: GameState, rng) -> None:
+    village = fete_village(state, state.day)
     state.event["village"] = village
     state.log.add(f"{village} has declared a fete-day — song on the square and doors "
                   "thrown open! Friendships warm twice as fast today.", _ANNOUNCE)
