@@ -295,6 +295,8 @@ def new_day(state: GameState, rested: bool = True) -> None:
     """Advance to the next morning: sell shipment, grow crops, roll weather."""
     from . import crafting
     crafting.sell_shipment(state)
+    from . import waystation
+    waystation.deliver(state)                # the deep couriers' loads reach the chest
     state.ledger_due = True                  # a new morning: the ledger's waiting
     prev_weather = state.weather        # the day now ending — it's what dried the crops
 

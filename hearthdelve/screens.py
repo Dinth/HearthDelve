@@ -242,6 +242,8 @@ class PlayScreen(Screen):
                     ui.push(StorageScreen())
                 elif isinstance(req, dict) and "lift" in req:
                     ui.push(LiftScreen())
+                elif isinstance(req, dict) and "waystation" in req:
+                    ui.push(WaystationScreen())
                 elif isinstance(req, dict) and "load" in req:
                     ui.push(LoadMachineScreen({
                         "pos": req["load"], "options": req["options"],
@@ -1065,6 +1067,33 @@ class LiftScreen(Screen):
         elif cmd == "confirm" and stops:
             if lift.ride(ui.state, stops[min(self.sel, len(stops) - 1)]):
                 ui.pop()
+
+
+class WaystationScreen(Screen):
+    """A Deep Sanctum's couriers' coffer: send loads from your pack up to the
+    farm chest, a fee a load."""
+
+    def __init__(self) -> None:
+        self.sel = 0
+
+    def render(self, ui: UI, con) -> None:
+        rendering.render_waystation(con, ui.state, self.sel)
+
+    def handle(self, ui: UI, cmd: str, action: tuple) -> None:
+        from .game import waystation
+        state = ui.state
+        slots = state.player.inventory.slots
+        if cmd in ("cancel", "quit", "grab"):
+            ui.pop()
+        elif cmd == "move" and action[2] and slots:
+            self.sel = (self.sel + action[2]) % len(slots)
+        elif cmd == "confirm" and slots:
+            it, q, ql = slots[min(self.sel, len(slots) - 1)]
+            waystation.send(state, it, q, ql)
+            self.sel = min(self.sel, max(0, len(slots) - 1))
+        elif cmd == "use" and slots:                              # Space: send the lot
+            waystation.send_all(state)
+            self.sel = 0
 
 
 class LedgerScreen(Screen):

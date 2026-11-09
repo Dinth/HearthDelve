@@ -97,9 +97,11 @@ def build_floor(state: GameState, kind: str, site: tuple, depth: int):
         gm = dungeon.generate_underriver(state.seed)
     else:
         gm = dungeon.generate(_seed_for(state, kind, site, depth), kind, depth)
-    from . import lift
+    from . import lift, waystation
     if kind == "dwarfhold" and depth % lift.LIFT_STEP == 0:
         lift.place_station(gm)                 # the dwarves' cage stops here
+    if depth % waystation.SANCTUM_STEP == 0:
+        waystation.place(gm)                   # a Deep Sanctum keeps the couriers' coffer
     return gm
 
 

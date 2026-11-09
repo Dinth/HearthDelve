@@ -720,6 +720,30 @@ def _homestead_rows(state: GameState) -> list:
     return rows
 
 
+def render_waystation(con: tcod.console.Console, state: GameState, sel: int) -> None:
+    """The couriers' coffer: your pack, a load a row, and what's already on
+    its way up."""
+    from ..game import skills, waystation
+    slots = state.player.inventory.slots
+    w, h = 62, min(C.SCREEN_H - 4, max(10, len(slots) + 9))
+    m = ui.Modal(con, w, h, "The Couriers' Waystation")
+    m.text(2, 2, f"Left here, it's in your farm chest by morning. {waystation.COURIER_FEE}g a load.",
+           fg=(196, 170, 116))
+    on_way = sum(q for _it, q, _ql in state.couriered.slots)
+    if on_way:
+        m.text(2, 3, f"Already on its way up: {on_way} good{'s' if on_way != 1 else ''}.", fg=C.DIM)
+    if not slots:
+        m.text(2, 5, "Your pack is empty.", fg=C.DIM)
+
+    def row(i, dy, selected, bg):
+        it, q, ql = slots[i]
+        star = (" " + skills.stars(ql)) if ql else ""
+        m.text(2, dy, ui.cur(selected) + f"{q:>3} {it.name}{star}"[:w - 6], fg=C.WHITE, bg=bg)
+
+    m.list(5, h - 8, len(slots), sel, row, arrow_top=5, arrow_bottom=h - 3)
+    m.footer(f"↑↓ choose  Enter send ({waystation.COURIER_FEE}g)  Space send all  Esc close")
+
+
 def render_lift(con: tcod.console.Console, state: GameState, sel: int) -> None:
     """The lift's stops, each with its fare and how long the ride takes."""
     from ..game import lift

@@ -81,6 +81,8 @@ class GameState:
     ship_bin: Inventory = field(default_factory=Inventory)
     storage: Inventory = field(default_factory=Inventory)   # home chest: stash goods off your back
     pack_bonus: int = 0                                     # extra carry capacity from crafted satchels
+    # loads left at a Deep Sanctum's waystation, on their way to the farm chest
+    couriered: Inventory = field(default_factory=Inventory)
     # last night's sale at the bin, line by line, for the dawn ledger and the
     # journal: {"day": the day it was shipped, "lines": [[Item, qty, quality, gold]]}
     shipped: dict = field(default_factory=dict)
