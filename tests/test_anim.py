@@ -41,7 +41,8 @@ class TestOneEngine(unittest.TestCase):
                                                "seasonal_motes",
                                                "living_fire", "festival_bunting", "crossings",
                                                "fireworks",
-                                               "songs_at_the_inn", "chatter", "afflictions"])
+                                               "songs_at_the_inn", "chatter", "underground_life",
+                                               "afflictions"])
 
     def test_effects_in_a_layer_draw_lowest_order_first(self):
         from hearthdelve.engine import anim
@@ -670,6 +671,67 @@ class TestShootingStars(unittest.TestCase):
     def test_none_by_day_or_under_cloud(self):
         self.assertEqual(self._streaks(hour=13, eve=True, seconds=30.0), 0)
         self.assertEqual(self._streaks(weather="Cloudy", eve=True, seconds=30.0), 0)
+
+
+class TestTheDeepIsntStill(unittest.TestCase):
+    """Underground nothing moved but you and what hunts you. Now water drips
+    in damp caves and mines, a bat flits by now and then, and a bomb shakes
+    dust down from the roof."""
+
+    def _below(self, kind="mine"):
+        from hearthdelve.game import delve
+        st = fresh_state(2)
+        mouth = sorted(q for q, k in st.surface.dungeon_kind.items() if k == kind)[0]
+        st.player.x, st.player.y = mouth
+        delve.enter(st, kind)
+        st.fx.clear()
+        st.world.monsters.clear()
+        return st
+
+    def _count(self, st, glyphs, colour_test, seconds):
+        n = 0
+        for k in range(int(seconds / 0.1)):
+            con = _render(st, k * 0.1)
+            for x in range(58):
+                for y in range(44):
+                    if chr(con.ch[x, y]) in glyphs and colour_test(con.fg[x, y]):
+                        n += 1
+        return n
+
+    def test_water_drips_in_a_mine(self):
+        st = self._below("mine")
+        bluish = lambda c: int(c[2]) > int(c[0]) + 25 and int(c[2]) > 120
+        self.assertGreater(self._count(st, "'°", bluish, 20.0), 5)
+
+    def test_not_in_a_dry_crypt(self):
+        st = self._below("crypt")
+        bluish = lambda c: int(c[2]) > int(c[0]) + 25 and int(c[2]) > 120
+        self.assertEqual(self._count(st, "'°", bluish, 20.0), 0)
+
+    def test_a_bat_flits_by_now_and_then(self):
+        st = self._below("mine")
+        dark = lambda c: tuple(int(v) for v in c) == (92, 84, 104)
+        self.assertGreater(self._count(st, "v^", dark, 150.0), 0)
+
+    def test_a_bomb_below_shakes_dust_down(self):
+        from hearthdelve.entities import items
+        from hearthdelve.game import combat
+        st = self._below("mine")
+        st.player.inventory.add(items.BOMB, 1)
+        p = st.player
+        tx, ty = next((x, y) for x in range(p.x - 3, p.x + 4) for y in range(p.y - 3, p.y + 4)
+                      if st.world.walkable(x, y) and max(abs(x - p.x), abs(y - p.y)) >= 2)
+        combat.throw_bomb_at(st, tx, ty)
+        self.assertIn("dust", [h.kind for h in st.fx])
+
+    def test_a_bomb_in_the_open_doesnt(self):
+        from hearthdelve.entities import items
+        from hearthdelve.game import combat
+        st = fresh_state(2)
+        st.player.inventory.add(items.BOMB, 1)
+        foe = _foe_beside(st, reach=3)
+        combat.throw_bomb_at(st, foe.x, foe.y)
+        self.assertNotIn("dust", [h.kind for h in st.fx])
 
 
 class TestAMonsterNoticesYou(unittest.TestCase):

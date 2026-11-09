@@ -795,6 +795,8 @@ def throw_bomb_at(state: GameState, tx: int, ty: int) -> bool:
                       (236, 180, 90))
         state.happen("blast", bx, by, radius=radius, delay=flight)
         state.happen("shake", p.x, p.y, delay=flight, strength=2 if radius > 1 else 1)
+        if state.world.is_dungeon:                 # the roof sheds its dust
+            state.happen("dust", bx, by, delay=flight + 0.1, radius=radius)
         _after(state, flight, _detonate, state, bx, by, radius, dmg)
     from . import turns
     turns.advance_time(state, C.BOMB_COST[1])

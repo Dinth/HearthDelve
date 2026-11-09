@@ -1247,6 +1247,96 @@ def fish_rising(f: anim.Frame) -> None:
                         _blend(f.con, x2, y2, "bg", spray, 0.45 * ring * fade)
 
 
+_WALKABLE_IDS = None
+_DRIPPING = ("grotto", "sea cave", "cavern", "mine")        # damp rock lets water through
+_ROOSTS = ("grotto", "sea cave", "cavern", "mine")          # where bats hang
+
+
+def _seen_floor(f: anim.Frame) -> np.ndarray:
+    """The floor in view that you can see right now, underground."""
+    global _WALKABLE_IDS
+    if _WALKABLE_IDS is None:
+        from ..world import tile
+        _WALKABLE_IDS = np.array([t.walkable for t in tile.TILES], dtype=bool)
+    w = f.state.world
+    seen = np.zeros((f.vw, f.vh), dtype=bool)
+    if w.visible is not None:
+        sub = w.visible[f.ox:f.ox + f.vw, f.oy:f.oy + f.vh]
+        seen[:sub.shape[0], :sub.shape[1]] = sub
+    return seen & _WALKABLE_IDS[f.view]
+
+
+@anim.ongoing(anim.OVERLAY, 58)
+def underground_life(f: anim.Frame) -> None:
+    """The deep isn't still: in damp caves and mines water drips from the
+    roof now and then, splashing where it lands, and once in a while a bat
+    flits across your sight — a dark flicker, gone before you can look."""
+    st = f.state
+    w = st.world
+    if not w.is_dungeon or getattr(w, "underriver", False):
+        return
+    kind = getattr(w, "kind", "")
+    if kind not in _DRIPPING and kind not in _ROOSTS:
+        return
+    floor = _seen_floor(f)
+    cells = np.flatnonzero(floor)
+    if len(cells) == 0:
+        return
+    salt = (st.seed + w.depth * 37) % 977
+    if kind in _DRIPPING:
+        for i in range(3):
+            window = 2.6 + 0.6 * i
+            age = anim.burst_age(f.t, window, 0.6, 0.9, salt + i * 5 + 0.2)
+            if age is None:
+                continue
+            k = math.floor(f.t / window)
+            sx, sy = divmod(int(cells[int(anim.h1(k * 7 + i, salt + 1.1) * len(cells))]), f.vh)
+            drop = (150, 172, 196)
+            if age < 0.3:                                       # it falls...
+                y = sy - 1 if age < 0.15 else sy
+                if 0 <= y and floor[sx, y] and (sx, y) not in f.occupied:
+                    _write(f, sx, y, "'", drop)
+                continue
+            fade = 1.0 - (age - 0.3) / 0.6                      # ...and splashes
+            if (sx, sy) not in f.occupied:
+                _write(f, sx, sy, "°", tuple(int(c * (0.4 + 0.6 * fade)) for c in drop))
+            for x in (sx - 1, sx + 1):
+                if 0 <= x < f.vw and floor[x, sy] and (x, sy) not in f.occupied and age < 0.6:
+                    _write(f, x, sy, "·", tuple(int(c * fade) for c in drop))
+    if kind in _ROOSTS:
+        age = anim.burst_age(f.t, 24.0, 0.55, 1.1, salt + 9.7)
+        if age is not None:
+            k = math.floor(f.t / 24.0)
+            sx, sy = divmod(int(cells[int(anim.h1(k, salt + 3.3) * len(cells))]), f.vh)
+            way = 1 if anim.h1(k, salt + 5.5) < 0.5 else -1
+            x = int(round(sx - way * 6 + way * 12 * age / 1.1))
+            y = int(round(sy + 1.5 * math.sin(age * 11.0)))     # it jinks as it flies
+            if 0 <= x < f.vw and 0 <= y < f.vh and floor[x, y] and (x, y) not in f.occupied:
+                _write(f, x, y, "v" if int(age / 0.08) % 2 else "^", (92, 84, 104))
+
+
+@anim.one_off("dust", life=2.0)
+def dust(f: anim.Frame, h, age: float) -> None:
+    """A blast underground shakes the roof: dust and grit sift down around
+    it for a moment after."""
+    centre = f.screen(h.x, h.y)
+    if centre is None:
+        return
+    floor = _seen_floor(f)
+    cx, cy = centre
+    reach = 4 + 2 * h.data.get("radius", 1)
+    for i in range(14):
+        start = 0.5 * anim.h1(i, h.x * 0.13 + h.y * 0.07)            # they come down raggedly
+        a = age - start
+        if not 0.0 <= a < 1.4:
+            continue
+        x = cx + int((anim.h1(i, 2.7) - 0.5) * 2 * reach)
+        y = cy + int((anim.h1(i, 4.9) - 0.5) * reach) + int(a / 0.5)    # sifting down
+        if 0 <= x < f.vw and 0 <= y < f.vh and floor[x, y] and (x, y) not in f.occupied:
+            fade = 1.0 - a / 1.4
+            _write(f, x, y, "'" if a < 0.5 else "·", tuple(int(c * fade) for c in (170, 160, 140)))
+
+
 @anim.ongoing(anim.OVERLAY, 60)
 def afflictions(f: anim.Frame) -> None:
     """Wounds that show: the poisoned pulse green with a bubble rising off
