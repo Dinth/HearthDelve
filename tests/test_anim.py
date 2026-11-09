@@ -639,6 +639,20 @@ class TestTransitions(unittest.TestCase):
         self.assertGreater((corner[..., 0] - corner[..., 2]).mean(),
                            (plain_corner[..., 0] - plain_corner[..., 2]).mean())
 
+    def test_the_whole_view_swims_as_you_come_round(self):
+        """Only the corners reddened, too faintly to notice: at first the
+        middle of the view swims too."""
+        from hearthdelve.game import farming
+        st = fresh_state(2)
+        farming.collapse(st, "You collapse.")
+        st.fx[:] = [h for h in st.fx if h.kind == "faint"]
+        sx, sy = _screen(st, st.player.x, st.player.y)
+        near = (sx + 1, sy) if sx + 1 < 58 else (sx - 1, sy)
+        swim = _render(st, 1.0).bg[near].astype(int)
+        st.fx.clear()
+        calm = _render(st, 1.0).bg[near].astype(int)
+        self.assertGreater(swim[0] - swim[2], calm[0] - calm[2] + 8)
+
 
 
 class TestTheGoldRuns(unittest.TestCase):

@@ -1104,7 +1104,7 @@ def faint(f: anim.Frame, h, age: float) -> None:
     X = np.arange(f.vw, dtype=np.float32)[:, None]
     Y = np.arange(f.vh, dtype=np.float32)[None, :]
     d = np.sqrt(((X - px) * 0.6) ** 2 + (Y - py) ** 2) / (f.vh * 0.6)
-    k = np.clip(d, 0.0, 1.0) ** 1.4 * 0.85 * (1.0 - age / 1.8)
+    k = np.clip(0.25 + d, 0.0, 1.0) ** 1.2 * 0.92 * (1.0 - age / 1.8)
     _view_toward(f, (70, 0, 6), k)
 
 
