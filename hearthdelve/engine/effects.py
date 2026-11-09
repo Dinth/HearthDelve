@@ -1037,6 +1037,50 @@ def songs_at_the_inn(f: anim.Frame) -> None:
             _write(f, sx, sy - 1 - int(age / 0.7), "♪", (240, 212, 140))
 
 
+@anim.ongoing(anim.OVERLAY, 60)
+def afflictions(f: anim.Frame) -> None:
+    """Wounds that show: the poisoned pulse green with a bubble rising off
+    them now and then, the bleeding drip red onto the ground, and the burning
+    smoulder, embers lifting off them — you, and any creature in sight you've
+    envenomed, cut or set alight. (A sickness, days long, stays in the panel.)"""
+    st = f.state
+    holders = [(st.player, 0.1)] + [(m, 3.7 + i) for i, m in enumerate(st.world.monsters)]
+    for who, salt in holders:
+        status = getattr(who, "status", None)
+        if not status:
+            continue
+        cell = f.cell(who.x, who.y)
+        if cell is None:
+            continue
+        sx, sy = cell
+        t = f.t
+        if "poison" in status:
+            _blend(f.con, sx, sy, "fg", (110, 230, 90), 0.4 + 0.25 * math.sin(t * 4.0 + salt))
+            age = anim.burst_age(t, 1.6, 0.7, 0.8, salt + 0.2)
+            y = sy - 1 - int((age or 0.0) / 0.4)
+            if age is not None and 0 <= y and (sx, y) not in f.occupied:
+                _write(f, sx, y, "°", tuple(int(c * (1.0 - age / 0.8 * 0.6)) for c in (130, 230, 100)))
+        if "bleed" in status:
+            age = anim.burst_age(t, 1.3, 0.75, 0.9, salt + 0.4)
+            if age is not None:
+                if age < 0.12:
+                    _blend(f.con, sx, sy, "fg", (230, 40, 40), 0.5)
+                if sy + 1 < f.vh and (sx, sy + 1) not in f.occupied:     # falls, then lands
+                    _write(f, sx, sy + 1, "'" if age < 0.2 else ",",
+                           tuple(int(c * (1.0 - age / 0.9 * 0.5)) for c in (232, 52, 52)))
+        if "burn" in status:
+            _blend(f.con, sx, sy, "bg", (200, 80, 20),
+                   0.3 + 0.15 * math.sin(t * 9.0 + salt) * math.sin(t * 5.3))
+            age = anim.burst_age(t, 0.7, 0.8, 0.6, salt + 0.6)
+            if age is not None:
+                k = math.floor(t / 0.7)
+                x = sx + (-1, 0, 1)[int(anim.h1(k, salt + 0.9) * 3)]
+                y = sy - 1 - int(age / 0.3)
+                if 0 <= y and 0 <= x < f.vw and (x, y) not in f.occupied:
+                    _write(f, x, y, "'", tuple(int(c * (1.0 - age / 0.6 * 0.5))
+                                               for c in (255, 170, 60)))
+
+
 _SPRAY = (196, 226, 250)
 
 

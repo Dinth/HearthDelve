@@ -38,7 +38,8 @@ class TestOneEngine(unittest.TestCase):
         self.assertEqual(names[anim.GROUND_LATE], ["gem_glitter", "lava_breathes"])
         self.assertEqual(names[anim.VEIL], ["westreach_weather"])
         self.assertEqual(names[anim.OVERLAY], ["weather", "seasonal_motes", "living_fire",
-                                               "crossings", "fireworks", "songs_at_the_inn"])
+                                               "crossings", "fireworks", "songs_at_the_inn",
+                                               "afflictions"])
 
     def test_effects_in_a_layer_draw_lowest_order_first(self):
         from hearthdelve.engine import anim
@@ -291,6 +292,48 @@ class TestAMissSwishesPast(unittest.TestCase):
         self.assertGreater(len(on[0].data["path"]), 0)
         first = next(h for h in st.fx if h.kind == "shot" and h is not on[0])
         self.assertAlmostEqual(on[0].data["delay"], len(first.data["path"]) * first.data["per"])
+
+
+class TestWoundsShow(unittest.TestCase):
+    """Poison, bleeding and burns showed only as a tag in the panel. Now they
+    show on whoever has them."""
+
+    def _player_cell(self, kinds, t):
+        st = fresh_state(2)
+        for k in kinds:
+            st.player.status[k] = 3
+        con = _render(st, t)
+        at = _screen(st, st.player.x, st.player.y)
+        return st, con, at
+
+    def test_the_poisoned_pulse_green(self):
+        _s, sick, at = self._player_cell(["poison"], 2.0)
+        _s, well, _a = self._player_cell([], 2.0)
+        g = lambda c: int(c.fg[at][1]) - (int(c.fg[at][0]) + int(c.fg[at][2])) // 2
+        self.assertGreater(g(sick), g(well) + 25)
+
+    def test_the_bleeding_drip(self):
+        st, _c, (sx, sy) = self._player_cell(["bleed"], 0.0)
+        drips = 0
+        for k in range(40):
+            con = _render(st, k * 0.1)
+            drips += chr(con.ch[sx, sy + 1]) == "," and con.fg[sx, sy + 1][0] > 120
+        self.assertGreater(drips, 5)
+
+    def test_the_burning_smoulder(self):
+        _s, hot, at = self._player_cell(["burn"], 2.0)
+        _s, cool, _a = self._player_cell([], 2.0)
+        warm = lambda c: int(c.bg[at][0]) - int(c.bg[at][2])
+        self.assertGreater(warm(hot), warm(cool) + 20)
+
+    def test_a_creature_you_envenomed_shows_it_too(self):
+        st = fresh_state(2)
+        foe = _foe_beside(st, reach=2)
+        at = _screen(st, foe.x, foe.y)
+        plain = _render(st, 2.0).fg[at].astype(int)
+        foe.status["poison"] = 3
+        tinted = _render(st, 2.0).fg[at].astype(int)
+        self.assertGreater(tinted[1] - tinted[0], plain[1] - plain[0] + 25)
 
 
 class TestAMonsterNoticesYou(unittest.TestCase):
