@@ -123,7 +123,10 @@ jobs:
           FONT=(); [ -f hearthdelve/assets/font.ttf ] && FONT=(--add-data "hearthdelve/assets/font.ttf;hearthdelve/assets")
           pyinstaller --noconfirm --onedir --name hearthdelve --collect-all tcod "${FONT[@]}" play.py
           mkdir -p out
-          powershell -Command "Compress-Archive -Path dist/hearthdelve/* -DestinationPath out/hearthdelve-windows.zip -Force"
+          # Python's zipfile writes standard "/" paths. Windows PowerShell's
+          # Compress-Archive wrote "\", which unzip elsewhere warns about
+          # (exit 1 — it failed the itch.io upload).
+          python -c "import shutil; shutil.make_archive('out/hearthdelve-windows', 'zip', 'dist/hearthdelve')"
 
       - name: Start the Windows binary (headless)
         if: runner.os == 'Windows'
