@@ -165,6 +165,16 @@ def build_codex_pages(state: GameState):
                       C.WHITE))
         crops.append((f"      from {c.seed.name}.  {c.desc}", C.DIM))
     crops.append(("", C.WHITE))
+    crops.append(("Hybrids", _HDR))
+    crops.append(("  Two related crops side by side, both in flower, may cross. Harvest", C.DIM))
+    crops.append(("  the crossed one and you save the hybrid's seed.", C.DIM))
+    for c in content.HYBRIDS:
+        a, b = content.HYBRID_PARENTS[c.name]
+        regrow = "regrows" if c.regrows else "single harvest"
+        crops.append((f" {c.glyph}  {c.name}  ({a} × {b})", _KEY))
+        crops.append((f"      {c.season}  ·  matures {c.days_to_mature}d  ·  {regrow}  ·  sells {c.sell_price}g",
+                      C.WHITE))
+    crops.append(("", C.WHITE))
     crops.append(("How to farm:", _HDR))
     crops.append(("  Till soil (Hoe) -> pick seeds on the hotbar -> Space to plant", C.WHITE))
     crops.append(("  -> water daily (Can) -> sleep -> harvest (g) when ripe.", C.WHITE))

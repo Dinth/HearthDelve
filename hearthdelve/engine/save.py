@@ -346,7 +346,7 @@ def save(state: GameState, path: str | None = None) -> None:
         "sites": [[x, y, surf.dungeon_kind[(x, y)]] for x, y in surf.dungeons],
         "tiles": base64.b64encode(np.ascontiguousarray(surf.tiles).tobytes()).decode("ascii"),
         "crops": {f"{x},{y}": [pl.crop.name, pl.days_grown, pl.watered, pl.dead, pl.fertilized,
-                               pl.thirst, pl.season_ended]
+                               pl.thirst, pl.season_ended, pl.cross]
                   for (x, y), pl in surf.crops.items()},
         "soil": {f"{x},{y}": lvl for (x, y), lvl in surf.soil.items() if lvl > 0},
         "trees": {f"{x},{y}": [t.name, t.age, t.has_fruit, t.refruit_in]
@@ -431,6 +431,7 @@ def load(path: str | None = None) -> GameState:
         # season most likely ran its season out, so grandfather it as one — any
         # doubt (it may have withered first) goes the player's way
         ended = rec[6] if len(rec) > 6 else None
+        cross = rec[7] if len(rec) > 7 else ""          # older saves: nothing crossed
         x, y = map(int, key.split(","))
         crop = content.CROP_BY_NAME.get(cname)
         if crop:
@@ -438,7 +439,7 @@ def load(path: str | None = None) -> GameState:
                 ended = bool(dead) and crop.season != _season_of(data["day"])
             world.crops[(x, y)] = CropPlot(crop=crop, days_grown=days, watered=watered,
                                            dead=dead, fertilized=fert, thirst=thirst,
-                                           season_ended=ended)
+                                           season_ended=ended, cross=cross)
 
     world.soil = {}
     for key, lvl in data.get("soil", {}).items():

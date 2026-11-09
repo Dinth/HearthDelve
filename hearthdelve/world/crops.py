@@ -25,6 +25,7 @@ class CropPlot:
     fertilized: bool = False   # nitre-fed soil: the harvest comes up a star finer
     thirst: int = 0            # consecutive unwatered days; a crop withers at the limit
     season_ended: bool = False  # died because its season was over, not of neglect
+    cross: str = ""            # the hybrid its seed carries, if a neighbour crossed it
 
     @property
     def mature(self) -> bool:

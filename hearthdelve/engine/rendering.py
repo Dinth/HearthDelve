@@ -989,6 +989,8 @@ def describe(state: GameState, x: int, y: int) -> str:
             return f"{poss}{name} — ripe! Harvest it with g{theft}.{soil}"
         water = "watered" if plot.watered else "needs watering"
         fert = ", fertilised" if plot.fertilized else ""
+        if plot.cross:                                   # the bees have been at it
+            fert += f", crossed — its seed will carry {plot.cross}"
         days = max(0, plot.crop.days_to_mature - plot.days_grown)
         when = "ripe tomorrow" if days <= 1 else f"~{days} days to ripe"
         return f"{poss}{name}, still growing — {when} ({water}{fert}){theft}.{soil}"

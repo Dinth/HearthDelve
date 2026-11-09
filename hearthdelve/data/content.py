@@ -1020,8 +1020,58 @@ CROP_BY_NAME: dict[str, Crop] = {c.name: c for c in CROPS}
 def crops_in_season(season: str) -> list[Crop]:
     """Food crops that grow in the given season (for stocking village fields)."""
     return [c for c in CROPS if c.season == season and c.category not in ("flower", "fiber")]
+
+
+# --- Hybrids -----------------------------------------------------------------
+# Two related crops grown side by side sometimes cross: the bees carry pollen
+# between them, and the cross shows in the seed. Harvest the crossed plant and
+# you save a few seeds of the new variety (see farming._cross_pollinate). Most
+# are real crosses; where the parents keep different seasons, only a
+# greenhouse brings them into flower together.
+#
+# Kept OUT of CROPS on purpose: worldgen's village fields, the favours board
+# and the Herbarium all draw on CROPS, and a new crop there would shift them
+# (worldgen's random draws included, which would move whole villages in an
+# existing save). They join the lookups — and the jam, wine and pickle
+# variants, so a Frostberry Jam is worth its berry — but nothing else.
+def _hybrid(name: str, glyph: str, color, season: str, days: int, regrow_days: int,
+            value: int, category: str, parents: tuple, desc: str) -> Crop:
+    a, b = parents
+    seed = items.register(items.Item(
+        f"{name} Seeds", "_", "seed",
+        f"Saved from {a.lower()} crossed with {b.lower()}. Sow in {season.lower()}."))
+    produce = items.register(items.Item(name, glyph, "crop", desc, value=value))
+    return Crop(name=name, glyph=glyph, color=color, season=season, days_to_mature=days,
+                regrows=regrow_days > 0, sell_price=value, seed=seed, produce=produce,
+                category=category, regrow_days=regrow_days, desc=desc)
+
+
+HYBRID_PARENTS: dict[str, tuple] = {}      # hybrid name -> (parent, parent)
+HYBRIDS: list[Crop] = []
+for _args in (
+    ("Romanesco", "%", (172, 210, 112), "Spring", 12, 0, 300, "vegetable", ("Cauliflower", "Kale"),
+     "A spiralled green head, born of cauliflower and kale. Prized."),
+    ("Sugar Corn", "Y", (238, 222, 128), "Summer", 11, 4, 175, "vegetable", ("Corn", "Sugarcane"),
+     "Corn with the cane's sweetness in every kernel."),
+    ("Rutabaga", "♠", (212, 176, 120), "Winter", 7, 0, 290, "vegetable", ("Snow Turnip", "Cabbage"),
+     "The turnip and the cabbage made one: a great, sweet winter swede."),
+    ("Kalette", "%", (150, 118, 172), "Fall", 8, 4, 240, "vegetable", ("Kale", "Cabbage"),
+     "Frilled purple sprouts up a kale stalk."),
+    ("Tritordeum", "≈", (222, 196, 122), "Fall", 8, 0, 90, "grain", ("Wheat", "Barley"),
+     "A golden grain of wheat and barley both."),
+    ("Pomato", "♥", (206, 96, 84), "Summer", 10, 4, 150, "vegetable", ("Tomato", "Potato"),
+     "Tomatoes on the vine above, potatoes in the ground below."),
+    ("Frostberry", "♦", (150, 172, 236), "Winter", 9, 4, 180, "fruit", ("Blueberry", "Winterberry"),
+     "A frost-blue berry, sweet as summer, ripening in the snow."),
+):
+    _c = _hybrid(*_args)
+    HYBRIDS.append(_c)
+    HYBRID_PARENTS[_c.name] = _args[8]
+HYBRID_OF: dict[frozenset, Crop] = {frozenset(HYBRID_PARENTS[c.name]): c for c in HYBRIDS}
+SEED_TO_CROP.update({c.seed: c for c in HYBRIDS})
+CROP_BY_NAME.update({c.name: c for c in HYBRIDS})
 # produce item -> "fruit" | "vegetable"
-PRODUCE_CATEGORY: dict[Item, str] = {c.produce: c.category for c in CROPS}
+PRODUCE_CATEGORY: dict[Item, str] = {c.produce: c.category for c in CROPS + HYBRIDS}
 # fruits not grown as field crops (shrubs & orchard trees) still count as fruit
 _EXTRA_FRUIT = {items.RASPBERRY, items.GOOSEBERRY, items.CURRANT,
                 items.CHERRY, items.PEACH, items.APPLE, items.PEAR, items.ORANGE}
@@ -1070,10 +1120,10 @@ def is_fruit(produce: Item) -> bool:
 JAM_MULT, WINE_MULT, PICKLE_MULT = 1.6, 1.8, 1.5
 GRAPE_WINE_MULT = 2.5           # grape is *the* wine fruit — its vintage tops every other
 
-_FRUIT_ITEMS = [c.produce for c in CROPS if c.category == "fruit"] + \
+_FRUIT_ITEMS = [c.produce for c in CROPS + HYBRIDS if c.category == "fruit"] + \
     [items.RASPBERRY, items.GOOSEBERRY, items.CURRANT,
      items.CHERRY, items.PEACH, items.APPLE, items.PEAR, items.ORANGE]
-_VEG_ITEMS = [c.produce for c in CROPS if c.category == "vegetable"]
+_VEG_ITEMS = [c.produce for c in CROPS + HYBRIDS if c.category == "vegetable"]
 
 
 def _variant(name: str, glyph: str, source: Item, mult: float, family: str) -> Item:

@@ -215,6 +215,7 @@ def harvest(state: GameState, x: int, y: int) -> bool:
     state.happen("harvest", x, y, quality=q)
     if q >= 5:
         state.bump("five_star_harvests")      # for the Gold Standard goal
+    _save_seed(state, plot)
     # every harvest works the ground a little richer (care compounds)
     state.world.soil[(x, y)] = min(4, soil_lvl + 1)
     state.bump("crops_harvested")
@@ -341,6 +342,7 @@ def new_day(state: GameState, rested: bool = True) -> None:
     if withered:
         state.log.add(f"{withered} crop{'s' if withered != 1 else ''} withered for want of water — "
                       "water them (2), catch the rain, or set a sprinkler.", (216, 170, 110))
+    _cross_pollinate(state)
     for tree in state.world.trees.values():
         advance_tree(tree, season)
 
@@ -682,6 +684,70 @@ def collapse(state: GameState, reason: str) -> None:
 
 
 _NOT_HOMESTEAD_MACHINES = ("coop_small", "coop_big", "barn", "pen", "site")
+
+
+CROSS_CHANCE = 0.08         # each dawn two related crops stand side by side in flower
+HYBRID_SEED_BACK = 0.3      # a hybrid's own harvest saves a seed of it, now and then
+
+
+def _in_flower(plot) -> bool:
+    """Half-grown or more: flowering, and able to cross."""
+    return not plot.dead and plot.days_grown * 2 >= plot.crop.days_to_mature
+
+
+def _cross_pollinate(state: GameState) -> None:
+    """At dawn, two related crops side by side on your land, both in flower,
+    may cross: the bees carry pollen between them, and one of the pair now
+    carries the hybrid in its seed (see content.HYBRIDS). Seeded by the world
+    and the day, so a reload never re-rolls it. The villages' own fields and
+    cottage gardens aren't yours to cross."""
+    surf = state.surface
+    if surf is None:
+        return
+    crops = surf.crops
+    theirs = set(map(tuple, getattr(surf, "village_fields", ()))) | set(
+        map(tuple, getattr(surf, "village_gardens", ())))
+    rng = random.Random(state.seed * 7717 + state.day)
+    crossed = []
+    for pos in sorted(crops):
+        plot = crops[pos]
+        if pos in theirs or not _in_flower(plot):
+            continue
+        for dx, dy in ((1, 0), (0, 1)):                # each neighbouring pair once
+            npos = (pos[0] + dx, pos[1] + dy)
+            other = crops.get(npos)
+            if other is None or npos in theirs or not _in_flower(other):
+                continue
+            hybrid = content.HYBRID_OF.get(frozenset((plot.crop.name, other.crop.name)))
+            if hybrid is None or (plot.cross and other.cross):
+                continue
+            if rng.random() < CROSS_CHANCE:
+                carrier = plot if not plot.cross and (other.cross or rng.random() < 0.5) else other
+                carrier.cross = hybrid.name
+                crossed.append((plot.crop.name.lower(), other.crop.name.lower()))
+    if len(crossed) == 1:
+        state.log.add(f"Bees have worked your {crossed[0][0]} and {crossed[0][1]} — one has "
+                      "crossed. Save its seed at harvest.", (190, 220, 150))
+    elif crossed:
+        state.log.add(f"Bees have worked your fields — {len(crossed)} crops have crossed. "
+                      "Save their seed at harvest.", (190, 220, 150))
+
+
+def _save_seed(state: GameState, plot) -> None:
+    """At harvest: a crossed plant gives up the hybrid's seed, and a hybrid
+    now and then breeds true and gives up its own."""
+    hybrid = content.CROP_BY_NAME.get(plot.cross) if plot.cross else None
+    if hybrid is not None:
+        n = 1 + (random.random() < 0.5)
+        state.player.inventory.add(hybrid.seed, n)
+        state.bump("hybrids_found")
+        state.log.add(f"  The {plot.crop.name.lower()} had crossed — you save {n} "
+                      f"{hybrid.seed.name.lower()}!", (190, 220, 150))
+        plot.cross = ""
+    elif plot.crop in content.HYBRIDS and random.random() < HYBRID_SEED_BACK:
+        state.player.inventory.add(plot.crop.seed, 1)
+        state.log.add(f"  It bred true — you save a {plot.crop.seed.name.lower()[:-1]}.",
+                      (190, 220, 150))
 
 
 def farm_report(state: GameState) -> dict:
