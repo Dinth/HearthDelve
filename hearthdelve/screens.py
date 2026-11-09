@@ -204,7 +204,7 @@ class PlayScreen(Screen):
         elif cmd == "use":
             busy = cmds.use_tool(state)
             if isinstance(busy, dict) and "fishing" in busy:
-                ui.push(FishingScreen(busy["fishing"]))
+                ui.push(CastScreen(busy["fishing"]))
             elif busy is not None:
                 self.busy_ctx = busy          # a long task begins — it animates
             else:
@@ -1126,6 +1126,44 @@ class CheatScreen(Screen):
                 cmds._cheat_go(state, locs[self.sel - 4][1])
                 state.log.add("You blink across the Vale.", (200, 180, 240))
                 ui.close_overlays()
+
+
+class CastScreen(Screen):
+    """The float on the water, waiting: it bobs for the cast's wait, then
+    either a fish bites (a "!" at the float, then the reel opens) or nothing
+    does and you reel in an empty line. Esc or Space draws it in early. Every
+    other key waits with you."""
+
+    BITE_BEAT = 0.45        # seconds the bite shows before the reel opens
+
+    def __init__(self, ctx: dict) -> None:
+        self.ctx = ctx
+        self.t0 = time.monotonic()
+        self.bit_at = None
+
+    def tick(self, ui: UI) -> None:
+        now = time.monotonic()
+        if self.bit_at is None:
+            if now - self.t0 < self.ctx["wait"]:
+                return
+            if self.ctx["bite"]:
+                fishing.bite(ui.state, self.ctx)
+                self.bit_at = now
+            else:
+                self._empty(ui)
+        elif now - self.bit_at >= self.BITE_BEAT:
+            self.ctx["last_t"] = time.monotonic()
+            ui.replace(FishingScreen(self.ctx))
+
+    def _empty(self, ui: UI) -> None:
+        fishing.land_empty(ui.state, self.ctx)
+        ui.pop()
+        cmds.check_faint(ui.state)
+
+    def handle(self, ui: UI, cmd: str, action: tuple) -> None:
+        if cmd in ("cancel", "use") and self.bit_at is None:
+            ui.state.fx[:] = [h for h in ui.state.fx if h.kind != "float"]   # the float comes in
+            self._empty(ui)
 
 
 class FishingScreen(Screen):

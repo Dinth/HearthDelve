@@ -502,9 +502,10 @@ class TestCreaturesShowHowTheyFeel(unittest.TestCase):
 
 
 class TestFishingShows(unittest.TestCase):
-    """A cast and its end were log lines. Now a cast that finds nothing drops
-    in with a ripple, a fish that slips the hook splashes, and a landed fish
-    leaps out of the water to you."""
+    """The reel opened the instant you cast and the rest was log lines. Now
+    the float sits bobbing on the water a moment first; a bite jerks it under
+    with a "!", then the reel opens; a cast nothing takes is reeled in empty;
+    a fish that slips the hook splashes, and a landed one leaps to you."""
 
     def _water_beside(self, st):
         from hearthdelve.world import tile
@@ -513,31 +514,67 @@ class TestFishingShows(unittest.TestCase):
         st.world.tiles[p.x + dx * 2, p.y + dy * 2] = tile.WATER
         return p.x + dx * 2, p.y + dy * 2
 
-    def test_a_cast_that_finds_nothing_ripples(self):
+    def _cast(self, bites):
         from unittest import mock
+        from hearthdelve import screens
         from hearthdelve.game import fishing
         st = fresh_state(2)
         x, y = self._water_beside(st)
-        with mock.patch.object(fishing.random, "random", return_value=0.999):
-            self.assertIsNone(fishing.begin(st, x, y))
-        self.assertEqual([(h.kind, h.x, h.y) for h in st.fx], [("plop", x, y)])
-        con = _render(st, 9.0)
+        with mock.patch.object(fishing.random, "random", return_value=0.0 if bites else 0.999):
+            ctx = fishing.begin(st, x, y)
+        ui = screens.UI(st)
+        ui.push(screens.CastScreen(ctx))
+        return st, ui, ctx, (x, y)
+
+    def test_the_float_bobs_on_the_water_while_you_wait(self):
+        st, _ui, ctx, (x, y) = self._cast(bites=True)
+        (h,) = [h for h in st.fx if h.kind == "float"]
+        self.assertEqual(((h.x, h.y), h.data["life"]), ((x, y), ctx["wait"]))
+        self.assertGreaterEqual(ctx["wait"], 0.9)
         sx, sy = _screen(st, x, y)
-        self.assertEqual(chr(con.ch[sx, sy]), "o")
+        glyphs = {chr(_render(st, 5.0 + k * 0.2).ch[sx, sy]) for k in range(5)}
+        self.assertEqual(glyphs, {"o", "°"})           # riding up, dipping
+
+    def test_a_bite_shows_then_the_reel_opens(self):
+        from hearthdelve import screens
+        st, ui, ctx, (x, y) = self._cast(bites=True)
+        cast = ui.top
+        cast.tick(ui)                                   # still waiting
+        self.assertIs(ui.top, cast)
+        self.assertNotIn("bite", [h.kind for h in st.fx])
+        cast.t0 -= ctx["wait"]                          # the wait runs out
+        cast.tick(ui)
+        self.assertIn("bite", [h.kind for h in st.fx])
+        self.assertIs(ui.top, cast)                     # the "!" has its moment…
+        cast.bit_at -= cast.BITE_BEAT
+        cast.tick(ui)
+        self.assertIsInstance(ui.top, screens.FishingScreen)   # …then the reel
+
+    def test_a_cast_nothing_takes_is_reeled_in_empty(self):
+        st, ui, ctx, _at = self._cast(bites=False)
+        self.assertFalse(ctx["bite"])
+        energy = st.player.energy
+        ui.top.t0 -= ctx["wait"]
+        ui.top.tick(ui)
+        self.assertIs(ui.top, ui.play)
+        self.assertLess(st.player.energy, energy)
+        self.assertIn("nothing's biting", st.log.messages[-1][0])
+
+    def test_you_can_draw_the_line_in_early(self):
+        st, ui, ctx, _at = self._cast(bites=True)
+        ui.top.handle(ui, "cancel", ("cancel",))
+        self.assertIs(ui.top, ui.play)
+        self.assertEqual([h for h in st.fx if h.kind in ("float", "bite")], [])
 
     def test_the_reel_ends_in_a_splash_or_a_catch(self):
-        from unittest import mock
         from hearthdelve.game import fishing
-        st = fresh_state(2)
-        x, y = self._water_beside(st)
-        with mock.patch.object(fishing.random, "random", return_value=0.0):
-            ctx = fishing.begin(st, x, y)
+        st, _ui, ctx, (x, y) = self._cast(bites=True)
         self.assertEqual(ctx["at"], (x, y))
+        st.fx.clear()
         fishing.resolve(st, ctx, caught=False)
         fishing.resolve(st, ctx, caught=True)
         self.assertEqual([h.kind for h in st.fx], ["splash", "catch"])
         self.assertEqual(st.fx[1].data["glyph"], ctx["fish"].glyph)
-
 
 
 class TestTransitions(unittest.TestCase):

@@ -104,8 +104,11 @@ def _pan_river(state: GameState, tx: int, ty: int) -> None:
 
 
 def begin(state: GameState, tx: int, ty: int):
-    """Roll for a bite and, if one comes, open the reel minigame. Returns a ctx
-    dict (fed to update/resolve) or None if nothing's biting / can't fish."""
+    """Cast the line: roll now whether a fish will bite, and how long the float
+    sits on the water first. Returns the cast (``bite`` says which way it went,
+    ``wait`` the seconds the float bobs before it), or None when you can't
+    fish at all. A biting cast also carries the reel minigame's state (fed to
+    update/resolve); one that finds nothing ends in :func:`land_empty`."""
     p = state.player
     if p.energy <= 0:
         state.log.add("You're too exhausted to fish.", C.DIM)
@@ -135,17 +138,18 @@ def begin(state: GameState, tx: int, ty: int):
             chance += 0.08
             table = table + [(items.MOONFISH, 6)]     # a local copy, never the module list
     if not table or random.random() > chance:
-        # a "cast that finds nothing" still costs a little time & effort
-        p.energy = max(0, p.energy - C.FISH_COST[0])
-        turns.advance_time(state, random.randint(C.FISH_SECONDS_MIN, C.FISH_SECONDS_MAX // 2))
-        state.happen("plop", tx, ty)                 # the float drops in, and nothing comes
-        state.log.add("You cast your line... nothing's biting.", C.DIM)
-        return None
+        wait = random.uniform(1.2, 2.2)              # the float sits, and nothing comes
+        state.happen("float", tx, ty, life=wait)
+        state.log.add("You cast your line...", C.DIM)
+        return {"bite": False, "at": (tx, ty), "wait": wait}
     fish = _weighted(table)
     lvl = skills.skill_level(state, "Fishing")
     bar_len = min(TRACK_LEN // 2, BAR_BASE_LEN + lvl // 3)
-    state.log.add("A bite! Reel it in — use ←/→ to keep the fish in the bracket.", (150, 200, 224))
+    wait = random.uniform(0.9, 2.4)                  # drawn after the fish: the catch is unchanged
+    state.happen("float", tx, ty, life=wait)
+    state.log.add("You cast your line...", C.DIM)
     return {
+        "bite": True, "wait": wait,
         "fish": fish, "diff": _difficulty(fish), "bar_len": bar_len,
         "bar": float(TRACK_LEN - bar_len) / 2,
         # the fish starts off-centre and already on the move, so you must chase it
@@ -154,6 +158,22 @@ def begin(state: GameState, tx: int, ty: int):
         "prog": START_PROG, "best": START_PROG, "elapsed": 0.0, "last_t": time.monotonic(),
         "at": (tx, ty),                               # where the line went in
     }
+
+
+def bite(state: GameState, ctx: dict) -> None:
+    """The float dips — a fish has taken the bait. The reel opens next."""
+    state.happen("bite", *ctx["at"])
+    state.log.add("A bite! Reel it in — use ←/→ to keep the fish in the bracket.", (150, 200, 224))
+    ctx["last_t"] = time.monotonic()                 # the reel's clock starts with the bite
+
+
+def land_empty(state: GameState, ctx: dict) -> None:
+    """Reel in a line nothing took (the wait ran out, or you drew it in early):
+    a cast that finds nothing still costs a little time and effort."""
+    p = state.player
+    p.energy = max(0, p.energy - C.FISH_COST[0])
+    turns.advance_time(state, random.randint(C.FISH_SECONDS_MIN, C.FISH_SECONDS_MAX // 2))
+    state.log.add("You reel in... nothing's biting.", C.DIM)
 
 
 def update(state: GameState, ctx: dict, move_dir: int) -> str:

@@ -974,25 +974,41 @@ def songs_at_the_inn(f: anim.Frame) -> None:
 _SPRAY = (196, 226, 250)
 
 
-@anim.one_off("plop", life=1.0)
-def plop(f: anim.Frame, h, age: float) -> None:
-    """A cast that finds nothing: the float drops in and a ripple spreads out
-    from it and fades."""
+@anim.one_off("float", life=2.5)
+def float_on_the_water(f: anim.Frame, h, age: float) -> None:
+    """The cast float: it drops in with a ripple, then sits bobbing on the
+    water — now riding up, now dipping — with a ring spreading off it now and
+    then, until something bites or you reel in."""
     cell = f.cell(h.x, h.y)
     if cell is None:
         return
     sx, sy = cell
-    if age < 0.25:
-        _write(f, sx, sy, "o", (232, 96, 80))         # the red float, just landed
-    r = 2.2 * age
+    _write(f, sx, sy, "o" if int(age / 0.35) % 2 == 0 else "°", (232, 96, 80))
+    since = age if age < 0.8 else (age - 0.8) % 1.1          # the drop, then a ring now and then
+    r = 2.2 * since
     for dx in range(-3, 4):
         for dy in range(-2, 3):
             x, y = sx + dx, sy + dy
-            if not (0 <= x < f.vw and 0 <= y < f.vh):
+            if (dx, dy) == (0, 0) or not (0 <= x < f.vw and 0 <= y < f.vh):
                 continue
             ring = max(0.0, 1.0 - abs(math.hypot(dx * 0.75, dy) - r) / 0.6)
             if ring > 0.1:
-                _blend(f.con, x, y, "bg", _SPRAY, 0.45 * ring * (1.0 - age))
+                _blend(f.con, x, y, "bg", _SPRAY, 0.4 * ring * max(0.0, 1.0 - since))
+
+
+@anim.one_off("bite", life=0.45)
+def bite(f: anim.Frame, h, age: float) -> None:
+    """A fish takes it: the float jerks under, spray flies, and a "!" over it."""
+    cell = f.cell(h.x, h.y)
+    if cell is None:
+        return
+    sx, sy = cell
+    _write(f, sx, sy, ".", (232, 96, 80))                  # pulled under
+    for x, y in ((sx - 1, sy), (sx + 1, sy)):
+        if (x, y) not in f.occupied:
+            _write(f, x, y, "~", _SPRAY)
+    if (sx, sy - 1) not in f.occupied:
+        _write(f, sx, sy - 1, "!", (255, 214, 72))
 
 
 @anim.one_off("splash", life=0.6)

@@ -108,7 +108,7 @@ class TestCastingPullsTheRightTable(unittest.TestCase):
             st.clock = 0
             before = {e[0] for e in st.player.inventory.slots}
             ctx = fishing.begin(st, x, y)
-            if ctx is not None:                       # a bite — land it outright
+            if ctx is not None and ctx["bite"]:       # a bite — land it outright
                 fishing.resolve(st, ctx, caught=True)
             got |= {e[0] for e in st.player.inventory.slots} - before
         return {it.name for it in got if it.kind == "fish"}
