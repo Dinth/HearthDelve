@@ -3352,7 +3352,7 @@ QUESTS: list[Quest] = [
           lambda s: s.stats.get("animals_born", 0) >= 1),
     Quest("cookbook", "Well Fed, Well Read", "Learn 20 cooking recipes.", 250,
           lambda s: len(getattr(s, "known_recipes", ())) >= 20),
-    Quest("prosper", "Prosperity", "Earn 2000g from the shipping bin.", 500,
+    Quest("prosper", "Prosperity", "Earn 2000g selling goods and filling favours.", 500,
           lambda s: s.stats.get("gold_earned", 0) >= 2000),
 
     # --- Year 2: putting down roots ---

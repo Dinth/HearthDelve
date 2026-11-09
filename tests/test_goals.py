@@ -90,6 +90,22 @@ class TestGoalsComeAYearAtATime(unittest.TestCase):
         self.assertTrue(any("new goals" in m for m, _c in st.log.messages))
 
 
+class TestProsperitySaysWhatCounts(unittest.TestCase):
+    """It read "earn 2000g from the shipping bin", but favour payouts and
+    sales to the innkeepers count towards it too."""
+
+    def test_a_favour_s_pay_counts_and_the_goal_says_so(self):
+        from hearthdelve.data import content
+        from hearthdelve.game import quests
+        st = fresh_state(2)
+        st.stats["gold_earned"] = 2000                 # as a favour's payout bumps it
+        quests.check(st)
+        self.assertIn("prosper", st.quests_done)
+        prosper = next(q for q in content.QUESTS if q.id == "prosper")
+        self.assertNotIn("shipping bin", prosper.desc)
+        self.assertIn("favours", prosper.desc)
+
+
 class TestFiveStarHarvestsAreCounted(unittest.TestCase):
     def test_a_five_star_harvest_counts(self):
         from hearthdelve.data import content
