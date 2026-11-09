@@ -263,7 +263,7 @@ hearthdelve/
 - **6 wild herbs** → remedies, potions and combat draughts · **4 wild mushroom species** + cave fungus and glowcaps
 - **9 weapon bases** × 7 forge metals × affixes × 6 gems · **10 armour slots** including cloth and beast-scale lines
 - **15 monsters + 5 bosses + 6 elite affixes** · **10 wildlife species** (5 common + the rare bear in the Vale, 4 in the Westreach)
-- **42 NPCs** · **9 community projects** · **93 collection specimens** · **21 goals** · **9 birth signs** · **6 festivals**
+- **42 NPCs** · **9 community projects** · **93 collection specimens** · **38 goals** (21 + 9 for year 2 + 8 for year 3) · **9 birth signs** · **6 festivals**
 
 ## 18. Screen layout & glyph legend
 
@@ -304,7 +304,7 @@ Target window **80×50**: a 58×44 world viewport, a 22-wide status panel, a bot
 - **Birth:** a title card — *"A letter from your grandfather: the old farm in Hollowmere Vale is yours now…"* — then the midwives roll your sign and attributes.
 - **Soft, diegetic tutorial.** No walls of text: the log nudges, the panel previews what Space would do on the tile you face, and NPCs explain themselves. A few tiles come pre-tilled; you have 15 parsnip seeds.
 - **No fail state.** Worst case you faint and wake at home, and the game frames it gently.
-- **Goalless by design.** 21 goals mark progress and pay a little gold, but there is no ending. *"There's no rush. The Vale keeps its own time."*
+- **Goalless by design.** Goals mark progress and pay a little gold, a year at a time: 21 for the first year, then a harder set as years 2 and 3 begin. There is no ending. *"There's no rush. The Vale keeps its own time."*
 
 ## 20. Open questions
 

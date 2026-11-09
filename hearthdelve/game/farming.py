@@ -213,6 +213,8 @@ def harvest(state: GameState, x: int, y: int) -> bool:
     q = min(5, q + soil_lvl // 2)             # rich, long-worked loam bears finer still
     state.player.inventory.add(crop.produce, 1, quality=q)
     state.happen("harvest", x, y, quality=q)
+    if q >= 5:
+        state.bump("five_star_harvests")      # for the Gold Standard goal
     # every harvest works the ground a little richer (care compounds)
     state.world.soil[(x, y)] = min(4, soil_lvl + 1)
     state.bump("crops_harvested")
@@ -741,6 +743,10 @@ def _announce_morning(state: GameState) -> None:
     """The morning's news, and the fair's comings and goings. Called at the end
     of new_day, before the autosave (it raises and strikes stalls)."""
     state.log.add(f"{state.date_str()} — {state.weather}.", (236, 226, 180))
+    from . import quests
+    if state.day > 0 and state.day % C.YEAR_LEN == 0 and quests.new_this_year(state):
+        state.log.add(f"Year {state.year} begins in the Vale — new goals are written in your "
+                      "journal (j).", (240, 220, 120))
     # A one-line dawn tally of what's ready, so a farm that sprawls across the
     # map doesn't need a manual patrol to find finished goods and produce.
     surf = state.surface

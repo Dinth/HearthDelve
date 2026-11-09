@@ -3231,10 +3231,27 @@ class Quest:
     desc: str
     gold: int
     check: object          # callable(state) -> bool
+    year: int = 1          # the year it joins the journal: a fresh set of aims each year
 
 
 def _hearts(state, n: int) -> bool:
     return any(npc.friendship >= n * 100 for npc in state.surface.npcs) if state.surface else False
+
+
+def _friends(state, n: int) -> int:
+    """How many folk (the Vale's and Khazgrim's) you've reached `n` hearts with."""
+    folk = list(state.surface.npcs if state.surface else ()) + list(state.dwarves or ())
+    return sum(1 for npc in folk if npc.friendship >= n * 100)
+
+
+def _mastered(state) -> int:
+    """How many skills you've taken to the top."""
+    from ..game import skills
+    return sum(1 for xp in state.player.skills.values() if skills.level_of(xp) >= skills.MAX_LEVEL)
+
+
+def _projects_raised(state) -> int:
+    return sum(1 for p in state.projects if p.get("state") == "done")
 
 
 QUESTS: list[Quest] = [
@@ -3280,6 +3297,44 @@ QUESTS: list[Quest] = [
           lambda s: len(getattr(s, "known_recipes", ())) >= 20),
     Quest("prosper", "Prosperity", "Earn 2000g from the shipping bin.", 500,
           lambda s: s.stats.get("gold_earned", 0) >= 2000),
+
+    # --- Year 2: putting down roots ---
+    Quest("master_farmer", "Master Farmer", "Harvest 500 crops.", 800,
+          lambda s: s.stats.get("crops_harvested", 0) >= 500, year=2),
+    Quest("gold_star", "Gold Standard", "Harvest 25 five-star crops.", 800,
+          lambda s: s.stats.get("five_star_harvests", 0) >= 25, year=2),
+    Quest("beloved", "Beloved", "Reach 8 hearts with five folk.", 1000,
+          lambda s: _friends(s, 8) >= 5, year=2),
+    Quest("abyss", "Into the Abyss", "Descend to dungeon floor 20.", 1000,
+          lambda s: s.stats.get("deepest_depth", 0) >= 20, year=2),
+    Quest("legends", "Slayer of Legends", "Slay 5 dungeon bosses.", 1000,
+          lambda s: s.stats.get("bosses_slain", 0) >= 5, year=2),
+    Quest("trade", "A Thriving Trade", "Make 200 artisan goods.", 800,
+          lambda s: s.stats.get("artisan_made", 0) >= 200, year=2),
+    Quest("fisher_king", "Fisher King", "Catch 150 fish.", 800,
+          lambda s: s.stats.get("fish_caught", 0) >= 150, year=2),
+    Quest("full_wing", "A Wing of Wonders", "Complete a wing of the Hall of Wonders.", 1000,
+          lambda s: any(k.startswith("wing_done_") for k in s.stats), year=2),
+    Quest("wealth", "Wealth of the Vale", "Earn 50,000g in all.", 2000,
+          lambda s: s.stats.get("gold_earned", 0) >= 50_000, year=2),
+
+    # --- Year 3: a life well made ---
+    Quest("pillar", "Pillar of the Vale", "Reach 10 hearts with ten folk.", 2500,
+          lambda s: _friends(s, 10) >= 10, year=3),
+    Quest("bottom", "The Bottom of All", "Descend to dungeon floor 30.", 2000,
+          lambda s: s.stats.get("deepest_depth", 0) >= 30, year=3),
+    Quest("raiser", "Raiser of Halls", "See every village project raised.", 2500,
+          lambda s: _projects_raised(s) >= len(PROJECTS), year=3),
+    Quest("keeper", "Keeper of Wonders", "Complete the Hall of Wonders.", 2500,
+          lambda s: bool(s.stats.get("collection_complete")), year=3),
+    Quest("grandmaster", "Grandmaster", "Master three skills (level 10).", 2000,
+          lambda s: _mastered(s) >= 3, year=3),
+    Quest("shepherd", "Good Shepherd", "See 20 animals born on your farm.", 1500,
+          lambda s: s.stats.get("animals_born", 0) >= 20, year=3),
+    Quest("bane", "Bane of the Deep", "Defeat 500 monsters.", 2000,
+          lambda s: s.stats.get("monsters_slain", 0) >= 500, year=3),
+    Quest("fortune", "A Fortune Made", "Earn 250,000g in all.", 4000,
+          lambda s: s.stats.get("gold_earned", 0) >= 250_000, year=3),
 ]
 
 

@@ -818,12 +818,20 @@ def render_journal(con: tcod.console.Console, state: GameState, tab: int = 0) ->
     rows: list[tuple[int, str, tuple]] = []      # (indent, text, color)
 
     if tab == 0:
-        for q in content.QUESTS:
+        year = 0
+        for q in quests.unlocked(state):
+            if q.year != year and q.year > 1:          # each later year's set under its own head
+                rows.append((0, "", C.WHITE))
+                rows.append((0, f"Year {q.year}", _HDR))
+            year = q.year
             ok = q.id in state.quests_done
             mark = "✔" if ok else "○"
             note = "done" if ok else q.desc
             rows.append((0, f" {mark} {q.title:<20.20s}{note}  (+{q.gold}g)",
                          (150, 205, 150) if ok else C.WHITE))
+        if any(q.year > state.year for q in content.QUESTS):
+            rows.append((0, "", C.WHITE))
+            rows.append((0, f"More goals come with Year {state.year + 1}.", C.DIM))
     elif tab == 1:
         if not state.requests:
             rows.append((0, "The notice boards are bare today — favours come and go.", C.DIM))
