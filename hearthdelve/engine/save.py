@@ -304,6 +304,8 @@ def save(state: GameState, path: str | None = None) -> None:
         "ship_bin": [[_item_key(it), q, ql] for it, q, ql in state.ship_bin.slots],
         "storage": [[_item_key(it), q, ql] for it, q, ql in state.storage.slots],
         "pack_bonus": state.pack_bonus,
+        "shipped": {"day": state.shipped.get("day", -1),
+                    "lines": [[_item_key(it), q, ql, g] for it, q, ql, g in state.shipped.get("lines", ())]},
         "stats": dict(state.stats),
         "bestiary": dict(state.bestiary),
         "pending_build": state.pending_build,
@@ -553,6 +555,10 @@ def load(path: str | None = None) -> GameState:
     state.storage = Inventory(slots=[[_item_from_key(rec[0]), rec[1], rec[2] if len(rec) > 2 else 0]
                                      for rec in data.get("storage", []) if _item_from_key(rec[0])])
     state.pack_bonus = data.get("pack_bonus", 0)
+    shipped = data.get("shipped") or {}               # older saves: no ledger yet
+    lines = [[_item_from_key(r[0]), r[1], r[2], r[3]] for r in shipped.get("lines", ())]
+    state.shipped = ({"day": shipped.get("day", -1), "lines": [ln for ln in lines if ln[0] is not None]}
+                     if shipped else {})
     state.stats = dict(data.get("stats", {}))
     state.bestiary = dict(data.get("bestiary", {}))
     state.quests_done = set(data.get("quests_done", []))

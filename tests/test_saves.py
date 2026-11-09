@@ -334,6 +334,7 @@ class TestEveryFieldSurvivesASave(unittest.TestCase):
         "warned",       # "press again to take it" warnings, for this sitting
         "aim_target",   # the aim cursor
         "fx",           # what just happened, played on screen for a moment
+        "ledger_due",   # the dawn ledger waiting to open, this sitting only
     }
     # Rebuilt from the world on demand, so never saved.
     CACHES = {"_owner_cache", "route"}

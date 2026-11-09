@@ -652,6 +652,95 @@ def render_ship(con: tcod.console.Console, state: GameState, sel: int) -> None:
     m.footer("↑↓ select · Enter stack · Space all · Esc close")
 
 
+def _shipped_rows(state: GameState, most: int = 8) -> list:
+    """Last night's sale at the bin, line by line, dearest first."""
+    from ..game import skills
+    lines = sorted(state.shipped.get("lines", ()), key=lambda ln: -ln[3])
+    rows = []
+    for it, qty, ql, gold in lines[:most]:
+        star = (" " + skills.stars(ql)) if ql else ""
+        rows.append((2, f"{qty:>3} {it.name}{star}"[:44].ljust(46) + f"{gold:>6}g", C.WHITE))
+    if len(lines) > most:
+        rest = sum(ln[3] for ln in lines[most:])
+        rows.append((2, f"    …and {len(lines) - most} more"[:44].ljust(46) + f"{rest:>6}g", C.DIM))
+    if lines:
+        rows.append((2, "Total".ljust(46) + f"{sum(ln[3] for ln in lines):>6}g", C.GOLD_COLOR))
+    return rows
+
+
+def _ready_rows(state: GameState, rep: dict, most: int = 8) -> list:
+    """What's ready around the homestead, from farming.farm_report."""
+    rows = [(2, f"✔ {name}: {out} — ready!", (250, 220, 110)) for name, out in rep["ready"][:most]]
+    if len(rep["ready"]) > most:
+        rows.append((2, f"…and {len(rep['ready']) - most} more ready.", (250, 220, 110)))
+    if rep["waiting"]:
+        rows.append((2, f"{rep['waiting']} animal{'s' if rep['waiting'] != 1 else ''} "
+                        "with produce waiting", (250, 220, 110)))
+    if rep["ripe"]:
+        rows.append((2, f"{rep['ripe']} crop{'s' if rep['ripe'] != 1 else ''} ripe for picking",
+                     (250, 220, 110)))
+    if rep["fruiting"]:
+        rows.append((2, f"{rep['fruiting']} tree{'s' if rep['fruiting'] != 1 else ''} bearing fruit",
+                     (250, 220, 110)))
+    return rows
+
+
+def _homestead_rows(state: GameState) -> list:
+    """The journal's Homestead page: last night's sale, then the machines,
+    fields and animals (see farming.farm_report)."""
+    from ..game import farming
+    rep = farming.farm_report(state)
+    now = state.abs_minutes
+    rows = []
+    if state.shipped.get("lines"):
+        rows.append((0, "Shipped last night", _HDR))
+        rows += _shipped_rows(state, most=4)
+        rows.append((0, "", C.WHITE))
+    rows.append((0, "Machines", _HDR))
+    rows += [r for r in _ready_rows(state, {**rep, "waiting": 0, "ripe": 0, "fruiting": 0})]
+    rows.append((2, f"{rep['working']} working · {rep['idle']} idle", C.WHITE))
+    if rep["soonest"] is not None:
+        from ..game.crafting import _fmt_remaining
+        at, name, out = rep["soonest"]
+        rows.append((2, f"next: {name} ({out}) in {_fmt_remaining(at - now)}", C.DIM))
+    rows.append((0, "", C.WHITE))
+    rows.append((0, "Fields", _HDR))
+    rows.append((2, f"{rep['ripe']} ripe · {rep['growing']} growing ({rep['dry']} need water)"
+                    + (f" · {rep['dead']} withered" if rep["dead"] else ""),
+                 (224, 180, 120) if rep["dry"] else C.WHITE))
+    if rep["trees"]:
+        rows.append((2, f"{rep['fruiting']} of {rep['trees']} trees bearing fruit", C.WHITE))
+    if rep["animals"]:
+        rows.append((0, "", C.WHITE))
+        rows.append((0, "Animals", _HDR))
+        rows.append((2, f"{rep['animals']} in your care · {rep['waiting']} with produce waiting",
+                     C.WHITE))
+        if rep["ill"]:
+            rows.append((2, f"{rep['ill']} ill — dose with a Herbal Tonic!", (228, 150, 110)))
+    return rows
+
+
+def render_ledger(con: tcod.console.Console, state: GameState) -> None:
+    """The dawn ledger: what the bin sold overnight, and what's ready this
+    morning — the day's planning at a glance as you wake."""
+    from ..game import farming
+    rep = farming.farm_report(state)
+    rows = [(0, "Shipped last night", _HDR)]
+    rows += _shipped_rows(state) or [(2, "Nothing went out in the bin.", C.DIM)]
+    rows.append((0, "", C.WHITE))
+    rows.append((0, "Ready this morning", _HDR))
+    rows += _ready_rows(state, rep) or [(2, "Nothing waiting yet.", C.DIM)]
+    if rep["dry"]:
+        rows.append((2, f"{rep['dry']} growing crop{'s' if rep['dry'] != 1 else ''} need water",
+                     (224, 180, 120)))
+    w = 60
+    h = min(C.SCREEN_H - 4, len(rows) + 5)
+    m = ui.Modal(con, w, h, f"The Ledger — {state.date_str()}, Year {state.year}")
+    for row, (indent, text, color) in enumerate(rows[:h - 4]):
+        m.text(2 + indent, 2 + row, text[:w - 4 - indent], fg=color)
+    m.footer("any key to begin the day")
+
+
 _JOURNAL_TABS = ("Goals", "Favours", "Market", "Homestead", "Projects", "Collection", "Almanac")
 _ALMANAC_AHEAD = 14         # days the almanac's "coming up" looks ahead
 _FEST_FG = (244, 210, 130)
@@ -810,63 +899,10 @@ def render_journal(con: tcod.console.Console, state: GameState, tab: int = 0) ->
         rows.append((0, "", C.WHITE))
         rows.append((0, "Present finds (g) at a display case in the Hall of Wonders.", C.DIM))
     else:
-        surf = state.surface
-        now = state.abs_minutes
-        if surf is None:
+        if state.surface is None:
             rows.append((0, "No homestead yet.", C.DIM))
         else:
-            from ..data.content import MACHINES
-            ready, working, idle, soonest = [], 0, 0, None
-            for m in surf.machines.values():
-                mdef = MACHINES.get(m.kind)
-                if mdef is None or m.kind in ("coop_small", "coop_big", "barn", "pen", "site"):
-                    continue
-                st = m.status(now)
-                if st == "done":
-                    ready.append(f"{mdef.name}: {m.loaded_output.name}")
-                elif st == "working":
-                    working += 1
-                    if soonest is None or m.ready_at < soonest[0]:
-                        soonest = (m.ready_at, mdef.name, m.loaded_output.name if m.loaded_output else "?")
-                else:
-                    idle += 1
-            rows.append((0, "Machines", _HDR))
-            for line in ready[:8]:
-                rows.append((2, f"✔ {line} — ready!", (250, 220, 110)))
-            if len(ready) > 8:
-                rows.append((2, f"…and {len(ready) - 8} more ready.", (250, 220, 110)))
-            rows.append((2, f"{working} working · {idle} idle", C.WHITE))
-            if soonest is not None:
-                from ..game.crafting import _fmt_remaining
-                rows.append((2, f"next: {soonest[1]} ({soonest[2]}) in {_fmt_remaining(soonest[0] - now)}",
-                             C.DIM))
-            growing = ripe = dry = dead = 0
-            for plot in surf.crops.values():
-                if plot.dead:
-                    dead += 1
-                elif plot.mature:
-                    ripe += 1
-                else:
-                    growing += 1
-                    if not plot.watered and not plot.crop.paddy:
-                        dry += 1
-            rows.append((0, "", C.WHITE))
-            rows.append((0, "Fields", _HDR))
-            rows.append((2, f"{ripe} ripe · {growing} growing ({dry} need water)"
-                            + (f" · {dead} withered" if dead else ""),
-                         (224, 180, 120) if dry else C.WHITE))
-            fruiting = sum(1 for tr in surf.trees.values() if tr.has_fruit)
-            if surf.trees:
-                rows.append((2, f"{fruiting} of {len(surf.trees)} trees bearing fruit", C.WHITE))
-            if surf.animals:
-                waiting = sum(1 for a in surf.animals if a.produce_ready)
-                ill = sum(1 for a in surf.animals if a.sick)
-                rows.append((0, "", C.WHITE))
-                rows.append((0, "Animals", _HDR))
-                rows.append((2, f"{len(surf.animals)} in your care · {waiting} with produce waiting",
-                             C.WHITE))
-                if ill:
-                    rows.append((2, f"{ill} ill — dose with a Herbal Tonic!", (228, 150, 110)))
+            rows += _homestead_rows(state)
 
     done, total = quests.progress(state)
     title = (f"Journal — Goals ({done}/{total})" if tab == 0

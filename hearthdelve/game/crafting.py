@@ -1117,7 +1117,9 @@ def bin_ceiling(item) -> int:
 def sell_shipment(state: GameState) -> None:
     """Convert everything in the shipping bin to gold overnight (quality-scaled,
     at the market's current prices)."""
-    total = sum(bin_value(state, it, ql) * qty for it, qty, ql in state.ship_bin.slots)
+    lines = [[it, qty, ql, bin_value(state, it, ql) * qty] for it, qty, ql in state.ship_bin.slots]
+    total = sum(gold for *_rest, gold in lines)
+    state.shipped = {"day": state.day, "lines": [ln for ln in lines if ln[3] > 0]}
     if total > 0:
         state.player.gold += total
         state.bump("gold_earned", total)

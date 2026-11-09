@@ -112,6 +112,15 @@ class PlayScreen(Screen):
 
     def tick(self, ui: UI) -> None:
         state = ui.state
+        # A new morning's ledger opens once you've come round (after the dawn
+        # card or the faint has played), and only if it has news.
+        if state.ledger_due and not any(h.kind in ("dawn", "faint") for h in state.fx):
+            state.ledger_due = False
+            from .game import farming
+            if farming.ledger_has_news(state):
+                self.cancel_auto()
+                ui.push(LedgerScreen())
+                return
         if self.run_ctx is not None:
             if not cmds.run_step(state, self.run_ctx):
                 reason = self.run_ctx.get("stop", "")
@@ -1029,6 +1038,20 @@ class CharGenScreen(Screen):
         sid, name, _g, told, boon = next(z for z in ZODIAC if z[0] == p.sign)
         state.log.add(f"You were born under {name} — {told}. ({boon})", (232, 216, 150))
         state.chargen_pending = False      # a life is begun; never offered again
+
+
+class LedgerScreen(Screen):
+    """The dawn ledger: last night's sale and what's ready. Any key closes it
+    (but not a key still held from before it opened)."""
+
+    def render(self, ui: UI, con) -> None:
+        rendering.render_ledger(con, ui.state)
+
+    def on_raw(self, ui: UI, event) -> bool:
+        if isinstance(event, tcod.event.KeyDown) and not getattr(event, "repeat", False):
+            ui.pop()
+            return True
+        return False
 
 
 class IntroScreen(Screen):

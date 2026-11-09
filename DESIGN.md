@@ -60,6 +60,7 @@ If a choice trades coziness for challenge, **coziness wins.**
 ```
 
 - **The day has two budgets: time and stamina.** Actions cost both, independently. For long work the clock, not stamina, is usually the real limit.
+- **The ledger opens the day.** On waking, a ledger lists what the bin sold overnight, line by line, and what's ready around the homestead: finished machines, animals with produce, ripe crops, fruiting trees, and crops needing water. It only opens when there's news. The journal's Homestead page keeps last night's sale too.
 - **Sleep** advances the day: crops grow, machines complete, animals produce, forage drifts, favours turn over, the calendar ticks.
 - Machine crafting costs *time*, not stamina — load it and it works while you get on with the day. A few benches (anvil, gem wheel) are worked in person instead, and charge stamina there and then.
 

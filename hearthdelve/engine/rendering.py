@@ -1232,6 +1232,7 @@ equippables = _sr.equippables
 render_craft = _sr.render_craft
 render_ship = _sr.render_ship
 render_journal = _sr.render_journal
+render_ledger = _sr.render_ledger
 render_relationships = _sr.render_relationships
 render_character = _sr.render_character
 render_dialogue = _sr.render_dialogue

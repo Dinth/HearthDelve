@@ -292,6 +292,7 @@ def new_day(state: GameState, rested: bool = True) -> None:
     """Advance to the next morning: sell shipment, grow crops, roll weather."""
     from . import crafting
     crafting.sell_shipment(state)
+    state.ledger_due = True                  # a new morning: the ledger's waiting
     prev_weather = state.weather        # the day now ending — it's what dried the crops
 
     # A fair day (that's now ending) dries any cut grass into straw; snow/rain
@@ -676,6 +677,64 @@ def collapse(state: GameState, reason: str) -> None:
         state.player.x, state.player.y = state.surface.bed
     new_day(state, rested=False)
     state.happen("faint", state.player.x, state.player.y)  # you come round, slowly
+
+
+_NOT_HOMESTEAD_MACHINES = ("coop_small", "coop_big", "barn", "pen", "site")
+
+
+def farm_report(state: GameState) -> dict:
+    """What's ready, working and growing around the homestead: the journal's
+    Homestead page and the dawn ledger both read it. The villages' own fields
+    and cottage gardens share the crop map but aren't yours, so they don't
+    count."""
+    rep = {"ready": [], "working": 0, "idle": 0, "soonest": None, "ripe": 0, "growing": 0,
+           "dry": 0, "dead": 0, "trees": 0, "fruiting": 0, "animals": 0, "waiting": 0, "ill": 0}
+    surf = state.surface
+    if surf is None:
+        return rep
+    now = state.abs_minutes
+    for m in surf.machines.values():
+        mdef = content.MACHINES.get(m.kind)
+        if mdef is None or m.kind in _NOT_HOMESTEAD_MACHINES:
+            continue
+        status = m.status(now)
+        if status == "done":
+            rep["ready"].append((mdef.name, m.loaded_output.name if m.loaded_output else "?"))
+        elif status == "working":
+            rep["working"] += 1
+            if rep["soonest"] is None or m.ready_at < rep["soonest"][0]:
+                rep["soonest"] = (m.ready_at, mdef.name,
+                                  m.loaded_output.name if m.loaded_output else "?")
+        else:
+            rep["idle"] += 1
+    theirs = set(map(tuple, getattr(surf, "village_fields", ()))) | set(
+        map(tuple, getattr(surf, "village_gardens", ())))
+    for pos, plot in surf.crops.items():
+        if pos in theirs:
+            continue
+        if plot.dead:
+            rep["dead"] += 1
+        elif plot.mature:
+            rep["ripe"] += 1
+        else:
+            rep["growing"] += 1
+            if not plot.watered and not plot.crop.paddy:
+                rep["dry"] += 1
+    rep["trees"] = len(surf.trees)
+    rep["fruiting"] = sum(1 for tr in surf.trees.values() if tr.has_fruit)
+    from .husbandry import _is_adult
+    rep["animals"] = len(surf.animals)
+    rep["waiting"] = sum(1 for a in surf.animals if a.produce_ready and _is_adult(a))
+    rep["ill"] = sum(1 for a in surf.animals if a.sick)
+    return rep
+
+
+def ledger_has_news(state: GameState) -> bool:
+    """Whether the dawn ledger has anything to tell: a sale last night, or
+    something ready this morning."""
+    rep = farm_report(state)
+    return bool(state.shipped.get("lines") or rep["ready"] or rep["waiting"]
+                or rep["ripe"] or rep["fruiting"])
 
 
 def _announce_morning(state: GameState) -> None:

@@ -81,6 +81,9 @@ class GameState:
     ship_bin: Inventory = field(default_factory=Inventory)
     storage: Inventory = field(default_factory=Inventory)   # home chest: stash goods off your back
     pack_bonus: int = 0                                     # extra carry capacity from crafted satchels
+    # last night's sale at the bin, line by line, for the dawn ledger and the
+    # journal: {"day": the day it was shipped, "lines": [[Item, qty, quality, gold]]}
+    shipped: dict = field(default_factory=dict)
 
     # delving: surface is the persistent farm; world is the active map
     surface: GameMap | None = None
@@ -142,6 +145,8 @@ class GameState:
     floor_cache_day: int = -1
     # what just happened, for the screen to show for a moment (never saved)
     fx: list = field(default_factory=list, repr=False)
+    # a new morning has come: the dawn ledger is waiting to be shown (never saved)
+    ledger_due: bool = False
 
     def happen(self, kind: str, x: int, y: int, **data) -> None:
         """Record that something happened at (x, y) on the current map — a hit,
