@@ -1054,14 +1054,18 @@ def _view_toward(f: anim.Frame, colour, k) -> None:
         f.con.rgb[chan][:f.vw, :f.vh] = (cur * (1.0 - k) + target * k).astype(np.uint8)
 
 
-@anim.one_off("stairs", life=0.45, order=950)
+@anim.one_off("stairs", life=0.4, order=950)
 def stairs(f: anim.Frame, h, age: float) -> None:
-    """Taking the stairs: the new floor comes out of the dark from the top
-    down, as your eyes find it."""
-    edge = -2.0 + (f.vh + 4.0) * age / 0.45       # rows above this are revealed
-    rows = np.arange(f.vh, dtype=np.float32)[None, :]
-    k = np.clip((rows - edge) / 3.0 + 0.5, 0.0, 1.0)          # a soft edge, not a hard line
-    _view_toward(f, (0, 0, 0), np.broadcast_to(k, (f.vw, f.vh)))
+    """Taking the stairs: the new floor comes out of the dark around you
+    first, spreading outward, as your eyes find it. (A wipe from the top
+    showed nothing underground, where the top of the view is unexplored
+    black: just a blink of darkness.)"""
+    p = f.state.player
+    X = np.arange(f.vw, dtype=np.float32)[:, None]
+    Y = np.arange(f.vh, dtype=np.float32)[None, :]
+    d = np.sqrt(((X - (p.x - f.ox)) * 0.6) ** 2 + (Y - (p.y - f.oy)) ** 2)
+    edge = -1.5 + 30.0 * (age / 0.4) ** 1.6         # the dark's edge, spreading out
+    _view_toward(f, (0, 0, 0), np.clip((d - edge) / 3.0 + 0.5, 0.0, 1.0))
 
 
 _DAWN_CARD = 2.6

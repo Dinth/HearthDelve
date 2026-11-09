@@ -584,7 +584,12 @@ class TestTransitions(unittest.TestCase):
     def _dark(self, con, rows):
         return float(con.bg[:58, rows].astype(int).sum() + con.fg[:58, rows].astype(int).sum())
 
-    def test_the_stairs_come_out_of_the_dark_from_the_top(self):
+    def test_the_stairs_come_out_of_the_dark_around_you(self):
+        """The new floor shows first where you stand and spreads outward. (It
+        once wiped in from the top of the view — underground, where the top is
+        unexplored black, that read as nothing but a blink of darkness.)"""
+        import numpy as np
+        from hearthdelve.engine import constants as C
         from hearthdelve.game import delve
         st = fresh_state(2)
         mouth = sorted(q for q, k in st.surface.dungeon_kind.items() if k == "mine")[0]
@@ -592,15 +597,21 @@ class TestTransitions(unittest.TestCase):
         delve.enter(st, "mine")
         st.fx[:] = [h for h in st.fx if h.kind == "stairs"]
         self.assertEqual(len(st.fx), 1)
-        _sx, sy = _screen(st, st.player.x, st.player.y)
+        sx, sy = _screen(st, st.player.x, st.player.y)
+        X = np.arange(C.VIEW_W)[:, None]
+        Y = np.arange(C.VIEW_H)[None, :]
+        far = np.sqrt(((X - sx) * 0.6) ** 2 + (Y - sy) ** 2) > 3.5      # beyond a few steps
+
+        def lit(con, where):
+            return int(con.bg[:C.VIEW_W, :C.VIEW_H][where].astype(int).sum()
+                       + con.fg[:C.VIEW_W, :C.VIEW_H][where].astype(int).sum())
         first = _render(st, 3.0)                       # the moment you arrive
-        mid = _render(st, 3.0 + (sy + 2) * 0.45 / 48)  # the dark's edge at your row
+        early = _render(st, 3.1)
         settled = _render(st, 3.6)
-        above, below = slice(sy - 3, sy - 1), slice(sy + 2, sy + 4)   # where your torch reaches
-        self.assertEqual(self._dark(first, slice(0, 44)), 0.0)
-        self.assertGreater(self._dark(mid, above), 0.0)
-        self.assertEqual(self._dark(mid, below), 0.0)              # the bottom still dark
-        self.assertGreater(self._dark(settled, below), 0.0)
+        self.assertEqual(lit(first, np.ones_like(far)), 0)
+        self.assertGreater(int(early.fg[sx, sy].astype(int).sum()), 0)       # you, first
+        self.assertEqual(lit(early, far), 0)                                  # the rest still dark
+        self.assertGreater(lit(settled, far), 0)
 
     def test_a_night_s_sleep_ends_in_a_card_naming_the_day(self):
         from hearthdelve.game import farming
