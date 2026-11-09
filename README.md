@@ -99,7 +99,7 @@ always-current reference.
 | `f` | give a villager a gift |
 | `s` | sleep in your bed → next day |
 | `i` | pack · `e` equipment · `v` character sheet |
-| `j` | journal (goals, favours, projects, collection) · `r` relationships |
+| `j` | journal (goals, favours, projects, collection, almanac) · `r` relationships |
 | `m` | world map · `h` or `Shift`+`M` message history (`PgUp`/`PgDn` page through it) |
 | `l` | look around (move a cursor, read what's there) |
 | `?` | codex: help & encyclopedia (← → pages, ↑ ↓ scroll) |
