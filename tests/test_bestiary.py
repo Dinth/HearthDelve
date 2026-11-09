@@ -47,7 +47,9 @@ class TestKillRecord(unittest.TestCase):
         from hearthdelve.game import combat
         st = fresh_state(2)
         # a peaceful surface critter: killing it must not add a bestiary tally
-        crit = type("W", (), {"name": "Rabbit", "kind": "wildlife", "hostile": False})()
+        from hearthdelve.entities.monster import Mob
+        crit = Mob("Rabbit", "r", (200, 180, 150), 3, 3, 2, "skittish",
+                   st.player.x + 1, st.player.y, kind="wildlife")
         st.world.monsters = [crit]
         combat._on_kill(st, crit)
         self.assertEqual(st.bestiary, {})
