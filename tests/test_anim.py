@@ -1130,11 +1130,11 @@ class TestFishingShows(unittest.TestCase):
         cast.tick(ui)                                   # still waiting
         self.assertIs(ui.top, cast)
         self.assertNotIn("bite", [h.kind for h in st.fx])
-        cast.t0 -= ctx["wait"]                          # the wait runs out
-        cast.tick(ui)
+        cast.t0 -= ctx["wait"] + 0.05                   # the wait runs out (with room to
+        cast.tick(ui)                                   #  spare: Windows' clock is coarse)
         self.assertIn("bite", [h.kind for h in st.fx])
         self.assertIs(ui.top, cast)                     # the "!" has its moment…
-        cast.bit_at -= cast.BITE_BEAT
+        cast.bit_at -= cast.BITE_BEAT + 0.05
         cast.tick(ui)
         self.assertIsInstance(ui.top, screens.FishingScreen)   # …then the reel
 
@@ -1142,7 +1142,7 @@ class TestFishingShows(unittest.TestCase):
         st, ui, ctx, _at = self._cast(bites=False)
         self.assertFalse(ctx["bite"])
         energy = st.player.energy
-        ui.top.t0 -= ctx["wait"]
+        ui.top.t0 -= ctx["wait"] + 0.05
         ui.top.tick(ui)
         self.assertIs(ui.top, ui.play)
         self.assertLess(st.player.energy, energy)

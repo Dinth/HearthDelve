@@ -102,11 +102,13 @@ class TestTheLedgerOpensAsYouWake(unittest.TestCase):
         st, ui = self._woken()
         st.fx.clear()
         ui.top.tick(ui)
-        held = tcod.event.KeyDown(sym=tcod.event.KeySym.s, scancode=tcod.event.Scancode.S,
+        # (letters built from their code, as test_keys does: the named letter
+        # members differ between tcod builds)
+        held = tcod.event.KeyDown(sym=tcod.event.KeySym(ord("s")), scancode=tcod.event.Scancode(0),
                                   mod=tcod.event.Modifier.NONE, repeat=True)
         ui.top.on_raw(ui, held)
         self.assertIsNot(ui.top, ui.play)
-        fresh = tcod.event.KeyDown(sym=tcod.event.KeySym.SPACE, scancode=tcod.event.Scancode.SPACE,
+        fresh = tcod.event.KeyDown(sym=tcod.event.KeySym.SPACE, scancode=tcod.event.Scancode(0),
                                    mod=tcod.event.Modifier.NONE)
         ui.top.on_raw(ui, fresh)
         self.assertIs(ui.top, ui.play)
