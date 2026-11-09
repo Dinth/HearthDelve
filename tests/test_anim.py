@@ -38,7 +38,7 @@ class TestOneEngine(unittest.TestCase):
         self.assertEqual(names[anim.GROUND_LATE], ["gem_glitter", "lava_breathes"])
         self.assertEqual(names[anim.VEIL], ["westreach_weather"])
         self.assertEqual(names[anim.OVERLAY], ["weather", "seasonal_motes", "living_fire",
-                                               "crossings"])
+                                               "crossings", "songs_at_the_inn"])
 
     def test_effects_in_a_layer_draw_lowest_order_first(self):
         from hearthdelve.engine import anim
@@ -444,6 +444,59 @@ class TestWorkShows(unittest.TestCase):
         commands.use_tool(st)
         self.assertEqual([(h.kind, h.x, h.y, h.data.get("crop")) for h in st.fx],
                          [("water", x, y, True)])
+
+
+
+class TestCreaturesShowHowTheyFeel(unittest.TestCase):
+    """Petting an animal, or a gift going down well or badly, were log lines.
+    Now a ♥ (or an "…") rises off them; ready produce glints; and the inn has
+    song in it of an evening."""
+
+    def test_a_petted_animal_shows_a_heart(self):
+        from hearthdelve.entities.animal import Animal
+        from hearthdelve.game import husbandry
+        st = fresh_state(2)
+        spec = husbandry.SPECIES["chicken"]
+        p = st.player
+        hen = Animal(kind="chicken", name="Hen", glyph=spec.glyph, color=spec.color,
+                     x=p.x + 2, y=p.y, home=(p.x, p.y), age_days=30, happiness=50)
+        st.surface.animals.append(hen)
+        husbandry.interact_animal(st, hen)
+        con = _render(st, 4.0)
+        sx, sy = _screen(st, hen.x, hen.y)
+        self.assertEqual(chr(con.ch[sx, sy - 1]), "♥")
+
+    def test_a_gift_shows_whether_it_landed(self):
+        from hearthdelve.game import village
+        st = fresh_state(2)
+        npc = next(n for n in st.surface.npcs if n.loves and n.dislikes)
+        st.player.inventory.add(npc.loves[0], 1)
+        village.gift(st, npc, npc.loves[0])
+        st.player.inventory.add(npc.dislikes[0], 1)
+        npc.gifted_today = False
+        village.gift(st, npc, npc.dislikes[0])
+        self.assertEqual([h.data["glyph"] for h in st.fx if h.kind == "emote"], ["♥", "…"])
+
+    def test_ready_produce_glints_on_its_own_beat(self):
+        from hearthdelve.engine import anim
+        beats = {tuple(anim.ready_glint(k * 0.05, x, 7) for k in range(40)) for x in range(6)}
+        self.assertGreater(len(beats), 1)
+
+    def test_the_inn_sings_of_an_evening(self):
+        from hearthdelve.engine import anim
+        from hearthdelve.engine import constants as C
+        st = fresh_state(2)
+        st.clock = (20 * 60 - C.DAY_START_MIN) * 60          # 20:00
+        regulars = [n for n in st.surface.npcs if n.spots.get("inn")][:3]
+        for n in regulars:
+            n.x, n.y = n.spots["inn"]
+        st.player.x, st.player.y = regulars[0].x, regulars[0].y + 3
+        notes = 0
+        for k in range(0, 600):
+            con = _render(st, k * 0.1)
+            notes += int((con.ch[:58, :44] == ord("♪")).sum() > 0)
+        self.assertGreater(notes, 20)                     # now and then…
+        self.assertLess(notes, 560)                       # …not all the time
 
 
 if __name__ == "__main__":

@@ -244,6 +244,7 @@ def interact_animal(state: GameState, a: Animal) -> None:
         return
     a.happiness = min(100, a.happiness + PET_BONUS)
     a.petted_today = True
+    state.happen("emote", a.x, a.y, glyph="♥", colour=(255, 128, 168))
     mood = "beams" if a.happiness >= 80 else "seems happier"
     state.log.add(f"You pet {a.name}; it {mood}.", (200, 220, 160))
 

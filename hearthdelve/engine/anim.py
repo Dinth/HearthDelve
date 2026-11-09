@@ -209,12 +209,16 @@ def eruption_age(t: float, seed: int):
     return burst_age(t, 41.0, 0.85, span, (seed % 1009) + 0.29)
 
 
-def machine_lit(t: float, mx: int, my: int) -> bool:
-    """A finished machine's glint: on its own phase and a beat of its own
-    (0.8-1.2s), so a yard of them twinkles rather than flashing as one."""
+def ready_glint(t: float, mx: int, my: int) -> bool:
+    """Something ready to collect glints — a finished machine, an animal with
+    its produce waiting — on its own phase and a beat of its own (0.8-1.2s),
+    so a yard of them twinkles rather than flashing as one."""
     h = mx * 7 + my * 13
     beat = 0.8 + 0.4 * h1(h, 6.7)
     return ((t / beat + h1(h, 4.1)) % 1.0) < 0.5
+
+
+machine_lit = ready_glint
 
 
 def flyover(f: int, t: float, seed: int):

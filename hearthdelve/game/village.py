@@ -436,6 +436,10 @@ def gift(state: GameState, npc: NPC, item, quality: int = 0) -> None:
         points = round(points * _warmth(state, npc) * (1 + 0.04 * attrs.mod(state, "Ap")))
     npc.friendship = max(0, min(MAX_HEARTS * 100, npc.friendship + points))
     npc.gifted_today = True
+    if npc._matches(item, npc.loves):                 # it shows on their face
+        state.happen("emote", npc.x, npc.y, glyph="♥", colour=(255, 128, 168))
+    elif npc._matches(item, npc.dislikes):
+        state.happen("emote", npc.x, npc.y, glyph="…", colour=(170, 170, 176))
     if points > 0:
         karma.adjust(state, 1)  # a small kindness
     color = (180, 230, 160) if points >= 45 else (200, 160, 140) if points < 0 else C.WHITE

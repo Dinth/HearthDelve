@@ -353,7 +353,7 @@ def _draw_world(f: anim.Frame) -> None:
             if status == "done":
                 # ready: pulse between bright gold and white — pollable at a
                 # glance across the whole farm, not a subtle tint
-                pulse = anim.machine_lit(t, mx, my)    # each on its own beat
+                pulse = anim.ready_glint(t, mx, my)    # each on its own beat
                 fg[sx, sy] = (255, 255, 220) if pulse else (250, 220, 110)
                 bg[sx, sy] = (60, 50, 26)
             elif status == "working":
@@ -501,8 +501,8 @@ def _draw_world(f: anim.Frame) -> None:
             col = a.color
             if spec and a.age_days < spec.mature_days:
                 col = spec.young_color
-            elif a.produce_ready:
-                col = (250, 240, 170)
+            elif a.produce_ready:                 # waiting to be collected: it glints
+                col = (255, 255, 228) if anim.ready_glint(t, a.x, a.y) else (250, 240, 170)
             _draw(sx, sy, a.glyph, col)
 
     # The engine's veil layer, over the creatures and under the player: the

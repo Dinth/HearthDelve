@@ -935,3 +935,37 @@ def water(f: anim.Frame, h, age: float) -> None:
         for x, y in ((sx - 1, sy), (sx + 1, sy)):
             if (x, y) not in f.occupied:
                 _write(f, x, y, "·", drop)
+
+
+@anim.one_off("emote", life=1.0)
+def emote(f: anim.Frame, h, age: float) -> None:
+    """A creature shows how it feels: a ♥ for a petted animal or a loved gift,
+    an "…" for a gift that missed — rising off it and fading."""
+    cell = f.cell(h.x, h.y)
+    if cell is None:
+        return
+    sx, sy = cell
+    fade = 1.0 if age < 0.6 else max(0.3, 1.0 - (age - 0.6) / 0.4)
+    colour = h.data.get("colour", (255, 128, 168))
+    _write(f, sx, sy - 1 - int(age / 0.5), h.data.get("glyph", "♥"),
+           tuple(int(c * fade) for c in colour))
+
+
+@anim.ongoing(anim.OVERLAY, 50)
+def songs_at_the_inn(f: anim.Frame) -> None:
+    """Evenings at the inn: now and then a "♪" rises over someone there —
+    each on their own time, never in chorus."""
+    st = f.state
+    if st.world.is_dungeon or not (19 * 60 <= st.time_minutes % 1440 < 22 * 60):
+        return
+    for npc in st.world.npcs:
+        inn = npc.spots.get("inn")
+        if inn is None or (npc.x, npc.y) != tuple(inn):
+            continue
+        age = anim.burst_age(f.t, 6.0, 0.45, 1.4, sum(map(ord, npc.name)) % 997 + 0.5)
+        if age is None:
+            continue
+        cell = f.cell(npc.x, npc.y)
+        if cell is not None:
+            sx, sy = cell
+            _write(f, sx, sy - 1 - int(age / 0.7), "♪", (240, 212, 140))
