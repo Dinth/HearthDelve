@@ -658,5 +658,43 @@ class TestFireworksNight(unittest.TestCase):
         self.assertEqual(self._night(filled=False), set())
 
 
+
+class TestFootprints(unittest.TestCase):
+    """Walking left no trace. Now sand, and snow-covered ground in winter,
+    take a footprint that fills in over a few seconds."""
+
+    def _walk(self, ground, day):
+        from hearthdelve.game import commands
+        from hearthdelve.world import tile
+        st = fresh_state(2)
+        st.day = day
+        p = st.player
+        dx, dy = _clear_line(st, 4)
+        for k in range(1, 4):
+            st.world.tiles[p.x + dx * k, p.y + dy * k] = ground
+        start = (p.x, p.y)
+        for _ in range(3):
+            commands.try_move(st, dx, dy)
+        return st, start, (dx, dy)
+
+    def test_sand_takes_prints_behind_you(self):
+        from hearthdelve.world import tile
+        st, start, (dx, dy) = self._walk(tile.SAND, day=5)
+        steps = [(h.x, h.y) for h in st.fx if h.kind == "step"]
+        self.assertEqual(steps, [(start[0] + dx * k, start[1] + dy * k) for k in (1, 2, 3)])
+        con = _render(st, 1.0)
+        sx, sy = _screen(st, start[0] + dx, start[1] + dy)      # behind you now
+        self.assertEqual(chr(con.ch[sx, sy]), "∙")
+
+    def test_snow_takes_them_in_winter_and_grass_doesnt_in_summer(self):
+        from hearthdelve.engine import constants as C
+        from hearthdelve.world import tile
+        winter = 3 * C.SEASON_LEN + 4
+        st, _s, _d = self._walk(tile.GRASS, day=winter)
+        self.assertEqual(len([h for h in st.fx if h.kind == "step"]), 3)
+        st, _s, _d = self._walk(tile.GRASS, day=C.SEASON_LEN + 4)
+        self.assertEqual([h for h in st.fx if h.kind == "step"], [])
+
+
 if __name__ == "__main__":
     unittest.main()

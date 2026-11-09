@@ -170,6 +170,24 @@ def _finish_busy(state: GameState, b: dict) -> None:
         land.penalize(state, b["tx"], b["ty"], "growth")
 
 
+# Ground soft enough to take a footprint: sand, always; open ground, when
+# winter has laid snow over it.
+_PRINTS_IN_WINTER = frozenset(("grass", "meadow", "tall_grass", "fog_grass", "dirt_path",
+                               "path", "moor", "hill", "scree", "marsh", "sand",
+                               "ruins_floor"))
+
+
+def _leave_print(state: GameState) -> None:
+    """A step on sand, or on snow-covered ground, leaves a print for the screen
+    to show for a while (see engine/effects.py)."""
+    w, p = state.world, state.player
+    if w.is_dungeon:
+        return
+    name = w.tile_at(p.x, p.y).name
+    if name == "sand" or (state.season == "Winter" and name in _PRINTS_IN_WINTER):
+        state.happen("step", p.x, p.y)
+
+
 def _apply_walk(state: GameState, on_road: bool) -> None:
     """Spend the time and stamina of one step, scaled by how laden you are.
 
@@ -178,6 +196,7 @@ def _apply_walk(state: GameState, on_road: bool) -> None:
     still spare you the *base* footfall, but the weight of a real haul tells on
     you even on a good road (see game.encumbrance)."""
     from . import encumbrance as enc
+    _leave_print(state)
     ratio = enc.load_ratio(state)
     base_time = C.ROAD_MOVE_SECONDS if on_road else C.MOVE_SECONDS
     turns.advance_time(state, max(1, round(base_time * enc.time_mult(ratio))))

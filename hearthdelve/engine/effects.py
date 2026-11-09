@@ -1135,3 +1135,17 @@ def fireworks(f: anim.Frame) -> None:
             y = apex + int(round(math.sin(ang) * (1 + 5 * b) * 0.8 + 2 * b * b))   # and droops
             if 0 <= x < f.vw and 0 <= y < f.vh and (x, y) not in f.occupied:
                 _write(f, x, y, "*" if b < 0.5 else "·", tuple(int(c * fade) for c in colour))
+
+
+@anim.one_off("step", life=10.0, order=10)
+def footprint(f: anim.Frame, h, age: float) -> None:
+    """A footprint pressed into sand or snow: a darker dent where you stepped,
+    filling in over ten seconds. Drawn under the other one-offs, and never on
+    a cell someone's standing in."""
+    cell = f.cell(h.x, h.y)
+    if cell is None or cell in f.occupied:
+        return
+    sx, sy = cell
+    depth = 0.38 * (1.0 - age / 10.0)
+    ground = f.con.rgb["bg"][sx, sy].astype(np.float32)
+    _write(f, sx, sy, "∙", tuple(int(c) for c in ground * (1.0 - depth)))

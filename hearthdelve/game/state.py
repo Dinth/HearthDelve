@@ -58,7 +58,8 @@ class Happening:
     start: float | None = None                         # set by the engine: when it first showed
 
 
-MAX_HAPPENINGS = 64        # kept short: with no screen to play them, the oldest go
+MAX_HAPPENINGS = 160       # kept short: with no screen to play them, the oldest go
+                           # (room for a running trail of footprints)
 
 
 @dataclass
