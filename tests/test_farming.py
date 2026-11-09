@@ -290,9 +290,12 @@ class TestSaplingsArePlantedAtHome(unittest.TestCase):
         from hearthdelve.entities import items
         from hearthdelve.game import farming
         st = fresh_state(4)
-        x, y = next((st.player.x + d, st.player.y + d) for d in range(2, 30)
-                    if st.surface.tile_at(st.player.x + d, st.player.y + d).name == "grass"
-                    and (st.player.x + d, st.player.y + d) not in st.surface.trees)
+        p = st.player                         # open grass near home, any direction
+        x, y = next((p.x + dx, p.y + dy) for r in range(2, 30)
+                    for dx in range(-r, r + 1) for dy in range(-r, r + 1)
+                    if max(abs(dx), abs(dy)) == r
+                    and st.surface.tile_at(p.x + dx, p.y + dy).name == "grass"
+                    and (p.x + dx, p.y + dy) not in st.surface.trees)
         st.player.inventory.add(items.APPLE_SAPLING, 1)
         farming.plant_tree(st, x, y, items.APPLE_SAPLING)
         self.assertIn((x, y), st.surface.trees)

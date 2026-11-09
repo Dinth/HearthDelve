@@ -74,11 +74,14 @@ def _wildness(w: int, h: int, seed: int) -> np.ndarray:
     return np.clip(field, 0.0, 1.0)
 
 
-def generate(seed: int = 1337, sites=None, legacy_ties: bool = False) -> GameMap:
+def generate(seed: int = 1337, sites=None, legacy_ties: bool = False,
+             legacy_home: bool = False) -> GameMap:
     """The Vale for `seed`. A loaded save passes the dungeon mouths it recorded
     (`sites`: (x, y, kind) in placement order) so they're rebuilt exactly
     where they were; a save older than that record passes `legacy_ties` to
-    break ties the way its world was first built (see _place_dungeons)."""
+    break ties the way its world was first built (see _place_dungeons), and
+    one older than the farm's re-siting passes `legacy_home` (see
+    _carve_homestead)."""
     w, h = C.WORLD_W, C.WORLD_H
     cx, cy = C.WORLD_CENTER
     tiles = np.full((w, h), tile.GRASS, dtype=np.uint8)
@@ -263,7 +266,7 @@ def generate(seed: int = 1337, sites=None, legacy_ties: bool = False) -> GameMap
     gm.herb_spots = herb_spots
     coast = _carve_sea(gm, seed)
     gm.coast = coast                     # per-column first sea row (salt vs fresh water)
-    _carve_homestead(gm, seed)
+    _carve_homestead(gm, seed, legacy=legacy_home)
     centers = _carve_villages(gm, seed, coast)
     _place_dungeons(gm, wild, flora, region, centers, sites=sites, legacy_ties=legacy_ties)
     forest_track = _carve_forest(gm, seed)
@@ -1125,12 +1128,10 @@ def _camp_work_spot(gm: GameMap, fx: int, fy: int, R: int, rng) -> tuple | None:
     return None
 
 
-def _carve_homestead(gm: GameMap, seed: int) -> None:
-    cx, cy = C.WORLD_CENTER
+def _clear_ground(gm: GameMap, cx: int, cy: int, R: int = 16) -> None:
+    """The homestead's grass clearing, round (cx, cy) — sparing the river and
+    its sandy banks."""
     t = gm.tiles
-
-    # 1. clearing
-    R = 16
     for x in range(cx - R, cx + R + 1):
         for y in range(cy - R, cy + R + 1):
             if not gm.in_bounds(x, y):
@@ -1139,6 +1140,33 @@ def _carve_homestead(gm: GameMap, seed: int) -> None:
                 # don't pave over the river running through home
                 if t[x, y] not in (tile.RIVER, tile.SAND):
                     t[x, y] = tile.GRASS
+
+
+def _clear_of_river(gm: GameMap, cx: int, y_top: int, y_bot: int) -> int:
+    """How far east the farm must sit for no river to run through its own
+    footprint (house, field and fence, with a tile or two to spare): past the
+    bend that crosses it, and no further."""
+    t = gm.tiles
+    offset = 0
+    for _ in range(64):
+        lo, hi = cx + offset - 1, cx + offset + 10          # the footprint, padded
+        wet = [x for x in range(lo, hi + 1) for y in range(y_top, y_bot + 1)
+               if gm.in_bounds(x, y) and t[x, y] == tile.RIVER]
+        if not wet:
+            break
+        offset = max(wet) + 3 - (cx + 1)                    # the field's west fence clears it
+    return offset
+
+
+def _carve_homestead(gm: GameMap, seed: int, legacy: bool = False) -> None:
+    cx, cy = C.WORLD_CENTER
+    t = gm.tiles
+    gm.home_layout = 1 if legacy else 2
+
+    # 1. clearing (an old world's, at the centre; a new one's goes round the
+    #    farm once it's sited, below)
+    if legacy:
+        _clear_ground(gm, cx, cy)
 
     # 2. house: kept EAST of the river (which meanders the clearing's west side)
     #    so building it never severs the river — roads must then bridge it.
@@ -1150,18 +1178,26 @@ def _carve_homestead(gm: GameMap, seed: int) -> None:
     hw, hh, pw, ph = 6, 5, 6, 5
     y_top = cy - 7 - 2                                 # house top, with margin
     y_bot = cy + 1 + ph + 1 + 2                        # plot + fence, with margin
-    river_max_x = -1
-    for x in range(cx, gm.width):
-        for y in range(y_top, y_bot + 1):
-            if gm.in_bounds(x, y) and t[x, y] == tile.RIVER:
-                river_max_x = max(river_max_x, x)
-    offset = 0
-    west_edge = cx + 1                                 # left fence of the plot
-    if river_max_x >= 0 and west_edge <= river_max_x + 2:
-        offset = (river_max_x + 2) - west_edge + 1
+    if legacy:
+        # (The old siting: past the river's FARTHEST crossing in these rows,
+        # anywhere east on the map — a bend 180 tiles off pushed the farm out
+        # of its clearing and into the fen. Kept only for the worlds it made.)
+        river_max_x = -1
+        for x in range(cx, gm.width):
+            for y in range(y_top, y_bot + 1):
+                if gm.in_bounds(x, y) and t[x, y] == tile.RIVER:
+                    river_max_x = max(river_max_x, x)
+        offset = 0
+        west_edge = cx + 1                             # left fence of the plot
+        if river_max_x >= 0 and west_edge <= river_max_x + 2:
+            offset = (river_max_x + 2) - west_edge + 1
+    else:
+        offset = _clear_of_river(gm, cx, y_top, y_bot)
     # keep the shifted footprint (plot fence reaches cx+2+pw) inside bounds
     offset = max(0, min(offset, gm.width - 2 - (cx + 2 + pw)))
     hcx = cx + offset
+    if not legacy:
+        _clear_ground(gm, hcx + 5, cy - 1)             # the clearing round the farm itself
 
     hx, hy = hcx + 2, cy - 7
     for x in range(hx, hx + hw):

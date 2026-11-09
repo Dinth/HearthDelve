@@ -345,6 +345,7 @@ def save(state: GameState, path: str | None = None) -> None:
         # load rather than re-picked, so the world comes back the same on any
         # machine (see worldgen._place_dungeons).
         "sites": [[x, y, surf.dungeon_kind[(x, y)]] for x, y in surf.dungeons],
+        "home_layout": surf.home_layout,
         "tiles": base64.b64encode(np.ascontiguousarray(surf.tiles).tobytes()).decode("ascii"),
         "crops": {f"{x},{y}": [pl.crop.name, pl.days_grown, pl.watered, pl.dead, pl.fertilized,
                                pl.thirst, pl.season_ended, pl.cross]
@@ -395,11 +396,15 @@ def load(path: str | None = None) -> GameState:
     # Rebuild the base world. A save that recorded its dungeon mouths gets them
     # back as they were; an older one is rebuilt with the tie order its world
     # was first made with, and records them from its next save on.
+    # A save from before the farm's re-siting keeps the farm where its world
+    # first put it (see worldgen._carve_homestead).
+    legacy_home = data.get("home_layout", 1) < 2
     sites = data.get("sites")
     if sites is not None:
-        world = worldgen.generate(data["seed"], sites=[(int(x), int(y), str(k)) for x, y, k in sites])
+        world = worldgen.generate(data["seed"], sites=[(int(x), int(y), str(k)) for x, y, k in sites],
+                                  legacy_home=legacy_home)
     else:
-        world = worldgen.generate(data["seed"], legacy_ties=True)
+        world = worldgen.generate(data["seed"], legacy_ties=True, legacy_home=legacy_home)
 
     w, h = data["tiles_shape"]
     # Keep the freshly-generated grid: worldgen improvements (new boards, the

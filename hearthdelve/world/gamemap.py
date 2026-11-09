@@ -75,6 +75,11 @@ class GameMap:
     berry_regrow: dict = field(default_factory=dict)
     # village name -> plaza centre (x, y), for the cheat teleport menu
     village_centers: dict = field(default_factory=dict)
+    # how worldgen sited the farm: 1 = east of the river's farthest crossing in
+    # the homestead's rows, anywhere on the map (which pushed most farms out of
+    # the clearing, often into the fen); 2 = just clear of river in its own
+    # footprint. A save remembers it, so an old world keeps its old farm.
+    home_layout: int = 2
 
     def in_bounds(self, x: int, y: int) -> bool:
         return 0 <= x < self.width and 0 <= y < self.height
