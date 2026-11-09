@@ -138,6 +138,7 @@ def begin(state: GameState, tx: int, ty: int):
         # a "cast that finds nothing" still costs a little time & effort
         p.energy = max(0, p.energy - C.FISH_COST[0])
         turns.advance_time(state, random.randint(C.FISH_SECONDS_MIN, C.FISH_SECONDS_MAX // 2))
+        state.happen("plop", tx, ty)                 # the float drops in, and nothing comes
         state.log.add("You cast your line... nothing's biting.", C.DIM)
         return None
     fish = _weighted(table)
@@ -151,6 +152,7 @@ def begin(state: GameState, tx: int, ty: int):
         "fish_pos": random.uniform(TRACK_LEN * 0.12, TRACK_LEN * 0.88),
         "tgt": random.uniform(0, TRACK_LEN - 1), "retarget": 0.35,
         "prog": START_PROG, "best": START_PROG, "elapsed": 0.0, "last_t": time.monotonic(),
+        "at": (tx, ty),                               # where the line went in
     }
 
 
@@ -213,11 +215,16 @@ def resolve(state: GameState, ctx: dict, caught: bool) -> None:
     p = state.player
     p.energy = max(0, p.energy - C.FISH_COST[0])
     turns.advance_time(state, random.randint(C.FISH_SECONDS_MIN, C.FISH_SECONDS_MAX))
+    at = ctx.get("at")
     if not caught:
         skills.gain(state, "Fishing", 6)          # you still learn from the ones that got away
+        if at:
+            state.happen("splash", *at)
         state.log.add("The line goes slack — it slipped the hook.", C.DIM)
         return
     fish = ctx["fish"]
+    if at:
+        state.happen("catch", *at, glyph=fish.glyph)  # out of the water and up to you
     q = skills.roll_quality(state, "Fishing")
     if ctx["elapsed"] < 6.0:                       # a swift, clean catch lands a finer fish
         q = min(5, q + 1)

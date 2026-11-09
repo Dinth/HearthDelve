@@ -969,3 +969,58 @@ def songs_at_the_inn(f: anim.Frame) -> None:
         if cell is not None:
             sx, sy = cell
             _write(f, sx, sy - 1 - int(age / 0.7), "♪", (240, 212, 140))
+
+
+_SPRAY = (196, 226, 250)
+
+
+@anim.one_off("plop", life=1.0)
+def plop(f: anim.Frame, h, age: float) -> None:
+    """A cast that finds nothing: the float drops in and a ripple spreads out
+    from it and fades."""
+    cell = f.cell(h.x, h.y)
+    if cell is None:
+        return
+    sx, sy = cell
+    if age < 0.25:
+        _write(f, sx, sy, "o", (232, 96, 80))         # the red float, just landed
+    r = 2.2 * age
+    for dx in range(-3, 4):
+        for dy in range(-2, 3):
+            x, y = sx + dx, sy + dy
+            if not (0 <= x < f.vw and 0 <= y < f.vh):
+                continue
+            ring = max(0.0, 1.0 - abs(math.hypot(dx * 0.75, dy) - r) / 0.6)
+            if ring > 0.1:
+                _blend(f.con, x, y, "bg", _SPRAY, 0.45 * ring * (1.0 - age))
+
+
+@anim.one_off("splash", life=0.6)
+def splash(f: anim.Frame, h, age: float) -> None:
+    """The fish slips the hook: a splash of spray where the line went slack."""
+    cell = f.cell(h.x, h.y)
+    if cell is None:
+        return
+    sx, sy = cell
+    spread = 1 if age < 0.25 else 2
+    for x, y in ((sx - spread, sy), (sx + spread, sy), (sx, sy - 1)):
+        if (x, y) not in f.occupied:
+            _write(f, x, y, "~" if age < 0.3 else "·", _SPRAY)
+
+
+@anim.one_off("catch", life=0.6)
+def catch(f: anim.Frame, h, age: float) -> None:
+    """A fish is landed: it leaps out of the water and arcs up to you."""
+    cell = f.cell(h.x, h.y)
+    if cell is None:
+        return
+    sx, sy = cell
+    p = f.state.player
+    tx, ty = p.x - f.ox, p.y - f.oy
+    u = min(1.0, age / 0.5)
+    x = int(round(sx + (tx - sx) * u))
+    y = int(round(sy + (ty - sy) * u - 2.0 * math.sin(math.pi * u)))   # a leap, not a slide
+    if age < 0.2 and (sx, sy - 1) not in f.occupied:
+        _write(f, sx, sy - 1, "~", _SPRAY)
+    if u < 1.0 and (x, y) != (tx, ty):
+        _write(f, x, y, h.data.get("glyph", "≈"), (150, 212, 236))

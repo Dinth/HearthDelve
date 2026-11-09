@@ -499,5 +499,44 @@ class TestCreaturesShowHowTheyFeel(unittest.TestCase):
         self.assertLess(notes, 560)                       # …not all the time
 
 
+
+class TestFishingShows(unittest.TestCase):
+    """A cast and its end were log lines. Now a cast that finds nothing drops
+    in with a ripple, a fish that slips the hook splashes, and a landed fish
+    leaps out of the water to you."""
+
+    def _water_beside(self, st):
+        from hearthdelve.world import tile
+        p = st.player
+        dx, dy = _clear_line(st, 3)
+        st.world.tiles[p.x + dx * 2, p.y + dy * 2] = tile.WATER
+        return p.x + dx * 2, p.y + dy * 2
+
+    def test_a_cast_that_finds_nothing_ripples(self):
+        from unittest import mock
+        from hearthdelve.game import fishing
+        st = fresh_state(2)
+        x, y = self._water_beside(st)
+        with mock.patch.object(fishing.random, "random", return_value=0.999):
+            self.assertIsNone(fishing.begin(st, x, y))
+        self.assertEqual([(h.kind, h.x, h.y) for h in st.fx], [("plop", x, y)])
+        con = _render(st, 9.0)
+        sx, sy = _screen(st, x, y)
+        self.assertEqual(chr(con.ch[sx, sy]), "o")
+
+    def test_the_reel_ends_in_a_splash_or_a_catch(self):
+        from unittest import mock
+        from hearthdelve.game import fishing
+        st = fresh_state(2)
+        x, y = self._water_beside(st)
+        with mock.patch.object(fishing.random, "random", return_value=0.0):
+            ctx = fishing.begin(st, x, y)
+        self.assertEqual(ctx["at"], (x, y))
+        fishing.resolve(st, ctx, caught=False)
+        fishing.resolve(st, ctx, caught=True)
+        self.assertEqual([h.kind for h in st.fx], ["splash", "catch"])
+        self.assertEqual(st.fx[1].data["glyph"], ctx["fish"].glyph)
+
+
 if __name__ == "__main__":
     unittest.main()
