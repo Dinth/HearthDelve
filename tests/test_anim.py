@@ -592,5 +592,40 @@ class TestTransitions(unittest.TestCase):
                            (plain_corner[..., 0] - plain_corner[..., 2]).mean())
 
 
+
+class TestTheGoldRuns(unittest.TestCase):
+    """The panel's gold jumped to a new amount. Now it runs there, green as it
+    rises and red as it falls, and settles in a moment."""
+
+    def _gold(self, con):
+        row = "".join(chr(c) for c in con.ch[58:, 11]).strip()
+        return int(row.split()[-1].rstrip("g")), tuple(int(c) for c in con.fg[60, 11])
+
+    def test_it_runs_up_to_a_sale_and_settles(self):
+        from hearthdelve.engine import constants as C
+        st = fresh_state(2)
+        st.player.gold = 100
+        self.assertEqual(self._gold(_render(st, 10.0))[0], 100)
+        st.player.gold = 1100                              # the bin paid out
+        seen = [self._gold(_render(st, 10.0 + k * 0.1)) for k in range(8)]
+        amounts = [a for a, _c in seen]
+        self.assertEqual(amounts[0], 100)
+        self.assertTrue(100 < amounts[2] < 1100)
+        self.assertEqual(amounts, sorted(amounts))
+        self.assertEqual(amounts[-1], 1100)
+        self.assertNotEqual(seen[2][1], tuple(C.GOLD_COLOR))   # tinted while it runs
+        self.assertEqual(seen[-1][1], tuple(C.GOLD_COLOR))
+
+    def test_spending_runs_it_down_in_red(self):
+        st = fresh_state(2)
+        st.player.gold = 500
+        _render(st, 1.0)
+        st.player.gold = 200
+        _render(st, 1.1)                                    # the frame that sees it spent
+        amount, (r, g, _b) = self._gold(_render(st, 1.25))
+        self.assertTrue(200 < amount < 500)
+        self.assertGreater(r, g)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -530,7 +530,7 @@ def _bar(con, x, y, label, cur, mx, color, width=12, low_frac=0.0):
     con.print(x + width + 1, y + 1, f"{cur}/{mx}", fg=C.DIM)
 
 
-def render_panel(con: tcod.console.Console, state: GameState) -> None:
+def render_panel(con: tcod.console.Console, state: GameState, t: float | None = None) -> None:
     x0 = C.VIEW_W
     # background + separator
     con.draw_rect(x0, 0, C.PANEL_W, C.SCREEN_H, ch=ord(" "), bg=C.PANEL_BG)
@@ -564,7 +564,11 @@ def render_panel(con: tcod.console.Console, state: GameState) -> None:
                 col += len(tag) + 1
     _bar(con, x, 8, "✦ Stamina", p.energy, p.max_energy, C.ENERGY_COLOR,
          low_frac=C.LOW_ENERGY_FRAC)
-    con.print(x, 11, f"⛁ Gold  {p.gold}g", fg=C.GOLD_COLOR)
+    # Gold runs to its new amount rather than jumping — green as it rises, red
+    # as it's spent (the animation engine's tally; no clock, no running).
+    gold, rising = (p.gold, 0) if t is None else anim.tally(state, "gold", p.gold, t)
+    con.print(x, 11, f"⛁ Gold  {gold}g",
+              fg=C.GOLD_COLOR if not rising else (150, 230, 150) if rising > 0 else (232, 140, 120))
     from ..game import encumbrance as enc
     load, cap, etier = enc.carried_weight(state), enc.capacity(state), enc.tier(state)
     load_fg = (C.WHITE, C.WARN_COLOR, C.DANGER_COLOR)[etier]
@@ -651,7 +655,7 @@ def render_all(con: tcod.console.Console, state: GameState, anim_time: float = 0
     f = _frame(con, state, anim_time)
     _draw_world(f)
     anim.run(anim.OVERLAY, f)          # weather, motes, embers, flyovers, happenings
-    render_panel(con, state)
+    render_panel(con, state, anim_time)
     render_log(con, state)
 
 
