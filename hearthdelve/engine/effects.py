@@ -1143,6 +1143,46 @@ def _water_ids():
     return _WATER_IDS
 
 
+@anim.ongoing(anim.OVERLAY, 12)
+def shooting_stars(f: anim.Frame) -> None:
+    """On a clear night a shooting star now and then streaks across the sky,
+    its tail fading behind it — and on the eve of a starfall, when the old
+    folk say the sky feels thin and to watch it after dark, they come down
+    in a shower."""
+    st = f.state
+    if st.world.is_dungeon or st.weather != "Clear":
+        return
+    minutes = st.time_minutes % 1440
+    if not (minutes >= 21 * 60 or minutes < 4 * 60 + 30):
+        return
+    from ..game import events
+    shower = events.peek_tomorrow(st) == "starfall"
+    window, chance, slots = (2.6, 0.85, 3) if shower else (22.0, 0.45, 1)
+    salt = st.seed % 983
+    for i in range(slots):
+        w = window * (1.0 + 0.23 * i)
+        age = anim.burst_age(f.t, w, chance, 0.7, salt + i * 7 + 0.9)
+        if age is None:
+            continue
+        k = math.floor(f.t / w)
+        x0 = f.vw * (0.1 + 0.8 * anim.h1(k * 3 + i, salt + 1.3))
+        y0 = f.vh * (0.04 + 0.4 * anim.h1(k * 3 + i, salt + 2.9))
+        way = 1 if anim.h1(k * 3 + i, salt + 4.4) < 0.5 else -1
+        u = min(1.0, age / 0.6)
+        fade = 1.0 if u < 0.8 else max(0.0, (1.0 - u) / 0.2)
+        for back, shade in ((0, 1.0), (1, 0.7), (2, 0.45), (3, 0.25)):
+            d = 13.0 * u - back
+            if d < 0:
+                continue
+            x, y = int(round(x0 + way * d)), int(round(y0 + 0.5 * d))
+            if 0 <= x < f.vw and 0 <= y < f.vh and (x, y) not in f.occupied:
+                glyph = "*" if back == 0 else ("\\" if way > 0 else "/")
+                c = (255, 255, 240) if back == 0 else (200, 212, 236)
+                if back == 0:                              # the head lights its patch of sky
+                    _blend(f.con, x, y, "bg", (190, 204, 255), 0.3 * fade)
+                _write(f, x, y, glyph, tuple(int(v * shade * fade) for v in c))
+
+
 @anim.ongoing(anim.OVERLAY, 15)
 def fish_rising(f: anim.Frame) -> None:
     """Fish rising: now and then a dimple on open water spreads into rings,

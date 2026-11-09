@@ -37,7 +37,8 @@ class TestOneEngine(unittest.TestCase):
         self.assertEqual(names[anim.GROUND], ["coastal_foam", "rain_on_the_ground"])
         self.assertEqual(names[anim.GROUND_LATE], ["gem_glitter", "lava_breathes"])
         self.assertEqual(names[anim.VEIL], ["westreach_weather"])
-        self.assertEqual(names[anim.OVERLAY], ["weather", "fish_rising", "seasonal_motes",
+        self.assertEqual(names[anim.OVERLAY], ["weather", "shooting_stars", "fish_rising",
+                                               "seasonal_motes",
                                                "living_fire", "festival_bunting", "crossings",
                                                "fireworks",
                                                "songs_at_the_inn", "chatter", "afflictions"])
@@ -638,6 +639,39 @@ class TestFestivalSquaresAreDressed(unittest.TestCase):
         self.assertEqual(st.event["village"], foretold)
 
 
+class TestShootingStars(unittest.TestCase):
+    """The night sky was still — even on a starfall's eve, when the old folk
+    tell you to watch it after dark. Now a star falls now and then on a clear
+    night, and they shower down on that eve."""
+
+    def _streaks(self, weather="Clear", eve=False, hour=23, seconds=120.0):
+        from unittest import mock
+        from hearthdelve.engine import constants as C
+        from hearthdelve.game import events
+        st = fresh_state(2)
+        st.weather = weather
+        st.clock = (hour * 60 - C.DAY_START_MIN) * 60
+        heads = 0
+        with mock.patch.object(events, "peek_tomorrow", return_value="starfall" if eve else ""):
+            for k in range(int(seconds / 0.1)):
+                con = _render(st, k * 0.1)
+                for x in range(58):
+                    for y in range(44):
+                        if chr(con.ch[x, y]) == "*" and min(con.fg[x, y]) > 200:
+                            heads += 1
+        return heads
+
+    def test_a_clear_night_has_its_falling_stars(self):
+        self.assertGreater(self._streaks(), 0)
+
+    def test_a_starfall_eve_showers_them(self):
+        self.assertGreater(self._streaks(eve=True), 4 * max(1, self._streaks()))
+
+    def test_none_by_day_or_under_cloud(self):
+        self.assertEqual(self._streaks(hour=13, eve=True, seconds=30.0), 0)
+        self.assertEqual(self._streaks(weather="Cloudy", eve=True, seconds=30.0), 0)
+
+
 class TestAMonsterNoticesYou(unittest.TestCase):
     """A monster waking showed only as it starting to move. Now a "!" shows
     over it the moment it sees you."""
@@ -1169,7 +1203,7 @@ class TestFireworksNight(unittest.TestCase):
         st = fresh_state(2)
         season, day, _name = _year_finale()
         st.day = C.SEASONS.index(season) * C.SEASON_LEN + day - 1
-        st.clock = (21 * 60 - C.DAY_START_MIN) * 60
+        st.clock = (20 * 60 - C.DAY_START_MIN) * 60       # (before the shooting stars come out)
         st.weather = "Clear"
         if filled:
             st.stats[f"fireworks_{st.year}"] = 2
