@@ -56,6 +56,27 @@ _OMENS = {
 }
 
 
+# Today's event in a line, for the almanac (the dawn's own announcement scrolls
+# away with the log).
+_TODAY = {
+    "caravan":  "A trading caravan is camped by {village}: goods shipped today fetch a quarter more.",
+    "shoal":    "A great shoal runs the coast: the fish all but leap at a line.",
+    "starfall": "Star-stones fell in the wilds overnight: worth a walk with a pickaxe.",
+    "bloom":    "The meadows are in bloom: flowers and wild herbs everywhere.",
+    "flush":    "Mushrooms have pushed up everywhere after the warm rain.",
+    "wolves":   "A wolf pack prowls the valley: mind the far fields.",
+    "boars":    "A sounder of great boar roots through the far fields.",
+    "swarm":    "A wild swarm has settled new hives: robbed today, they often hold the queen.",
+    "fete":     "{village} keeps a fete: friendships there warm twice as fast.",
+}
+
+
+def today_line(state: GameState) -> str:
+    """Today's event in a line ("" on a quiet day)."""
+    eid = state.event.get("id", "")
+    return _TODAY.get(eid, "").format(village=state.event.get("village", "the valley"))
+
+
 def is_active(state: GameState, eid: str) -> bool:
     return state.event.get("id") == eid
 

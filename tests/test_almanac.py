@@ -81,5 +81,47 @@ class TestVillagersHaveBirthdays(unittest.TestCase):
 
 
 
+class TestTheAlmanac(unittest.TestCase):
+    """Festivals, birthdays and tomorrow's sky were scattered across chats and
+    log lines that scrolled away. The journal now keeps an almanac."""
+
+    def _almanac(self, st):
+        from hearthdelve.engine import rendering
+        tab = rendering._JOURNAL_TABS.index("Almanac")
+        con = tcod.console.Console(80, 50, order="F")
+        rendering.render_journal(con, st, tab)
+        return "\n".join("".join(chr(c) for c in con.ch[:, y]) for y in range(50))
+
+    def test_it_marks_the_season_s_festivals_and_what_s_coming(self):
+        from hearthdelve.data import content
+        from hearthdelve.engine import constants as C
+        st = fresh_state(2)
+        season, fests = next((s, f) for s, f in content.FESTIVALS.items() if f)
+        day = fests[0][0]
+        st.day = C.SEASONS.index(season) * C.SEASON_LEN + day - 4      # three days before
+        text = self._almanac(st)
+        self.assertIn("★", text)
+        self.assertIn(f"{fests[0][1]} (in 3 days)", text)
+
+    def test_it_lists_a_birthday_coming_up(self):
+        from hearthdelve.game import village
+        st = fresh_state(2)
+        npc = st.surface.npcs[0]
+        _on_their_birthday(st, npc).day -= 2
+        self.assertIn(f"{npc.name}'s birthday (in 2 days)", self._almanac(st))
+
+    def test_tomorrow_s_sky_shows_once_you_ve_read_it(self):
+        from hearthdelve.game import farming, village
+        st = fresh_state(2)
+        saying = farming.weather_saying(farming.forecast(st))
+        self.assertNotIn(saying[:30], self._almanac(st))
+        elder = next(n for n in st.surface.npcs if n.role in ("fisher", "forager", "forester", "elder"))
+        elder.talked_today = True
+        village.talk(st, elder)
+        self.assertIn(saying[:30], self._almanac(st))
+        st.day += 1                                            # a new day: it's tomorrow's again
+        self.assertIn("Unread", self._almanac(st))
+
+
 if __name__ == "__main__":
     unittest.main()

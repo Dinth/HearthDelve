@@ -329,6 +329,7 @@ def talk(state: GameState, npc: NPC) -> str:
     # village elder and they'll foretell tomorrow's weather in folk lore.
     if npc.role in ("fisher", "forager", "forester", "elder"):
         from . import farming, events
+        state.stats["forecast_seen"] = state.day          # the almanac notes it down
         saying = farming.weather_saying(farming.forecast(state))
         om = events.omen(state)                 # the weather-wise read more than sky
         return saying + ("\n" + om if om else "")

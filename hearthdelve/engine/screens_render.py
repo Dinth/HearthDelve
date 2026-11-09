@@ -652,13 +652,77 @@ def render_ship(con: tcod.console.Console, state: GameState, sel: int) -> None:
     m.footer("↑↓ select · Enter stack · Space all · Esc close")
 
 
-_JOURNAL_TABS = ("Goals", "Favours", "Market", "Homestead", "Projects", "Collection")
+_JOURNAL_TABS = ("Goals", "Favours", "Market", "Homestead", "Projects", "Collection", "Almanac")
+_ALMANAC_AHEAD = 14         # days the almanac's "coming up" looks ahead
+_FEST_FG = (244, 210, 130)
+_BDAY_FG = (240, 190, 210)
+
+
+def _almanac_rows(state: GameState) -> list:
+    """The almanac: this season's calendar with its festivals (★) and
+    birthdays (♥), today's doings, tomorrow's sky once you've read it (from
+    the weather-wise folk or a weathervane), and what's coming up."""
+    from ..data import content
+    from ..game import events, farming, village
+    season, today = state.season, state.day_of_season
+    born = {}
+    for name, day in village.birthdays(state).items():
+        born.setdefault(day, []).append(name)
+    rows = [(0, f"{season}, Year {state.year}", _HDR)]
+    for week in range(C.SEASON_LEN // 7):
+        cells = []
+        for d in range(week * 7 + 1, week * 7 + 8):
+            mark = ("★" if content.festival_on(season, d) else
+                    "♥" if (season, d) in born else " ")
+            cells.append((f"[{d:>2}]" if d == today else f" {d:>2} ") + mark)
+        rows.append((2, " ".join(cells), C.WHITE))
+    rows.append((2, "★ festival   ♥ birthday   [ ] today", C.DIM))
+
+    rows.append((0, "", C.WHITE))
+    rows.append((0, "Today", _HDR))
+    rows.append((2, f"{state.date_str()} · {state.weather}", C.WHITE))
+    fest = content.festival_on(season, today)
+    if fest:
+        rows.append((2, f"★ {fest[1]} — {fest[2]}", _FEST_FG))
+    for n in village.birthdays_today(state):
+        rows.append((2, f"♥ {n.name}'s birthday ({n.village}) — a gift means all the more",
+                     _BDAY_FG))
+    line = events.today_line(state)
+    if line:
+        rows.append((2, line, (232, 200, 120)))
+
+    rows.append((0, "", C.WHITE))
+    rows.append((0, "Tomorrow's sky", _HDR))
+    if state.stats.get("forecast_seen") == state.day:
+        rows.append((2, farming.weather_saying(farming.forecast(state)), (200, 216, 232)))
+        om = events.omen(state)
+        if om:
+            rows.append((2, om, C.DIM))
+    else:
+        rows.append((2, "Unread — ask a fisher, a forager, a forester or an elder,", C.DIM))
+        rows.append((2, "or read a weathervane.", C.DIM))
+
+    rows.append((0, "", C.WHITE))
+    rows.append((0, "Coming up", _HDR))
+    ahead = []
+    for k in range(1, _ALMANAC_AHEAD + 1):
+        n = state.day + k
+        s, d = C.SEASONS[(n // C.SEASON_LEN) % len(C.SEASONS)], n % C.SEASON_LEN + 1
+        when = "tomorrow" if k == 1 else f"in {k} days"
+        fest = content.festival_on(s, d)
+        if fest:
+            ahead.append((2, f"★ {s} {d} — {fest[1]} ({when})", _FEST_FG))
+        for name in sorted(born.get((s, d), ())):
+            ahead.append((2, f"♥ {s} {d} — {name}'s birthday ({when})", _BDAY_FG))
+    rows += ahead[:8] or [(2, f"Nothing marked in the next {_ALMANAC_AHEAD} days.", C.DIM)]
+    return rows
 
 
 def render_journal(con: tcod.console.Console, state: GameState, tab: int = 0) -> None:
-    """The journal, in four pages (←→): quest goals, the open notice-board
-    favours, the market's mood, and a homestead status overview — the planning
-    surfaces that used to require a walk across the map."""
+    """The journal, in pages (←→): quest goals, the open notice-board favours,
+    the market's mood, a homestead status overview, the village projects, the
+    Hall's collection and the almanac — the planning surfaces that used to
+    require a walk across the map."""
     from ..data import content
     from ..game import quests
     tab %= len(_JOURNAL_TABS)
@@ -725,6 +789,8 @@ def render_journal(con: tcod.console.Console, state: GameState, tab: int = 0) ->
                 rows.append((2, d.perk, C.DIM))
             rows.append((0, "", C.WHITE))
         rows.append((0, "Contribute at that village's notice board (g).", C.DIM))
+    elif tab == 6:
+        rows += _almanac_rows(state)
     elif tab == 5:
         from ..game import collection as coll
         from ..data import content as _cc
@@ -808,7 +874,7 @@ def render_journal(con: tcod.console.Console, state: GameState, tab: int = 0) ->
     w = 76
     h = min(C.SCREEN_H - 4, max(10, len(rows) + 6))
     m = ui.Modal(con, w, h, title)
-    tabs = "   ".join((f"[{n}]" if i == tab else f" {n} ") for i, n in enumerate(_JOURNAL_TABS))
+    tabs = " ".join((f"[{n}]" if i == tab else f" {n} ") for i, n in enumerate(_JOURNAL_TABS))
     m.text(2, 1, tabs[:w - 4], fg=(224, 204, 128))
     body = h - 5
     for row, (indent, text, color) in enumerate(rows[:body]):

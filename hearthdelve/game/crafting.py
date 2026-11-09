@@ -444,6 +444,7 @@ def interact_machine(state: GameState, x: int, y: int) -> bool:
 
     if m.kind == "weathervane":
         from . import farming, events
+        state.stats["forecast_seen"] = state.day          # the almanac notes it down
         state.log.add(f"The weathervane reads the coming sky: {farming.weather_saying(farming.forecast(state))}",
                       (200, 216, 232))
         om = events.omen(state)
