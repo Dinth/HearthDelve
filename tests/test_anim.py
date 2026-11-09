@@ -121,10 +121,22 @@ class TestOneOffEffects(unittest.TestCase):
 
 
 
-def _foe_beside(st, hp=99):
+def _clear_line(st, reach):
+    """A direction from the player with `reach` open, walkable cells in a row."""
+    p, w = st.player, st.world
+    for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+        if all(w.walkable(p.x + dx * k, p.y + dy * k) for k in range(1, reach + 1)):
+            return dx, dy
+    raise AssertionError("boxed in")
+
+
+def _foe_beside(st, hp=99, reach=3):
+    """A target `reach` cells off in a clear straight line from the player."""
     from hearthdelve.entities.monster import Mob
     p = st.player
-    foe = Mob("Target", "T", (200, 200, 200), hp, hp, 1, "chase", p.x + 3, p.y, dv=0, pv=0)
+    dx, dy = _clear_line(st, reach + 3)
+    foe = Mob("Target", "T", (200, 200, 200), hp, hp, 1, "chase",
+              p.x + dx * reach, p.y + dy * reach, dv=0, pv=0)
     st.world.monsters.append(foe)
     return foe
 
@@ -287,6 +299,89 @@ class TestAHarvestSparkles(unittest.TestCase):
 
     def test_finer_crops_throw_more_sparks(self):
         self.assertGreater(len(self._sparks(4)[0]), len(self._sparks(0)[0]))
+
+
+
+def _render(st, t):
+    from hearthdelve.engine import rendering
+    con = _con()
+    rendering.render_all(con, st, t)
+    return con
+
+
+def _screen(st, x, y):
+    from hearthdelve.engine import rendering
+    ox, oy = rendering.camera_origin(st)
+    return x - ox, y - oy
+
+
+class TestShotsFly(unittest.TestCase):
+    """A shot struck at once and showed nothing between bow and target. Now
+    the arrow flies its line, and its hit lands when it arrives."""
+
+    def _loose(self):
+        from unittest import mock
+        from hearthdelve.data import content
+        from hearthdelve.entities import items
+        from hearthdelve.game import combat
+        st = fresh_state(2)
+        st.player.equipment["ranged"] = content.make_ranged("Short Bow", "birch")
+        st.player.inventory.add(items.ARROW, 5)
+        foe = _foe_beside(st, reach=6)                  # six cells off, in a straight line
+        with mock.patch.object(combat, "_resolve", return_value=(5, False)):
+            self.assertTrue(combat.fire_ranged_at(st, foe.x, foe.y))
+        return st, foe
+
+    def test_the_arrow_flies_and_its_hit_waits_for_it(self):
+        st, foe = self._loose()
+        shot = next(h for h in st.fx if h.kind == "shot")
+        hit = next(h for h in st.fx if h.kind == "hit")
+        self.assertEqual(shot.data["path"][-1], (foe.x, foe.y))
+        self.assertAlmostEqual(hit.data["delay"], len(shot.data["path"]) * shot.data["per"])
+
+    def test_on_screen_the_arrow_is_on_its_way_before_the_number(self):
+        st, foe = self._loose()
+        p = st.player
+        early = _render(st, 20.0)                         # 0 s: the first cell out
+        dx, dy = (foe.x - p.x) // 6, (foe.y - p.y) // 6
+        x1, y1 = _screen(st, p.x + dx, p.y + dy)
+        self.assertEqual(chr(early.ch[x1, y1]), "-" if dx else "|")
+        fx, fy = _screen(st, foe.x, foe.y)
+        self.assertNotEqual(chr(early.ch[fx, fy - 1]), "5")   # no hit yet
+        later = _render(st, 20.25)                        # landed by now
+        self.assertEqual(chr(later.ch[fx, fy - 1]), "5")
+
+
+class TestBombsBlow(unittest.TestCase):
+    """A bomb went off as a log line. Now it arcs out, then a flash and a
+    ring of fire, the view jolts, and the damage it did floats up."""
+
+    def _throw(self):
+        from hearthdelve.entities import items
+        from hearthdelve.game import combat
+        st = fresh_state(2)
+        st.player.inventory.add(items.BOMB, 1)
+        foe = _foe_beside(st)
+        self.assertTrue(combat.throw_bomb_at(st, foe.x, foe.y))
+        return st, foe
+
+    def test_the_blast_shake_and_hits_wait_for_the_bomb_to_land(self):
+        st, foe = self._throw()
+        kinds = [h.kind for h in st.fx]
+        self.assertEqual(kinds[:4], ["lob", "blast", "shake", "hit"])
+        flight = next(h for h in st.fx if h.kind == "lob").data["life"] - 0.04
+        for h in st.fx[1:]:
+            with self.subTest(kind=h.kind):
+                self.assertAlmostEqual(h.data["delay"], flight)
+
+    def test_the_blast_lights_the_ground_and_the_view_jolts(self):
+        st, foe = self._throw()
+        flight = next(h for h in st.fx if h.kind == "lob").data["life"] - 0.04
+        _render(st, 50.0)
+        con = _render(st, 50.0 + flight + 0.01)          # the moment it goes off
+        calm = _render(fresh_state(2), 50.0 + flight + 0.01)
+        moved = int((con.ch[:58, :44] != calm.ch[:58, :44]).sum())
+        self.assertGreater(moved, 200)                    # the whole view jolted aside
 
 
 if __name__ == "__main__":

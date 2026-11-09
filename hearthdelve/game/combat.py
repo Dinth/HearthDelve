@@ -657,6 +657,33 @@ def _line(x0: int, y0: int, x1: int, y1: int):
     return pts
 
 
+SHOT_CELL_SECONDS = 0.03    # on screen, a loosed shot crosses a cell in this
+LOB_CELL_SECONDS = 0.05     # a lobbed bomb hangs in the air a little longer
+
+
+def _in_flight(state: GameState, path: list, per: float, kind: str = "shot", **data) -> float:
+    """Record a projectile flying from the player along `path` (world cells),
+    for the screen to show; returns how long the flight takes on screen."""
+    if not path:
+        return 0.0
+    flight = len(path) * per
+    p = state.player
+    state.happen(kind, p.x, p.y, path=list(path), per=per, life=flight + 0.04, **data)
+    return flight
+
+
+def _after(state: GameState, delay: float, fn, *args):
+    """Call fn(*args); whatever it records as happening is held back `delay`
+    seconds on screen — the hit lands when the arrow arrives, the blast when
+    the bomb does."""
+    before = {id(h) for h in state.fx}
+    result = fn(*args)
+    for h in state.fx:
+        if id(h) not in before:
+            h.data.setdefault("delay", delay)
+    return result
+
+
 def projectile_landing(state: GameState, tx: int, ty: int, rng: int) -> tuple[int, int]:
     """Where a projectile aimed at (tx, ty) actually lands: it flies along the
     line from the player, stopping at the first wall (thunking short), a mob it
@@ -698,6 +725,7 @@ def _detonate(state: GameState, bx: int, by: int, radius: int = 1,
             if m:
                 m.awake = True                  # the blast rouses survivors
                 m.hp -= dmg
+                state.happen("hit", x, y, amount=dmg, on="foe")
                 hit.append(m)
             t = state.world.tile_at(x, y)
             if t.name in _BREAKABLE:
@@ -723,14 +751,20 @@ def throw_bomb_at(state: GameState, tx: int, ty: int) -> bool:
     bx, by = bomb_landing(state, tx, ty)
     p.inventory.remove(bomb, 1)
     p.energy = max(0, p.energy - C.BOMB_COST[0])
+    # On screen it arcs out first; what it does there waits for it to land.
+    flight = _in_flight(state, _line(p.x, p.y, bx, by), LOB_CELL_SECONDS, kind="lob",
+                        firecracker=bomb is items.FIRECRACKER)
     if bomb is items.FIRECRACKER:                # a bang, not a blast
-        _crack(state, bx, by)
+        state.happen("crack", bx, by, delay=flight)
+        _after(state, flight, _crack, state, bx, by)
     else:
         radius, dmg = BOMB_STATS.get(bomb, (1, BOMB_DAMAGE))
         state.log.add("You set a blast charge flying — a THUNDERCLAP rolls through the rock!"
                       if bomb is items.BLAST_CHARGE else "You hurl a bomb — BOOM!",
                       (236, 180, 90))
-        _detonate(state, bx, by, radius, dmg)
+        state.happen("blast", bx, by, radius=radius, delay=flight)
+        state.happen("shake", p.x, p.y, delay=flight, strength=2 if radius > 1 else 1)
+        _after(state, flight, _detonate, state, bx, by, radius, dmg)
     from . import turns
     turns.advance_time(state, C.BOMB_COST[1])
     return True
@@ -869,12 +903,15 @@ def fire_ranged_at(state: GameState, tx: int, ty: int) -> bool:
     astat = content.ammo_stat(ammo)
     p.inventory.remove(ammo, 1)
     p.energy = max(0, p.energy - fight_stamina(state))
+    lx, ly = projectile_landing(state, tx, ty, stat.rng)
+    flight = _in_flight(state, _line(p.x, p.y, lx, ly), SHOT_CELL_SECONDS,
+                        stone=astat.family == "stone")
 
     # Resolve the shot against the world as it stands *now* — like a melee blow —
     # and only then let the world take its turn. (Advancing time first let erratic
     # movers step off the aimed tile before the arrow "landed", so shots at exactly
     # the foes bows are for flew wide with no to-hit roll and silently ate ammo.)
-    _resolve_shot(state, stat, ammo, astat, tx, ty)
+    _after(state, flight, _resolve_shot, state, stat, ammo, astat, tx, ty)
     from . import turns
     turns.advance_time(state, C.ATTACK_COST[1])
     return True

@@ -746,3 +746,108 @@ def harvest(f: anim.Frame, h, age: float) -> None:
         colour = _QUALITY_SPARK[(i + int(age * 10)) % 5] if q == 5 else _QUALITY_SPARK[q]
         glyph = ("*" if q >= 3 else "+") if age < 0.35 else "·"
         _write(f, x, y, glyph, tuple(int(c * fade) for c in colour))
+
+
+def _sign(v: int) -> int:
+    return (v > 0) - (v < 0)
+
+
+_SHOT_GLYPH = {(1, 0): "-", (-1, 0): "-", (0, 1): "|", (0, -1): "|",
+               (1, 1): "\\", (-1, -1): "\\", (1, -1): "/", (-1, 1): "/"}
+
+
+def _flight_cell(f: anim.Frame, h, age: float):
+    """Where a projectile is along its recorded path at `age`, with the step
+    it took to get there — or None once it has landed or is out of view."""
+    path, per = h.data.get("path", []), h.data.get("per", 0.03)
+    k = int(age / per)
+    if not path or k >= len(path):
+        return None
+    x, y = path[k]
+    px, py = (h.x, h.y) if k == 0 else path[k - 1]
+    cell = f.cell(x, y)
+    return None if cell is None else (cell, (_sign(x - px), _sign(y - py)))
+
+
+@anim.one_off("shot", life=0.5)
+def shot(f: anim.Frame, h, age: float) -> None:
+    """A loosed arrow (or sling stone) flies its line, pointing the way it
+    goes; its hit lands when it arrives."""
+    at = _flight_cell(f, h, age)
+    if at is None:
+        return
+    (sx, sy), step = at
+    if h.data.get("stone"):
+        _write(f, sx, sy, "∙", (190, 186, 176))
+    else:
+        _write(f, sx, sy, _SHOT_GLYPH.get(step, "-"), (232, 218, 176))
+
+
+@anim.one_off("lob", life=0.8)
+def lob(f: anim.Frame, h, age: float) -> None:
+    """A thrown bomb arcs out, its fuse fizzing; the blast waits for it."""
+    at = _flight_cell(f, h, age)
+    if at is None:
+        return
+    (sx, sy), _step = at
+    if h.data.get("firecracker"):
+        _write(f, sx, sy, "¡", (240, 120, 90))
+    else:
+        _write(f, sx, sy, "●", (120, 112, 104))
+        if sy - 1 >= 0 and int(age * 20) % 2 == 0:
+            _write(f, sx, sy - 1, "'", (255, 196, 90))     # the fuse spits
+
+
+@anim.one_off("blast", life=0.5)
+def blast(f: anim.Frame, h, age: float) -> None:
+    """A bomb goes off: a white-hot flash at its heart and a ring of fire
+    racing out past the blast's reach."""
+    cell = f.cell(h.x, h.y)
+    if cell is None:
+        return
+    sx, sy = cell
+    reach = h.data.get("radius", 1) + 1
+    r = reach * age / 0.5
+    fade = 1.0 - age / 0.5
+    for dx in range(-reach - 1, reach + 2):
+        for dy in range(-reach - 1, reach + 2):
+            x, y = sx + dx, sy + dy
+            if not (0 <= x < f.vw and 0 <= y < f.vh):
+                continue
+            d = math.hypot(dx * 0.75, dy)                 # cells are taller than wide
+            ring = max(0.0, 1.0 - abs(d - r) / 0.8)
+            core = max(0.0, 1.0 - age / 0.15) if d < 0.5 else 0.0
+            k = max(ring * fade, core)
+            if k <= 0.05:
+                continue
+            _blend(f.con, x, y, "bg", (255, 236, 200) if core > ring else (240, 140, 50), 0.85 * k)
+            if ring > 0.6:
+                _write(f, x, y, "*", (255, 214, 120))
+
+
+@anim.one_off("crack", life=0.35)
+def crack(f: anim.Frame, h, age: float) -> None:
+    """A firecracker pops: a bright flash and a scatter of coloured sparks."""
+    cell = f.cell(h.x, h.y)
+    if cell is None:
+        return
+    sx, sy = cell
+    if age < 0.1:
+        _blend(f.con, sx, sy, "bg", (255, 240, 200), 0.8)
+    colours = ((255, 120, 120), (120, 220, 255), (255, 230, 120), (180, 255, 150))
+    for i in range(4):
+        ang = i * 1.5708 + 0.7
+        x = sx + int(round(math.cos(ang) * (1 + 2.5 * age / 0.35) * 1.3))
+        y = sy + int(round(math.sin(ang) * (1 + 2.5 * age / 0.35) * 0.8))
+        _write(f, x, y, "*", colours[i])
+
+
+@anim.one_off("shake", life=0.2, order=999)
+def shake(f: anim.Frame, h, age: float) -> None:
+    """The ground jumps under a blast: the whole view jolts a cell this way
+    and that for a moment (drawn last, so everything in view shakes)."""
+    steps = ((1, 0), (-1, 0), (0, 1), (0, -1), (1, 0))
+    dx, dy = steps[min(len(steps) - 1, int(age / 0.04))]
+    n = h.data.get("strength", 1)
+    view = f.con.rgb[:f.vw, :f.vh]
+    f.con.rgb[:f.vw, :f.vh] = np.roll(view, shift=(dx * n, dy * n), axis=(0, 1))

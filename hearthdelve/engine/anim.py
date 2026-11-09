@@ -91,8 +91,9 @@ class Frame:
 @dataclass(frozen=True)
 class _OneOff:
     kind: str
-    life: float                    # seconds it plays for
+    life: float                    # seconds it plays for (a happening may say its own)
     layer: str
+    order: int                     # within the layer's one-offs, lowest first
     draw: object                   # draw(frame, happening, age_seconds)
 
 
@@ -110,11 +111,13 @@ def ongoing(layer: str, order: int):
     return deco
 
 
-def one_off(kind: str, life: float, layer: str = OVERLAY):
+def one_off(kind: str, life: float, layer: str = OVERLAY, order: int = 100):
     """Register the effect a happening of `kind` plays for `life` seconds:
-    ``draw(frame, happening, age)``."""
+    ``draw(frame, happening, age)``. A happening's own ``life`` and ``delay``
+    (in its data) override the life and hold it back — an arrow's hit waits
+    for the arrow to arrive."""
     def deco(fn):
-        _ONE_OFFS[kind] = _OneOff(kind, life, layer, fn)
+        _ONE_OFFS[kind] = _OneOff(kind, life, layer, order, fn)
         return fn
     return deco
 
@@ -138,7 +141,7 @@ def _play_one_offs(layer: str, f: Frame) -> None:
     if not fx:
         return
     now_game = f.state.abs_minutes
-    keep = []
+    keep, playing = [], []
     for h in fx:
         spec = _ONE_OFFS.get(h.kind)
         if spec is None:                       # nothing plays for it: let it go
@@ -150,13 +153,15 @@ def _play_one_offs(layer: str, f: Frame) -> None:
             if now_game - h.at > STALE_MINUTES:
                 continue                       # long past by the time we saw it
             h.start = f.t
-        age = f.t - h.start
-        if age >= spec.life:
+        age = f.t - h.start - h.data.get("delay", 0.0)
+        if age >= h.data.get("life", spec.life):
             continue                           # played out
         keep.append(h)
-        if h.world is f.state.world:           # only where you can see it happen
-            spec.draw(f, h, age)
+        if age >= 0.0 and h.world is f.state.world:   # due, and where you can see it
+            playing.append((spec.order, len(playing), spec, h, age))
     fx[:] = keep
+    for _o, _i, spec, h, age in sorted(playing, key=lambda e: e[:2]):
+        spec.draw(f, h, age)
 
 
 # --- timing helpers -------------------------------------------------------------
