@@ -1188,6 +1188,7 @@ def footprint(f: anim.Frame, h, age: float) -> None:
     if cell is None or cell in f.occupied:
         return
     sx, sy = cell
-    depth = 0.38 * (1.0 - age / 10.0)
+    fresh = 1.0 - age / 10.0
+    _blend(f.con, sx, sy, "bg", (0, 0, 0), 0.24 * fresh)            # the dent
     ground = f.con.rgb["bg"][sx, sy].astype(np.float32)
-    _write(f, sx, sy, "∙", tuple(int(c) for c in ground * (1.0 - depth)))
+    _write(f, sx, sy, "∙", tuple(int(c) for c in ground * (1.0 - 0.5 * fresh)))

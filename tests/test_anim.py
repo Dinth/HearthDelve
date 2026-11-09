@@ -765,6 +765,17 @@ class TestFootprints(unittest.TestCase):
         sx, sy = _screen(st, start[0] + dx, start[1] + dy)      # behind you now
         self.assertEqual(chr(con.ch[sx, sy]), "∙")
 
+    def test_a_print_is_a_dent_you_can_see(self):
+        """It only darkened the dot's colour, which vanished in the sand's
+        texture: the cell itself now darkens, and fills back in."""
+        from hearthdelve.world import tile
+        st, start, (dx, dy) = self._walk(tile.SAND, day=5)
+        sx, sy = _screen(st, start[0] + dx, start[1] + dy)
+        printed = _render(st, 1.0).bg[sx, sy].astype(int).sum()
+        st.fx.clear()
+        plain = _render(st, 1.0).bg[sx, sy].astype(int).sum()
+        self.assertLess(printed, plain * 0.85)
+
     def test_snow_takes_them_in_winter_and_grass_doesnt_in_summer(self):
         from hearthdelve.engine import constants as C
         from hearthdelve.world import tile
