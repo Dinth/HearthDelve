@@ -571,14 +571,21 @@ def _maybe_inflict(state: GameState, m) -> None:
 def _ranged_attack(state: GameState, m) -> None:
     """A ranged mob strikes from a distance — the same to-hit vs DV and damage
     minus PV as a melee blow, but it can be answered only by closing or shooting
-    back."""
+    back. What it looses flies across to you on screen, and its hit lands when
+    it arrives; one that goes wide flies on past."""
+    p = state.player
     res = _resolve(m.to_hit, m.dmg, 0, 0.0, player_dv(state), player_pv(state))
+    path = _line(m.x, m.y, p.x, p.y)
+    if res is None:
+        path += _flies_on(state, m.x, m.y, p.x, p.y)
+    flight = _in_flight(state, path, SHOT_CELL_SECONDS, origin=(m.x, m.y),
+                        spit=True, colour=tuple(m.color))
     if res is None:
         state.log.add(f"The {m.name.lower()} looses at you — it goes wide.", C.DIM)
         return
     dmg, _crit = res
-    state.player.hp -= dmg
-    state.happen("hit", state.player.x, state.player.y, amount=dmg, on="you")
+    p.hp -= dmg
+    state.happen("hit", p.x, p.y, amount=dmg, on="you", delay=flight)
     state.log.add(f"The {m.name.lower()} strikes you from afar for {dmg}!", (224, 150, 130))
     _maybe_inflict(state, m)
 
@@ -661,15 +668,28 @@ SHOT_CELL_SECONDS = 0.03    # on screen, a loosed shot crosses a cell in this
 LOB_CELL_SECONDS = 0.05     # a lobbed bomb hangs in the air a little longer
 
 
-def _in_flight(state: GameState, path: list, per: float, kind: str = "shot", **data) -> float:
-    """Record a projectile flying from the player along `path` (world cells),
-    for the screen to show; returns how long the flight takes on screen."""
+def _in_flight(state: GameState, path: list, per: float, kind: str = "shot",
+               origin: tuple | None = None, **data) -> float:
+    """Record a projectile flying along `path` (world cells) from `origin`
+    (the player, unless a monster looses it), for the screen to show; returns
+    how long the flight takes on screen."""
     if not path:
         return 0.0
     flight = len(path) * per
-    p = state.player
-    state.happen(kind, p.x, p.y, path=list(path), per=per, life=flight + 0.04, **data)
+    x, y = origin if origin is not None else (state.player.x, state.player.y)
+    state.happen(kind, x, y, path=list(path), per=per, life=flight + 0.04, **data)
     return flight
+
+
+def _flies_on(state: GameState, x0: int, y0: int, x1: int, y1: int, most: int = 3) -> list:
+    """The cells a shot from (x0, y0) that missed at (x1, y1) carries on
+    through: onward along the same line, until a wall stops it."""
+    on = []
+    for cell in _line(x1, y1, x1 + (x1 - x0) * 4, y1 + (y1 - y0) * 4)[:most]:
+        if not state.world.walkable(*cell):
+            break
+        on.append(cell)
+    return on
 
 
 def _after(state: GameState, delay: float, fn, *args):

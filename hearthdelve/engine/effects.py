@@ -771,13 +771,18 @@ def _flight_cell(f: anim.Frame, h, age: float):
 
 @anim.one_off("shot", life=0.5)
 def shot(f: anim.Frame, h, age: float) -> None:
-    """A loosed arrow (or sling stone) flies its line, pointing the way it
-    goes; its hit lands when it arrives."""
+    """A loosed arrow (or sling stone, or a monster's spat glob) flies its
+    line, pointing the way it goes; its hit lands when it arrives."""
     at = _flight_cell(f, h, age)
     if at is None:
         return
     (sx, sy), step = at
-    if h.data.get("stone"):
+    if (sx, sy) in f.occupied:                   # passing over a creature, it's hidden
+        return
+    if h.data.get("spit"):                       # a monster's glob of spores or bile
+        c = h.data.get("colour", (150, 200, 130))
+        _write(f, sx, sy, "°", tuple(min(255, int(v * 1.25) + 20) for v in c))
+    elif h.data.get("stone"):
         _write(f, sx, sy, "∙", (190, 186, 176))
     else:
         _write(f, sx, sy, _SHOT_GLYPH.get(step, "-"), (232, 218, 176))

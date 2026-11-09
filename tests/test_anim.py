@@ -353,6 +353,46 @@ class TestShotsFly(unittest.TestCase):
         self.assertEqual(chr(later.ch[fx, fy - 1]), "5")
 
 
+class TestMonstersShotsFly(unittest.TestCase):
+    """A spore spitter's shot struck you at once, with nothing in the air, and
+    one that went wide was only a log line. Now its glob flies across to you
+    and the hit waits for it; a miss flies on past."""
+
+    def _spat(self, lands):
+        from unittest import mock
+        from hearthdelve.game import combat
+        from hearthdelve.world import tile
+        st = fresh_state(2)
+        foe = _foe_beside(st, reach=4)
+        foe.reach, foe.color = 4, (150, 200, 130)
+        p = st.player
+        dx, dy = (foe.x - p.x) // 4, (foe.y - p.y) // 4
+        for k in (1, 2, 3):                              # open ground behind you
+            st.world.tiles[p.x - dx * k, p.y - dy * k] = tile.GRASS
+        with mock.patch.object(combat, "_resolve", return_value=(6, False) if lands else None):
+            combat._ranged_attack(st, foe)
+        shot = next(h for h in st.fx if h.kind == "shot")
+        return st, foe, shot
+
+    def test_its_glob_flies_from_it_to_you_and_the_hit_waits(self):
+        st, foe, shot = self._spat(lands=True)
+        p = st.player
+        self.assertEqual((shot.x, shot.y), (foe.x, foe.y))
+        self.assertEqual(shot.data["path"][-1], (p.x, p.y))
+        hit = next(h for h in st.fx if h.kind == "hit")
+        self.assertAlmostEqual(hit.data["delay"], len(shot.data["path"]) * shot.data["per"])
+        first = shot.data["path"][0]
+        con = _render(st, 20.0)
+        self.assertEqual(chr(con.ch[_screen(st, *first)]), "°")
+
+    def test_a_miss_flies_on_past_you(self):
+        st, foe, shot = self._spat(lands=False)
+        p = st.player
+        self.assertIn((p.x, p.y), shot.data["path"])
+        self.assertNotEqual(shot.data["path"][-1], (p.x, p.y))       # carried on beyond
+        self.assertEqual([h for h in st.fx if h.kind == "hit"], [])
+
+
 class TestBombsBlow(unittest.TestCase):
     """A bomb went off as a log line. Now it arcs out, then a flash and a
     ring of fire, the view jolts, and the damage it did floats up."""
