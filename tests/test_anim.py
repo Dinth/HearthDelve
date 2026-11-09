@@ -719,6 +719,23 @@ class TestFireworksNight(unittest.TestCase):
     def test_no_show_without_the_order(self):
         self.assertEqual(self._night(filled=False), set())
 
+    def test_the_show_keeps_going(self):
+        """It was one small burst every few seconds, the sky dark between:
+        now launchers overlap, so the night is rarely without a burst."""
+        from hearthdelve.engine import constants as C
+        from hearthdelve.game.requests import _year_finale
+        st = fresh_state(2)
+        season, day, _name = _year_finale()
+        st.day = C.SEASONS.index(season) * C.SEASON_LEN + day - 1
+        st.clock = (21 * 60 - C.DAY_START_MIN) * 60
+        st.weather = "Clear"
+        st.stats[f"fireworks_{st.year}"] = 2
+        lit = 0
+        for k in range(120):
+            con = _render(st, k * 0.1)
+            lit += sum(chr(c) in "*'" for c in con.ch[:58, :44].flat) >= 8
+        self.assertGreater(lit, 80)
+
 
 
 class TestFootprints(unittest.TestCase):

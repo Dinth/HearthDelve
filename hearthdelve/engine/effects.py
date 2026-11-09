@@ -1126,35 +1126,57 @@ def _fireworks_tonight(st) -> bool:
 @anim.ongoing(anim.OVERLAY, 45)
 def fireworks(f: anim.Frame) -> None:
     """The year's closing night, if you filled the fireworks order: rockets
-    climb into the sky over the view and burst into rings of colour, on
-    their own irregular beats — the sky the whole Vale cheered for."""
+    climb into the sky over the view and burst into double rings of colour
+    that light the ground below, five launchers each on their own irregular
+    beat — the sky the whole Vale cheered for."""
     st = f.state
     if st.world.is_dungeon or not _fireworks_tonight(st):
         return
     salt = st.seed % 997
-    for i in range(3):
-        window = 2.3 + 0.7 * i
-        age = anim.burst_age(f.t, window, 0.85, 2.0, salt + i * 17 + 0.3)
+    glow = np.zeros((f.vw, f.vh), np.float32)
+    glow_rgb = np.zeros((f.vw, f.vh, 3), np.float32)
+    X = np.arange(f.vw, dtype=np.float32)[:, None]
+    Y = np.arange(f.vh, dtype=np.float32)[None, :]
+    sparks = []
+    for i in range(5):
+        window = 1.7 + 0.45 * i
+        age = anim.burst_age(f.t, window, 0.9, 1.9, salt + i * 17 + 0.3)
         if age is None:
             continue
         k = math.floor(f.t / window)
-        x0 = int(f.vw * (0.15 + 0.7 * anim.h1(k * 3 + i, salt + 1.1)))
-        apex = int(f.vh * (0.12 + 0.22 * anim.h1(k * 3 + i, salt + 2.3)))
+        x0 = int(f.vw * (0.12 + 0.76 * anim.h1(k * 3 + i, salt + 1.1)))
+        apex = int(f.vh * (0.10 + 0.25 * anim.h1(k * 3 + i, salt + 2.3)))
         colour = _FIREWORK_COLOURS[int(anim.h1(k * 5 + i, salt + 3.7) * len(_FIREWORK_COLOURS))]
-        if age < 0.6:                                 # the rocket climbs, trailing sparks
-            y = int(f.vh - 1 - (f.vh - 1 - apex) * age / 0.6)
-            for dy, glyph in ((0, "'"), (1, "·")):
+        if age < 0.5:                                 # the rocket climbs, trailing sparks
+            y = int(f.vh - 1 - (f.vh - 1 - apex) * age / 0.5)
+            for dy, glyph in ((0, "'"), (1, "·"), (2, "·")):
                 if 0 <= y + dy < f.vh and (x0, y + dy) not in f.occupied:
                     _write(f, x0, y + dy, glyph, (255, 214, 150))
             continue
-        b = (age - 0.6) / 1.4                         # then bursts into a ring
+        b = (age - 0.5) / 1.4                         # then bursts
+        if b < 0.3:                                   # the flash lights the sky around it
+            k = 0.32 * (1.0 - b / 0.3) * np.exp(-(((X - x0) * 0.6) ** 2 + (Y - apex) ** 2) / 60.0)
+            more = k > glow
+            glow = np.where(more, k, glow)
+            glow_rgb[more] = colour
         fade = max(0.25, 1.0 - b)
-        for j in range(12):
-            ang = j * 6.2832 / 12
-            x = x0 + int(round(math.cos(ang) * (1 + 5 * b) * 1.4))
-            y = apex + int(round(math.sin(ang) * (1 + 5 * b) * 0.8 + 2 * b * b))   # and droops
-            if 0 <= x < f.vw and 0 <= y < f.vh and (x, y) not in f.occupied:
-                _write(f, x, y, "*" if b < 0.5 else "·", tuple(int(c * fade) for c in colour))
+        for ring, n, reach in ((0, 16, 6.0), (1, 8, 3.0)):
+            for j in range(n):
+                ang = j * 6.2832 / n + ring * 0.2
+                rr = 1 + reach * b
+                x = x0 + int(round(math.cos(ang) * rr * 1.4))
+                y = apex + int(round(math.sin(ang) * rr * 0.8 + 2.5 * b * b))   # and droops
+                if 0 <= x < f.vw and 0 <= y < f.vh and (x, y) not in f.occupied:
+                    c = colour if ring == 0 else (255, 244, 220)
+                    sparks.append((x, y, "*" if b < 0.55 else "·", c, fade))
+    if glow.any():
+        k = glow[..., None]
+        for chan in ("fg", "bg"):
+            cur = f.con.rgb[chan][:f.vw, :f.vh].astype(np.float32)
+            f.con.rgb[chan][:f.vw, :f.vh] = (cur * (1.0 - k) + glow_rgb * k).astype(np.uint8)
+    for x, y, glyph, c, fade in sparks:               # each spark lights its own cell
+        _blend(f.con, x, y, "bg", c, 0.4 * fade)
+        _write(f, x, y, glyph, tuple(int(v * fade) for v in c))
 
 
 @anim.one_off("step", life=10.0, order=10)
