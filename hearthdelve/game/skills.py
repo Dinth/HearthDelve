@@ -39,6 +39,7 @@ def gain(state: GameState, skill: str, xp: int) -> None:
         p.skills[skill] = cur + applied
         if level_of(p.skills[skill]) > before:
             state.log.add(f"{skill} skill is now level {level_of(p.skills[skill])}!", (170, 210, 240))
+            _celebrate(state, f"{skill} {level_of(p.skills[skill])}", (170, 210, 240))
     gain_char_xp(state, xp)                   # the character track is never capped by skills
 
 
@@ -48,6 +49,14 @@ MAX_CHAR_LEVEL = 15
 
 def xp_to_next(level: int) -> int:
     return level * 150
+
+
+def _celebrate(state: GameState, text: str, colour) -> None:
+    """A level gained shows on screen as well as in the log; two at once (a
+    skill and your own level) take their turns rather than overlapping."""
+    queued = sum(1 for h in state.fx if h.kind == "level_up" and h.start is None)
+    p = state.player
+    state.happen("level_up", p.x, p.y, text=text, colour=colour, delay=0.9 * queued)
 
 
 def gain_char_xp(state: GameState, amount: int) -> None:
@@ -63,6 +72,7 @@ def gain_char_xp(state: GameState, amount: int) -> None:
         p.hp = min(p.max_hp, p.hp + 8)
         p.energy = min(p.max_energy, p.energy + 12)
         state.log.add(f"You reach level {p.level}! (+8 max HP, +12 max stamina)", (240, 220, 140))
+        _celebrate(state, f"Level {p.level}", (240, 220, 140))
     if p.level >= MAX_CHAR_LEVEL:
         p.xp = 0                              # maxed — stop banking overflow
 

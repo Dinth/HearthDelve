@@ -764,6 +764,37 @@ def miss(f: anim.Frame, h, age: float) -> None:
             _write(f, x, y, "~", tuple(int(c * fade) for c in (206, 208, 220)))
 
 
+@anim.one_off("level_up", life=1.8)
+def level_up(f: anim.Frame, h, age: float) -> None:
+    """A level gained: a ring of light spreads out from you, and what rose —
+    the skill and its new level, or your own — lifts off you and fades."""
+    cell = f.cell(h.x, h.y)
+    if cell is None:
+        return
+    sx, sy = cell
+    colour = h.data.get("colour", (240, 220, 140))
+    if age < 0.6:
+        r = 0.6 + 4.4 * age / 0.6
+        fade = 1.0 - age / 0.6
+        for dx in range(-8, 9):
+            for dy in range(-6, 7):
+                x, y = sx + dx, sy + dy
+                if not (0 <= x < f.vw and 0 <= y < f.vh) or (x, y) in f.occupied:
+                    continue
+                if abs(math.hypot(dx * 0.6, dy) - r) < 0.5:
+                    _blend(f.con, x, y, "bg", colour, 0.35 * fade)
+                    _write(f, x, y, "*" if age < 0.3 else "·", tuple(int(c * (0.5 + 0.5 * fade))
+                                                                     for c in colour))
+    text = h.data.get("text", "")
+    y = sy - 2 - int(age / 0.6)
+    fade = 1.0 if age < 1.2 else max(0.3, 1.0 - (age - 1.2) / 0.6)
+    x0 = sx - len(text) // 2
+    for i in range(len(text)):                       # a dark band behind, to read it
+        if 0 <= x0 + i < f.vw and 0 <= y < f.vh:
+            _blend(f.con, x0 + i, y, "bg", (0, 0, 0), 0.55 * fade)
+    _write(f, x0, y, text, tuple(int(c * fade) for c in colour))
+
+
 @anim.one_off("wake", life=0.9)
 def wake(f: anim.Frame, h, age: float) -> None:
     """A monster notices you: a "!" over it, steady for a moment, then

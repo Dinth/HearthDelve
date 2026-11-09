@@ -336,6 +336,48 @@ class TestWoundsShow(unittest.TestCase):
         self.assertGreater(tinted[1] - tinted[0], plain[1] - plain[0] + 25)
 
 
+class TestALevelGainedShows(unittest.TestCase):
+    """A skill or character level gained was a log line. Now a ring of light
+    spreads from you and the new level lifts off you."""
+
+    def _row_text(self, con, y):
+        return "".join(chr(c) for c in con.ch[:58, y])
+
+    def test_a_skill_level_lifts_off_you(self):
+        from hearthdelve.game import skills
+        st = fresh_state(2)
+        st.player.skills["Farming"] = 0
+        skills.gain(st, "Farming", skills.XP_PER_LEVEL * 2)
+        h = next(h for h in st.fx if h.kind == "level_up")
+        level = skills.skill_level(st, "Farming")
+        self.assertEqual(h.data["text"], f"Farming {level}")
+        sx, sy = _screen(st, st.player.x, st.player.y)
+        con = _render(st, 50.0)
+        self.assertIn(f"Farming {level}", self._row_text(con, sy - 2))
+
+    def test_a_ring_spreads_from_you(self):
+        from hearthdelve.game import skills
+        st = fresh_state(2)
+        skills.gain(st, "Mining", skills.XP_PER_LEVEL * 2)
+        sx, sy = _screen(st, st.player.x, st.player.y)
+        _render(st, 50.0)
+        con = _render(st, 50.25)
+        plain = _render(fresh_state(2), 50.25)
+        ring = sum(chr(con.ch[x, y]) == "*" and chr(plain.ch[x, y]) != "*"
+                   for x in range(sx - 8, sx + 9) for y in range(sy - 6, sy + 7))
+        self.assertGreater(ring, 8)
+
+    def test_your_own_level_waits_its_turn_behind_a_skill(self):
+        from hearthdelve.game import skills
+        st = fresh_state(2)
+        st.player.xp = skills.xp_to_next(st.player.level) - 1
+        skills.gain(st, "Combat", skills.XP_PER_LEVEL * 2)
+        ups = [h for h in st.fx if h.kind == "level_up"]
+        self.assertEqual(len(ups), 2)
+        self.assertTrue(ups[1].data["text"].startswith("Level "))
+        self.assertGreater(ups[1].data["delay"], ups[0].data["delay"])
+
+
 class TestAMonsterNoticesYou(unittest.TestCase):
     """A monster waking showed only as it starting to move. Now a "!" shows
     over it the moment it sees you."""
