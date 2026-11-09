@@ -263,8 +263,8 @@ class PlayScreen(Screen):
                                       "build_kind": state.pending_build}))
         elif cmd == "target":
             if not combat.can_fire(state):
-                state.log.add("Nothing to loose or throw — equip a bow (+ arrows) "
-                              "or craft a bomb (c).", C.DIM)
+                state.log.add("Nothing to loose or throw — equip a bow (+ arrows), "
+                              "craft a bomb (c), or hold a spear to reach.", C.DIM)
             else:
                 cur = cmds.clamp_look(state, *combat.aim_start(state))
                 state.cam_focus = tuple(cur)
@@ -385,15 +385,16 @@ class TargetScreen(Screen):
         if cmd in ("cancel", "target", "quit"):
             state.cam_focus = None
             ui.pop()
-        elif cmd == "swap" and self.ctx["purpose"] in ("shoot", "throw"):
-            # Tab toggles bow<->bomb when you carry both, so a readied launcher
-            # never locks bombs (needed for ore/gem veins) away.
-            if self.ctx["purpose"] == "shoot" and combat.can_throw(state):
-                self.ctx["purpose"] = "throw"
-                state.log.add("You ready a bomb to throw.", (200, 220, 160))
-            elif self.ctx["purpose"] == "throw" and combat.can_shoot(state):
-                self.ctx["purpose"] = "shoot"
-                state.log.add("You draw your bow.", (200, 220, 160))
+        elif cmd == "swap" and self.ctx["purpose"] in ("reach", "shoot", "throw"):
+            # Tab steps through whatever you can do — a held spear's reach, the
+            # bow, a bomb — so one never locks another (bombs for veins) away.
+            ways = combat.aim_purposes(state)
+            if len(ways) > 1:
+                at = ways.index(self.ctx["purpose"]) if self.ctx["purpose"] in ways else -1
+                self.ctx["purpose"] = ways[(at + 1) % len(ways)]
+                state.log.add({"reach": "You level your polearm.", "shoot": "You draw your bow.",
+                               "throw": "You ready a bomb to throw."}[self.ctx["purpose"]],
+                              (200, 220, 160))
             else:
                 state.log.add("You've nothing else to switch to.", C.DIM)
         elif cmd == "move":
@@ -405,6 +406,9 @@ class TargetScreen(Screen):
             tx, ty = self.ctx["cursor"]
             if self.ctx["purpose"] == "throw":
                 combat.throw_bomb_at(state, tx, ty)
+                cmds.check_faint(state)
+            elif self.ctx["purpose"] == "reach":
+                combat.reach_attack(state, tx, ty)
                 cmds.check_faint(state)
             elif self.ctx["purpose"] == "shoot":
                 combat.fire_ranged_at(state, tx, ty)

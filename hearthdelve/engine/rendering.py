@@ -1135,8 +1135,22 @@ def render_target(con: tcod.console.Console, state: GameState, ctx) -> None:
             con.rgb["fg"][sx, sy] = (20, 20, 20)
         banner = (f" Aim — throw a bomb (range {combat.BOMB_RANGE})"
                   if ok else " Aim — out of range")
+    elif ctx["purpose"] == "reach":
+        foe = combat.reach_target(state, cx, cy)
+        ok = foe is not None
+        if ok:
+            _paint(foe.x, foe.y, True)                 # who the thrust would strike
+        else:
+            _paint(cx, cy, False)
+        sx, sy = cx - ox, cy - oy
+        if 0 <= sx < C.VIEW_W and 0 <= sy < C.VIEW_H:
+            con.rgb["ch"][sx, sy] = ord("*")
+            con.rgb["fg"][sx, sy] = (20, 20, 20)
+        held = state.player.active_tool
+        banner = (f" Aim — thrust the {held.name.lower()} (reach {combat.POLEARM_REACH})" if ok
+                  else f" Aim — nothing in reach there (a straight line, {combat.POLEARM_REACH} tiles)")
     elif ctx["purpose"] == "shoot":
-        rng = combat.aim_range(state)
+        rng = combat.aim_range(state, "shoot")
         ok = combat.in_range(state, cx, cy, rng)
         lx, ly = combat.projectile_landing(state, cx, cy, rng)
         _paint(lx, ly, ok)                             # the single struck tile
@@ -1160,8 +1174,9 @@ def render_target(con: tcod.console.Console, state: GameState, ctx) -> None:
     # sharing one row, the hint was printed over the banner ("Aim — th…", so
     # "out of range" never showed) and, with bow and bomb both carried, ran
     # past the map onto the side panel.
-    swap = " · Tab bow/bomb" if (ctx["purpose"] in ("shoot", "throw")
-                                 and combat.can_shoot(state) and combat.can_throw(state)) else ""
+    ways = combat.aim_purposes(state) if ctx["purpose"] in ("reach", "shoot", "throw") else []
+    names = {"reach": "reach", "shoot": "bow", "throw": "bomb"}
+    swap = f" · Tab {'/'.join(names[w] for w in ways)}" if len(ways) > 1 else ""
     hint = ui.wrap(f"move to aim · Enter/Space confirm{swap} · Esc cancel", C.VIEW_W - 2)
     bg = (40, 38, 30)
     con.draw_rect(0, 0, C.VIEW_W, 1 + len(hint), ch=ord(" "), bg=bg)

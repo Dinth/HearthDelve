@@ -907,9 +907,63 @@ def can_throw(state: GameState) -> bool:
     return _carried_bomb(state) is not None
 
 
+# --- a polearm's reach -------------------------------------------------------
+# A spear or halberd strikes two tiles out — chosen in the aim mode, like a
+# shot, so a bump into a monster stays the plain melee blow it always was.
+POLEARM_REACH = 2
+
+
+def can_reach(state: GameState) -> bool:
+    """True if you hold a real polearm (a spear, a halberd — not the hoe)."""
+    held = state.player.active_tool
+    return held is not None and held.kind == "weapon" and held_profile(state).category == "polearm"
+
+
+def reach_target(state: GameState, tx: int, ty: int):
+    """Who a polearm thrust at (tx, ty) would strike: a foe one or two tiles
+    out in a straight line, with nothing solid between — and if a foe stands
+    in between, it takes the blow instead. None if the thrust can't land."""
+    p = state.player
+    dx, dy = tx - p.x, ty - p.y
+    dist = max(abs(dx), abs(dy))
+    if not 1 <= dist <= POLEARM_REACH or (dist == 2 and (abs(dx) == 1 or abs(dy) == 1)):
+        return None                                   # out of reach, or a knight's move off line
+    if dist == 2:
+        mx, my = p.x + dx // 2, p.y + dy // 2
+        between = mob_at(state, mx, my)
+        if between is not None:
+            return between
+        if not state.world.walkable(mx, my):
+            return None                               # a wall in the way
+    return mob_at(state, tx, ty)
+
+
+def reach_attack(state: GameState, tx: int, ty: int) -> bool:
+    """Thrust the held polearm at (tx, ty): the same blow as a bump, landed two
+    tiles out. Returns True if a blow was struck."""
+    m = reach_target(state, tx, ty)
+    if m is None:
+        state.log.add("Your thrust finds nothing to strike there.", C.DIM)
+        return False
+    p = state.player
+    p.facing = (_sign(m.x - p.x), _sign(m.y - p.y))
+    player_attack(state, m)
+    from . import turns
+    turns.advance_time(state, C.ATTACK_COST[1])      # a combat turn, as a bump is
+    return True
+
+
 def can_fire(state: GameState) -> bool:
-    """True if the player can loose a shot (bow+ammo) or throw a bomb."""
-    return can_shoot(state) or can_throw(state)
+    """True if the player can loose a shot (bow+ammo), throw a bomb, or reach
+    with a polearm."""
+    return can_shoot(state) or can_throw(state) or can_reach(state)
+
+
+def aim_purposes(state: GameState) -> list:
+    """What the aim mode can do, in the order Tab steps through them: the held
+    polearm's reach first (you chose to hold it), then the bow, then a bomb."""
+    return ([p for p, ok in (("reach", can_reach(state)), ("shoot", can_shoot(state)),
+                             ("throw", can_throw(state))) if ok])
 
 
 def chosen_ammo(state: GameState, stat):
@@ -926,13 +980,15 @@ def chosen_ammo(state: GameState, stat):
 
 
 def aim_purpose(state: GameState) -> str:
-    """The aim mode's opening intent: "shoot" if a loaded ranged weapon is readied,
-    else "throw" (bombs). In aim mode the player can toggle between the two (if they
-    carry both) so a readied bow never locks bombs away — see main's target mode."""
-    return "shoot" if equipped_ranged(state) is not None else "throw"
+    """The aim mode's opening intent: a held polearm's reach, else "shoot" if a
+    loaded ranged weapon is readied, else "throw" (bombs). In aim mode Tab steps
+    through whichever of them you can do (see aim_purposes)."""
+    return (aim_purposes(state) or ["throw"])[0]
 
 
-def aim_range(state: GameState) -> int:
+def aim_range(state: GameState, purpose: str = "") -> int:
+    if (purpose or aim_purpose(state)) == "reach":
+        return POLEARM_REACH
     ready = equipped_ranged(state)
     return ready[1].rng if ready else BOMB_RANGE
 
@@ -947,6 +1003,13 @@ def aim_start(state: GameState) -> tuple[int, int]:
             and in_range(state, m.x, m.y, aim_range(state))):
         return m.x, m.y
     state.aim_target = None
+    if aim_purpose(state) == "reach":                 # onto the nearest foe in reach
+        foes = [(max(abs(f.x - p.x), abs(f.y - p.y)), f) for f in state.world.monsters
+                if reach_target(state, f.x, f.y) is f]
+        if foes:
+            f = min(foes, key=lambda e: e[0])[1]
+            return f.x, f.y
+        return p.x + p.facing[0] * POLEARM_REACH, p.y + p.facing[1] * POLEARM_REACH
     return p.x + p.facing[0], p.y + p.facing[1]
 
 
