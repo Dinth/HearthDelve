@@ -1132,6 +1132,81 @@ def songs_at_the_inn(f: anim.Frame) -> None:
             _write(f, sx, sy - 1 - int(age / 0.7), "♪", (240, 212, 140))
 
 
+_WATER_IDS = None
+
+
+def _water_ids():
+    global _WATER_IDS
+    if _WATER_IDS is None:
+        from ..world import tile
+        _WATER_IDS = np.array([t.kind == "water" for t in tile.TILES], dtype=bool)
+    return _WATER_IDS
+
+
+@anim.ongoing(anim.OVERLAY, 15)
+def fish_rising(f: anim.Frame) -> None:
+    """Fish rising: now and then a dimple on open water spreads into rings,
+    and once in a while a fish clears the surface. They rise where they bite
+    — as often as a cast there would find one (a shoal run sets the water
+    boiling), and not at all where nothing swims."""
+    st = f.state
+    w = st.world
+    if getattr(w, "underriver", False):
+        return
+    water = _water_ids()[f.view]
+    if w.is_dungeon and w.visible is not None:           # underground, only what you see
+        seen = np.zeros_like(water)
+        sub = w.visible[f.ox:f.ox + f.vw, f.oy:f.oy + f.vh]
+        seen[:sub.shape[0], :sub.shape[1]] = sub
+        water &= seen
+    cells = np.flatnonzero(water)
+    if len(cells) == 0:
+        return
+    from ..game import fishing
+    slots = int(min(8, max(1, len(cells) // 60)))
+    salt = st.seed % 991
+    odds = {}
+    for i in range(slots):
+        window = 3.2 + 0.7 * anim.h1(i, salt + 0.3)
+        age = anim.burst_age(f.t, window, 1.0, 1.4, salt + i * 13 + 0.5)
+        if age is None:
+            continue
+        k = math.floor(f.t / window)
+        idx = cells[int(anim.h1(k * 17 + i, salt + 1.9) * len(cells))]
+        sx, sy = divmod(int(idx), f.vh)
+        x, y = f.ox + sx, f.oy + sy
+        kind = fishing.water_kind(st, x, y)
+        if kind not in odds:
+            chance, table = fishing.bite_odds(st, kind)
+            odds[kind] = chance if table else 0.0
+        if anim.h1(k * 29 + i, salt + 4.1) >= odds[kind] * 0.75:
+            continue                                  # nothing rising there this time
+        if (sx, sy) in f.occupied:
+            continue
+        spray = (196, 226, 250)
+        if anim.h1(k * 31 + i, salt + 6.7) < 0.18 and age < 0.7:     # a fish clears the water
+            u = age / 0.7
+            jy = sy - int(round(1.6 * math.sin(math.pi * u)))
+            if (sx, jy) not in f.occupied:
+                _write(f, sx, jy, "≈" if 0.15 < u < 0.85 else "~", (170, 214, 236))
+            continue
+        fade = 1.0 - age / 1.4
+        _write(f, sx, sy, "·" if age < 0.25 else "o" if age < 0.6 else "°",
+               tuple(int(c * (0.55 + 0.45 * fade)) for c in (240, 248, 255)))
+        if age >= 0.25:                               # and its ring spreads
+            r = 0.6 + 1.6 * (age - 0.25) / 1.15
+            for dx in range(-3, 4):
+                for dy in range(-2, 3):
+                    x2, y2 = sx + dx, sy + dy
+                    if (dx, dy) == (0, 0) or not (0 <= x2 < f.vw and 0 <= y2 < f.vh):
+                        continue
+                    if not water[x2, y2]:
+                        continue
+                    ring = max(0.0, 1.0 - abs(math.hypot(dx * 0.75, dy) - r) / 0.6)
+                    if ring > 0.1:
+                        _blend(f.con, x2, y2, "bg", spray, 0.45 * ring * fade)
+
+
 @anim.ongoing(anim.OVERLAY, 60)
 def afflictions(f: anim.Frame) -> None:
     """Wounds that show: the poisoned pulse green with a bubble rising off

@@ -103,23 +103,10 @@ def _pan_river(state: GameState, tx: int, ty: int) -> None:
     state.log.add(f"You pan the Underriver and sift out {catch.name.lower()}!", (200, 214, 150))
 
 
-def begin(state: GameState, tx: int, ty: int):
-    """Cast the line: roll now whether a fish will bite, and how long the float
-    sits on the water first. Returns the cast (``bite`` says which way it went,
-    ``wait`` the seconds the float bobs before it), or None when you can't
-    fish at all. A biting cast also carries the reel minigame's state (fed to
-    update/resolve); one that finds nothing ends in :func:`land_empty`."""
-    p = state.player
-    if p.energy <= 0:
-        state.log.add("You're too exhausted to fish.", C.DIM)
-        return None
-    p.facing = (max(-1, min(1, tx - p.x)), max(-1, min(1, ty - p.y)))
-    if getattr(state.world, "underriver", False):        # pan the ore-river — no minigame
-        with state.noting_gains([(tx, ty)]):
-            _pan_river(state, tx, ty)
-        return None
+def bite_odds(state: GameState, kind: str) -> tuple[float, list]:
+    """A cast's chance of a bite on water of `kind`, and what may take it.
+    (The screen reads this too: fish rise where they bite.)"""
     from . import skills
-    kind = water_kind(state, tx, ty)
     table = (content.fish_in_season(state.season) if kind == "river"
              else _STILL_TABLES[kind])
     chance = content.FISH_CATCH_CHANCE + skills.fishing_catch_bonus(state)
@@ -138,6 +125,27 @@ def begin(state: GameState, tx: int, ty: int):
         if projects.done(state, "lighthouse"):
             chance += 0.08
             table = table + [(items.MOONFISH, 6)]     # a local copy, never the module list
+    return chance, table
+
+
+def begin(state: GameState, tx: int, ty: int):
+    """Cast the line: roll now whether a fish will bite, and how long the float
+    sits on the water first. Returns the cast (``bite`` says which way it went,
+    ``wait`` the seconds the float bobs before it), or None when you can't
+    fish at all. A biting cast also carries the reel minigame's state (fed to
+    update/resolve); one that finds nothing ends in :func:`land_empty`."""
+    p = state.player
+    if p.energy <= 0:
+        state.log.add("You're too exhausted to fish.", C.DIM)
+        return None
+    p.facing = (max(-1, min(1, tx - p.x)), max(-1, min(1, ty - p.y)))
+    if getattr(state.world, "underriver", False):        # pan the ore-river — no minigame
+        with state.noting_gains([(tx, ty)]):
+            _pan_river(state, tx, ty)
+        return None
+    from . import skills
+    kind = water_kind(state, tx, ty)
+    chance, table = bite_odds(state, kind)
     if not table or random.random() > chance:
         wait = random.uniform(1.2, 2.2)              # the float sits, and nothing comes
         state.happen("float", tx, ty, life=wait)

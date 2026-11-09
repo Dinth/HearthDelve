@@ -37,9 +37,9 @@ class TestOneEngine(unittest.TestCase):
         self.assertEqual(names[anim.GROUND], ["coastal_foam", "rain_on_the_ground"])
         self.assertEqual(names[anim.GROUND_LATE], ["gem_glitter", "lava_breathes"])
         self.assertEqual(names[anim.VEIL], ["westreach_weather"])
-        self.assertEqual(names[anim.OVERLAY], ["weather", "seasonal_motes", "living_fire",
-                                               "crossings", "fireworks", "songs_at_the_inn",
-                                               "afflictions"])
+        self.assertEqual(names[anim.OVERLAY], ["weather", "fish_rising", "seasonal_motes",
+                                               "living_fire", "crossings", "fireworks",
+                                               "songs_at_the_inn", "afflictions"])
 
     def test_effects_in_a_layer_draw_lowest_order_first(self):
         from hearthdelve.engine import anim
@@ -491,6 +491,55 @@ class TestGainsHopIntoYourPack(unittest.TestCase):
         with st.noting_gains([(p.x, p.y)]):
             p.inventory.remove(items.WOOD, 3)
         self.assertEqual([h for h in st.fx if h.kind == "pickup"], [])
+
+
+class TestFishRise(unittest.TestCase):
+    """Open water lay still between casts, telling you nothing. Now fish rise
+    on it now and then — as often as a cast there would find one."""
+
+    def _pond(self):
+        from hearthdelve.world import tile
+        st = fresh_state(2)
+        st.weather = "Clear"
+        p = st.player
+        for x in range(p.x - 20, p.x + 21):
+            for y in range(p.y - 15, p.y + 16):
+                if max(abs(x - p.x), abs(y - p.y)) > 3:
+                    st.world.tiles[x, y] = tile.WATER
+        return st
+
+    def _rises(self, st, seconds=30.0):
+        from hearthdelve.world import tile
+        n = 0
+        for k in range(int(seconds / 0.25)):
+            con = _render(st, k * 0.25)
+            ox, oy = _screen(st, 0, 0)
+            for x in range(58):
+                for y in range(44):
+                    wx, wy = x - ox, y - oy
+                    if (st.world.tiles[wx, wy] == tile.WATER             # (water's own
+                            and chr(con.ch[x, y]) in "o°"):               #  glyph is ≈)
+                        n += 1
+        return n
+
+    def test_fish_rise_on_open_water(self):
+        self.assertGreater(self._rises(self._pond()), 10)
+
+    def test_none_rise_where_none_bite(self):
+        from unittest import mock
+        from hearthdelve.game import fishing
+        st = self._pond()
+        with mock.patch.object(fishing, "bite_odds", return_value=(0.9, [])):
+            self.assertEqual(self._rises(st), 0)
+
+    def test_a_cast_reads_the_same_odds(self):
+        from unittest import mock
+        from hearthdelve.game import fishing
+        st = self._pond()
+        p = st.player
+        with mock.patch.object(fishing, "bite_odds", return_value=(0.0, [])):
+            ctx = fishing.begin(st, p.x + 5, p.y)
+        self.assertFalse(ctx["bite"])
 
 
 class TestAMonsterNoticesYou(unittest.TestCase):
