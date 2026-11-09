@@ -238,6 +238,61 @@ class TestAKillCrumbles(unittest.TestCase):
         self.assertNotIn(chr(_render(st, 31.2).ch[at]), "T%,")       # gone
 
 
+class TestAMissSwishesPast(unittest.TestCase):
+    """A swing that went wide showed nothing, and a shot that streaked past
+    stopped dead at its target. Now a swish sweeps round the far side of
+    whoever dodged, and a missed arrow flies on."""
+
+    def test_your_miss_swishes_past_the_foe(self):
+        from unittest import mock
+        from hearthdelve.game import combat
+        st = fresh_state(2)
+        foe = _foe_beside(st, reach=1)
+        with mock.patch.object(combat, "_resolve", return_value=None):
+            combat.player_attack(st, foe)
+        (h,) = [h for h in st.fx if h.kind == "miss"]
+        p = st.player
+        way = (foe.x - p.x, foe.y - p.y)
+        self.assertEqual((h.x, h.y, tuple(h.data["way"])), (foe.x, foe.y, way))
+        swept = set()
+        for t in (0.0, 0.1, 0.2, 0.3):
+            con = _render(st, 40.0 + t)
+            for dx in (-1, 0, 1):
+                for dy in (-1, 0, 1):
+                    at = _screen(st, foe.x + way[0] + dx * (way[1] != 0),
+                                 foe.y + way[1] + dy * (way[0] != 0))
+                    if chr(con.ch[at]) == "~":
+                        swept.add(at)
+        self.assertEqual(len(swept), 3)                    # it swept the far side
+
+    def test_a_dodged_lunge_swishes_past_you(self):
+        from unittest import mock
+        from hearthdelve.game import combat
+        st = fresh_state(2)
+        foe = _foe_beside(st, reach=1)
+        with mock.patch.object(combat, "_resolve", return_value=None):
+            combat._attack_player(st, foe)
+        (h,) = [h for h in st.fx if h.kind == "miss"]
+        self.assertEqual((h.x, h.y), (st.player.x, st.player.y))
+
+    def test_a_missed_arrow_flies_on(self):
+        from unittest import mock
+        from hearthdelve.data import content
+        from hearthdelve.entities import items
+        from hearthdelve.game import combat
+        st = fresh_state(2)
+        st.player.equipment["ranged"] = content.make_ranged("Short Bow", "birch")
+        st.player.inventory.add(items.ARROW, 5)
+        foe = _foe_beside(st, reach=4)
+        with mock.patch.object(combat, "_resolve", return_value=None):
+            combat.fire_ranged_at(st, foe.x, foe.y)
+        on = [h for h in st.fx if h.kind == "shot" and (h.x, h.y) == (foe.x, foe.y)]
+        self.assertEqual(len(on), 1)
+        self.assertGreater(len(on[0].data["path"]), 0)
+        first = next(h for h in st.fx if h.kind == "shot" and h is not on[0])
+        self.assertAlmostEqual(on[0].data["delay"], len(first.data["path"]) * first.data["per"])
+
+
 class TestAMonsterNoticesYou(unittest.TestCase):
     """A monster waking showed only as it starting to move. Now a "!" shows
     over it the moment it sees you."""

@@ -401,6 +401,7 @@ def player_attack(state: GameState, m) -> None:
     wild = getattr(m, "kind", "monster") == "wildlife"
 
     if res is None:
+        state.happen("miss", m.x, m.y, way=(_sign(m.x - p.x), _sign(m.y - p.y)))
         state.log.add(f"You swing at the {m.name.lower()} and miss.", C.DIM)
         if wild and m.behavior == "defensive":
             m.hostile = True
@@ -540,6 +541,8 @@ def _attack_player(state: GameState, m) -> None:
     hi = m.dmg[1]                       # its top-end swing, to judge a soaked hit below
     res = _resolve(m.to_hit, m.dmg, 0, 0.0, player_dv(state), player_pv(state))
     if res is None:
+        p = state.player
+        state.happen("miss", p.x, p.y, way=(_sign(p.x - m.x), _sign(p.y - m.y)))
         state.log.add(f"The {m.name.lower()} lunges — you dodge.", C.DIM)
         return
     dmg, _crit = res
@@ -958,6 +961,9 @@ def _resolve_shot(state: GameState, stat, ammo, astat, tx: int, ty: int) -> None
         m.hostile = True
 
     if res is None:
+        p = state.player                        # it flies on past, until a wall stops it
+        _in_flight(state, _flies_on(state, p.x, p.y, m.x, m.y), SHOT_CELL_SECONDS,
+                   origin=(m.x, m.y), stone=astat.family == "stone")
         state.log.add(f"Your shot streaks past the {m.name.lower()}.", C.DIM)
         return
     dmg, was_crit = res

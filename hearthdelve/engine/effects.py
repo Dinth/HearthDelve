@@ -734,6 +734,36 @@ def slain(f: anim.Frame, h, age: float) -> None:
                 _write(f, x, y, "'", tuple(int(c * (1.0 - 0.7 * u)) for c in (196, 186, 166)))
 
 
+def _far_side(way):
+    """The three cells round the far side of someone attacked from `way`, in
+    the order a swing sweeps past them."""
+    dx, dy = way
+    if dx and dy:
+        return ((dx, 0), (dx, dy), (0, dy))
+    if dx:
+        return ((dx, -1), (dx, 0), (dx, 1))
+    return ((-1, dy), (0, dy), (1, dy))
+
+
+@anim.one_off("miss", life=0.4)
+def miss(f: anim.Frame, h, age: float) -> None:
+    """A swing goes wide: a swish sweeps round the far side of whoever
+    dodged it, and is gone."""
+    cell = f.cell(h.x, h.y)
+    if cell is None:
+        return
+    sx, sy = cell
+    arc = _far_side(tuple(h.data.get("way", (1, 0))))
+    k = int(age / 0.1)
+    for i, (dx, dy) in enumerate(arc):
+        if i > k or k - i > 1:
+            continue                                  # not reached yet, or long past
+        x, y = sx + dx, sy + dy
+        if (x, y) not in f.occupied:
+            fade = 1.0 if i == k else 0.45            # the swish, and its wake
+            _write(f, x, y, "~", tuple(int(c * fade) for c in (206, 208, 220)))
+
+
 @anim.one_off("wake", life=0.9)
 def wake(f: anim.Frame, h, age: float) -> None:
     """A monster notices you: a "!" over it, steady for a moment, then
