@@ -719,3 +719,8 @@ def _announce_morning(state: GameState) -> None:
                 village.befriend(state, n, 40)
             state.log.add("Tonight your firecrackers light the sky over the square — "
                           "the whole Vale cheers!", (250, 220, 110))
+    from .village import birthdays_today
+    for npc in birthdays_today(state):
+        if npc.met:                          # folk you know: word gets round
+            state.log.add(f"It's {npc.name}'s birthday today, over in {npc.village}.",
+                          (240, 190, 210))

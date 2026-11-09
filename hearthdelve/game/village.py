@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import bisect
+import random
 from dataclasses import dataclass
 
 from ..data import content
@@ -245,6 +246,50 @@ def npc_near(state: GameState):
 
 
 # --- talk & gift ------------------------------------------------------------
+# --- birthdays ------------------------------------------------------------------
+BIRTHDAY_GIFT_MULT = 3      # a kind gift on someone's birthday means three times as much
+_BIRTHDAYS: dict = {}       # (seed, roster) -> birthdays: derived, so never saved
+
+_BIRTHDAY_LINES = (
+    "It's my birthday today! Fancy you stopping by — or did you know?",
+    "Another year older today, and not a day wiser. Still — it's my birthday!",
+    "My birthday, would you believe. The kettle's on if you're passing.",
+    "I'm a year older this morning. Don't you dare say I look it.",
+)
+
+
+def birthdays(state: GameState) -> dict:
+    """Every villager's birthday as (season, day of season): drawn from the
+    world's seed, one villager to a day and none on a festival. The world is
+    rebuilt from its seed on every load, so they come out the same every time
+    and nothing new is saved."""
+    roster = tuple(sorted(n.name for n in state.surface.npcs))
+    memo = _BIRTHDAYS.get((state.seed, roster))
+    if memo is not None:
+        return memo
+    taken = {(season, fest[0]) for season, fests in content.FESTIVALS.items() for fest in fests}
+    out = {}
+    for name in roster:
+        i = random.Random(f"{state.seed}:birthday:{name}").randrange(C.YEAR_LEN)
+        for _ in range(C.YEAR_LEN):
+            day = (C.SEASONS[i // C.SEASON_LEN], i % C.SEASON_LEN + 1)
+            if day not in taken:
+                break
+            i = (i + 1) % C.YEAR_LEN               # someone has it: the next free day
+        taken.add(day)
+        out[name] = day
+    _BIRTHDAYS[(state.seed, roster)] = out
+    return out
+
+
+def is_birthday(state: GameState, npc: NPC) -> bool:
+    return birthdays(state).get(npc.name) == (state.season, state.day_of_season)
+
+
+def birthdays_today(state: GameState) -> list:
+    return [n for n in state.surface.npcs if is_birthday(state, n)]
+
+
 def befriend(state: GameState, npc: NPC, points: int) -> None:
     """Warm (or cool) a villager by `points`, within friendship's bounds. A
     heart won shows: a burst of them around the villager, wherever the
@@ -268,6 +313,8 @@ def talk(state: GameState, npc: NPC) -> str:
     scene = _heart_event(state, npc)         # a once-per-tier scripted moment
     if scene:
         return scene
+    if first and is_birthday(state, npc):   # it's their day, and they'll tell you
+        return _BIRTHDAY_LINES[sum(map(ord, npc.name)) % len(_BIRTHDAY_LINES)]
     if first:
         treat = _festival_treat(state, npc)  # a nibble at the fair
         if treat:
@@ -445,6 +492,9 @@ def gift(state: GameState, npc: NPC, item, quality: int = 0) -> None:
     if points > 0:                       # a fete or festival warms a kind gift double
         from . import attrs
         points = round(points * _warmth(state, npc) * (1 + 0.04 * attrs.mod(state, "Ap")))
+    birthday = points > 0 and is_birthday(state, npc)
+    if birthday:                         # remembered on their day, it means all the more
+        points *= BIRTHDAY_GIFT_MULT
     befriend(state, npc, points)
     npc.gifted_today = True
     if npc._matches(item, npc.loves):                 # it shows on their face
@@ -455,6 +505,9 @@ def gift(state: GameState, npc: NPC, item, quality: int = 0) -> None:
         karma.adjust(state, 1)  # a small kindness
     color = (180, 230, 160) if points >= 45 else (200, 160, 140) if points < 0 else C.WHITE
     state.log.add(line, color)
+    if birthday:
+        state.log.add(f"It's {npc.name}'s birthday — your gift means all the more today.",
+                      (240, 190, 210))
 
 
 def anger_owner(state: GameState, owner: str, amount: int) -> None:

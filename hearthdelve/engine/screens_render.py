@@ -825,7 +825,7 @@ def render_relationships(con: tcod.console.Console, state: GameState, scroll: in
     from ..game import village
     met = [n for n in state.surface.npcs if n.met] if state.surface else []
     w = 62
-    h = min(C.SCREEN_H - 4, max(8, len(met) * 4 + 5))
+    h = min(C.SCREEN_H - 4, max(8, len(met) * 5 + 5))
     m = ui.Modal(con, w, h, "Relationships")
     if not met:
         m.text(2, 2, "You haven't met anyone yet.", C.WHITE)
@@ -842,6 +842,11 @@ def render_relationships(con: tcod.console.Console, state: GameState, scroll: in
         lines.append((0, f" {n.glyph} {n.name:<13.13s}{hearts}{prog}{tag}   {where}"[:w - 2],
                       n.color))
         lines.append((2, f"{n.village} · {n.bio}"[:w - 8], C.DIM))
+        bday = village.birthdays(state).get(n.name)
+        if bday is not None:
+            today = village.is_birthday(state, n)
+            lines.append((2, f"birthday: {bday[0]} {bday[1]}" + ("  — it's today!" if today else ""),
+                          (240, 190, 210) if today else (190, 160, 176)))
         loves = ", ".join(it.name for it in n.loves) or "—"
         lines.append((2, f"loves: {loves}"[:w - 8], (220, 170, 170)))
         # If a loved dish is a cookable recipe you don't know, they'll share it.
