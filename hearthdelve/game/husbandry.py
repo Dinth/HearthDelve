@@ -393,6 +393,8 @@ def _finish_construction(state: GameState) -> None:
             projects.finish(state, x, y, m)
         elif m.build_kind in ("oven", "cellar"):
             _finish_house_machine(state, x, y, m)
+        elif m.build_kind == "extension":
+            _finish_extension(state, x, y)
         elif m.build_kind == "weathervane":
             # A post, not a walled building — just stand the vane on the ground.
             surf.tiles[x, y] = tile.GRASS
@@ -405,6 +407,92 @@ def _finish_construction(state: GameState) -> None:
             _raise_building(state, x, y, m.build_kind)
 
 
+# --- the farmhouse and its extension -------------------------------------------
+HOUSE_W, HOUSE_H = 6, 5          # worldgen's farmhouse, walls included (bed at hx+1, hy+1)
+def _house_origin(surf):
+    return surf.bed[0] - 1, surf.bed[1] - 1
+
+
+def _extension_rect(hx: int, hy: int, side: str):
+    """The second room's walls (x0, y0, w, h), sharing one wall with the
+    house, and the doorway knocked through that wall."""
+    if side == "north":
+        return (hx, hy - HOUSE_H + 1, HOUSE_W, HOUSE_H), (hx + 3, hy)
+    if side == "east":
+        return (hx + HOUSE_W - 1, hy, HOUSE_W, HOUSE_H), (hx + HOUSE_W - 1, hy + 2)
+    return (hx - HOUSE_W + 1, hy, HOUSE_W, HOUSE_H), (hx, hy + 2)          # west
+
+
+def _new_cells(hx: int, hy: int, side: str) -> list:
+    """The cells the second room needs (everything but the shared wall)."""
+    (x0, y0, w, h), _door = _extension_rect(hx, hy, side)
+    shared_x = {"east": x0, "west": x0 + w - 1}.get(side)
+    shared_y = y0 + h - 1 if side == "north" else None
+    return [(x, y) for x in range(x0, x0 + w) for y in range(y0, y0 + h)
+            if x != shared_x and y != shared_y]
+
+
+def extension_side(state: GameState):
+    """Which side of the farmhouse its second room stands, or None."""
+    return state.stats.get("house_extended") or None
+
+
+def house_rects(state: GameState) -> list:
+    """The farmhouse's footprint(s), walls included: the house, and its second
+    room once built."""
+    surf = state.surface
+    if surf is None or not surf.bed:
+        return []
+    hx, hy = _house_origin(surf)
+    rects = [(hx, hy, HOUSE_W, HOUSE_H)]
+    side = extension_side(state)
+    if side:
+        rects.append(_extension_rect(hx, hy, side)[0])
+    return rects
+
+
+def in_house(state: GameState, x: int, y: int) -> bool:
+    return any(x0 <= x < x0 + w and y0 <= y < y0 + h for x0, y0, w, h in house_rects(state))
+
+
+def _extension_spot(state: GameState):
+    """Where Tomas would stake the second room: the first side of the house
+    (north, east, west) with clear open ground — no path, crop, tree, machine
+    or anyone else's land. Returns the new room's centre, or None."""
+    from . import land
+    surf = state.surface
+    hx, hy = _house_origin(surf)
+    ground = _GROUND - {tile.DIRT_PATH}
+    for side in ("north", "east", "west"):
+        cells = _new_cells(hx, hy, side)
+        if all(surf.in_bounds(x, y) and surf.tiles[x, y] in ground
+               and (x, y) not in surf.machines and (x, y) not in surf.crops
+               and (x, y) not in surf.trees and not land.owned_by_other(state, x, y)
+               for x, y in cells):
+            (x0, y0, w, h), _door = _extension_rect(hx, hy, side)
+            return (x0 + w // 2, y0 + h // 2)
+    return None
+
+
+def _finish_extension(state: GameState, x: int, y: int) -> None:
+    """The second room is up: walls round the new floor, and a doorway
+    knocked through the wall it shares with the house."""
+    surf = state.surface
+    hx, hy = _house_origin(surf)
+    side = "north" if y < hy else "east" if x > hx + HOUSE_W - 1 else "west"
+    (x0, y0, w, h), door = _extension_rect(hx, hy, side)
+    for cx, cy in _new_cells(hx, hy, side):
+        edge = cx in (x0, x0 + w - 1) or cy in (y0, y0 + h - 1)
+        surf.tiles[cx, cy] = tile.HOUSE_WALL if edge else tile.HOUSE_FLOOR
+    surf.tiles[door] = tile.HOUSE_FLOOR
+    surf.machines.pop((x, y), None)
+    state.stats["house_extended"] = side
+    from . import land
+    land.invalidate(surf)
+    state.log.add("Tomas knocks through the wall and hangs up his tools — your farmhouse "
+                  "has a second room.", (200, 220, 160))
+
+
 def find_house_spot(state: GameState, kind: str):
     """Where a farmhouse fitting goes — the oven on a free interior floor tile
     (back wall first, never the bed or the doorway), the cellar dug just outside
@@ -412,13 +500,20 @@ def find_house_spot(state: GameState, kind: str):
     surf = state.surface
     if surf is None or not surf.bed:
         return None
-    hx, hy = surf.bed[0] - 1, surf.bed[1] - 1        # worldgen: bed = (hx+1, hy+1)
-    w, h = 6, 5
+    if kind == "extension":
+        return None if extension_side(state) else _extension_spot(state)
+    hx, hy = _house_origin(surf)
+    w, h = HOUSE_W, HOUSE_H
     if kind == "oven":
         door_inside = (hx + w // 2, hy + h - 2)      # keep the doorway clear
-        for spot in ((hx + 4, hy + 1), (hx + 2, hy + 1), (hx + 4, hy + 2),
-                     (hx + 1, hy + 2), (hx + 4, hy + 3), (hx + 1, hy + 3),
-                     (hx + 2, hy + 3)):
+        spots = [(hx + 4, hy + 1), (hx + 2, hy + 1), (hx + 4, hy + 2),
+                 (hx + 1, hy + 2), (hx + 4, hy + 3), (hx + 1, hy + 3), (hx + 2, hy + 3)]
+        side = extension_side(state)
+        if side:                                     # the second room has floor to spare
+            (x0, y0, ew, eh), knock = _extension_rect(hx, hy, side)
+            spots += [(x, y) for y in range(y0 + 1, y0 + eh - 1) for x in range(x0 + 1, x0 + ew - 1)
+                      if max(abs(x - knock[0]), abs(y - knock[1])) > 1]
+        for spot in spots:
             x, y = spot
             if (spot != door_inside and spot != surf.bed
                     and surf.in_bounds(x, y) and surf.tiles[x, y] == tile.HOUSE_FLOOR
@@ -443,7 +538,7 @@ def _finish_house_machine(state: GameState, x: int, y: int, m) -> None:
     """A house fitting (oven, cellar) finishes: the scaffold gives way to the
     machine itself, standing ready on the restored floor."""
     surf = state.surface
-    inside = surf.bed and abs(x - surf.bed[0]) <= 4 and abs(y - surf.bed[1]) <= 3
+    inside = in_house(state, x, y)
     surf.tiles[x, y] = tile.HOUSE_FLOOR if inside else tile.GRASS
     surf.machines[(x, y)] = Machine(kind=m.build_kind)
     state.log.add(f"Tomas hangs up his tools — your {MACHINES[m.build_kind].name.lower()} "
@@ -466,6 +561,9 @@ def _build_wh(kind: str):
 def _build_name(kind: str) -> str:
     if kind == "greenhouse":
         return "greenhouse"
+    from ..data import content
+    if kind in content.HOUSE_JOB_NAMES:
+        return content.HOUSE_JOB_NAMES[kind]
     if kind in MACHINES:
         return MACHINES[kind].name.lower()
     from ..data import content

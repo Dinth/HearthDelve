@@ -1291,7 +1291,11 @@ HOUSE_JOBS: list = [
      ((items.STONE, 40), (items.IRON_BAR, 4), (items.TIMBER_PLANK, 20))),
     ("Cellar (ages wine, mead & cheese)", "cellar", 3500,
      ((items.STONE, 60), (items.TIMBER_PLANK, 30), (items.IRON_BAR, 2))),
+    ("Farmhouse Extension (a second room)", "extension", 6000,
+     ((items.TIMBER_PLANK, 60), (items.STONE, 80), (items.IRON_BAR, 6))),
 ]
+# What Tomas calls a house job that isn't a machine, in his notes and yours.
+HOUSE_JOB_NAMES = {"extension": "farmhouse extension"}
 
 # The recipes an oven can batch-bake (they still cook fine by hand — the oven
 # is bigger and finer, never the only way).

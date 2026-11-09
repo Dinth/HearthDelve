@@ -856,6 +856,8 @@ def _shop_entries(shop: str, state: GameState | None = None,
             for label, kind, gold, mats in content.HOUSE_JOBS:
                 owned = any(m.kind == kind or (m.kind == "site" and m.build_kind == kind)
                             for m in state.surface.machines.values())
+                if kind == "extension" and state.stats.get("house_extended"):
+                    owned = True                      # one second room is a house enough
                 if not owned:
                     jobs.append(ShopRow("housejob", label=label, build=kind,
                                         price=gold, mats=tuple(mats)))
@@ -1009,7 +1011,8 @@ def purchase(state: GameState, row: ShopRow) -> None:
         surf.tiles[spot] = tile.SCAFFOLD
         surf.machines[spot] = Machine(kind="site", build_kind=row.build,
                                       ready_at=(state.day + 2) * 1440 + C.DAY_START_MIN)
-        name = content.MACHINES[row.build].name.lower()
+        name = (content.HOUSE_JOB_NAMES.get(row.build)
+                or content.MACHINES[row.build].name.lower())
         state.log.add(f"Tomas sets to work on your {name} — ready in 2 mornings.",
                       (200, 220, 160))
     elif row.kind == "upgrade":
