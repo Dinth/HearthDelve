@@ -1178,6 +1178,9 @@ MACHINES: dict[str, MachineDef] = {
                              None, "Cures raw hides & pelts into leather over half a day."),
     "chest":      MachineDef("chest", "Storage Chest", "▤", (156, 120, 78), 0, "store",
                              None, "Stashes goods at home, off your back — no weight to carry."),
+    "lift":      MachineDef("lift", "Dwarven Lift", "⇕", (214, 176, 108), 0, "ride", None,
+                            "The dwarves' old ore-shaft cage — for a fare it rides to Khazgrim, or "
+                            "down to any fifth floor you've reached."),
     "weathervane": MachineDef("weathervane", "Weathervane", "Ϯ", (190, 186, 178), 0, "sky",
                               None, "Points to tomorrow's sky — read it (g) for the coming weather.",
                               footprint=(1, 1)),

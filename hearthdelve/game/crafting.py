@@ -436,6 +436,9 @@ def interact_machine(state: GameState, x: int, y: int) -> bool:
     if m.kind == "chest":
         return {"storage": True}          # a home store — the player opens the chest UI
 
+    if m.kind == "lift":
+        return {"lift": True}             # the dwarves' cage — choose where to ride
+
     if m.kind == "fair_games":
         return _play_tombola(state)
 

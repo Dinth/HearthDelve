@@ -1012,6 +1012,8 @@ def describe(state: GameState, x: int, y: int) -> str:
             return f"a weathervane — it points to tomorrow: {farming.weather_saying(farming.forecast(state))}"
         if m.kind == "chest":
             return "your storage chest — stash goods here (g) to carry less."
+        if m.kind == "lift":
+            return f"{mdef.name} — {mdef.desc} (g to ride)"
         if m.kind == "beehive":
             if not m.has_queen:
                 return "a beehive — add a bee queen (g) to start a colony."
@@ -1233,6 +1235,7 @@ render_craft = _sr.render_craft
 render_ship = _sr.render_ship
 render_journal = _sr.render_journal
 render_ledger = _sr.render_ledger
+render_lift = _sr.render_lift
 render_relationships = _sr.render_relationships
 render_character = _sr.render_character
 render_dialogue = _sr.render_dialogue

@@ -240,6 +240,8 @@ class PlayScreen(Screen):
                     ui.push(DonateScreen())
                 elif isinstance(req, dict) and "storage" in req:
                     ui.push(StorageScreen())
+                elif isinstance(req, dict) and "lift" in req:
+                    ui.push(LiftScreen())
                 elif isinstance(req, dict) and "load" in req:
                     ui.push(LoadMachineScreen({
                         "pos": req["load"], "options": req["options"],
@@ -1038,6 +1040,27 @@ class CharGenScreen(Screen):
         sid, name, _g, told, boon = next(z for z in ZODIAC if z[0] == p.sign)
         state.log.add(f"You were born under {name} — {told}. ({boon})", (232, 216, 150))
         state.chargen_pending = False      # a life is begun; never offered again
+
+
+class LiftScreen(Screen):
+    """The dwarven lift: pick a stop and ride, for a fare."""
+
+    def __init__(self) -> None:
+        self.sel = 0
+
+    def render(self, ui: UI, con) -> None:
+        rendering.render_lift(con, ui.state, self.sel)
+
+    def handle(self, ui: UI, cmd: str, action: tuple) -> None:
+        from .game import lift
+        stops = lift.stops(ui.state)
+        if cmd in ("cancel", "quit"):
+            ui.pop()
+        elif cmd == "move" and action[2] and stops:
+            self.sel = (self.sel + action[2]) % len(stops)
+        elif cmd == "confirm" and stops:
+            if lift.ride(ui.state, stops[min(self.sel, len(stops) - 1)]):
+                ui.pop()
 
 
 class LedgerScreen(Screen):

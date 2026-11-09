@@ -720,6 +720,26 @@ def _homestead_rows(state: GameState) -> list:
     return rows
 
 
+def render_lift(con: tcod.console.Console, state: GameState, sel: int) -> None:
+    """The lift's stops, each with its fare and how long the ride takes."""
+    from ..game import lift
+    from ..world import dwarftown
+    stops = lift.stops(state)
+    w, h = 54, max(9, len(stops) + 8)
+    m = ui.Modal(con, w, h, "The Dwarven Lift")
+    m.text(2, 2, "\"Mind the gate. Fare's by the floor, paid first.\"", fg=(214, 176, 108))
+    for i, d in enumerate(stops):
+        name = "Khazgrim — the dwarves' town" if d == dwarftown.TOWN_DEPTH else f"Floor {d}"
+        cost = lift.fare(state, d)
+        dear = cost > state.player.gold
+        m.text(2, 4 + i, ui.cur(i == sel) + f"{name:<30.30s}{cost:>5}g  {lift.ride_minutes(state, d):>3} min",
+               fg=C.DIM if dear else C.WHITE)
+    if len(stops) <= 1:
+        m.text(2, 5 + len(stops),
+               f"It stops on every {lift.LIFT_STEP}th floor you've reached on foot.", fg=C.DIM)
+    m.footer("↑↓ choose   Enter ride   Esc step away")
+
+
 def render_ledger(con: tcod.console.Console, state: GameState) -> None:
     """The dawn ledger: what the bin sold overnight, and what's ready this
     morning — the day's planning at a glance as you wake."""

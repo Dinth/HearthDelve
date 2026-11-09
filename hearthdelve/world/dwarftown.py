@@ -21,6 +21,7 @@ from .gamemap import GameMap
 TOWN_DEPTH = 4          # deeper than the door, shallower than the dark
 UNDERRIVER_DEPTH = TOWN_DEPTH + 1   # one below Khazgrim: the dwarves' ore-river cavern
 W, H = 72, 46
+LIFT = (7, 22)          # the dwarves' lift, in the west corridor by the way down
 
 
 def generate(seed: int, dwarves: list) -> GameMap:
@@ -94,4 +95,7 @@ def generate(seed: int, dwarves: list) -> GameMap:
                         n.x, n.y = n.x + dx, n.y + dy
                         break
     gm.npcs = list(dwarves)
+    # The old ore-shaft by the way down, its cage worked again for a fare.
+    from ..entities.machine import Machine
+    gm.machines[LIFT] = Machine(kind="lift")
     return gm

@@ -34,11 +34,13 @@ def _step_actors(state: GameState) -> None:
         husbandry_act(state)
 
 
-def advance_time(state: GameState, seconds: int) -> None:
+def advance_time(state: GameState, seconds: int, actors: bool = True) -> None:
+    """Pass `seconds` of game time. With ``actors=False`` nothing gets a turn
+    in it (you're riding a cage down a shaft, out of anything's reach)."""
     before = state.abs_minutes
     state.clock += seconds
     _announce_finished_machines(state, before, state.abs_minutes)
-    steps = max(1, min(round(seconds / C.MOVE_SECONDS), _MAX_STEPS))
+    steps = max(1, min(round(seconds / C.MOVE_SECONDS), _MAX_STEPS)) if actors else 0
     for _ in range(steps):
         _step_actors(state)
     if state.player.status:                     # poison/bleed/burn bite as time passes

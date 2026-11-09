@@ -123,7 +123,7 @@ Eight mouths in the Vale, of six kinds; the Westreach adds tombs, a lava cavern 
 - Floors are **72×46 with FOV**, generated on demand and **re-rolled per in-game day** — but cached within the day, so stepping out and back returns the same already-looted floor. Depth is unbounded.
 - Texture: hidden traps, rubble, chests, cave fungus, underground lakes, gold vaults on deeper floors, and the rare **Glimmerwood Hollow** — a glowing grove of wispwood and giant caps.
 - Every **10th floor is a Deep Sanctum**: a guaranteed boss and a rich vault.
-- **Khazgrim** — the dwarves' living town on floor 4 of the dwarfhold. Hand-shaped and world-seeded, so it never re-rolls: a pillared hall, an alehall, Thrunn's forge, and folk who remember a friend across saves. Floor 5 below it is the **Underriver**, a persistent ore-river you pan with a rod for ore and gems.
+- **Khazgrim** — the dwarves' living town on floor 4 of the dwarfhold. Hand-shaped and world-seeded, so it never re-rolls: a pillared hall, an alehall, Thrunn's forge, and folk who remember a friend across saves. Floor 5 below it is the **Underriver**, a persistent ore-river you pan with a rod for ore and gems. The dwarves' **lift** in the west corridor rides, for a fare (15g a floor, a few minutes), to every fifth floor of the mine you've reached on foot, and back from a station beside the stairs on each. It saves the walk down and opens nothing new.
 
 ### Water
 

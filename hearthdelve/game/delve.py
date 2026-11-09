@@ -94,8 +94,13 @@ def build_floor(state: GameState, kind: str, site: tuple, depth: int):
     if kind == "dwarfhold" and depth == dwarftown.UNDERRIVER_DEPTH:
         # The Underriver: world-seeded like the town, so the same river every
         # time — a persistent stake you return to and pan for ore & gems.
-        return dungeon.generate_underriver(state.seed)
-    return dungeon.generate(_seed_for(state, kind, site, depth), kind, depth)
+        gm = dungeon.generate_underriver(state.seed)
+    else:
+        gm = dungeon.generate(_seed_for(state, kind, site, depth), kind, depth)
+    from . import lift
+    if kind == "dwarfhold" and depth % lift.LIFT_STEP == 0:
+        lift.place_station(gm)                 # the dwarves' cage stops here
+    return gm
 
 
 def _go_to_floor(state: GameState, depth: int, descending: bool) -> None:
@@ -127,6 +132,9 @@ def _go_to_floor(state: GameState, depth: int, descending: bool) -> None:
         state.floor_cache[key] = gm
     state.world = gm
     state.stats["deepest_depth"] = max(state.stats.get("deepest_depth", 0), depth)
+    if state.dungeon_kind == "dwarfhold":            # the lift's stops
+        from . import lift
+        state.stats["dwarfhold_deepest"] = max(lift.deepest(state), depth)
     # arrive at the up-stairs when descending into a floor, down-stairs when rising
     state.player.x, state.player.y = gm.stairs_up if descending else gm.stairs_down
     update_fov(state)
