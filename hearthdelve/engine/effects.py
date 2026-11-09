@@ -1024,3 +1024,65 @@ def catch(f: anim.Frame, h, age: float) -> None:
         _write(f, sx, sy - 1, "~", _SPRAY)
     if u < 1.0 and (x, y) != (tx, ty):
         _write(f, x, y, h.data.get("glyph", "≈"), (150, 212, 236))
+
+
+def _view_toward(f: anim.Frame, colour, k) -> None:
+    """Pull the whole view's colours toward `colour` by `k` (a number, or a
+    (vw, vh) field)."""
+    k = np.asarray(k, dtype=np.float32)
+    if k.ndim == 2:
+        k = k[..., None]
+    target = np.array(colour, np.float32)
+    for chan in ("fg", "bg"):
+        cur = f.con.rgb[chan][:f.vw, :f.vh].astype(np.float32)
+        f.con.rgb[chan][:f.vw, :f.vh] = (cur * (1.0 - k) + target * k).astype(np.uint8)
+
+
+@anim.one_off("stairs", life=0.45, order=950)
+def stairs(f: anim.Frame, h, age: float) -> None:
+    """Taking the stairs: the new floor comes out of the dark from the top
+    down, as your eyes find it."""
+    edge = -2.0 + (f.vh + 4.0) * age / 0.45       # rows above this are revealed
+    rows = np.arange(f.vh, dtype=np.float32)[None, :]
+    k = np.clip((rows - edge) / 3.0 + 0.5, 0.0, 1.0)          # a soft edge, not a hard line
+    _view_toward(f, (0, 0, 0), np.broadcast_to(k, (f.vw, f.vh)))
+
+
+_DAWN_CARD = 2.6
+
+
+@anim.one_off("dawn", life=_DAWN_CARD, order=950)
+def dawn(f: anim.Frame, h, age: float) -> None:
+    """Morning after a night's sleep: the view comes up out of the night, and
+    a card names the day and its weather for a moment."""
+    from . import ui
+    from ..data import content
+    if age < 1.0:
+        _view_toward(f, (10, 12, 30), 0.9 * (1.0 - age))
+    if not 0.2 <= age < _DAWN_CARD - 0.15:
+        return
+    st = f.state
+    icon, icol = _rendering()._WEATHER_ICON.get(st.weather, ("·", (200, 200, 200)))
+    fest = content.festival_on(st.season, st.day_of_season)
+    line1 = f"{st.date_str()}, Year {st.year}"
+    line2 = fest[1] if fest else f"{st.weather}"
+    w = max(len(line1), len(line2) + 2) + 6
+    x0, y0 = (f.vw - w) // 2, f.vh // 3
+    ui.frame(f.con, x0, y0, w, 4)
+    f.con.print(x0 + (w - len(line1)) // 2, y0 + 1, line1, fg=(236, 226, 180), bg=ui.BASE_BG)
+    f.con.print(x0 + (w - len(line2) - 2) // 2, y0 + 2, icon, fg=icol, bg=ui.BASE_BG)
+    f.con.print(x0 + (w - len(line2) - 2) // 2 + 2, y0 + 2, line2,
+                fg=(244, 210, 130) if fest else (200, 204, 210), bg=ui.BASE_BG)
+
+
+@anim.one_off("faint", life=1.8, order=950)
+def faint(f: anim.Frame, h, age: float) -> None:
+    """Coming round after a faint: the edges of sight swim red and dark, and
+    slowly let go."""
+    p = f.state.player
+    px, py = p.x - f.ox, p.y - f.oy
+    X = np.arange(f.vw, dtype=np.float32)[:, None]
+    Y = np.arange(f.vh, dtype=np.float32)[None, :]
+    d = np.sqrt(((X - px) * 0.6) ** 2 + (Y - py) ** 2) / (f.vh * 0.6)
+    k = np.clip(d, 0.0, 1.0) ** 1.4 * 0.85 * (1.0 - age / 1.8)
+    _view_toward(f, (70, 0, 6), k)

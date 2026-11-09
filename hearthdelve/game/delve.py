@@ -130,6 +130,7 @@ def _go_to_floor(state: GameState, depth: int, descending: bool) -> None:
     # arrive at the up-stairs when descending into a floor, down-stairs when rising
     state.player.x, state.player.y = gm.stairs_up if descending else gm.stairs_down
     update_fov(state)
+    state.happen("stairs", state.player.x, state.player.y)   # the dark gives way to the new floor
     state.log.add(_feeling(gm), (176, 180, 216))
 
 
@@ -153,6 +154,7 @@ def ascend(state: GameState) -> None:
     state.depth -= 1
     if state.depth <= 0:
         leave_to_surface(state)
+        state.happen("stairs", state.player.x, state.player.y)
         state.log.add("You climb back out into the daylight.", (220, 215, 180))
     else:
         _go_to_floor(state, state.depth, descending=False)

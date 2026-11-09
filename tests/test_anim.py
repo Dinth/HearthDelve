@@ -221,6 +221,7 @@ class TestAMonsterNoticesYou(unittest.TestCase):
         mouth = sorted(q for q, k in st.surface.dungeon_kind.items() if k == "mine")[0]
         st.player.x, st.player.y = mouth
         delve.enter(st, "mine")
+        st.fx.clear()                                  # (the way down has its own effect)
         return st
 
     def test_it_shows_over_a_monster_that_sees_you(self):
@@ -536,6 +537,59 @@ class TestFishingShows(unittest.TestCase):
         fishing.resolve(st, ctx, caught=True)
         self.assertEqual([h.kind for h in st.fx], ["splash", "catch"])
         self.assertEqual(st.fx[1].data["glyph"], ctx["fish"].glyph)
+
+
+
+class TestTransitions(unittest.TestCase):
+    """Taking the stairs, waking from sleep and coming round from a faint all
+    cut straight to the new scene. Now each comes in."""
+
+    def _dark(self, con, rows):
+        return float(con.bg[:58, rows].astype(int).sum() + con.fg[:58, rows].astype(int).sum())
+
+    def test_the_stairs_come_out_of_the_dark_from_the_top(self):
+        from hearthdelve.game import delve
+        st = fresh_state(2)
+        mouth = sorted(q for q, k in st.surface.dungeon_kind.items() if k == "mine")[0]
+        st.player.x, st.player.y = mouth
+        delve.enter(st, "mine")
+        st.fx[:] = [h for h in st.fx if h.kind == "stairs"]
+        self.assertEqual(len(st.fx), 1)
+        _sx, sy = _screen(st, st.player.x, st.player.y)
+        first = _render(st, 3.0)                       # the moment you arrive
+        mid = _render(st, 3.0 + (sy + 2) * 0.45 / 48)  # the dark's edge at your row
+        settled = _render(st, 3.6)
+        above, below = slice(sy - 3, sy - 1), slice(sy + 2, sy + 4)   # where your torch reaches
+        self.assertEqual(self._dark(first, slice(0, 44)), 0.0)
+        self.assertGreater(self._dark(mid, above), 0.0)
+        self.assertEqual(self._dark(mid, below), 0.0)              # the bottom still dark
+        self.assertGreater(self._dark(settled, below), 0.0)
+
+    def test_a_night_s_sleep_ends_in_a_card_naming_the_day(self):
+        from hearthdelve.game import farming
+        st = fresh_state(2)
+        farming.sleep(st)
+        self.assertIn("dawn", [h.kind for h in st.fx])
+        st.fx[:] = [h for h in st.fx if h.kind == "dawn"]
+        _render(st, 1.0)
+        con = _render(st, 2.0)
+        text = " ".join("".join(chr(c) for c in con.ch[:58, y]) for y in range(44))
+        self.assertIn(f"{st.date_str()}, Year {st.year}", text)
+
+    def test_coming_round_from_a_faint_swims_red_at_the_edges(self):
+        from hearthdelve.game import farming
+        st = fresh_state(2)
+        farming.collapse(st, "You collapse.")
+        st.fx[:] = [h for h in st.fx if h.kind == "faint"]
+        self.assertEqual(len(st.fx), 1)
+        con = _render(st, 1.0)
+        calm = fresh_state(2)
+        calm.day, calm.clock = st.day, st.clock
+        plain = _render(calm, 1.0)
+        corner = con.bg[:4, :4].astype(int)
+        plain_corner = plain.bg[:4, :4].astype(int)
+        self.assertGreater((corner[..., 0] - corner[..., 2]).mean(),
+                           (plain_corner[..., 0] - plain_corner[..., 2]).mean())
 
 
 if __name__ == "__main__":

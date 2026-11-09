@@ -645,6 +645,7 @@ def _tend_village_fields(state: GameState, season: str) -> None:
 def sleep(state: GameState) -> None:
     state.log.add("You sleep soundly. A new day dawns.", (180, 200, 240))
     new_day(state, rested=True)
+    state.happen("dawn", state.player.x, state.player.y)   # the morning comes up on screen
 
 
 def collapse(state: GameState, reason: str) -> None:
@@ -674,6 +675,7 @@ def collapse(state: GameState, reason: str) -> None:
     if state.surface and state.surface.bed:
         state.player.x, state.player.y = state.surface.bed
     new_day(state, rested=False)
+    state.happen("faint", state.player.x, state.player.y)  # you come round, slowly
 
 
 def _announce_morning(state: GameState) -> None:
