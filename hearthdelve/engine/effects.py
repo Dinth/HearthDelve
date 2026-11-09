@@ -1132,17 +1132,6 @@ def songs_at_the_inn(f: anim.Frame) -> None:
             _write(f, sx, sy - 1 - int(age / 0.7), "♪", (240, 212, 140))
 
 
-_WATER_IDS = None
-
-
-def _water_ids():
-    global _WATER_IDS
-    if _WATER_IDS is None:
-        from ..world import tile
-        _WATER_IDS = np.array([t.kind == "water" for t in tile.TILES], dtype=bool)
-    return _WATER_IDS
-
-
 @anim.ongoing(anim.OVERLAY, 12)
 def shooting_stars(f: anim.Frame) -> None:
     """On a clear night a shooting star now and then streaks across the sky,
@@ -1193,7 +1182,7 @@ def fish_rising(f: anim.Frame) -> None:
     w = st.world
     if getattr(w, "underriver", False):
         return
-    water = _water_ids()[f.view]
+    water = np.isin(f.view, _WATER_IDS)
     if w.is_dungeon and w.visible is not None:           # underground, only what you see
         seen = np.zeros_like(water)
         sub = w.visible[f.ox:f.ox + f.vw, f.oy:f.oy + f.vh]

@@ -57,6 +57,33 @@ class TestOneEngine(unittest.TestCase):
                                               if e[0] < 1000]
         self.assertEqual(drawn, ["first", "second"])
 
+    def test_no_effect_redefines_another_s_name(self):
+        """effects.py is one module of many effects: a second top-level
+        `_WATER_IDS = ...` (fish rising's own table) silently replaced the
+        shimmer's, foam's and puddles' list of water tiles, and grass and
+        meadow rolled like the sea."""
+        import ast
+        import collections
+        import pathlib
+        src = (pathlib.Path(__file__).resolve().parent.parent
+               / "hearthdelve" / "engine" / "effects.py").read_text(encoding="utf-8")
+        names = collections.Counter()
+        for node in ast.parse(src).body:
+            targets = (node.targets if isinstance(node, ast.Assign)
+                       else [node.target] if isinstance(node, ast.AnnAssign) else [])
+            names.update(t.id for t in targets if isinstance(t, ast.Name))
+            if isinstance(node, (ast.FunctionDef, ast.ClassDef)):
+                names[node.name] += 1
+        self.assertEqual([n for n, c in names.items() if c > 1], [])
+
+    def test_the_water_list_stays_the_water_tiles_after_frames_play(self):
+        import numpy as np
+        from hearthdelve.engine import effects
+        from hearthdelve.world import tile
+        for k in range(3):
+            _render(fresh_state(2), k * 0.4)
+        self.assertEqual(sorted(np.asarray(effects._WATER_IDS).tolist()), sorted([tile.WATER, tile.RIVER]))
+
     def test_the_game_never_imports_drawing_code(self):
         """Game logic records what happens; it never reaches for the screen."""
         import pathlib
