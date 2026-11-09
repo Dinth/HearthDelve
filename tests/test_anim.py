@@ -786,6 +786,45 @@ class TestTheDeepIsntStill(unittest.TestCase):
         self.assertNotIn("dust", [h.kind for h in st.fx])
 
 
+class TestStillWaterIsStill(unittest.TestCase):
+    """Every water tile next to land got the sea's surging surf line, and all
+    water the sea's rolling swell — so a bog pool or a village pond looked
+    like a little sea. Only the sea has surf now; still water just ripples."""
+
+    def _edge_brightness(self, st, cells, frames=12):
+        best = 0
+        for k in range(frames):
+            con = _render(st, 2.0 + k * 0.25)
+            for c in cells:
+                best = max(best, int(con.bg[_screen(st, *c)].astype(int).sum()))
+        return best
+
+    def test_a_pond_inland_has_no_surf(self):
+        from hearthdelve.world import tile
+        st = fresh_state(2)
+        st.weather = "Clear"
+        p = st.player
+        dx, dy = _clear_line(st, 6)
+        pond = [(p.x + dx * k + j * dy, p.y + dy * k + j * dx) for k in (4, 5) for j in (-1, 0, 1)]
+        for c in pond:
+            st.world.tiles[c] = tile.WATER
+        self.assertLess(self._edge_brightness(st, pond), 330)
+
+    def test_the_sea_still_breaks_on_its_shore(self):
+        st = fresh_state(2)
+        st.weather = "Clear"
+        w = st.world
+        x = st.player.x
+        while True:                                   # a real shore: land right above the sea
+            y = int(w.coast[x])
+            if (w.tile_at(x, y).name == "water" and w.tile_at(x, y - 1).kind != "water"
+                    and w.walkable(x, y - 3)):
+                break
+            x += 1
+        st.player.x, st.player.y = x, y - 3
+        self.assertGreater(self._edge_brightness(st, [(x, y)]), 330)
+
+
 class TestAMonsterNoticesYou(unittest.TestCase):
     """A monster waking showed only as it starting to move. Now a "!" shows
     over it the moment it sees you."""

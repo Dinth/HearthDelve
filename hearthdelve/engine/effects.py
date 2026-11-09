@@ -79,17 +79,36 @@ def wind(f: anim.Frame) -> None:
     f.fg_mul = np.where(trees, 1.0 + 0.17 * gust + 0.5 * ambient, f.fg_mul)
 
 
+def _sea(f: anim.Frame) -> np.ndarray:
+    """The view's sea cells. The map keeps the sea, a lake, a village pond and
+    a bog pool all as one water tile; its coastline (per column, the first
+    sea row) says which is salt. A map without one has no sea."""
+    sea = f.view == tile.WATER
+    coast = getattr(f.state.world, "coast", None)
+    if coast is None or f.state.world.is_dungeon:
+        return np.zeros_like(sea)
+    cols = np.clip(f.ox + np.arange(f.vw), 0, len(coast) - 1)
+    rows = f.oy + np.arange(f.vh)
+    return sea & (rows[None, :] >= np.asarray(coast)[cols][:, None])
+
+
 @anim.ongoing(anim.TINT, 20)
 def water_shimmer(f: anim.Frame) -> None:
-    """Water: two interfering wave trains shimmer the surface (fg + a little bg)."""
+    """Water: on the sea and the running river, two interfering wave trains
+    shimmer the surface (fg + a little bg); standing water inland — a lake, a
+    pond, a bog pool — only ripples, gently, as still water does."""
     water = np.isin(f.view, _WATER_IDS)
     if not water.any():
         return
     xs, ys, t = f.xs, f.ys, f.t
+    still = (f.view == tile.WATER) & ~_sea(f)
     wave = (np.sin((xs * 0.70 - ys * 0.50) - t * 2.6)
             + 0.5 * np.sin((xs * 0.25 + ys * 0.60) - t * 1.5))
-    f.fg_mul = np.where(water, 1.0 + 0.17 * wave, f.fg_mul)
-    f.bg_mul = np.where(water, 1.0 + 0.10 * wave, f.bg_mul)
+    ripple = np.sin(xs * 1.3 + ys * 1.7 - t * 1.1) * np.sin(xs * 0.6 - ys * 0.9 + t * 0.7)
+    fg_k = np.where(still, 0.05 * ripple, 0.17 * wave)
+    bg_k = np.where(still, 0.03 * ripple, 0.10 * wave)
+    f.fg_mul = np.where(water, 1.0 + fg_k, f.fg_mul)
+    f.bg_mul = np.where(water, 1.0 + bg_k, f.bg_mul)
 
 
 @anim.ongoing(anim.TINT, 30)
@@ -126,10 +145,13 @@ def campfire_flicker(f: anim.Frame) -> None:
 # ==============================================================================
 @anim.ongoing(anim.GROUND, 10)
 def coastal_foam(f: anim.Frame) -> None:
-    """Coastal foam: SEA cells (not the river) that lap against land carry a
-    bright surf line that surges and recedes, so coasts read as living edges."""
-    sea = f.view == tile.WATER
-    if f.state.world.is_dungeon or not sea.any():
+    """Coastal foam: SEA cells (not the river, nor a lake, pond or bog pool —
+    still water has no surf) that lap against land carry a bright surf line
+    that surges and recedes, so coasts read as living edges."""
+    if f.state.world.is_dungeon:
+        return
+    sea = _sea(f)
+    if not sea.any():
         return
     water = np.isin(f.view, _WATER_IDS)
     land = ~water                                    # water = sea|river; land = neither
