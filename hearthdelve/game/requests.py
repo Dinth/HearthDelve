@@ -18,7 +18,6 @@ import random
 from ..data import content
 from ..engine import constants as C
 from ..entities import items
-from ..entities.npc import MAX_HEARTS
 from .state import GameState
 
 MAX_OPEN = 4                  # the board holds only so many pinned favours
@@ -282,8 +281,8 @@ def deliver(state: GameState, req: dict) -> bool:
     karma.adjust(state, 1)
     npc = _find_npc(state, req["npc"])
     if npc is not None:
-        pts = karma.scale(state.player.karma, FRIEND_POINTS)
-        npc.friendship = min(MAX_HEARTS * 100, npc.friendship + pts)
+        from . import village
+        village.befriend(state, npc, karma.scale(state.player.karma, FRIEND_POINTS))
         npc.met = True
     extra = f" (+{bonus}g for the quality)" if bonus else ""
     state.log.add(f"You fill {req['npc']}'s favour — {req['gold']}g{extra}, with thanks.",

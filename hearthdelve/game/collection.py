@@ -116,11 +116,11 @@ def _complete_all(state: GameState) -> None:
         return
     state.stats["collection_complete"] = 1
     from . import karma
-    from ..entities.npc import MAX_HEARTS
     karma.adjust(state, 10)
     if state.surface is not None:
+        from . import village
         for n in state.surface.npcs:
-            n.friendship = min(MAX_HEARTS * 100, n.friendship + 150)
+            village.befriend(state, n, 150)
     state.log.add("The Hall of Wonders is COMPLETE — every wonder of the Vale, catalogued and kept. "
                   "Your name will be spoken here for generations.", (248, 232, 160))
     state.mail.append({

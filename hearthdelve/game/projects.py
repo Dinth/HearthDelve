@@ -15,7 +15,6 @@ from ..data import content
 from ..engine import constants as C
 from ..entities import items
 from ..entities.machine import Machine
-from ..entities.npc import MAX_HEARTS
 from ..world import tile
 from .state import GameState
 
@@ -280,9 +279,10 @@ def finish(state: GameState, x: int, y: int, m: Machine) -> None:
     if proj:
         proj["state"] = "done"
     # the whole village turns out for the raising
+    from . import village
     for n in surf.npcs:
         if getattr(n, "village", "") == d.village:
-            n.friendship = min(MAX_HEARTS * 100, n.friendship + 150)
+            village.befriend(state, n, 150)
     karma.adjust(state, 5)
     state.log.add(f"The {d.name} stands finished! {d.perk}", (232, 200, 120))
     state.mail.append({

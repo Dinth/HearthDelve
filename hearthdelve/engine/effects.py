@@ -1048,6 +1048,33 @@ def emote(f: anim.Frame, h, age: float) -> None:
            tuple(int(c * fade) for c in colour))
 
 
+@anim.one_off("hearts", life=1.5)
+def hearts(f: anim.Frame, h, age: float) -> None:
+    """A heart won with a villager: a ring of hearts bursts out around them,
+    and their new count rises over their head."""
+    cell = f.cell(h.x, h.y)
+    if cell is None:
+        return
+    sx, sy = cell
+    pink = (255, 128, 168)
+    u = min(1.0, age / 0.9)
+    fade = 1.0 if age < 0.6 else max(0.25, 1.0 - (age - 0.6) / 0.9)
+    for i in range(8):
+        ang = i * 6.2832 / 8 + 0.39
+        r = 0.9 + 2.6 * u
+        x = sx + int(round(math.cos(ang) * r * 1.4))
+        y = sy + int(round(math.sin(ang) * r * 0.8 - 0.8 * u))      # and drift upward
+        if (x, y) != (sx, sy) and (x, y) not in f.occupied and 0 <= x < f.vw and 0 <= y < f.vh:
+            _write(f, x, y, "♥" if u < 0.85 else "·", tuple(int(c * fade) for c in pink))
+    label = f"♥{h.data.get('hearts', '')}"
+    y = sy - 1 - int(age / 0.5)
+    if 0 <= y < f.vh:
+        for i in range(len(label)):
+            if 0 <= sx + i < f.vw:
+                _blend(f.con, sx + i, y, "bg", (0, 0, 0), 0.5 * fade)
+        _write(f, sx, y, label, tuple(int(c * fade) for c in (255, 170, 196)))
+
+
 @anim.ongoing(anim.OVERLAY, 50)
 def songs_at_the_inn(f: anim.Frame) -> None:
     """Evenings at the inn: now and then a "♪" rises over someone there —

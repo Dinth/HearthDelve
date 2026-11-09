@@ -708,14 +708,14 @@ def _announce_morning(state: GameState) -> None:
         # The year's closing night: if you filled the fireworks order, the sky
         # over the square is yours — and the whole Vale remembers who lit it.
         from .requests import _year_finale
-        from ..entities.npc import MAX_HEARTS
         season, fday, _name = _year_finale()
         if ((state.season, state.day_of_season) == (season, fday)
                 and state.stats.get(f"fireworks_{state.year}") == 1):
             state.stats[f"fireworks_{state.year}"] = 2      # the show is spent
             from . import karma
             karma.adjust(state, 2)
+            from . import village
             for n in state.surface.npcs:
-                n.friendship = min(MAX_HEARTS * 100, n.friendship + 40)
+                village.befriend(state, n, 40)
             state.log.add("Tonight your firecrackers light the sky over the square — "
                           "the whole Vale cheers!", (250, 220, 110))

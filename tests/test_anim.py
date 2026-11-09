@@ -378,6 +378,54 @@ class TestALevelGainedShows(unittest.TestCase):
         self.assertGreater(ups[1].data["delay"], ups[0].data["delay"])
 
 
+class TestAHeartWonShows(unittest.TestCase):
+    """A heart won with a villager went by unremarked. Now hearts burst out
+    around them, whatever won it — and every source of friendship goes
+    through the one place that notices."""
+
+    def _villager(self, st):
+        p = st.player
+        npc = st.surface.npcs[0]
+        dx, dy = _clear_line(st, 4)
+        npc.x, npc.y = p.x + dx * 3, p.y + dy * 3
+        return npc
+
+    def test_a_gift_that_wins_a_heart_bursts_into_hearts(self):
+        from hearthdelve.game import village
+        st = fresh_state(2)
+        npc = self._villager(st)
+        npc.friendship = 299
+        village.befriend(st, npc, 5)
+        (h,) = [h for h in st.fx if h.kind == "hearts"]
+        self.assertEqual((h.x, h.y, h.data["hearts"]), (npc.x, npc.y, 3))
+        _render(st, 60.0)
+        con = _render(st, 60.4)
+        sx, sy = _screen(st, npc.x, npc.y)
+        around = sum(chr(con.ch[x, y]) == "♥" for x in range(sx - 6, sx + 7)
+                     for y in range(sy - 4, sy + 4))
+        self.assertGreaterEqual(around, 5)
+
+    def test_points_within_a_heart_dont_burst(self):
+        from hearthdelve.game import village
+        st = fresh_state(2)
+        npc = self._villager(st)
+        npc.friendship = 210
+        village.befriend(st, npc, 30)
+        village.befriend(st, npc, -100)
+        self.assertEqual([h for h in st.fx if h.kind == "hearts"], [])
+
+    def test_every_friendship_gain_goes_through_befriend(self):
+        """So none of them can win a heart without it showing."""
+        import pathlib
+        import re
+        root = pathlib.Path(__file__).resolve().parent.parent / "hearthdelve" / "game"
+        raw = re.compile(r"\.friendship\s*=\s*min\(")
+        offenders = [f"{p.name}:{n}" for p in sorted(root.glob("*.py"))
+                     for n, line in enumerate(p.read_text(encoding="utf-8").splitlines(), 1)
+                     if raw.search(line)]
+        self.assertEqual(offenders, [])
+
+
 class TestAMonsterNoticesYou(unittest.TestCase):
     """A monster waking showed only as it starting to move. Now a "!" shows
     over it the moment it sees you."""

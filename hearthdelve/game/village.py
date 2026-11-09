@@ -245,6 +245,17 @@ def npc_near(state: GameState):
 
 
 # --- talk & gift ------------------------------------------------------------
+def befriend(state: GameState, npc: NPC, points: int) -> None:
+    """Warm (or cool) a villager by `points`, within friendship's bounds. A
+    heart won shows: a burst of them around the villager, wherever the
+    friendship came from — a chat, a gift, a favour, the whole village
+    turning out for a raising."""
+    before = npc.hearts
+    npc.friendship = max(0, min(MAX_HEARTS * 100, npc.friendship + points))
+    if npc.hearts > before and state.world is state.surface:     # villagers live up top
+        state.happen("hearts", npc.x, npc.y, hearts=npc.hearts)
+
+
 def talk(state: GameState, npc: NPC) -> str:
     first = not npc.talked_today
     npc.met = True
@@ -253,7 +264,7 @@ def talk(state: GameState, npc: NPC) -> str:
         from . import attrs
         gain = karma.scale(state.player.karma, 10) * _warmth(state, npc)
         gain = round(gain * (1 + 0.04 * attrs.mod(state, "Ch")))   # easy company
-        npc.friendship = min(MAX_HEARTS * 100, npc.friendship + gain)
+        befriend(state, npc, gain)
     scene = _heart_event(state, npc)         # a once-per-tier scripted moment
     if scene:
         return scene
@@ -285,7 +296,7 @@ def _heart_event(state: GameState, npc: NPC):
         key = f"{npc.name}:{hearts}"
         if npc.hearts >= hearts and key not in state.seen_events:
             state.seen_events.add(key)
-            npc.friendship = min(MAX_HEARTS * 100, npc.friendship + 50)
+            befriend(state, npc, 50)
             karma.adjust(state, 1)
             return text
     return None
@@ -434,7 +445,7 @@ def gift(state: GameState, npc: NPC, item, quality: int = 0) -> None:
     if points > 0:                       # a fete or festival warms a kind gift double
         from . import attrs
         points = round(points * _warmth(state, npc) * (1 + 0.04 * attrs.mod(state, "Ap")))
-    npc.friendship = max(0, min(MAX_HEARTS * 100, npc.friendship + points))
+    befriend(state, npc, points)
     npc.gifted_today = True
     if npc._matches(item, npc.loves):                 # it shows on their face
         state.happen("emote", npc.x, npc.y, glyph="♥", colour=(255, 128, 168))
@@ -571,7 +582,7 @@ def enter_contest(state: GameState, item, ql: int, judge: NPC | None = None) -> 
         state.player.inventory.add(items.FAIR_RIBBON, 1)
         for n in state.surface.npcs:
             if getattr(n, "village", "") == home:
-                n.friendship = min(MAX_HEARTS * 100, n.friendship + 100)
+                befriend(state, n, 100)
         karma.adjust(state, 3)
         extra = ""
         if rng.random() < 0.4:
@@ -590,7 +601,7 @@ def enter_contest(state: GameState, item, ql: int, judge: NPC | None = None) -> 
                 f"A fair ribbon is pinned on you, to warm applause.{extra}")
     if place <= 3:
         if judge is not None:
-            judge.friendship = min(MAX_HEARTS * 100, judge.friendship + 45)
+            befriend(state, judge, 45)
         karma.adjust(state, 1)
         state.player.inventory.add(fest[3], 1)
         state.log.add(f"Your {entry} places {place}{'nd' if place == 2 else 'rd'} at the fair.",
