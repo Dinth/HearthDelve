@@ -1086,3 +1086,52 @@ def faint(f: anim.Frame, h, age: float) -> None:
     d = np.sqrt(((X - px) * 0.6) ** 2 + (Y - py) ** 2) / (f.vh * 0.6)
     k = np.clip(d, 0.0, 1.0) ** 1.4 * 0.85 * (1.0 - age / 1.8)
     _view_toward(f, (70, 0, 6), k)
+
+
+_FIREWORK_COLOURS = ((255, 110, 120), (120, 210, 255), (255, 226, 110), (170, 255, 150),
+                     (230, 150, 255), (255, 170, 90))
+
+
+def _fireworks_tonight(st) -> bool:
+    """The year's last festival, after dark, with the fireworks order filled
+    (the show, spent at dawn, goes up that night)."""
+    from ..game.requests import _year_finale
+    season, day, _name = _year_finale()
+    minutes = st.time_minutes % 1440
+    return ((st.season, st.day_of_season) == (season, day)
+            and st.stats.get(f"fireworks_{st.year}") == 2
+            and (minutes >= 19 * 60 or minutes < 2 * 60))
+
+
+@anim.ongoing(anim.OVERLAY, 45)
+def fireworks(f: anim.Frame) -> None:
+    """The year's closing night, if you filled the fireworks order: rockets
+    climb into the sky over the view and burst into rings of colour, on
+    their own irregular beats — the sky the whole Vale cheered for."""
+    st = f.state
+    if st.world.is_dungeon or not _fireworks_tonight(st):
+        return
+    salt = st.seed % 997
+    for i in range(3):
+        window = 2.3 + 0.7 * i
+        age = anim.burst_age(f.t, window, 0.85, 2.0, salt + i * 17 + 0.3)
+        if age is None:
+            continue
+        k = math.floor(f.t / window)
+        x0 = int(f.vw * (0.15 + 0.7 * anim.h1(k * 3 + i, salt + 1.1)))
+        apex = int(f.vh * (0.12 + 0.22 * anim.h1(k * 3 + i, salt + 2.3)))
+        colour = _FIREWORK_COLOURS[int(anim.h1(k * 5 + i, salt + 3.7) * len(_FIREWORK_COLOURS))]
+        if age < 0.6:                                 # the rocket climbs, trailing sparks
+            y = int(f.vh - 1 - (f.vh - 1 - apex) * age / 0.6)
+            for dy, glyph in ((0, "'"), (1, "·")):
+                if 0 <= y + dy < f.vh and (x0, y + dy) not in f.occupied:
+                    _write(f, x0, y + dy, glyph, (255, 214, 150))
+            continue
+        b = (age - 0.6) / 1.4                         # then bursts into a ring
+        fade = max(0.25, 1.0 - b)
+        for j in range(12):
+            ang = j * 6.2832 / 12
+            x = x0 + int(round(math.cos(ang) * (1 + 5 * b) * 1.4))
+            y = apex + int(round(math.sin(ang) * (1 + 5 * b) * 0.8 + 2 * b * b))   # and droops
+            if 0 <= x < f.vw and 0 <= y < f.vh and (x, y) not in f.occupied:
+                _write(f, x, y, "*" if b < 0.5 else "·", tuple(int(c * fade) for c in colour))

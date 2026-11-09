@@ -38,7 +38,7 @@ class TestOneEngine(unittest.TestCase):
         self.assertEqual(names[anim.GROUND_LATE], ["gem_glitter", "lava_breathes"])
         self.assertEqual(names[anim.VEIL], ["westreach_weather"])
         self.assertEqual(names[anim.OVERLAY], ["weather", "seasonal_motes", "living_fire",
-                                               "crossings", "songs_at_the_inn"])
+                                               "crossings", "fireworks", "songs_at_the_inn"])
 
     def test_effects_in_a_layer_draw_lowest_order_first(self):
         from hearthdelve.engine import anim
@@ -625,6 +625,37 @@ class TestTheGoldRuns(unittest.TestCase):
         amount, (r, g, _b) = self._gold(_render(st, 1.25))
         self.assertTrue(200 < amount < 500)
         self.assertGreater(r, g)
+
+
+
+class TestFireworksNight(unittest.TestCase):
+    """Filling the year's fireworks order paid out as a log line. Now the sky
+    over the closing night actually lights up."""
+
+    def _night(self, filled):
+        from hearthdelve.engine import constants as C
+        from hearthdelve.game.requests import _year_finale
+        st = fresh_state(2)
+        season, day, _name = _year_finale()
+        st.day = C.SEASONS.index(season) * C.SEASON_LEN + day - 1
+        st.clock = (21 * 60 - C.DAY_START_MIN) * 60
+        st.weather = "Clear"
+        if filled:
+            st.stats[f"fireworks_{st.year}"] = 2
+        colours = set()
+        for k in range(120):
+            con = _render(st, k * 0.1)
+            for x in range(58):
+                for y in range(22):
+                    if chr(con.ch[x, y]) == "*":
+                        colours.add(tuple(int(c) for c in con.fg[x, y]))
+        return colours
+
+    def test_the_sky_bursts_in_colour_when_the_order_was_filled(self):
+        self.assertGreaterEqual(len(self._night(filled=True)), 3)
+
+    def test_no_show_without_the_order(self):
+        self.assertEqual(self._night(filled=False), set())
 
 
 if __name__ == "__main__":
