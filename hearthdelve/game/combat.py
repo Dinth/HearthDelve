@@ -641,6 +641,37 @@ _BREAKABLE = {"rock", "ore_vein", "gem_vein", "ruins_wall",
 # no matter what pickaxe you carry.
 BOMB_STATS = {items.BOMB: (1, 8), items.BLAST_CHARGE: (2, 16)}
 
+# --- noise -----------------------------------------------------------------------
+# Loud work underground carries. A sleeping thing within earshot may wake and
+# come looking — the nearer, the likelier, never a hard ring.
+BOMB_NOISE = 10             # a bomb's report carries this far
+BLAST_NOISE = 16            # a blast charge's thunderclap, further
+CRACKER_NOISE = 12          # a firecracker: all noise, and it wakes all it reaches
+PICK_NOISE = 6              # a pick ringing on rock
+PICK_STIR = 0.35            # ...and the odds it stirs a sleeper close by
+
+
+def make_noise(state: GameState, x: int, y: int, reach: int, chance: float = 1.0,
+               falloff: bool = True) -> int:
+    """A noise at (x, y), underground: each sleeping monster within `reach`
+    wakes on `chance` (halving toward the edge of earshot, unless no
+    `falloff`). Those in sight show it. Returns how many stirred."""
+    w = state.world
+    if not w.is_dungeon:
+        return 0
+    stirred = 0
+    for m in w.monsters:
+        d = max(abs(m.x - x), abs(m.y - y))
+        if m.awake or d > reach:
+            continue
+        odds = chance * (1.0 - 0.5 * d / reach) if falloff else chance
+        if random.random() < odds:
+            m.awake = True
+            stirred += 1
+            if w.visible is not None and w.visible[m.x, m.y]:
+                state.happen("wake", m.x, m.y)
+    return stirred
+
 
 def _carried_bomb(state: GameState):
     """The bomb a throw will spend: the one readied in the ammo slot if it's a
@@ -798,6 +829,12 @@ def throw_bomb_at(state: GameState, tx: int, ty: int) -> bool:
         if state.world.is_dungeon:                 # the roof sheds its dust
             state.happen("dust", bx, by, delay=flight + 0.1, radius=radius)
         _after(state, flight, _detonate, state, bx, by, radius, dmg)
+        reach = BLAST_NOISE if bomb is items.BLAST_CHARGE else BOMB_NOISE
+        stirred = _after(state, flight, make_noise, state, bx, by, reach)
+        if stirred:
+            state.log.add(f"The boom rolls on through the dark — {stirred} "
+                          f"thing{'s' if stirred != 1 else ''} stir{'' if stirred != 1 else 's'}.",
+                          (236, 180, 90))
     from . import turns
     turns.advance_time(state, C.BOMB_COST[1])
     return True
@@ -808,11 +845,7 @@ def _crack(state: GameState, bx: int, by: int) -> None:
     critter nearby bolting and keeps raiders off your land for days; in the
     dark it just tells everything exactly where you are."""
     if state.world.is_dungeon:
-        roused = 0
-        for m in state.world.monsters:
-            if max(abs(m.x - bx), abs(m.y - by)) <= 12 and not m.awake:
-                m.awake = True
-                roused += 1
+        roused = make_noise(state, bx, by, CRACKER_NOISE, falloff=False)
         state.log.add("CRACK-BANG! The report rolls through the dark"
                       + (f" — {roused} things stir." if roused else "."), (236, 180, 90))
         return

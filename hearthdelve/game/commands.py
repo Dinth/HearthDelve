@@ -156,6 +156,14 @@ def work_strike(state: GameState, b: dict) -> None:
                  done=max(0.0, min(1.0, 1.0 - b["left"] / total)))
 
 
+def _pick_rings(state: GameState, item, tx: int, ty: int) -> None:
+    """Mining underground is loud: the pick's ring may wake something
+    sleeping nearby (see combat.make_noise)."""
+    if item is items.PICKAXE and state.world.is_dungeon:
+        if combat.make_noise(state, tx, ty, combat.PICK_NOISE, combat.PICK_STIR):
+            state.log.add("Your pick rings through the rock — something stirs.", (224, 170, 120))
+
+
 def _finish_busy(state: GameState, b: dict) -> None:
     """Complete a long, animated tool action (chop/mine) once its time is up."""
     p = state.player
@@ -166,6 +174,7 @@ def _finish_busy(state: GameState, b: dict) -> None:
     state.log.add(b["msg"])
     with state.noting_gains([(b["tx"], b["ty"])]):
         _gather_drop(state, b["item"], b["target"])
+    _pick_rings(state, b["item"], b["tx"], b["ty"])
     if b.get("steal"):
         from . import land
         land.penalize(state, b["tx"], b["ty"], "growth")
@@ -615,6 +624,7 @@ def use_tool(state: GameState) -> dict | None:
     state.log.add(msg)
     with state.noting_gains([(tx, ty)]):
         _gather_drop(state, item, target)
+    _pick_rings(state, item, tx, ty)
     if steal:
         land.penalize(state, tx, ty, "growth")
     elif new_tile == tile.TILLED:
