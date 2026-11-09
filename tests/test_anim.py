@@ -384,5 +384,67 @@ class TestBombsBlow(unittest.TestCase):
         self.assertGreater(moved, 200)                    # the whole view jolted aside
 
 
+
+class TestWorkShows(unittest.TestCase):
+    """Felling a tree or breaking rock played out over a few frames with
+    nothing moving but the clock. Now chips fly, a pip fills, and a felled
+    tree crashes over."""
+
+    def _chop(self):
+        from hearthdelve import screens
+        from hearthdelve.entities import items
+        from hearthdelve.game import commands
+        from hearthdelve.world import tile
+        st = fresh_state(2)
+        p = st.player
+        dx, dy = _clear_line(st, 4)
+        st.world.tiles[p.x + dx, p.y + dy] = tile.TREE_OAK
+        p.facing = (dx, dy)
+        p.hotbar[p.active_slot] = items.AXE
+        ui = screens.UI(st)
+        busy = commands.use_tool(st)
+        self.assertIsInstance(busy, dict)
+        ui.play.busy_ctx = busy
+        while ui.play.busy_ctx is not None:
+            ui.play.tick(ui)
+        return st, (p.x + dx, p.y + dy), (dx, dy)
+
+    def test_each_beat_of_work_is_recorded_with_its_progress(self):
+        st, spot, _away = self._chop()
+        done = [h.data["done"] for h in st.fx if h.kind == "strike"]
+        self.assertGreater(len(done), 2)
+        self.assertEqual(done, sorted(done))
+        self.assertEqual(done[-1], 1.0)
+
+    def test_the_tree_goes_over_away_from_you(self):
+        st, spot, away = self._chop()
+        (fell,) = [h for h in st.fx if h.kind == "fell"]
+        self.assertEqual(((fell.x, fell.y), fell.data["away"]), (spot, away))
+        for h in st.fx:                                  # show only the fall
+            h.start = None
+        st.fx[:] = [fell]
+        _render(st, 30.0)
+        late = _render(st, 30.5)                          # lying where it fell
+        sx, sy = _screen(st, *spot)
+        lying = "".join(chr(late.ch[sx + away[0] * k, sy + away[1] * k]) for k in (1, 2))
+        self.assertEqual(lying, ("═" if away[0] else "║") * 2)
+
+    def test_watering_a_crop_is_recorded(self):
+        from hearthdelve.data import content
+        from hearthdelve.entities import items
+        from hearthdelve.game import commands
+        from hearthdelve.world.crops import CropPlot
+        st = fresh_state(2)
+        p = st.player
+        dx, dy = _clear_line(st, 2)
+        x, y = p.x + dx, p.y + dy
+        st.world.crops[(x, y)] = CropPlot(crop=content.CROPS[0])
+        p.facing = (dx, dy)
+        p.hotbar[p.active_slot] = items.WATERING_CAN
+        commands.use_tool(st)
+        self.assertEqual([(h.kind, h.x, h.y, h.data.get("crop")) for h in st.fx],
+                         [("water", x, y, True)])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -851,3 +851,87 @@ def shake(f: anim.Frame, h, age: float) -> None:
     n = h.data.get("strength", 1)
     view = f.con.rgb[:f.vw, :f.vh]
     f.con.rgb[:f.vw, :f.vh] = np.roll(view, shift=(dx * n, dy * n), axis=(0, 1))
+
+
+# What flies off a tool's work: (fresh, settling, colour) — wood chips, sparks
+# from rock, green bits from brush.
+_STRIKE_BITS = {"Axe": ("'", ",", (176, 128, 74)), "Pickaxe": ("*", "·", (255, 226, 150)),
+                "Machete": ("'", "`", (128, 196, 96))}
+_PIP = "▁▂▃▄▅▆▇█"
+
+
+@anim.one_off("strike", life=0.3)
+def strike(f: anim.Frame, h, age: float) -> None:
+    """A beat of chopping, mining or clearing: a couple of chips (or sparks)
+    fly up and out from the work, and a pip beyond it fills as it goes."""
+    cell = f.cell(h.x, h.y)
+    if cell is None:
+        return
+    sx, sy = cell
+    fresh, settled, colour = _STRIKE_BITS.get(h.data.get("tool"), ("'", ",", (200, 190, 170)))
+    done = h.data.get("done", 0.0)
+    seed = int(h.at) * 7 + int(done * 97)
+    fade = 1.0 if age < 0.15 else 0.6
+    for i in range(2):
+        ang = -1.5708 + (anim.h1(seed + i, 2.3) - 0.5) * 2.6        # mostly upward
+        r = 0.7 + 2.0 * age / 0.3
+        x = sx + int(round(math.cos(ang) * r * 1.3))
+        y = sy + int(round(math.sin(ang) * r * 0.8))
+        if (x, y) == (sx, sy) or (x, y) in f.occupied:
+            continue
+        _write(f, x, y, fresh if age < 0.15 else settled, tuple(int(c * fade) for c in colour))
+    p = f.state.player
+    px, py = sx + (h.x - p.x), sy + (h.y - p.y)     # beyond the work, never on you
+    if (px, py) not in f.occupied:
+        _write(f, px, py, _PIP[min(len(_PIP) - 1, int(done * len(_PIP)))], (232, 222, 170))
+
+
+@anim.one_off("fell", life=0.9)
+def fell(f: anim.Frame, h, age: float) -> None:
+    """A tree comes down: it leans away from you, then crashes over, trunk and
+    crown lying where it fell before the stump is all that's left."""
+    cell = f.cell(h.x, h.y)
+    if cell is None:
+        return
+    sx, sy = cell
+    dx, dy = h.data.get("away", (1, 0))
+    if (dx, dy) == (0, 0):
+        dx = 1
+    trunk, crown = (130, 94, 60), h.data.get("colour", (90, 150, 80))
+    if age < 0.3:
+        lean = "/" if (dx > 0 or dy < 0) else "\\"
+        _write(f, sx, sy, lean, trunk)
+        if (sx + dx, sy + dy) not in f.occupied:
+            _write(f, sx + dx, sy + dy, h.data.get("glyph", "♣"), crown)
+        return
+    fade = max(0.3, 1.0 - (age - 0.3) / 0.6)
+    bar = "═" if dx else "║"
+    for k in (1, 2):
+        if (sx + dx * k, sy + dy * k) not in f.occupied:
+            _write(f, sx + dx * k, sy + dy * k, bar, tuple(int(c * fade) for c in trunk))
+    if (sx + dx * 3, sy + dy * 3) not in f.occupied:
+        _write(f, sx + dx * 3, sy + dy * 3, h.data.get("glyph", "♣"),
+               tuple(int(c * fade) for c in crown))
+
+
+@anim.one_off("water", life=0.6)
+def water(f: anim.Frame, h, age: float) -> None:
+    """The watering can tips: drops fall into the ground and spatter, and a
+    planted cell darkens from dusty to damp rather than all at once."""
+    cell = f.cell(h.x, h.y)
+    if cell is None:
+        return
+    sx, sy = cell
+    if h.data.get("crop") and age < 0.5:
+        _blend(f.con, sx, sy, "bg", (62, 40, 18), 1.0 - age / 0.5)   # it was parched a moment ago
+    drop = (150, 196, 240)
+    if age < 0.3:
+        fall = int(age / 0.1)                       # three rows down into the soil
+        for x in (sx - 1, sx, sx + 1):
+            y = sy - 3 + fall + (x - sx) % 2
+            if y < sy and (x, y) not in f.occupied:
+                _write(f, x, y, "'", drop)
+    else:
+        for x, y in ((sx - 1, sy), (sx + 1, sy)):
+            if (x, y) not in f.occupied:
+                _write(f, x, y, "·", drop)

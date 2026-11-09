@@ -140,9 +140,26 @@ def _threat_near(state: GameState):
     return None
 
 
+def _felled(state: GameState, target, new_tile, tx: int, ty: int) -> None:
+    """A tree coming down is recorded for the screen: it goes over away from you."""
+    if target.kind == "tree" and new_tile is not None:
+        p = state.player
+        state.happen("fell", tx, ty, glyph=target.glyph, colour=tuple(int(c) for c in target.fg),
+                     away=((tx > p.x) - (tx < p.x), (ty > p.y) - (ty < p.y)))
+
+
+def work_strike(state: GameState, b: dict) -> None:
+    """One beat of a long tool action, recorded for the screen: chips fly and
+    the work's progress shows (see engine/effects.py)."""
+    total = b.get("total") or 1
+    state.happen("strike", b["tx"], b["ty"], tool=b["item"].name,
+                 done=max(0.0, min(1.0, 1.0 - b["left"] / total)))
+
+
 def _finish_busy(state: GameState, b: dict) -> None:
     """Complete a long, animated tool action (chop/mine) once its time is up."""
     p = state.player
+    _felled(state, b["target"], b["new_tile"], b["tx"], b["ty"])
     if b["new_tile"] is not None:
         state.world.tiles[b["tx"], b["ty"]] = b["new_tile"]
     p.energy = max(0, p.energy - b["stamina"])
@@ -471,6 +488,7 @@ def use_tool(state: GameState) -> dict | None:
             state.log.add("You're too exhausted. Rest first.", C.DIM)
             return None
         if farming.water_crop(state, tx, ty):
+            state.happen("water", tx, ty, crop=True)
             tier = p.tool_tier.get(items.WATERING_CAN, 0)
             p.energy = max(0, p.energy - max(1, round(C.WATER_COST[0] * (1 - 0.12 * tier))))
             turns.advance_time(state, C.WATER_COST[1])
@@ -561,10 +579,14 @@ def use_tool(state: GameState) -> dict | None:
             state.log.add(f"You can't focus with a {threat.name.lower()} so close.", C.DIM)
             return None
         state.log.add(f"You set to work with the {item.name.lower()}...", C.DIM)
-        return {"left": seconds, "item": item, "tx": tx, "ty": ty, "target": target,
-                "new_tile": new_tile, "stamina": stamina, "msg": msg, "steal": steal}
+        return {"left": seconds, "total": seconds, "item": item, "tx": tx, "ty": ty,
+                "target": target, "new_tile": new_tile, "stamina": stamina, "msg": msg,
+                "steal": steal}
 
     # Short tasks resolve at once.
+    _felled(state, target, new_tile, tx, ty)
+    if item is items.WATERING_CAN and target.name == "tilled":
+        state.happen("water", tx, ty)
     if new_tile is not None:
         state.world.tiles[tx, ty] = new_tile
     p.energy = max(0, p.energy - stamina)

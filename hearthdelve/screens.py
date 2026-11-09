@@ -143,6 +143,7 @@ class PlayScreen(Screen):
                 if state.world.is_dungeon:
                     delve.update_fov(state)
                 self.busy_ctx["left"] -= C.MOVE_SECONDS
+                cmds.work_strike(state, self.busy_ctx)
                 if self.busy_ctx["left"] <= 0:
                     cmds._finish_busy(state, self.busy_ctx)
                     self.busy_ctx = None
