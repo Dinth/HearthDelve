@@ -39,7 +39,7 @@ class TestOneEngine(unittest.TestCase):
         self.assertEqual(names[anim.VEIL], ["westreach_weather"])
         self.assertEqual(names[anim.OVERLAY], ["weather", "fish_rising", "seasonal_motes",
                                                "living_fire", "crossings", "fireworks",
-                                               "songs_at_the_inn", "afflictions"])
+                                               "songs_at_the_inn", "chatter", "afflictions"])
 
     def test_effects_in_a_layer_draw_lowest_order_first(self):
         from hearthdelve.engine import anim
@@ -540,6 +540,39 @@ class TestFishRise(unittest.TestCase):
         with mock.patch.object(fishing, "bite_odds", return_value=(0.0, [])):
             ctx = fishing.begin(st, p.x + 5, p.y)
         self.assertFalse(ctx["bite"])
+
+
+class TestVillagersChat(unittest.TestCase):
+    """Villagers stood side by side in silence. Now, now and then, one says
+    something and the other answers."""
+
+    def _pair(self, apart=1, hour=11):
+        from hearthdelve.engine import constants as C
+        st = fresh_state(2)
+        st.clock = (hour * 60 - C.DAY_START_MIN) * 60
+        p = st.player
+        dx, dy = _clear_line(st, 4)
+        a, b = st.surface.npcs[0], st.surface.npcs[1]
+        a.x, a.y = p.x + dx * 2 + dy, p.y + dy * 2 + dx
+        b.x, b.y = a.x + dx * apart, a.y + dy * apart
+        return st, a, b
+
+    def _said_over(self, st, npc, seconds=40.0):
+        sx, sy = _screen(st, npc.x, npc.y)
+        return {chr(_render(st, k * 0.2).ch[sx, sy - 1]) for k in range(int(seconds / 0.2))} & set("…?!♪")
+
+    def test_two_together_take_turns(self):
+        st, a, b = self._pair()
+        self.assertTrue(self._said_over(st, a))
+        self.assertTrue(self._said_over(st, b))
+
+    def test_two_far_apart_say_nothing(self):
+        st, a, b = self._pair(apart=5)
+        self.assertEqual(self._said_over(st, a), set())
+
+    def test_nothing_in_the_small_hours(self):
+        st, a, b = self._pair(hour=2)
+        self.assertEqual(self._said_over(st, a), set())
 
 
 class TestAMonsterNoticesYou(unittest.TestCase):

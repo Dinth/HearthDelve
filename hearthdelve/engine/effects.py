@@ -1251,6 +1251,53 @@ def afflictions(f: anim.Frame) -> None:
                                                for c in (255, 170, 60)))
 
 
+# Two villagers passing the time: what each says in turn.
+_CHATTER = (("…", "…"), ("?", "!"), ("!", "♪"), ("…", "♪"), ("?", "…"), ("!", "!"))
+_SAID = {"…": (226, 222, 206), "?": (190, 212, 240), "!": (250, 220, 120), "♪": (240, 212, 140)}
+
+
+@anim.ongoing(anim.OVERLAY, 55)
+def chatter(f: anim.Frame) -> None:
+    """Villagers who stand together pass the time: now and then one says
+    something — a "…", a "?", a "!" — and the other answers, each pair on its
+    own time. (At the inn of an evening they sing instead.)"""
+    st = f.state
+    w = st.world
+    if w.is_dungeon:
+        return
+    minutes = st.time_minutes % 1440
+    if not 7 * 60 <= minutes < 21 * 60 + 30:
+        return
+    evening = 19 * 60 <= minutes
+    here = []
+    for npc in w.npcs:
+        cell = f.cell(npc.x, npc.y)
+        if cell is None:
+            continue
+        inn = npc.spots.get("inn")
+        if evening and inn is not None and (npc.x, npc.y) == tuple(inn):
+            continue
+        here.append((npc, cell))
+    here.sort(key=lambda e: e[0].name)
+    for i, (a, ca) in enumerate(here):
+        for b, cb in here[i + 1:]:
+            if max(abs(a.x - b.x), abs(a.y - b.y)) > 2:
+                continue
+            salt = (sum(map(ord, a.name)) * 31 + sum(map(ord, b.name))) % 997 + 0.25
+            age = anim.burst_age(f.t, 8.0, 0.55, 1.8, salt)
+            if age is None:
+                continue
+            k = math.floor(f.t / 8.0)
+            said = _CHATTER[int(anim.h1(k, salt + 2.2) * len(_CHATTER))]
+            turn = 0 if age < 0.8 else 1 if age >= 0.95 else None
+            if turn is None:
+                continue                                  # a beat between them
+            sx, sy = (ca, cb)[turn]
+            glyph = said[turn]
+            if sy - 1 >= 0 and (sx, sy - 1) not in f.occupied:
+                _write(f, sx, sy - 1, glyph, _SAID[glyph])
+
+
 _SPRAY = (196, 226, 250)
 
 
