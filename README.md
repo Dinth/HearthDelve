@@ -13,7 +13,8 @@ describes the game as built.
 Prebuilt standalone binaries for **Linux, macOS (Apple Silicon & Intel) and
 Windows** are published under the
 [**rolling release**](https://github.com/Dinth/HearthDelve/releases/tag/rolling)
-— no Python needed. Grab the one for your OS and run it in a terminal. (On
+and on [**itch.io**](https://dinth.itch.io/hearthdelve) (the itch app keeps it
+up to date) — no Python needed. Grab the one for your OS and run it in a terminal. (On
 macOS, first run: right-click → Open, or clear Gatekeeper with
 `xattr -dr com.apple.quarantine <file>`.)
 

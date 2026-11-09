@@ -179,6 +179,61 @@ jobs:
           name: build-linux
           path: out/*
 
+  # The same binaries, pushed to https://dinth.itch.io/hearthdelve with butler
+  # (itch.io's uploader): one channel per platform, so the page and the itch
+  # app always offer the latest build, and butler only sends what changed.
+  # Needs the repo secret BUTLER_API_KEY (an itch.io API key); without it the
+  # job says so and skips, rather than failing the build.
+  itch:
+    name: Publish to itch.io
+    needs: [build, build-linux]
+    runs-on: ubuntu-latest
+    env:
+      BUTLER_API_KEY: ${{ secrets.BUTLER_API_KEY }}
+      ITCH_TARGET: dinth/hearthdelve
+    steps:
+      - name: Check for the itch.io key
+        id: key
+        run: |
+          if [ -z "$BUTLER_API_KEY" ]; then
+            echo "::notice::No BUTLER_API_KEY secret — skipping the itch.io upload."
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/download-artifact@v4
+        if: steps.key.outputs.ok == 'true'
+        with:
+          path: artifacts
+
+      - name: Install butler
+        if: steps.key.outputs.ok == 'true'
+        run: |
+          curl -fsSL -o butler.zip https://broth.itch.zone/butler/linux-amd64/LATEST/archive/default
+          unzip -q butler.zip -d butler && chmod +x butler/butler
+          butler/butler -V
+
+      - name: Lay out one folder per channel
+        if: steps.key.outputs.ok == 'true'
+        run: |
+          # Artifacts lose their executable bit in transit, so set it back.
+          mkdir -p itch/windows itch/linux itch/mac-arm64 itch/mac-intel
+          unzip -q "$(find artifacts -name hearthdelve-windows.zip)" -d itch/windows
+          cp "$(find artifacts -name hearthdelve-linux)" itch/linux/hearthdelve
+          cp "$(find artifacts -name hearthdelve-macos-arm64)" itch/mac-arm64/hearthdelve
+          cp "$(find artifacts -name hearthdelve-macos-intel)" itch/mac-intel/hearthdelve
+          chmod +x itch/linux/hearthdelve itch/mac-arm64/hearthdelve itch/mac-intel/hearthdelve
+          ls -R itch | head -40
+
+      - name: Push to itch.io
+        if: steps.key.outputs.ok == 'true'
+        run: |
+          VERSION="$(date -u +%Y.%m.%d)-${GITHUB_SHA::7}"
+          for channel in windows linux mac-arm64 mac-intel; do
+            butler/butler push "itch/$channel" "$ITCH_TARGET:$channel" --userversion "$VERSION"
+          done
+
   release:
     name: Publish rolling release
     needs: [build, build-linux]
