@@ -243,6 +243,22 @@ def held_profile(state: GameState):
     return content.profile_of(state.player.active_tool)
 
 
+# A blunt weapon's crushing head caves armour in rather than glancing off it:
+# it ignores a third of the target's Protection, rounded up so that even a
+# hide jerkin feels it. (Tools that happen to be blunt, a watering can or a
+# rod, are no maces.)
+BLUNT_CRUSH_DIV = 3
+
+
+def crushed_pv(state: GameState, pv: int) -> int:
+    """The Protection your blow actually meets: all of it, unless you swing a
+    blunt weapon, which crushes a third of it away."""
+    held = state.player.active_tool
+    if held is not None and held.kind == "weapon" and held_profile(state).category == "blunt":
+        return pv - (pv + BLUNT_CRUSH_DIV - 1) // BLUNT_CRUSH_DIV
+    return pv
+
+
 # How much Dodge a full suit of heavy plate may cost, in total. Each steel or
 # adamantium piece carries -1 DV, which reads as a fair trade per piece — but
 # summed across eight slots it came to -7, swamping BASE_DV of 8 and dropping a
@@ -404,7 +420,8 @@ def player_attack(state: GameState, m) -> None:
     from . import attrs
     dmg_bonus = skills.mastery_dmg(skills.mastery_level(state, prof.category))
     dmg_bonus += _fighter_dmg(state) + attrs.mod(state, "St") // 3
-    res = _resolve(player_to_hit(state), prof.dmg, dmg_bonus, player_crit(state), m.dv, m.pv, min_dmg=1)
+    res = _resolve(player_to_hit(state), prof.dmg, dmg_bonus, player_crit(state), m.dv,
+                   crushed_pv(state, m.pv), min_dmg=1)
     wild = getattr(m, "kind", "monster") == "wildlife"
 
     if res is None:
