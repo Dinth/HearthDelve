@@ -101,5 +101,19 @@ class KindWeightTest(unittest.TestCase):
         self.assertGreater(calf, encumbrance.weight_of(items.PLATE_ARMOR))
 
 
+class TestAMeadLoverLovesAgedMead(unittest.TestCase):
+    """Gift tastes match by family ("loves jam" takes any jam), but mead had
+    none: the aged bottle, worth twice as much, met a mead-lover as a plain
+    gift. Aged wines and cheeses kept their families all along."""
+
+    def test_aged_mead_is_loved_where_mead_is(self):
+        from hearthdelve.entities import items
+        st = fresh_state(2)
+        lover = next(n for n in st.surface.npcs if items.MEAD in n.loves)
+        loved, _line = lover.gift_reaction(items.MEAD)
+        aged, _line = lover.gift_reaction(items.AGED_MEAD)
+        self.assertEqual(aged, loved)
+
+
 if __name__ == "__main__":
     unittest.main()

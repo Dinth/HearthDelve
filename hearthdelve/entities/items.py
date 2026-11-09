@@ -338,7 +338,8 @@ WINE        = Item("Wine",        "ø", "artisan",  "Aged fruit wine.",         
 GRAPE_WINE  = Item("Grape Wine",  "ø", "artisan",  "Vintage grape wine; the finest.", value=260, family="wine", source=GRAPE)
 PICKLES     = Item("Pickles",     "■", "artisan",  "Pickled vegetables; tangy and tidy.", value=130, family="pickles")
 JELLIED_EEL = Item("Jellied Eel", "■", "artisan",  "Eel set in savoury jelly; a delicacy.", value=150, family="jellied")
-MEAD        = Item("Mead",        "u", "artisan",  "Fermented honey mead (miód pitny).", value=180)
+MEAD        = Item("Mead",        "u", "artisan",  "Fermented honey mead (miód pitny).", value=180,
+                   family="mead")
 
 # --- Cooked dishes (kind 'food'; eat to restore stamina, scaled by quality) --
 PARSNIP_SOUP     = Item("Parsnip Soup",     "≈", "food", "A warming bowl of soup.",        value=90, energy=45, buff="tiller")
@@ -398,7 +399,8 @@ SEAFOOD_CHOWDER  = Item("Seafood Chowder",  "≈", "food", "A creamy chowder thi
 # and a goat rather than sell their richer eggs and cheese outright.
 QUICHE           = Item("Quiche",           "≈", "food", "A deep tart of rich duck egg and melted cheese.", value=480, energy=110, buff="hearty")
 GOAT_CHEESE_TART = Item("Goat Cheese Tart", "≈", "food", "A savoury tart of tangy goat's cheese and tomato.", value=380, energy=95, buff="forager")
-AGED_MEAD   = Item("Aged Mead",   "u", "artisan",  "Mead matured in the cask; deep and mellow.", value=360)
+AGED_MEAD   = Item("Aged Mead",   "u", "artisan",  "Mead matured in the cask; deep and mellow.", value=360,
+                   family="mead")         # a mead-lover loves the aged bottle too
 SUNFLOWER_OIL = Item("Sunflower Oil", "ó", "artisan", "Golden oil pressed from sunflowers.", value=130)
 # Condiments, dairy & preserved goods.
 MAYONNAISE  = Item("Mayonnaise",  "◓", "artisan", "Whisked egg and oil — a creamy staple.", value=230, energy=15)
