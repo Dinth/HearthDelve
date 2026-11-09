@@ -237,7 +237,7 @@ def gem_embed_delta(gemkey: str, domain: str) -> dict:
 # Base types: their stats are the IRON / leather baseline (material adds on top).
 #   weapon -> (category, to_hit, (lo,hi), dv, glyph, base_value, desc)
 WEAPON_BASES: dict[str, tuple] = {
-    "Dagger":     ("blade",   3, (2, 5),  0,  "†", 70,  "A quick, light blade — deft and accurate."),
+    "Dagger":     ("blade",   3, (2, 5),  0,  "†", 45,  "A quick, light blade that finds the gaps — far more critical hits."),
     "Sword":      ("blade",   2, (3, 7),  0,  "|", 60,  "A versatile blade for the wilds."),
     "Rapier":     ("blade",   4, (2, 6),  1,  "†", 85,  "A slender dueling blade — swift, precise, quick to parry."),
     "Greatsword": ("blade",   0, (5, 11), -1, "|", 160, "A massive two-handed blade — slow, but it cleaves deep."),
@@ -247,6 +247,17 @@ WEAPON_BASES: dict[str, tuple] = {
     "Spear":      ("polearm", 2, (3, 8),  0,  "|", 90,  "A long-hafted spear — reach and a keen point."),
     "Halberd":    ("polearm", 1, (4, 10), -1, "¶", 150, "A pole-axe: it cleaves with reach, but is unwieldy."),
 }
+# A weapon's own knack for critical hits, by base. The dagger hits lighter than
+# a sword, so it earns its place by finding the gaps: it was weaker AND dearer.
+WEAPON_CRIT: dict[str, float] = {"Dagger": 0.10}
+
+
+def weapon_crit(item) -> float:
+    """The extra critical-hit chance a weapon's make gives (keyed on the
+    structured base the gear factory recorded, never the display name)."""
+    return WEAPON_CRIT.get(_GEAR_BASE.get(item), 0.0) if item is not None else 0.0
+
+
 # Two-handed weapons occupy both hands, so you can't also carry a shield (its DV/PV
 # is ignored while one is wielded). Their base names are single, distinctive words.
 TWO_HANDED_BASES = {"Greatsword", "Warhammer", "Halberd"}

@@ -349,7 +349,7 @@ def player_crit(state: GameState) -> float:
     from . import skills
     lvl = skills.mastery_level(state, held_profile(state).category)
     return (0.03 + skills.skill_level(state, "Combat") * 0.01 + skills.mastery_crit(lvl)
-            + _fighter_crit(state))
+            + content.weapon_crit(state.player.active_tool) + _fighter_crit(state))
 
 
 # Protection turns aside up to two thirds of a blow outright, then keeps paying at
