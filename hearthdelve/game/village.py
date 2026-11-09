@@ -254,16 +254,28 @@ _BIRTHDAY_LINES = (
     "It's my birthday today! Fancy you stopping by — or did you know?",
     "Another year older today, and not a day wiser. Still — it's my birthday!",
     "My birthday, would you believe. The kettle's on if you're passing.",
-    "I'm a year older this morning. Don't you dare say I look it.",
+    "It's my birthday — a year older this morning. Don't you dare say I look it.",
 )
 
 
+_DWARF_NAMES: tuple = ()
+
+
+def _dwarf_names() -> tuple:
+    """Khazgrim's folk, by name — known from the start, so their birthdays
+    are fixed before you ever meet them."""
+    global _DWARF_NAMES
+    if not _DWARF_NAMES:
+        _DWARF_NAMES = tuple(n.name for n in content.dwarf_npcs())
+    return _DWARF_NAMES
+
+
 def birthdays(state: GameState) -> dict:
-    """Every villager's birthday as (season, day of season): drawn from the
-    world's seed, one villager to a day and none on a festival. The world is
-    rebuilt from its seed on every load, so they come out the same every time
-    and nothing new is saved."""
-    roster = tuple(sorted(n.name for n in state.surface.npcs))
+    """Every villager's birthday as (season, day of season), Khazgrim's
+    dwarves too: drawn from the world's seed, one to a day and none on a
+    festival. The world is rebuilt from its seed on every load, so they come
+    out the same every time and nothing new is saved."""
+    roster = tuple(sorted({n.name for n in state.surface.npcs} | set(_dwarf_names())))
     memo = _BIRTHDAYS.get((state.seed, roster))
     if memo is not None:
         return memo
@@ -287,7 +299,8 @@ def is_birthday(state: GameState, npc: NPC) -> bool:
 
 
 def birthdays_today(state: GameState) -> list:
-    return [n for n in state.surface.npcs if is_birthday(state, n)]
+    folk = list(state.surface.npcs) + list(state.dwarves or ())
+    return [n for n in folk if is_birthday(state, n)]
 
 
 def befriend(state: GameState, npc: NPC, points: int) -> None:

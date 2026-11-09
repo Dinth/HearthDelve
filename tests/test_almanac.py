@@ -24,7 +24,8 @@ class TestVillagersHaveBirthdays(unittest.TestCase):
         from hearthdelve.game import village
         st = fresh_state(2)
         days = village.birthdays(st)
-        self.assertEqual(set(days), {n.name for n in st.surface.npcs})
+        self.assertEqual(set(days), {n.name for n in st.surface.npcs}
+                         | {n.name for n in content.dwarf_npcs()})
         self.assertEqual(len(set(days.values())), len(days))
         for season, day in days.values():
             self.assertIsNone(content.festival_on(season, day), "a birthday on a festival")
@@ -64,11 +65,14 @@ class TestVillagersHaveBirthdays(unittest.TestCase):
         self.assertTrue(any("birthday" in m for m, _c in st.log.messages))
 
     def test_they_tell_you_on_the_day(self):
+        """Every one of them says so in as many words — whoever's day it is."""
         from hearthdelve.game import village
-        st = fresh_state(2)
-        npc = next(n for n in st.surface.npcs if n.role not in ("fisher", "forager", "forester", "elder"))
-        _on_their_birthday(st, npc)
-        self.assertIn("birthday", village.talk(st, npc).lower())
+        for npc in fresh_state(2).surface.npcs:
+            st = fresh_state(2)
+            npc = next(n for n in st.surface.npcs if n.name == npc.name)
+            _on_their_birthday(st, npc)
+            with self.subTest(npc=npc.name):
+                self.assertIn("birthday", village.talk(st, npc).lower())
 
     def test_the_dawn_names_a_friend_s_birthday(self):
         from hearthdelve.game import farming
@@ -79,6 +83,54 @@ class TestVillagersHaveBirthdays(unittest.TestCase):
         farming.sleep(st)
         self.assertTrue(any(f"{npc.name}'s birthday" in m for m, _c in st.log.messages))
 
+
+
+class TestTheDwarvesHaveBirthdaysToo(unittest.TestCase):
+    """Only the surface villagers had birthdays; Khazgrim's dwarves, who take
+    gifts and remember a friend like anyone, had none."""
+
+    def _dwarves(self):
+        from hearthdelve.data import content
+        st = fresh_state(2)
+        st.dwarves = content.dwarf_npcs()
+        return st
+
+    def test_every_dwarf_has_one_of_his_own(self):
+        from hearthdelve.game import village
+        st = self._dwarves()
+        days = village.birthdays(st)
+        for d in st.dwarves:
+            self.assertIn(d.name, days)
+        self.assertEqual(len(set(days.values())), len(days))       # still one to a day
+
+    def test_they_re_fixed_before_you_ever_meet_them(self):
+        from hearthdelve.game import village
+        st = fresh_state(2)
+        self.assertIsNone(st.dwarves)
+        self.assertEqual(village.birthdays(st), village.birthdays(self._dwarves()))
+
+    def test_a_gift_on_a_dwarf_s_birthday_counts_triple_and_he_says_so(self):
+        from hearthdelve.game import village
+        st = self._dwarves()
+        dwarf = st.dwarves[0]
+        _on_their_birthday(st, dwarf)
+        self.assertIn("birthday", village.talk(st, dwarf).lower())
+        item = dwarf.loves[0]
+        st.player.inventory.add(item, 1)
+        before = dwarf.friendship
+        village.gift(st, dwarf, item)
+        self.assertTrue(any("birthday" in m for m, _c in st.log.messages))
+        self.assertGreater(dwarf.friendship - before, 0)
+
+    def test_the_dawn_names_a_dwarf_friend_s_birthday(self):
+        from hearthdelve.game import farming
+        st = self._dwarves()
+        dwarf = st.dwarves[1]
+        dwarf.met = True
+        _on_their_birthday(st, dwarf).day -= 1
+        farming.sleep(st)
+        self.assertTrue(any(f"{dwarf.name}'s birthday" in m and "Khazgrim" in m
+                            for m, _c in st.log.messages))
 
 
 class TestTheAlmanac(unittest.TestCase):
