@@ -517,7 +517,7 @@ def use_tool(state: GameState) -> dict | None:
     # Watering can over a planted tile waters the crop directly.
     if item is items.WATERING_CAN and (tx, ty) in state.world.crops:
         if p.energy <= 0:
-            state.log.add("You're too exhausted. Rest first.", C.DIM)
+            state.log.add("You're too exhausted. Eat something, or sleep.", C.DIM)
             return None
         if farming.water_crop(state, tx, ty):
             state.happen("water", tx, ty, crop=True)
@@ -562,7 +562,7 @@ def use_tool(state: GameState) -> dict | None:
         steal = gate == "steal"
 
     if p.energy <= 0:
-        state.log.add("You're too exhausted. Rest first.", C.DIM)
+        state.log.add("You're too exhausted. Eat something, or sleep.", C.DIM)
         return None
 
     if item.kind == "weapon":
