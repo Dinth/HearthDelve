@@ -590,9 +590,16 @@ def placement_cells(kind: str, door) -> list:
 
 def can_place_building(state: GameState, door, kind: str):
     """Whether an outbuilding may be sited with its door at `door`.
-    Returns (ok, cells, reason) — reason is a ready-to-log line when not ok."""
-    surf = state.world
+    Returns (ok, cells, reason) — reason is a ready-to-log line when not ok.
+
+    Outbuildings rise in the Vale and nowhere else: the carpenter's sites are
+    kept, finished and saved on the surface map, so one staked on any other
+    map (a dungeon floor, the Westreach) would take the order and never be
+    built."""
+    surf = state.surface
     cells = placement_cells(kind, door)
+    if state.world is not surf:
+        return False, cells, "Tomas only builds in the Vale — site it back home."
     sx, sy = surf.spawn
     if max(abs(door[0] - sx), abs(door[1] - sy)) > FARM_RADIUS:
         return False, cells, "That's too far from the homestead for Tomas to work."
@@ -617,10 +624,10 @@ def place_commission_at(state: GameState, dx: int, dy: int) -> bool:
     if not kind:
         state.log.add("You've nothing on order from the carpenter.", C_DIM)
         return False
-    surf = state.world
-    if surf.is_dungeon:
+    if state.world.is_dungeon:
         state.log.add("You can only raise a building on the surface.", C_DIM)
         return False
+    surf = state.surface
     door = (dx, dy)
     ok, cells, reason = can_place_building(state, door, kind)
     if not ok:

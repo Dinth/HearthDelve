@@ -257,6 +257,8 @@ class PlayScreen(Screen):
                 state.log.add("You've nothing on order from the carpenter.", C.DIM)
             elif state.world.is_dungeon:
                 state.log.add("You can only raise a building on the surface.", C.DIM)
+            elif state.world is not state.surface:
+                state.log.add("Tomas only builds in the Vale — site it back home.", C.DIM)
             else:
                 fx, fy = state.player.facing
                 cur = cmds.clamp_look(state, state.player.x + fx, state.player.y + fy)
