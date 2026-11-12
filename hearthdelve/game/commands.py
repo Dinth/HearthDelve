@@ -11,7 +11,7 @@ import random
 from ..engine import constants as C
 from ..entities import items
 from ..world import tile
-from . import combat, crafting, delve, farming, fishing, skills, turns
+from . import actions, combat, crafting, delve, farming, fishing, skills, turns
 from .state import GameState
 
 
@@ -525,7 +525,7 @@ def use_tool(state: GameState) -> dict | None:
             return None
 
     target = state.world.tile_at(tx, ty)
-    success, new_tile, msg = actions.resolve_tool(item, target)
+    success, new_tile, msg = actions.resolve_tool(item, target, state.world)
     if not success:
         state.log.add(msg, C.DIM)
         return None
@@ -733,7 +733,7 @@ def _gather_drop(state: GameState, item, target) -> None:
         state.bump("ore_mined")
         skills.gain(state, "Mining", 10)
         state.log.add(f"  (+{n} Saltpeter)", C.DIM)
-    elif item is items.PICKAXE and target.name in ("rock", "ruins_wall"):
+    elif item is items.PICKAXE and actions.loose_rock(state.world, target):
         inv.add(items.STONE, 2)
         state.bump("ore_mined")
         skills.gain(state, "Mining", 10)
@@ -767,7 +767,8 @@ def _gather_drop(state: GameState, item, target) -> None:
     def _bonus_drop():
         if item is items.AXE and target.kind == "tree":
             return items.WOOD
-        if item is items.PICKAXE and target.name in ("ore_vein", "rock", "ruins_wall"):
+        if item is items.PICKAXE and (target.name == "ore_vein"
+                                      or actions.loose_rock(state.world, target)):
             return items.STONE
         if item is items.MACHETE and target.kind in ("tall_grass", "foliage", "shrub", "shrub_berry"):
             return items.FIBER

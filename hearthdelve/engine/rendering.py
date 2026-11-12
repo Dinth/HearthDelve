@@ -680,7 +680,7 @@ def render_facing(con: tcod.console.Console, state: GameState) -> None:
     color = C.TARGET_HL
     tool = p.active_tool
     if tool is not None:
-        ok, _new, _msg = resolve_tool(tool, state.world.tile_at(tx, ty))
+        ok, _new, _msg = resolve_tool(tool, state.world.tile_at(tx, ty), state.world)
         if ok:
             color = C.TARGET_OK
     con.rgb["bg"][sx, sy] = color
@@ -725,7 +725,7 @@ def facing_hint(state: GameState) -> str:
         return named[t.name]
     tool = p.active_tool
     if tool is not None:
-        ok, _new, _msg = resolve_tool(tool, t)
+        ok, _new, _msg = resolve_tool(tool, t, state.world)
         if ok:
             verb = _TOOL_VERB.get(tool, "cut" if tool.kind == "weapon" else "use")
             return f"Space: {verb}"

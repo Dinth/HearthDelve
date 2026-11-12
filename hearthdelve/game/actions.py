@@ -14,7 +14,18 @@ from ..world import tile
 from ..world.tile import TileType
 
 
-def resolve_tool(tool: Item, t: TileType) -> tuple[bool, int | None, str]:
+def loose_rock(world, t: TileType) -> bool:
+    """Whether a pick or a blast can break this tile down to stone: a boulder
+    anywhere, and the crumbling ruin stone that lies about the surface. Below
+    ground that same pale stone IS the tomb — its walls and its outer ring —
+    and digging it tunnelled straight to the vault and paid stone and Mining
+    practice without end, where every other deep wall turns a pick."""
+    if t.name == "rock":
+        return True
+    return t.name == "ruins_wall" and not (world is not None and world.is_dungeon)
+
+
+def resolve_tool(tool: Item, t: TileType, world=None) -> tuple[bool, int | None, str]:
     if tool is items.HOE:
         if t.name in ("grass", "meadow", "tall_grass", "path"):
             return True, tile.TILLED, "You till the soil into a neat plot."
@@ -41,8 +52,10 @@ def resolve_tool(tool: Item, t: TileType) -> tuple[bool, int | None, str]:
             return True, tile.GRASS, "You chip away the yellow seam."
         if t.name == "nitre_deposit":
             return True, tile.GRASS, "You scrape the nitre crust free."
-        if t.name in ("rock", "ruins_wall"):
+        if loose_rock(world, t):
             return True, tile.GRASS, "You break the rock apart."
+        if t.name == "ruins_wall":
+            return False, None, "The tomb's dressed stone turns your pick — it wants rock or ore."
         return False, None, "Your pickaxe needs rock or ore to swing at."
 
     if tool is items.MACHETE:

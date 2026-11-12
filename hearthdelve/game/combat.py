@@ -7,6 +7,7 @@ from ..data import content
 from ..engine import constants as C
 from ..entities import items
 from ..world import tile
+from . import actions
 from .state import GameState
 
 
@@ -820,7 +821,8 @@ def _detonate(state: GameState, bx: int, by: int, radius: int = 1,
                 state.happen("hit", x, y, amount=dmg, on="foe")
                 hit.append(m)
             t = state.world.tile_at(x, y)
-            if t.name in _BREAKABLE:
+            if t.name in _BREAKABLE and (t.name != "ruins_wall"
+                                         or actions.loose_rock(state.world, t)):
                 _shatter(state, x, y, t)
     for m in hit:                               # snapshot: _on_kill mutates the list
         if not m.alive:
@@ -1139,7 +1141,7 @@ def _shatter(state: GameState, x: int, y: int, t) -> None:
         inv.add(items.SULPHUR, 1)
     elif t.name == "nitre_deposit":
         inv.add(items.SALTPETER, 1)
-    elif t.name in ("rock", "ruins_wall"):
+    elif actions.loose_rock(state.world, t):
         inv.add(items.STONE, 1)
     floor = (getattr(state.world, "floor_tile", 0) or tile.DUNGEON_FLOOR) \
         if state.world.is_dungeon else tile.GRASS
