@@ -187,7 +187,7 @@ RICE_FLOUR  = Item("Rice Flour",  "▪", "material", "Fine flour ground from ric
 SUGAR       = Item("Sugar",       "▪", "material", "Milled from pressed cane; sweetens any bake.", value=80)
 SALT_LUMP   = Item("Salt Lump",   "○", "material", "A crust of sea salt scraped from the strand — mill it fine.", value=12)
 SEA_SALT    = Item("Sea Salt",    "▪", "material", "Finely milled sea salt; seasons a dish.", value=20)
-CHARCOAL    = Item("Charcoal",    "♦", "material", "Wood charred in a kiln; a modest, self-sufficient fuel.", value=10)
+CHARCOAL    = Item("Charcoal",    "♦", "material", "Wood charred in a kiln; a modest, self-sufficient fuel.", value=13)
 # Coke is worth coal's 12 plus the 25% a processed good earns; at 28 a lump of
 # coal bought at the smith's and kilned sold back for more than it cost.
 COKE        = Item("Coke",        "♦", "material", "Coal baked in a kiln; the hottest fuel — smelts the deepest metals fast.", value=15)
@@ -207,7 +207,7 @@ VENISON       = Item("Venison",       "▬", "material", "Lean deer meat; makes 
 # A skin is filled at a well (g) and drunk from the eat menu (x); drinking
 # hands the empty skin back. Both are worth the same, so a well mints no gold.
 WATERSKIN      = Item("Waterskin",      "δ", "material", "A bat-wing membrane skin, waxed at the seams. Fill it at a well (g).", value=115, weight=0.3)
-FULL_WATERSKIN = Item("Full Waterskin", "δ", "material", "A skin of cold well water: a drink on the road steadies tired limbs (x). The skin is kept.", value=115, energy=25, weight=1.3)
+FULL_WATERSKIN = Item("Full Waterskin", "δ", "material", "A skin of cold well water: the first few drinks of a day steady tired limbs (x). The skin is kept.", value=115, energy=25, weight=1.3)
 LEATHER_SATCHEL = Item("Leather Satchel", "¬", "gear", "A roomy stitched satchel — carry more before the weight tells.", stackable=False)
 TRAPPERS_PACK   = Item("Trapper's Pack",  "¬", "gear", "A big trapper's pack, leather and antler-toggled — carry a great deal more.", stackable=False)
 # Alchemical minerals from dungeon deposits — powder, fertiliser & curing salt.

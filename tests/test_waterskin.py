@@ -75,6 +75,33 @@ class TestWaterskin(unittest.TestCase):
         self.assertEqual(st.stats.get("meals_eaten", 0), meals)    # water is no meal
         self.assertNotIn(items.WATERSKIN, [e[0] for e in crafting.edible_items(st)])
 
+    def test_only_the_first_few_drinks_of_a_day_help(self):
+        from hearthdelve.data import content
+        from hearthdelve.entities import items
+        from hearthdelve.game import commands
+        st = fresh_state(63)
+        p = st.player
+        n = content.DRINKS_PER_DAY
+        p.inventory.add(items.FULL_WATERSKIN, n + 2)
+        p.energy = 10
+        for _ in range(n + 2):
+            commands._eat(st, items.FULL_WATERSKIN, 0)
+        self.assertEqual(p.energy, 10 + n * items.FULL_WATERSKIN.energy)
+        self.assertEqual(p.inventory.count(items.WATERSKIN), n + 2)   # the skins come back all the same
+        self.assertEqual(commands.drinks_left(st), 0)
+        st.day += 1                                                  # tomorrow you're thirsty again
+        self.assertEqual(commands.drinks_left(st), n)
+        p.inventory.add(items.FULL_WATERSKIN, 1)
+        commands._eat(st, items.FULL_WATERSKIN, 0)
+        self.assertEqual(p.energy, 10 + (n + 1) * items.FULL_WATERSKIN.energy)
+
+    def test_a_days_water_is_a_fraction_of_a_days_stamina(self):
+        from hearthdelve.data import content
+        from hearthdelve.engine import constants as C
+        from hearthdelve.entities import items
+        self.assertLess(content.DRINKS_PER_DAY * items.FULL_WATERSKIN.energy,
+                        C.START_ENERGY / 3)
+
     def test_a_well_mints_no_gold(self):
         from hearthdelve.entities import items
         self.assertEqual(items.FULL_WATERSKIN.value, items.WATERSKIN.value)

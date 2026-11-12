@@ -1483,6 +1483,14 @@ class Recipe:
     desc: str = ""
 
 
+# Leather a tanned skin yields, where it's more than one.
+HIDE_LEATHER = {items.WOLF_PELT: 2}
+
+# A drink of water steadies you only while you're thirsty: this many a day
+# restore stamina, and after that it's just water. Without it a well by the
+# house was a day's stamina every quarter of an hour.
+DRINKS_PER_DAY = 3
+
 # Vessels you drink from and keep: the full one -> the empty one it leaves.
 DRINK_VESSELS = {items.FULL_WATERSKIN: items.WATERSKIN}
 
@@ -2976,7 +2984,8 @@ DEEP_FORGE_METALS = ("adamantium", "mithril")
 def blacksmith_stock() -> list[tuple[Item, int]]:
     """Bron's counter: fuels at cost, bars at 2x, and finished low/mid gear at
     the smith's markup. Crafting the same pieces from bars stays far cheaper."""
-    out = [(items.COAL, 25), (items.CHARCOAL, 20), (items.COKE, 55)]
+    out = [(items.COAL, 25), (items.CHARCOAL, max(20, counter_price(items.CHARCOAL))),
+           (items.COKE, 55)]
     out += [(b, _round5(b.value * 2.0)) for b in SMITH_BARS]
     out += [(it, _round5(it.value * smith_markup(it))) for it in _SMITH_WEAPONS]
     out += [(it, max(price, counter_price(it)))      # the literal, or what clears the bin

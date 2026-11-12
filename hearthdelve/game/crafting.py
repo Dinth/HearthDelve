@@ -662,8 +662,13 @@ def machine_load_options(state: GameState, mdef) -> list:
     elif a == "hide":
         for hide in (items.RAW_HIDE, items.BOAR_HIDE, items.WOLF_PELT):
             if inv.count(hide) >= 1:
-                opts.append({"inputs": [(hide, 1)], "output": items.LEATHER,
-                             "quality_from": None, "label": f"{hide.name} → Leather"})
+                # A wolf's pelt is a bigger skin than a boar's: two hides' worth.
+                # At one it cured 60g of pelt into 60g of leather — half a day
+                # on the rack for nothing.
+                n = content.HIDE_LEATHER.get(hide, 1)
+                opts.append({"inputs": [(hide, 1)], "output": items.LEATHER, "out_qty": n,
+                             "quality_from": None,
+                             "label": f"{hide.name} → {f'{n} ' if n > 1 else ''}Leather"})
     elif a == "fiber":
         for src, out in content.SPIN_RECIPES.items():
             if inv.count(src) >= 1:

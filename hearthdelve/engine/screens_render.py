@@ -164,6 +164,13 @@ def render_eat(con: tcod.console.Console, state: GameState, sel: int) -> None:
         buff = f" ↯{skills.BUFFS[it.buff]}" if it.buff in skills.BUFFS else ""
         m.text(2, dy, ui.cur(selected) + f"{q:>2} {it.name}{star}{buff}"[:w - 22],
                fg=C.WHITE, bg=bg)
+        from ..data import content
+        if it in content.DRINK_VESSELS:                  # water: a few drinks a day, no more
+            from ..game.commands import drinks_left
+            left = drinks_left(state)
+            m.text(w - 18, dy, f"+{it.energy} st  ({left} left)" if left else "not thirsty",
+                   fg=(150, 210, 150) if left else C.DIM, bg=bg)
+            return
         m.text(w - 18, dy, f"+{gain} st  +{hp} hp", fg=(150, 210, 150), bg=bg)
 
     m.list(2, body, len(foods), sel, row, arrow_top=2, arrow_bottom=h - 3)

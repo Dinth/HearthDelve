@@ -1239,6 +1239,13 @@ def _under_threat(state: GameState) -> bool:
     return False
 
 
+def drinks_left(state: GameState) -> int:
+    """How many more drinks of water will do you any good today."""
+    from ..data import content
+    had = state.stats.get("drinks", 0) if state.stats.get("drinks_day") == state.day else 0
+    return max(0, content.DRINKS_PER_DAY - had)
+
+
 def _eat_seconds(state: GameState) -> int:
     return EAT_COMBAT_SECONDS if _under_threat(state) else C.USE_SECONDS
 
@@ -1274,18 +1281,29 @@ def _eat(state: GameState, item, quality: int) -> None:
                       f"your {A.NAMES[item.attr]} rises for good!", (240, 224, 150))
         turns.advance_time(state, _eat_seconds(state))
         return
-    gain = round(item.energy * (1 + 0.12 * quality))     # tastier food goes further
-    heal = max(1, gain // 6) + item.heal
-    p.gain_energy(gain)
-    p.hp = min(p.max_hp, p.hp + heal)
     from ..data import content
     empty = content.DRINK_VESSELS.get(item)
     if empty is not None:                                # a drink, not a meal: the vessel is kept
         p.inventory.add(empty, 1)
-        state.log.add(f"You drink the {empty.name.lower()} dry. (+{gain} stamina, +{heal} HP)",
-                      (170, 210, 230))
+        thirsty = drinks_left(state) > 0
+        if state.stats.get("drinks_day") != state.day:   # a new day, a new thirst
+            state.stats["drinks_day"], state.stats["drinks"] = state.day, 0
+        state.stats["drinks"] += 1
+        if not thirsty:
+            state.log.add(f"You drink the {empty.name.lower()} dry — but you weren't thirsty; "
+                          "it does nothing more for you today.", C.DIM)
+        else:
+            p.gain_energy(item.energy)
+            left = drinks_left(state)
+            state.log.add(f"You drink the {empty.name.lower()} dry. (+{item.energy} stamina"
+                          + (")" if left else "; that's your thirst slaked for today)"),
+                          (170, 210, 230))
         turns.advance_time(state, _eat_seconds(state))
         return
+    gain = round(item.energy * (1 + 0.12 * quality))     # tastier food goes further
+    heal = max(1, gain // 6) + item.heal
+    p.gain_energy(gain)
+    p.hp = min(p.max_hp, p.hp + heal)
     state.bump("meals_eaten")
     star = (" " + skills.stars(quality)) if quality else ""
     state.log.add(f"You eat the {item.name.lower()}{star}. (+{gain} stamina, +{heal} HP)", (180, 230, 160))
