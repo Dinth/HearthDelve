@@ -119,7 +119,7 @@ TILLED      = _add(TileType("tilled",     "≡", (120, 86, 60),  (52, 36, 24), k
 WELL    = _add(TileType("well",     "o", (180, 190, 205), (50, 54, 60), walkable=False, kind="well"))
 LAMP    = _add(TileType("lamp",     "î", (245, 210, 130), (30, 40, 30), walkable=False, kind="lamp"))
 STALL   = _add(TileType("stall",    "∩", (214, 96, 84),   (44, 34, 26), walkable=False, kind="stall"))
-SIGNPOST= _add(TileType("signpost", "‡", (188, 150, 104), (40, 50, 34), walkable=False, kind="signpost"))
+SIGNPOST= _add(TileType("signpost", "┬", (188, 150, 104), (40, 50, 34), walkable=False, kind="signpost"))
 # Paved streets & squares — walkable and count as road (halve travel time).
 COBBLE  = _add(TileType("cobble",   "·", (168, 166, 170), (78, 78, 84), kind="road"))
 STATUE  = _add(TileType("statue",   "Ψ", (200, 202, 210), (70, 70, 78), walkable=False, kind="statue"))
