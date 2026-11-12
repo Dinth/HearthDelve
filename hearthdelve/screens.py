@@ -470,7 +470,10 @@ class LoadMachineScreen(Screen):
 
 
 class HelpScreen(Screen):
-    """The codex: paged help/reference, ←→ pages, ↑↓ scrolls."""
+    """The codex: paged help/reference, ←→ pages, ↑↓ scrolls a line and
+    PgUp/PgDn most of a screen (its longest page runs to over 300 rows)."""
+
+    PAGE = 30                                # rows a PgUp/PgDn moves
 
     def __init__(self) -> None:
         self.page = 0
@@ -490,6 +493,8 @@ class HelpScreen(Screen):
                 self.scroll = 0
             if action[2]:
                 self.scroll = max(0, self.scroll + action[2])
+        elif cmd == "scroll":                # ("scroll", 1) is PgUp: back up the page
+            self.scroll = max(0, self.scroll - action[1] * self.PAGE)
 
 
 _EQUIP_KINDS = ("weapon", "armor", "jewelry", "ranged", "ammo", "bomb")

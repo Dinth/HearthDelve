@@ -490,7 +490,7 @@ def render_codex(con: tcod.console.Console, state: GameState, page: int, scroll:
         text, color = rows[idx]
         m.text(2, 2 + i, text, fg=color)
     m.arrows(scroll > 0, scroll < max_scroll, 2, h - 3)
-    m.footer(f" ← → page {page + 1}/{len(pages)}   ↑ ↓ scroll   Esc close ")
+    m.footer(f" ← → page {page + 1}/{len(pages)}   ↑ ↓ PgUp PgDn scroll   Esc close ")
     return scroll                        # clamped, for the screen to keep (see ui.Modal.list)
 
 
