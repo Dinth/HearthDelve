@@ -1452,6 +1452,7 @@ def run_step(state: GameState, ctx: dict) -> bool:
         p.x, p.y = nx, ny
         ctx["d"] = ndir
         _apply_walk(state, True)
+        _surface_tile_fx(state)                        # a road through the fen is still the fen
         ctx["steps"] += 1
         note = _notable_nearby(state, ctx["ack"])
         if ctx["steps"] >= RUN_MAX_TILES:
@@ -1480,6 +1481,8 @@ def run_step(state: GameState, ctx: dict) -> bool:
         _scoop_gold(state)                             # grab gold we ran over
         if _dungeon_tile_fx(state):
             return False                               # a trap sprang — it logs its own message
+    else:
+        _surface_tile_fx(state)                        # running the marsh breathes its miasma too
     ctx["steps"] += 1
 
     note = _notable_nearby(state, ctx["ack"])
