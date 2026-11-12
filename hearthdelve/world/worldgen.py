@@ -74,14 +74,20 @@ def _wildness(w: int, h: int, seed: int) -> np.ndarray:
     return np.clip(field, 0.0, 1.0)
 
 
+# The nearest village clearing stands 229 columns from the middle (Fenwick),
+# so the river keeps a clear dozen short of that.
+_RIVER_ROAM = 215.0
+
+
 def generate(seed: int = 1337, sites=None, legacy_ties: bool = False,
-             legacy_home: bool = False) -> GameMap:
+             legacy_home: bool = False, legacy_villages: bool = False) -> GameMap:
     """The Vale for `seed`. A loaded save passes the dungeon mouths it recorded
     (`sites`: (x, y, kind) in placement order) so they're rebuilt exactly
     where they were; a save older than that record passes `legacy_ties` to
     break ties the way its world was first built (see _place_dungeons), and
     one older than the farm's re-siting passes `legacy_home` (see
-    _carve_homestead)."""
+    _carve_homestead); one older than Saltmere's passes `legacy_villages`
+    (see _carve_villages)."""
     w, h = C.WORLD_W, C.WORLD_H
     cx, cy = C.WORLD_CENTER
     tiles = np.full((w, h), tile.GRASS, dtype=np.uint8)
@@ -229,10 +235,20 @@ def generate(seed: int = 1337, sites=None, legacy_ties: bool = False,
     wide_n = _noise_field(seed + 53, w, 1, scale=0.05, octaves=3).reshape(-1)
     c, vel, prev_c = w * 0.5, 0.0, None
     centerline = []
+    # How far from the map's middle the river may wander. It used to have
+    # the whole width, and now and then reached a village 300 columns out
+    # and ran through its square. Worlds made since keep it to the middle
+    # ground between them, turning back from the limit rather than running
+    # along it (see _carve_villages for the layout a save remembers).
+    roam = w * 0.5 - 28.0 if legacy_villages else _RIVER_ROAM
     for y in range(h):
         vel = vel * 0.86 + (steer[min(y, w - 1)] - 0.5) * 1.7   # accelerate, damped
         vel = max(-2.7, min(2.7, vel))
-        c = max(28.0, min(w - 28.0, c + vel))
+        c += vel
+        if abs(c - w * 0.5) > roam:
+            c = w * 0.5 + (roam if c > w * 0.5 else -roam)
+            if not legacy_villages:
+                vel = -0.5 * vel                                # turned back by the high ground
         ci = int(round(c))
         half = 1 + int(wide_n[min(y, w - 1)] * 2.4)             # irregular width 3..7
         lo, hi = ci - half, ci + half
@@ -267,7 +283,7 @@ def generate(seed: int = 1337, sites=None, legacy_ties: bool = False,
     coast = _carve_sea(gm, seed)
     gm.coast = coast                     # per-column first sea row (salt vs fresh water)
     _carve_homestead(gm, seed, legacy=legacy_home)
-    centers = _carve_villages(gm, seed, coast)
+    centers = _carve_villages(gm, seed, coast, legacy=legacy_villages)
     _place_dungeons(gm, wild, flora, region, centers, sites=sites, legacy_ties=legacy_ties)
     forest_track = _carve_forest(gm, seed)
     camp = _carve_camp(gm, seed)                     # woodcutters' camp in the NW wood
@@ -818,13 +834,44 @@ def _lay_square(gm: GameMap, vx: int, vy: int, R: int, rng) -> list:
     return [s for s in seats if gm.tiles[s] == tile.COBBLE]
 
 
-def _carve_villages(gm: GameMap, seed: int, coast: np.ndarray) -> dict:
+_ROLE_BUILDINGS = ("inn", "temple", "shop", "smithy")
+
+
+def _saltmere_x(gm: GameMap, coast: np.ndarray, want: int, R: int) -> int:
+    """The column for Saltmere: `want` when the river keeps clear of it,
+    else the nearest column along the coast, either way, whose clearing,
+    square and piers the river doesn't run through. The river starts above
+    the map's middle and wanders to the sea, so about one world in nine it
+    came down through the village — a square under water, no room for the
+    inn, piers adrift. No dice are rolled; nothing else in the world moves
+    but what follows the village (its roads, the nearest dungeon mouths)."""
+    reach = R + 6                                     # the clearing, and a margin to build in
+
+    def clear(x: int) -> bool:
+        if not (reach <= x < gm.width - reach):
+            return False
+        shore = int(coast[x])
+        top, bottom = max(0, shore - 10 - reach), min(gm.height, shore + 7)
+        return not (gm.tiles[x - reach:x + reach + 1, top:bottom] == tile.RIVER).any()
+
+    for off in range(0, 200, 4):
+        for x in ((want - off, want + off) if off else (want,)):
+            if clear(x):
+                return x
+    return want
+
+
+def _carve_villages(gm: GameMap, seed: int, coast: np.ndarray, legacy: bool = False) -> dict:
+    """The four villages. `legacy` sites them as worlds made before Saltmere's
+    re-siting had them (layout 1: Saltmere at a fixed column, river or no);
+    a save remembers its layout, so an old world keeps its village."""
     import math
     cx, cy = C.WORLD_CENTER
     h = gm.height
     groups = content.village_npcs()
+    gm.village_layout = 1 if legacy else 2
 
-    salt_x = cx - 20
+    salt_x = cx - 20 if legacy else _saltmere_x(gm, coast, cx - 20, 16)
     salt_cy = int(coast[salt_x]) if 0 <= salt_x < len(coast) else int(h * 0.82)
     sites = {
         "Mossford":   (cx + 300, cy + 205, False),         # farming town, SE plains
@@ -867,6 +914,17 @@ def _carve_villages(gm: GameMap, seed: int, coast: np.ndarray) -> dict:
 
         def build(kind, tag, w, h, ang, rad):
             b = _try_building(gm, vx, vy, placed, w, h, ang, rad)
+            if b is None and not legacy and kind in _ROLE_BUILDINGS:
+                # A village's inn, shop, chapel or smithy is not optional: its
+                # keeper has nowhere to trade from. Try round the square, a
+                # little further out each lap, before giving it up. (No dice.)
+                for lap in (0, 3, 6):
+                    for turn in (0.6, -0.6, 1.2, -1.2, 1.9, -1.9, 2.6, -2.6):
+                        b = _try_building(gm, vx, vy, placed, w, h, ang + turn, rad + lap)
+                        if b is not None:
+                            break
+                    if b is not None:
+                        break
             if b is None:
                 return None
             anchors = _furnish(gm, b, tag, rng)

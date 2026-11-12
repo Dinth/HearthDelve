@@ -398,6 +398,7 @@ def save(state: GameState, path: str | None = None) -> None:
         # machine (see worldgen._place_dungeons).
         "sites": [[x, y, surf.dungeon_kind[(x, y)]] for x, y in surf.dungeons],
         "home_layout": surf.home_layout,
+        "village_layout": surf.village_layout,
         "tiles": base64.b64encode(np.ascontiguousarray(surf.tiles).tobytes()).decode("ascii"),
         "crops": {f"{x},{y}": [pl.crop.name, pl.days_grown, pl.watered, pl.dead, pl.fertilized,
                                pl.thirst, pl.season_ended, pl.cross]
@@ -453,12 +454,17 @@ def load(path: str | None = None) -> GameState:
     # A save from before the farm's re-siting keeps the farm where its world
     # first put it (see worldgen._carve_homestead).
     legacy_home = data.get("home_layout", 1) < 2
+    # A save from before Saltmere was moved clear of the river keeps the
+    # village where its world first put it (its tiles, homes and roads are
+    # all there); only worlds born since are sited the new way.
+    legacy_villages = data.get("village_layout", 1) < 2
     sites = data.get("sites")
     if sites is not None:
         world = worldgen.generate(data["seed"], sites=[(int(x), int(y), str(k)) for x, y, k in sites],
-                                  legacy_home=legacy_home)
+                                  legacy_home=legacy_home, legacy_villages=legacy_villages)
     else:
-        world = worldgen.generate(data["seed"], legacy_ties=True, legacy_home=legacy_home)
+        world = worldgen.generate(data["seed"], legacy_ties=True, legacy_home=legacy_home,
+                                  legacy_villages=legacy_villages)
 
     w, h = data["tiles_shape"]
     # Keep the freshly-generated grid: worldgen improvements (new boards, the

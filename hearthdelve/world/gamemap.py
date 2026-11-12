@@ -80,6 +80,10 @@ class GameMap:
     # the clearing, often into the fen); 2 = just clear of river in its own
     # footprint. A save remembers it, so an old world keeps its old farm.
     home_layout: int = 2
+    # how worldgen sited the villages: 1 = Saltmere at a fixed column, even
+    # when the river ran through it; 2 = moved along the coast clear of the
+    # river. Remembered by a save, like home_layout.
+    village_layout: int = 2
 
     def in_bounds(self, x: int, y: int) -> bool:
         return 0 <= x < self.width and 0 <= y < self.height
