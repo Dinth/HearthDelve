@@ -124,11 +124,11 @@ def _scoop_gold(state: GameState) -> None:
 THREAT_RANGE = 6          # a menacing creature this close breaks your concentration
 
 
-def _threat_near(state: GameState):
-    """A dangerous creature within THREAT_RANGE (an awake dungeon monster, or
-    roused wildlife) — peaceful critters and villagers don't count. Returns the
-    mob, or None."""
+def _threats_near(state: GameState) -> list:
+    """Every dangerous creature within THREAT_RANGE (an awake dungeon monster,
+    or roused wildlife) — peaceful critters and villagers don't count."""
     p = state.player
+    out = []
     for m in state.world.monsters:
         if not m.alive:
             continue
@@ -138,8 +138,21 @@ def _threat_near(state: GameState):
         elif not m.awake:
             continue                              # a sleeping mob is no threat yet
         if max(abs(m.x - p.x), abs(m.y - p.y)) <= THREAT_RANGE:
-            return m
-    return None
+            out.append(m)
+    return out
+
+
+def _threat_near(state: GameState):
+    """The first such creature, or None."""
+    near = _threats_near(state)
+    return near[0] if near else None
+
+
+def new_threat(state: GameState, known: frozenset):
+    """A threat that wasn't there (by ``known``, a set of ids) when a long task
+    began — the one worth breaking off for. What you chose to work beside
+    doesn't stop you; it just doesn't wait."""
+    return next((m for m in _threats_near(state) if id(m) not in known), None)
 
 
 def _felled(state: GameState, target, new_tile, tx: int, ty: int) -> None:
@@ -508,9 +521,9 @@ def use_tool(state: GameState) -> dict | None:
     # Fishing rod cast at water.
     if item is items.FISHING_ROD and state.world.tile_at(tx, ty).kind == "water":
         threat = _threat_near(state)
-        if threat is not None:
-            state.log.add(f"You can't fish with a {threat.name.lower()} lurking so near.", C.DIM)
-            return None
+        if threat is not None:                    # your choice — it won't wait on the fish
+            state.log.add(f"You cast with a {threat.name.lower()} lurking near — "
+                          "it will have its chance at you.", C.WARN_COLOR)
         ctx = fishing.begin(state, tx, ty)
         return {"fishing": ctx} if ctx else None
 
@@ -606,14 +619,15 @@ def use_tool(state: GameState) -> dict | None:
     # Long tasks (felling a tree, breaking rock) play out over a few seconds so
     # the world moves around you — and a menacing creature can break them off.
     if seconds >= LONG_ACTION_SECONDS:
-        threat = _threat_near(state)
-        if threat is not None:
-            state.log.add(f"You can't focus with a {threat.name.lower()} so close.", C.DIM)
-            return None
-        state.log.add(f"You set to work with the {item.name.lower()}...", C.DIM)
+        near = _threats_near(state)
+        if near:                                  # your choice: it won't wait while you work
+            state.log.add(f"You set to work with a {near[0].name.lower()} close by — "
+                          "it won't wait on you.", C.WARN_COLOR)
+        else:
+            state.log.add(f"You set to work with the {item.name.lower()}...", C.DIM)
         return {"left": seconds, "total": seconds, "item": item, "tx": tx, "ty": ty,
                 "target": target, "new_tile": new_tile, "stamina": stamina, "msg": msg,
-                "steal": steal}
+                "steal": steal, "ack": frozenset(id(m) for m in near)}
 
     # Short tasks resolve at once.
     _felled(state, target, new_tile, tx, ty)

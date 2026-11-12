@@ -142,11 +142,16 @@ class PlayScreen(Screen):
                 cmds.check_faint(state)
                 quests.check(state)
         elif self.busy_ctx is not None:
-            threat = cmds._threat_near(state)
-            if threat is not None:                   # a beast closes in — break off
+            # A beast that closes in breaks the task off. One that was already
+            # there when you chose to start doesn't: it just gets its turns.
+            threat = cmds.new_threat(state, self.busy_ctx.get("ack", frozenset()))
+            if threat is not None:
                 state.log.add(f"You break off — a {threat.name.lower()} is too close!",
                               C.WARN_COLOR)
                 self.busy_ctx = None
+            elif state.player.hp <= 0:               # it had its turns, and they told
+                self.busy_ctx = None
+                cmds.check_faint(state)
             else:
                 turns.advance_time(state, C.MOVE_SECONDS)
                 if state.world.is_dungeon:
