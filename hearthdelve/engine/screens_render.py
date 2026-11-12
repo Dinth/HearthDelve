@@ -775,14 +775,24 @@ def render_lift(con: tcod.console.Console, state: GameState, sel: int) -> None:
     from ..game import lift
     from ..world import dwarftown
     stops = lift.stops(state)
-    w, h = 54, max(9, len(stops) + 8)
+    # A deep enough shaft has more stops than the screen has rows (one every
+    # fifth floor, and the mine has no bottom): show a window of them that
+    # follows the cursor, where the list used to run off both ends of the frame.
+    page = min(len(stops), C.SCREEN_H - 12)
+    first = max(0, min(sel - page // 2, len(stops) - page))
+    w, h = 54, max(9, page + 8)
     m = ui.Modal(con, w, h, "The Dwarven Lift")
     m.text(2, 2, "\"Mind the gate. Fare's by the floor, paid first.\"", fg=(214, 176, 108))
-    for i, d in enumerate(stops):
+    if first > 0:
+        m.text(w - 12, 3, "↑ more", fg=C.DIM)
+    if first + page < len(stops):
+        m.text(w - 12, 4 + page, "↓ more", fg=C.DIM)
+    for i, d in enumerate(stops[first:first + page], start=first):
         name = "Khazgrim — the dwarves' town" if d == dwarftown.TOWN_DEPTH else f"Floor {d}"
         cost = lift.fare(state, d)
         dear = cost > state.player.gold
-        m.text(2, 4 + i, ui.cur(i == sel) + f"{name:<30.30s}{cost:>5}g  {lift.ride_minutes(state, d):>3} min",
+        m.text(2, 4 + i - first,
+               ui.cur(i == sel) + f"{name:<30.30s}{cost:>5}g  {lift.ride_minutes(state, d):>3} min",
                fg=C.DIM if dear else C.WHITE)
     if len(stops) <= 1:
         m.text(2, 5 + len(stops),
