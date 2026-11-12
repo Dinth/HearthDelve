@@ -513,12 +513,24 @@ def _move_toward(state: GameState, m, away: bool = False) -> bool:
     p = state.player
     sx = _sign(p.x - m.x) * (-1 if away else 1)
     sy = _sign(p.y - m.y) * (-1 if away else 1)
-    for ax, ay in ((sx, sy), (sx, 0), (0, sy)):
+    for ax, ay in ((sx, sy), (sx, 0), (0, sy)) + _sidesteps(sx, sy):
         if (ax or ay) and _can_move(state, m, ax, ay):
             m.x += ax
             m.y += ay
             return True
     return False
+
+
+def _sidesteps(sx: int, sy: int) -> tuple:
+    """The ways round when the straight ways are shut: dead in line with its
+    quarry (one of sx, sy is 0), a mover's three plain steps are really one,
+    so a single pillar, brazier or packmate in between held it there for good
+    — to be shot at leisure. It slips past on a forward diagonal (either side,
+    by the toss of a coin). Never sideways or back: that would only pace."""
+    if sx and sy or not (sx or sy):
+        return ()
+    a, b = ((sx, 1), (sx, -1)) if sx else ((1, sy), (-1, sy))
+    return (a, b) if random.random() < 0.5 else (b, a)
 
 
 def _step(state: GameState, m) -> None:

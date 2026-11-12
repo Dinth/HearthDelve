@@ -64,7 +64,8 @@ def _toward(state: GameState, m, tx: int, ty: int, away: bool = False) -> bool:
     sx, sy = _sign(tx - m.x), _sign(ty - m.y)
     if away:
         sx, sy = -sx, -sy
-    for ax, ay in ((sx, sy), (sx, 0), (0, sy)):
+    from .combat import _sidesteps
+    for ax, ay in ((sx, sy), (sx, 0), (0, sy)) + _sidesteps(sx, sy):
         if _move(state, m, ax, ay):
             return True
     return False
