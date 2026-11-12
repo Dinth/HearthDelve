@@ -1491,6 +1491,13 @@ RECIPES: list[Recipe] = [
            desc="Crops -> jam. (needs timber planks)"),
     Recipe("Keg", "build", ((items.TIMBER_PLANK, 5), (items.COPPER_BAR, 1)), machine="keg",
            desc="Crops -> wine. (needs timber planks)"),
+    # A cooper caulks his staves. Sealed with slime gel, the same tight vessel
+    # comes out of three planks: no doubled staves to hold a leak back.
+    Recipe("Preserves Jar, gel-sealed", "build", ((items.TIMBER_PLANK, 3), (items.SLIME_GEL, 2)),
+           machine="jar", desc="The same jar from 3 planks, its seams caulked with slime gel."),
+    Recipe("Keg, gel-sealed", "build",
+           ((items.TIMBER_PLANK, 3), (items.COPPER_BAR, 1), (items.SLIME_GEL, 2)),
+           machine="keg", desc="The same keg from 3 planks, its staves caulked with slime gel."),
     Recipe("Beehive", "build", ((items.TIMBER_PLANK, 8), (items.BEESWAX, 3)), machine="beehive",
            desc="Add a bee queen; honey & wax, boosted by nearby flowers."),
     Recipe("Oil Press", "build", ((items.TIMBER_PLANK, 6), (items.STONE, 4), (items.COPPER_BAR, 1)),

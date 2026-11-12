@@ -87,5 +87,48 @@ class TestCompositeBow(unittest.TestCase):
         self.assertEqual(back.player.inventory.count(bow), 1)
 
 
+class TestCaulkedCasks(unittest.TestCase):
+    """A cooper caulks his staves: with gel in the seams the same keg or jar
+    is built from three planks, not five."""
+
+    def _open_ground(self, st):
+        p = st.player
+        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            x, y = p.x + dx, p.y + dy
+            if (st.world.walkable(x, y) and (x, y) not in st.world.machines
+                    and (x, y) not in st.world.crops):
+                p.facing = (dx, dy)
+                return x, y
+        self.fail("no open ground beside the farmer")
+
+    def test_the_sealed_build_is_the_same_machine(self):
+        from hearthdelve.entities import items
+        from hearthdelve.game import crafting
+        for name, kind in (("Keg, gel-sealed", "keg"), ("Preserves Jar, gel-sealed", "jar")):
+            with self.subTest(build=name):
+                st = fresh_state(34)
+                inv = st.player.inventory
+                r = _recipe(name)
+                for it, q in r.inputs:
+                    inv.add(it, q)
+                spot = self._open_ground(st)
+                self.assertTrue(crafting.craft(st, r))
+                self.assertEqual(st.world.machines[spot].kind, kind)
+                self.assertEqual(inv.count(items.SLIME_GEL), 0)
+                self.assertEqual(inv.count(items.TIMBER_PLANK), 0)
+
+    def test_gel_spares_planks(self):
+        from hearthdelve.entities import items
+        for plain, sealed in (("Keg", "Keg, gel-sealed"),
+                              ("Preserves Jar", "Preserves Jar, gel-sealed")):
+            a, b = dict(_recipe(plain).inputs), dict(_recipe(sealed).inputs)
+            with self.subTest(build=plain):
+                self.assertLess(b[items.TIMBER_PLANK], a[items.TIMBER_PLANK])
+                self.assertGreater(b.get(items.SLIME_GEL, 0), 0)
+                rest = lambda d: {k: v for k, v in d.items()
+                                  if k not in (items.TIMBER_PLANK, items.SLIME_GEL)}
+                self.assertEqual(rest(a), rest(b))
+
+
 if __name__ == "__main__":
     unittest.main()
