@@ -201,7 +201,11 @@ def _loop(ui, state: GameState, console, context, music) -> None:
 
         # A short timeout drives the ambient animation: when no key is
         # pressed, wait() returns after ~1/30s and we redraw the next frame.
-        for event in tcod.event.wait(timeout=1.0 / 30.0):
+        # Wake for the next beat, not a fixed 1/30s after this frame: drawing
+        # takes a few milliseconds, and sleeping a whole beat on top of it let
+        # an idle game step a little slower than a busy one.
+        pause = min(AUTO_STEP, max(0.001, (beat.next or 0.0) - time.perf_counter()))
+        for event in tcod.event.wait(timeout=pause):
             if not route_event(ui, event, konami):
                 break
 
