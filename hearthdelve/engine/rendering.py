@@ -1264,6 +1264,7 @@ letter_index = _sr.letter_index
 INV_LETTERS = _sr.INV_LETTERS
 render_inventory = _sr.render_inventory
 render_equipment = _sr.render_equipment
+gear_page = _sr.gear_page
 # The equipment screen's letter keys address the same rows the renderer draws.
 PAPERDOLL_SLOTS = _sr.PAPERDOLL_SLOTS
 equippables = _sr.equippables

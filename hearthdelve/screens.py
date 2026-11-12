@@ -596,8 +596,12 @@ class InventoryScreen(Screen):
 
 
 class EquipmentScreen(Screen):
+    def __init__(self) -> None:
+        self.scroll = 0                   # first carried piece shown (a long list pages)
+
     def render(self, ui: UI, con) -> None:
-        rendering.render_equipment(con, ui.state)
+        self.scroll = rendering.gear_page(ui.state, self.scroll)[0]
+        rendering.render_equipment(con, ui.state, self.scroll)
 
     def on_raw(self, ui: UI, event) -> bool:
         # One letter namespace: the first letters address the worn slots (take
@@ -611,8 +615,9 @@ class EquipmentScreen(Screen):
             cmds._unequip(ui.state, rendering.PAPERDOLL_SLOTS[idx])
         else:
             gear = rendering.equippables(ui.state)
-            gi = idx - nslots
-            if 0 <= gi < len(gear):
+            first, shown = rendering.gear_page(ui.state, self.scroll)
+            gi = first + idx - nslots     # the letter is the row on this page
+            if idx - nslots < shown and 0 <= gi < len(gear):
                 cmds._equip(ui.state, gear[gi][0], gear[gi][2])
         return True
 
@@ -623,6 +628,11 @@ class EquipmentScreen(Screen):
             ui.replace(InventoryScreen())
         elif cmd in ("cancel", "equipment", "quit"):
             ui.pop()
+        elif cmd == "scroll":                # ("scroll", 1) is PgUp: back up the page
+            page = rendering.gear_page(ui.state, self.scroll)[1]
+            self.scroll = max(0, self.scroll - action[1] * max(1, page))
+        elif cmd == "move" and action[2]:
+            self.scroll = max(0, self.scroll + action[2])
         # Take-off & equip are handled by the letter namespace in on_raw.
 
 

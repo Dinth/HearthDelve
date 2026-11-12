@@ -475,6 +475,21 @@ PAPERDOLL_SLOTS = ("head", "body", "cloak", "hands", "waist", "legs", "feet",
                    "shield", "neck", "ring1", "ring2", "ranged", "ammo")
 
 
+# The carried list's first row: stats, in hand, the worn slots, a header.
+_GEAR_TOP = 6 + len(PAPERDOLL_SLOTS)
+
+
+def gear_page(state: GameState, scroll: int = 0) -> tuple[int, int]:
+    """(first, count) of the carried gear the equipment screen shows at
+    ``scroll`` — as many rows as fit under the paperdoll and have a letter left
+    to pick them by. The screen's keys and its renderer both read this, so a
+    letter always addresses the row it is drawn beside."""
+    n = len(equippables(state))
+    page = min(C.SCREEN_H - 2 - 2 - _GEAR_TOP, len(INV_LETTERS) - len(PAPERDOLL_SLOTS))
+    first = max(0, min(scroll, n - page))
+    return first, min(page, n - first)
+
+
 def equippables(state: GameState) -> list:
     """Carried gear the equipment screen equips by letter: weapons, armour,
     jewellery, ranged launchers, and ammunition."""
@@ -501,12 +516,13 @@ def _jewel_desc(it, quality: int) -> str:
     return "[" + ", ".join(parts) + "]" if parts else ""
 
 
-def render_equipment(con: tcod.console.Console, state: GameState) -> None:
+def render_equipment(con: tcod.console.Console, state: GameState, scroll: int = 0) -> None:
     from ..data import content
     from ..game import combat, skills
     p = state.player
     gear = equippables(state)
     nslots = len(PAPERDOLL_SLOTS)
+    first, shown = gear_page(state, scroll)
     w, h = 60, min(C.SCREEN_H - 2, 8 + nslots + len(gear))   # stats + in-hand + worn slots + 2 headers + gear + footer
     m = ui.Modal(con, w, h, "PERSONAL EQUIPMENT")
 
@@ -551,9 +567,7 @@ def render_equipment(con: tcod.console.Console, state: GameState) -> None:
     row += 1
     m.text(2, row, "Carried gear — press a letter to equip / take off:", fg=_HDR)
     row += 1
-    for i, (it, _q, _ql) in enumerate(gear):
-        if row >= h - 2:
-            break
+    for i, (it, _q, _ql) in enumerate(gear[first:first + shown]):
         st = content.ARMOR_STATS.get(it)
         rs = content.ranged_stat(it)
         if it.kind == "jewelry":
@@ -570,7 +584,11 @@ def render_equipment(con: tcod.console.Console, state: GameState) -> None:
         m.text(3, row, f"{inv_letter(nslots + i)} - {it.glyph} {it.name}", fg=C.WHITE)
         m.text(34, row, tag, fg=_BRACKET_FG)
         row += 1
-    m.footer("[letter] equip / take off  [i] pack  [Esc] close", fg=_FOOT_FG)
+    if shown < len(gear):                 # more than a page: say where you are in it
+        m.footer(f"[letter] equip  [PgUp/PgDn] {first + 1}-{first + shown} of {len(gear)}"
+                 "  [i] pack  [Esc] close", fg=_FOOT_FG)
+    else:
+        m.footer("[letter] equip / take off  [i] pack  [Esc] close", fg=_FOOT_FG)
 
 
 def render_craft(con: tcod.console.Console, state: GameState, sel: int) -> None:
