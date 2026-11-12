@@ -97,9 +97,13 @@ def in_homestead(surf, x: int, y: int) -> bool:
 
 def owner_at(state, x: int, y: int):
     """Owner of a surface tile: an NPC name, a village name, ``"player"``, or
-    ``None`` for wilderness. Underground has no ownership."""
+    ``None`` for wilderness. Ownership is the Vale's alone: underground and
+    out on the Westreach nobody owns anything. (The check used to look at the
+    surface map's own flag, which is never a dungeon — so the Vale's deeds
+    were read at the same coordinates of whatever map you stood on, and a few
+    dozen spots of the Westreach "belonged" to a forester a world away.)"""
     surf = _surf(state)
-    if getattr(surf, "is_dungeon", False):
+    if state.world is not surf:
         return None
     vo = _village_owner(surf).get((x, y))
     if vo is not None:                     # village land is never overridden
