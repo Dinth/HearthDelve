@@ -154,10 +154,32 @@ def open_screens(ui) -> None:
         ui.push(screens.IntroScreen())
 
 
+AUTO_STEP = 1.0 / 30.0      # real seconds between steps of a run, a rest, a long job
+
+
+class Beat:
+    """A steady clock for real-time work. The loop turns once per frame AND
+    once per input event, so stepping a run on every turn of it made the run
+    as fast as the events arriving: moving the mouse over the window doubled a
+    run's pace on a 60Hz screen and quadrupled it on a 120Hz one."""
+
+    def __init__(self, step: float = AUTO_STEP) -> None:
+        self.step, self.next = step, None
+
+    def due(self, now: float) -> bool:
+        if self.next is not None and now < self.next:
+            return False
+        # Keep the cadence when the loop is quick; don't bank steps when it's slow.
+        behind = self.next is None or now - self.next > self.step
+        self.next = now + self.step if behind else self.next + self.step
+        return True
+
+
 def _loop(ui, state: GameState, console, context, music) -> None:
     """Advance the top screen, render, route events — until the UI stops."""
     konami: list = []        # rolling buffer of recent keys
     start = time.perf_counter()
+    beat = Beat()
     while ui.running:
         anim_time = time.perf_counter() - start
 
@@ -168,8 +190,10 @@ def _loop(ui, state: GameState, console, context, music) -> None:
             state.player.energy = state.player.max_energy
 
         # Real-time work on the active screen: an in-progress run, rest or
-        # long tool action on the world; the fishing minigame's physics.
-        ui.top.tick(ui)
+        # long tool action on the world; the fishing minigame's physics. On
+        # the beat, not on every pass: a pass also runs for each input event.
+        if beat.due(time.perf_counter()):
+            ui.top.tick(ui)
 
         rendering.render_all(console, state, anim_time)
         ui.top.render(ui, console)
