@@ -723,6 +723,35 @@ def _try_building(gm: GameMap, vx: int, vy: int, placed: list,
     return None
 
 
+def _board_somewhere(gm: GameMap, vx: int, vy: int, R: int) -> None:
+    """Stand the notice board on the nearest fit ground when none of the
+    square's four corners took cobble (a river or the shore through the
+    square). A village with no board can pin no favours and — worse — can
+    never have its restoration projects funded, which are paid in at the
+    board. Cobble off the through-lines first, then any cobble, then open
+    ground; nearest the centre wins. No dice are rolled, so nothing else in
+    the world moves."""
+    open_ground = (tile.GRASS, tile.MEADOW, tile.DIRT_PATH)
+    best = None
+    for dx in range(-R, R + 1):
+        for dy in range(-R, R + 1):
+            x, y = vx + dx, vy + dy
+            if not gm.in_bounds(x, y):
+                continue
+            t = gm.tiles[x, y]
+            if t == tile.COBBLE:
+                rank = 0 if dx and dy else 1
+            elif t in open_ground:
+                rank = 2
+            else:
+                continue
+            key = (rank, max(abs(dx), abs(dy)), abs(dx) + abs(dy), dy, dx)
+            if best is None or key < best[0]:
+                best = (key, (x, y))
+    if best is not None:
+        gm.tiles[best[1]] = tile.NOTICE_BOARD
+
+
 def _lay_square(gm: GameMap, vx: int, vy: int, R: int, rng) -> list:
     """A cobbled market square with a crossroads high street, well, market cross,
     stalls, lamps and flower beds. Returns walkable cobble tiles (gathering spots)."""
@@ -748,6 +777,8 @@ def _lay_square(gm: GameMap, vx: int, vy: int, R: int, rng) -> list:
         if gm.in_bounds(x, y) and gm.tiles[x, y] == tile.COBBLE:
             gm.tiles[x, y] = tile.NOTICE_BOARD
             break
+    else:
+        _board_somewhere(gm, vx, vy, R)
     for dx, dy in ((-3, -2), (3, -2), (-3, 2), (3, 2)):
         x, y = vx + dx, vy + dy
         if gm.in_bounds(x, y) and gm.tiles[x, y] in (tile.COBBLE, tile.GRASS):
