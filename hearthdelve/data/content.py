@@ -1830,6 +1830,16 @@ COOKING_LEVEL_RECIPES: dict[int, str] = {
     2: "Mayonnaise", 3: "Ketchup", 4: "Coleslaw", 6: "Glowcap Broth", 8: "Yogurt Pie",
 }
 
+BREW_SPOIL_PER_LEVEL = 0.15     # odds a potion spoils, per Herbalism level short of it
+BREW_SPOIL_MOST = 0.90
+
+
+def brew_spoil_chance(need: int, level: int) -> float:
+    """The odds a potion asking Herbalism ``need`` spoils in the hands of a
+    herbalist at ``level``: none at or above it, 15% a level below."""
+    return min(BREW_SPOIL_MOST, BREW_SPOIL_PER_LEVEL * max(0, need - level))
+
+
 # Remedies come to the herbalist as their skill deepens (mirrors cooking levels).
 HERBALISM_LEVEL_RECIPES: dict[int, str] = {
     1: "Herbal Tonic", 2: "Yarrow Poultice", 3: "Warding Tea", 4: "Antidote",

@@ -787,15 +787,20 @@ def machine_load_options(state: GameState, mdef) -> list:
             opts.append({"inputs": [(items.GRAIN_MASH, 1)], "output": items.VODKA, "out_qty": 1,
                          "quality_from": items.GRAIN_MASH, "minutes": 600, "group": "Spirits",
                          "label": "Vodka"})
-        # Station-only potions, distilled beyond a hand-brew's reach (skill-gated).
+        # Station-only potions, distilled beyond a hand-brew's reach. Anyone
+        # may try any of them: below the skill a potion asks, the batch may
+        # simply spoil — likelier the further short you are (see
+        # content.brew_spoil_chance). They used not to appear at all.
         from . import skills
         hlvl = skills.skill_level(state, "Herbalism")
         for inputs, out, oq, need, mins in content.APOTHECARY_POTIONS:
-            if hlvl >= need and all(inv.count(it) >= q for it, q in inputs):
+            if all(inv.count(it) >= q for it, q in inputs):
                 qf = max(inputs, key=lambda e: e[0].value)[0]
+                spoil = content.brew_spoil_chance(need, hlvl)
                 opts.append({"inputs": list(inputs), "output": out, "out_qty": oq,
                              "quality_from": qf, "minutes": mins, "group": "Potions",
-                             "label": out.name})
+                             "spoil": spoil,
+                             "label": out.name + (f" ⚠{round(spoil * 100)}%" if spoil else "")})
     elif a == "age":
         for src, out in content.AGED_DRINK.items():
             if inv.count(src) >= 1:
@@ -827,6 +832,13 @@ def load_machine_choice(state: GameState, m: Machine, mdef, opt) -> None:
             continue                                  # already taken above
         inv.remove(it, q)
     output = opt["output"]
+    if opt.get("spoil") and random.random() < opt["spoil"]:
+        # Brewing past your skill: the batch turned. The herbs are gone, and
+        # you're a little wiser for it.
+        skills.gain(state, "Herbalism", 10)
+        state.log.add(f"The {output.name.lower()} clouds and turns in the still — the batch is "
+                      "spoiled. A surer hand at herbalism would lose fewer.", (216, 170, 110))
+        return
     if opt.get("geode"):                              # a cracked geode reveals (and cuts) a gem
         output = content.CUT_GEM[content.random_gem(random)]
     elif mdef.kind == "anvil":                        # a skilled smith may forge in a bonus affix
