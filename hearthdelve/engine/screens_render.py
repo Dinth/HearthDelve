@@ -39,9 +39,17 @@ def render_message_log(con: tcod.console.Console, state: GameState, scroll: int)
 
 def render_mail(con: tcod.console.Console, state: GameState, sel: int) -> None:
     mail = state.mail
-    body = mail[min(sel, len(mail) - 1)]["body"].split("\n") if mail else []
     w = 60
+    # The open letter, wrapped to the window: its lines were cut at the edge,
+    # and every project's letter lost the end of the sentence naming its perk.
+    body = [ln for raw in (mail[min(sel, len(mail) - 1)]["body"].split("\n") if mail else [])
+            for ln in (ui.wrap(raw, w - 6) or [""])]
     list_h = min(10, max(1, len(mail)))          # cap the letter list; it scrolls
+    room = C.SCREEN_H - 2 - 8                    # rows the list and the letter share
+    if list_h + len(body) > room:                # a long letter: the list gives way first,
+        list_h = max(3, min(list_h, room - len(body)))
+        if list_h + len(body) > room:            # then the letter closes on an ellipsis
+            body = body[:room - list_h - 1] + ["…"]
     h = list_h + len(body) + 8
     m = ui.Modal(con, w, h, "Post Box")
     if not mail:
@@ -54,7 +62,7 @@ def render_mail(con: tcod.console.Console, state: GameState, sel: int) -> None:
 
     m.list(2, list_h, len(mail), sel, row, arrow_top=2, arrow_bottom=1 + list_h)
     for j, bl in enumerate(body):                # the open letter's text below the list
-        m.text(3, 3 + list_h + j, bl[:w - 6], fg=(210, 205, 190))
+        m.text(3, 3 + list_h + j, bl, fg=(210, 205, 190))
     m.footer("↑↓ select   Enter settle tax / take letter   Esc close"
              if any(le.get("tax") for le in mail)
              else "↑↓ select   Enter take letter   Esc close")

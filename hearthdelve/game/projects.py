@@ -260,6 +260,17 @@ def new_day(state: GameState) -> None:
 
 
 # --- completion --------------------------------------------------------------------
+def completion_letter(d) -> dict:
+    """The village's letter of thanks when its project `d` stands finished."""
+    return {
+        "sender": d.village,
+        "body": (f"The {d.name} is finished, and the whole village turned out\n"
+                 f"for the raising. {d.perk}\n"
+                 "None of it would stand without you. Thank you, friend."),
+        "items": [],
+    }
+
+
 def finish(state: GameState, x: int, y: int, m: Machine) -> None:
     """Raise the finished landmark (called from husbandry's construction tick)."""
     from . import karma, land
@@ -285,13 +296,7 @@ def finish(state: GameState, x: int, y: int, m: Machine) -> None:
             village.befriend(state, n, 150)
     karma.adjust(state, 5)
     state.log.add(f"The {d.name} stands finished! {d.perk}", (232, 200, 120))
-    state.mail.append({
-        "sender": d.village,
-        "body": (f"The {d.name} is finished, and the whole village turned out\n"
-                 f"for the raising. {d.perk}\n"
-                 "None of it would stand without you. Thank you, friend."),
-        "items": [],
-    })
+    state.mail.append(completion_letter(d))
 
 
 def _stamp_hall(state: GameState, rect, interior=()) -> None:
