@@ -2214,7 +2214,7 @@ def village_npcs() -> dict[str, list[NPC]]:
                         "the long road ever gave me.\"")),
                 loves=(items.WINE, items.GRAPE_WINE, items.JELLIED_EEL, items.MEAT_PIE,
                        items.TRUFFLE, items.TRUFFLE_PASTA, items.VODKA),
-                likes=(items.JAM, items.PICKLES, items.WALL_TAPESTRY), dislikes=(items.STONE,),
+                likes=(items.JAM, items.PICKLES, items.WALL_TAPESTRY, items.QUILT), dislikes=(items.STONE,),
                 gifts=(items.WINE, items.MEAD, items.JAM, items.PICKLES),
                 bio="Keeps the Mossford inn; a settled wanderer, full of stories."),
             NPC("Sister Ivy", "I", (214, 196, 224), shop=None, role="priest",
@@ -2236,7 +2236,7 @@ def village_npcs() -> dict[str, list[NPC]]:
                         "The quiet of this place gave it somewhere to rest, at last.\n"
                         "You did too, friend — more than you know. Bless you for it.\"")),
                 loves=(items.WINE, items.JAM, items.DIAMOND, items.ASTER, items.CANDIED_FRUIT),
-                likes=(items.STRAWBERRY, items.BLUEBERRY, items.LAVENDER, items.CHAMOMILE),
+                likes=(items.STRAWBERRY, items.BLUEBERRY, items.LAVENDER, items.CHAMOMILE, items.WALL_TAPESTRY),
                 dislikes=(items.COAL,),
                 gifts=(items.AMETHYST, items.TOPAZ, items.JAM),
                 bio="Tends the shrine and churchyard of Mossford; serene and watchful."),
@@ -2398,7 +2398,7 @@ def village_npcs() -> dict[str, list[NPC]]:
                               (6, "My own two went off to the cities years back.\n"
                                   "So I keep the lamp lit for everyone else's. Suits me.")),
                 loves=(items.GRAPE_WINE, items.WINE, items.JELLIED_EEL, items.PIZZA),
-                likes=(items.JAM, items.PICKLES), dislikes=(items.STONE,),
+                likes=(items.JAM, items.PICKLES, items.QUILT, items.WALL_TAPESTRY), dislikes=(items.STONE,),
                 gifts=(items.MEAD, items.GRAPE_WINE, items.PICKLES),
                 bio="Runs the Cinderhope taproom; matron to the whole outpost."),
             NPC("Father Ansel", "F", (196, 200, 224), shop=None, role="priest",
@@ -2414,7 +2414,7 @@ def village_npcs() -> dict[str, list[NPC]]:
                               (6, "Between us — there's a vault beneath the chapel floor.\n"
                                   "Some doors are best left shut. I trust you agree.")),
                 loves=(items.WINE, items.SAPPHIRE, items.JAM, items.CUSTARD, items.WRAITH_ESSENCE),
-                likes=(items.APPLE, items.CHERRY), dislikes=(items.COAL,),
+                likes=(items.APPLE, items.CHERRY, items.WALL_TAPESTRY), dislikes=(items.COAL,),
                 gifts=(items.SAPPHIRE, items.EMERALD, items.WINE),
                 bio="Keeps the old chapel of Cinderhope; wry, and guards its secrets."),
             NPC("Old Pell", "P", (150, 180, 200), shop=None, role="fisher",
@@ -2456,7 +2456,7 @@ def village_npcs() -> dict[str, list[NPC]]:
                               (6, "This one's for you, if you'll have it — don't argue.\n"
                                   "A friend should have something made with them in mind.")),
                 loves=(items.FIBER, items.WINE, items.SHORTBREAD),
-                likes=(items.WOOD, items.CURRANT), dislikes=(items.STONE,),
+                likes=(items.WOOD, items.CURRANT, items.QUILT, items.WALL_TAPESTRY), dislikes=(items.STONE,),
                 gifts=(items.FIBER, items.TULIP, items.ASTER_SEEDS),
                 bio="The Cinderhope weaver; meticulous, and homesick for the sea."),
             NPC("Sable", "S", (200, 170, 220), shop=None, role="trader",
@@ -2523,7 +2523,7 @@ def village_npcs() -> dict[str, list[NPC]]:
                               (6, "Every soul who walks through that door, I want them\n"
                                   "leaving a little warmer than they came. You do.")),
                 loves=(items.JELLIED_EEL, items.WINE, items.GRAPE_WINE, items.BAKED_PIKE),
-                likes=(items.JAM, items.PICKLES), dislikes=(items.STONE,),
+                likes=(items.JAM, items.PICKLES, items.QUILT), dislikes=(items.STONE,),
                 gifts=(items.MEAD, items.JELLIED_EEL, items.WINE),
                 bio="Keeps the dockside inn at Saltmere; a lighthouse-keeper's daughter."),
             NPC("Bryn", "b", (140, 180, 208), shop=None, role="fisher",
@@ -2625,7 +2625,7 @@ def village_npcs() -> dict[str, list[NPC]]:
                               (6, "My inn's the only warm light for a league of marsh.\n"
                                   "Some nights that feels like a duty. Most, a gift.")),
                 loves=(items.HONEY, items.MEAD, items.JELLIED_EEL, items.GLAZED_VEG),
-                likes=(items.JAM, items.PICKLES, items.WINE), dislikes=(items.STONE,),
+                likes=(items.JAM, items.PICKLES, items.WINE, items.QUILT, items.WALL_TAPESTRY), dislikes=(items.STONE,),
                 gifts=(items.MEAD, items.HONEY, items.JAM),
                 bio="Keeps the stilt-house inn at Fenwick; steady warmth in a cold fen."),
             NPC("Sedge", "S", (170, 190, 148), shop=None, role="forager",
@@ -3128,7 +3128,8 @@ PROJECTS: dict[str, ProjectDef] = {p.id: p for p in (
                "Pray at the shrine altar (bump it) for a daily blessing.",
                "Sister Ivy's shrine is a humble thing; the faithful long to raise it grand."),
     ProjectDef("scriptorium", "Cinderhope Scriptorium", "Cinderhope", 4000,
-               ((items.TIMBER_PLANK, 100), (items.STONE, 50), (items.WOOLEN_CLOTH, 6)),
+               ((items.TIMBER_PLANK, 100), (items.STONE, 50), (items.WOOLEN_CLOTH, 6),
+                (items.WALL_TAPESTRY, 2)),
                (7, 6), 5,
                "Study at the lectern (bump it) to work out a new recipe now and then.",
                "Father Ansel keeps the Vale's records in crates; a scriptorium would house them proper."),
@@ -3146,7 +3147,8 @@ PROJECTS: dict[str, ProjectDef] = {p.id: p for p in (
     # specimen to the curator (see game/collection.py) for lore, wing perks and a
     # capstone. Expensive and grand — the culmination of Mossford's works.
     ProjectDef("hall_of_wonders", "Mossford Hall of Wonders", "Mossford", 7000,
-               ((items.STONE, 160), (items.TIMBER_PLANK, 120), (items.SILK_CLOTH, 8)),
+               ((items.STONE, 160), (items.TIMBER_PLANK, 120), (items.SILK_CLOTH, 8),
+                (items.WALL_TAPESTRY, 2)),
                (11, 7), 7,
                "Present finds to the curator (g at a display case) — a cabinet of the Vale's wonders.",
                "A hall to gather the Vale's wonders — every fish, gem, herb and delved relic, "
