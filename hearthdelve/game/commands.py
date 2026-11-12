@@ -794,9 +794,10 @@ def _gather_drop(state: GameState, item, target) -> None:
             state.log.add(f"  (gem: +1 {extra.name})", (150, 210, 170))
 
 
-def _equip(state: GameState, item) -> None:
+def _equip(state: GameState, item, quality: int | None = None) -> None:
     """Equip a carried weapon (into the held hotbar weapon slot) or armour piece
-    (into its paperdoll slot); whatever was there returns to the pack."""
+    (into its paperdoll slot); whatever was there returns to the pack. For
+    jewellery `quality` names the copy picked (its stars); None wears the best."""
     from ..data import content
     p = state.player
     if item.kind == "weapon":
@@ -833,7 +834,11 @@ def _equip(state: GameState, item) -> None:
         else:
             slot = "ring1" if p.equipment.get("ring1") is None else (
                 "ring2" if p.equipment.get("ring2") is None else "ring1")
-        q = p.inventory.pop_quality(item, 1)     # take one, remember its stars
+        held = [ql for it, _n, ql in p.inventory.slots if it is item]
+        if not held:
+            return
+        q = quality if quality in held else max(held)    # the copy picked, else the finest
+        p.inventory.remove(item, 1, quality=q)
         old, oldq = p.equipment.get(slot), p.equip_quality.get(slot, 0)
         p.equipment[slot] = item
         p.equip_quality[slot] = int(round(q))

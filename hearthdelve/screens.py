@@ -570,7 +570,7 @@ class InventoryScreen(Screen):
                     ui.pop()                     # struck down: back to the map to come round
                     return
             elif it.kind in _EQUIP_KINDS:
-                cmds._equip(state, it)
+                cmds._equip(state, it, ql)
             else:
                 state.log.add(f"The {it.name.lower()} isn't something to use from the pack.",
                               C.DIM)
@@ -613,7 +613,7 @@ class EquipmentScreen(Screen):
             gear = rendering.equippables(ui.state)
             gi = idx - nslots
             if 0 <= gi < len(gear):
-                cmds._equip(ui.state, gear[gi][0])
+                cmds._equip(ui.state, gear[gi][0], gear[gi][2])
         return True
 
     def handle(self, ui: UI, cmd: str, action: tuple) -> None:
