@@ -225,6 +225,10 @@ def harvest(state: GameState, x: int, y: int) -> bool:
         state.log.add("  Your farming skill yields an extra one!", C.DIM)
     if crop.regrows:
         plot.days_grown = max(0, crop.days_to_mature - crop.regrow_days)
+        # A dressing feeds one harvest. It used to stay on a regrower for
+        # good — one dose, a star on every pick for the plant's whole life
+        # (for ever, in a greenhouse). The ground keeps what it gained.
+        plot.fertilized = False
         # Keep any water the plot has already had today. Clearing it here threw
         # away the player's own watering can — and since the dawn rain/sprinkler
         # passes skip ripe plots, the plant then entered the next dawn bone dry
