@@ -1184,9 +1184,14 @@ def _under_threat(state: GameState) -> bool:
     """Whether something awake and hostile is close enough to make a swig cost."""
     p = state.player
     for m in state.world.monsters:
-        if not m.alive or not getattr(m, "awake", False):
+        if not m.alive:
             continue
-        if getattr(m, "kind", "monster") == "wildlife" and not getattr(m, "hostile", False):
+        # A beast hunting you is a threat whether or not it was ever "woken":
+        # predators turn hostile on sight and never get the dungeon's flag.
+        if getattr(m, "kind", "monster") == "wildlife":
+            if not getattr(m, "hostile", False):
+                continue
+        elif not getattr(m, "awake", False):
             continue
         if max(abs(m.x - p.x), abs(m.y - p.y)) <= _EAT_THREAT_RADIUS:
             return True
