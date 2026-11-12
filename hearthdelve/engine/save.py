@@ -40,6 +40,56 @@ def default_path() -> str:
     return os.environ.get("HEARTHDELVE_SAVE") or SAVE_PATH
 
 
+# The player's real save is written only by the running game. Anything else
+# that builds a state and lets a day pass — a script, a REPL, a tool — used to
+# autosave over it at dawn, and a second dawn rolled the only backup away too.
+_ARMED = False
+DATED_BACKUPS = 7            # how many earlier days' saves are kept beside it
+
+
+class SaveNotArmedError(RuntimeError):
+    """Something other than the running game tried to write the real save."""
+
+
+def arm() -> None:
+    """Called once by ``main()``: from here on the real save may be written."""
+    global _ARMED
+    _ARMED = True
+
+
+def may_write(path: str | None = None) -> bool:
+    """Whether a save to ``path`` is allowed: always for a path given outright
+    or set through ``$HEARTHDELVE_SAVE``; for the real save, only once the game
+    itself has called :func:`arm`."""
+    return bool(path or os.environ.get("HEARTHDELVE_SAVE") or _ARMED)
+
+
+def _guard(path: str | None) -> None:
+    if not may_write(path):
+        raise SaveNotArmedError(
+            f"refusing to touch the real save at {SAVE_PATH} from outside the game — "
+            "set HEARTHDELVE_SAVE to a scratch file, or pass a path")
+
+
+def _keep_dated(bak: str) -> None:
+    """Before the rolling ``.bak`` is overwritten, set it aside under the date
+    it was written if that was an earlier day (``….bak.2026-11-09``) — so each
+    day you played leaves its last good save behind, and a bad day can't roll
+    every backup away. Only the newest ``DATED_BACKUPS`` are kept."""
+    import datetime
+    import glob
+    try:
+        written = datetime.date.fromtimestamp(os.path.getmtime(bak))
+        if written >= datetime.date.today():
+            return
+        os.replace(bak, f"{bak}.{written.isoformat()}")
+        dated = sorted(glob.glob(glob.escape(bak) + ".????-??-??"))
+        for old in dated[:-DATED_BACKUPS]:
+            os.remove(old)
+    except OSError:
+        pass                              # a failed backup must never block the save
+
+
 class IncompatibleSaveError(Exception):
     """The save file's format version doesn't match this build — distinct from a
     truly corrupt/unreadable file so the caller can explain it clearly."""
@@ -224,6 +274,7 @@ def exists(path: str | None = None) -> bool:
 
 
 def delete(path: str | None = None) -> None:
+    _guard(path)
     try:
         os.remove(path or default_path())
     except OSError:
@@ -268,6 +319,7 @@ def load_or_backup(path: str | None = None):
 
 # --- save --------------------------------------------------------------------
 def save(state: GameState, path: str | None = None) -> None:
+    _guard(path)
     path = path or default_path()
     surf = state.surface
     px, py = state.return_pos if state.depth > 0 else (state.player.x, state.player.y)
@@ -373,6 +425,8 @@ def save(state: GameState, path: str | None = None) -> None:
     # Keep the previous good save as a rolling .bak (recovery if this write's
     # result ever proves unreadable — see load_or_backup), then write atomically.
     if os.path.isfile(path):
+        if os.path.isfile(path + ".bak"):
+            _keep_dated(path + ".bak")
         try:
             shutil.copy2(path, path + ".bak")
         except OSError:

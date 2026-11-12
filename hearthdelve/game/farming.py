@@ -420,10 +420,12 @@ def new_day(state: GameState, rested: bool = True) -> None:
     # karma and friendship for good.
     _announce_morning(state)
 
-    # auto-save each morning
+    # auto-save each morning — when this is the game, or a save path was named
+    # (see save.may_write): a script letting a day pass is not the player.
+    from ..engine import save
     try:
-        from ..engine import save
-        save.save(state)
+        if save.may_write():
+            save.save(state)
     except Exception as e:  # noqa: BLE001 - never let a save error break the day…
         # …but never hide it either: a full disk shouldn't mean silent loss.
         state.log.add(f"⚠ The morning auto-save FAILED ({e}) — your progress isn't "

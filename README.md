@@ -47,6 +47,14 @@ button; Cmd+Q leaves at once without saving), to
 `.bak`), and **continues it** on the next launch. Pass `--new` to start a new
 life instead. Set `HEARTHDELVE_SAVE` to keep the save somewhere else.
 
+The last save of each earlier day you played is also kept, as
+`.bak.2026-11-09` and so on (the newest seven). Only the running game writes
+the real save: a script or REPL that lets a day pass leaves it alone unless
+`HEARTHDELVE_SAVE` names a file.
+
+Every new life gets a vale of its own. Set `HEARTHDELVE_SEED` to a number to
+start in a particular one — to share a world, or to play one again.
+
 ## Sharing it with testers
 
 **Option A — double-click launcher (testers have Python 3).** Zip the project

@@ -88,6 +88,7 @@ def load_or_new() -> GameState:
 
 
 def main() -> None:
+    save.arm()               # this is the game itself: the real save is ours to write
     tileset = font.load_tileset(16)
     state = load_or_new()
     console = tcod.console.Console(C.SCREEN_W, C.SCREEN_H, order="F")
