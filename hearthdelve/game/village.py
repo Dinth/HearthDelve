@@ -716,12 +716,20 @@ def _contest_key(state: GameState) -> str | None:
     return f"contest_{state.year}_{state.season}_{fest[0]}" if fest else None
 
 
-def contest_open(state: GameState) -> str | None:
-    """The festival whose produce contest awaits an entry today, or None —
-    contests run only once the Grange Hall stands, once per festival."""
+CONTEST_HOME = "Mossford"      # where the fair's contest is held before the Grange stands
+
+
+def contest_open(state: GameState, npc: NPC | None = None) -> str | None:
+    """The festival whose produce contest ``npc`` (an innkeeper) will take an
+    entry for today, or None. One entry per festival. Mossford has always
+    judged its own produce on a trestle outside the inn; raising the Grange
+    Hall makes it the Vale's contest, held at every inn and with the grange
+    elders' prizes. (There used to be no contest at all until the hall stood.)"""
     from . import projects
     fest = content.festival_on(state.season, state.day_of_season)
-    if (fest and projects.done(state, "grange_hall")
+    held = (projects.done(state, "grange_hall")
+            or getattr(npc, "village", "") == CONTEST_HOME)
+    if (fest and held
             and state.world is state.surface        # the fair is up in the sunlight
             and not state.stats.get(_contest_key(state))):
         return fest[1]
@@ -778,12 +786,14 @@ def enter_contest(state: GameState, item, ql: int, judge: NPC | None = None) -> 
                 befriend(state, n, 100)
         karma.adjust(state, 3)
         extra = ""
-        if rng.random() < 0.4:
+        from . import projects
+        grand = projects.done(state, "grange_hall")   # the elders' prizes come with the hall
+        if rng.random() < 0.4 and grand:
             pool = gamereq.unknown_recipes(state)
             if pool:
                 gamereq.learn_recipe(state, rng.choice(pool), teacher="The judge")
                 extra = "\nThere's a recipe card tucked under the ribbon, too."
-        if rng.random() < 0.2:                    # a rare grand-prize treat (very occasional)
+        if rng.random() < 0.2 and grand:          # a rare grand-prize treat (very occasional)
             treat = rng.choice(content.ATTRIBUTE_TREATS)
             state.player.inventory.add(treat, 1)
             extra += f"\nThe grange elders press a rare {treat.name} into your hands."
@@ -978,7 +988,7 @@ def _shop_entries(shop: str, state: GameState | None = None,
         # On a fair day (with the Grange standing), the innkeeper judges the
         # produce contest — one entry per festival.
         if state is not None:
-            fest_name = contest_open(state)
+            fest_name = contest_open(state, npc)
             if fest_name:
                 meals = [ShopRow("contest", name=fest_name)] + meals
         # The house recipes: an innkeeper will part with one, for a price.

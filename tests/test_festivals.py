@@ -273,5 +273,67 @@ class TestTheContestThanksItsOwnJudge(unittest.TestCase):
         self.skipTest("the first-drawn rival led every year checked")
 
 
+class TestMossfordJudgesBeforeTheGrange(unittest.TestCase):
+    """There was no produce contest anywhere until a 4,000g hall was built."""
+
+    def _fair(self):
+        st = fresh_state(11)
+        st.day = FESTIVAL_DAY
+        return st
+
+    def _keeper(self, st, village_name):
+        return next(n for n in st.surface.npcs
+                    if n.role == "innkeeper" and n.village == village_name)
+
+    def test_mossfords_inn_holds_it_from_the_start(self):
+        from hearthdelve.game import village
+        st = self._fair()
+        hollis = self._keeper(st, "Mossford")
+        self.assertIsNotNone(village.contest_open(st, hollis))
+        rows = village.shop_entries("tavern", st, hollis)
+        self.assertTrue(any(r.kind == "contest" for r in rows))
+
+    def test_the_other_inns_wait_for_the_hall(self):
+        from hearthdelve.game import projects, village
+        st = self._fair()
+        mabel = self._keeper(st, "Cinderhope")
+        self.assertIsNone(village.contest_open(st, mabel))
+        projects.get(st, "grange_hall")["state"] = "done"
+        self.assertIsNotNone(village.contest_open(st, mabel))
+
+    def test_it_is_still_one_entry_a_fair(self):
+        from hearthdelve.entities import items
+        from hearthdelve.game import village
+        st = self._fair()
+        hollis = self._keeper(st, "Mossford")
+        st.player.inventory.add(items.STRAWBERRY, 1, quality=5)
+        village.enter_contest(st, items.STRAWBERRY, 5, judge=hollis)
+        self.assertIsNone(village.contest_open(st, hollis))
+
+    def test_a_win_before_the_hall_is_a_ribbon_and_no_more(self):
+        from unittest import mock
+        from hearthdelve.entities import items
+        from hearthdelve.game import village
+        st = self._fair()
+        hollis = self._keeper(st, "Mossford")
+        known = set(st.known_recipes)
+        inv = st.player.inventory
+        inv.add(items.TRUFFLE, 1, quality=5)
+        treats = sum(inv.count(t) for t in __import__("hearthdelve.data.content",
+                     fromlist=["x"]).ATTRIBUTE_TREATS)
+        village.enter_contest(st, items.TRUFFLE, 5, judge=hollis)
+        if inv.count(items.FAIR_RIBBON) == 0:
+            self.skipTest("the field beat a five-star truffle this fair")
+        from hearthdelve.data import content
+        self.assertEqual(st.known_recipes, known)
+        self.assertEqual(sum(inv.count(t) for t in content.ATTRIBUTE_TREATS), treats)
+
+    def test_no_fair_no_contest(self):
+        from hearthdelve.game import village
+        st = fresh_state(11)
+        st.day = FESTIVAL_DAY + 1
+        self.assertIsNone(village.contest_open(st, self._keeper(st, "Mossford")))
+
+
 if __name__ == "__main__":
     unittest.main()

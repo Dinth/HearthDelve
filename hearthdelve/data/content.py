@@ -3177,7 +3177,7 @@ PROJECTS: dict[str, ProjectDef] = {p.id: p for p in (
     ProjectDef("grange_hall", "Mossford Grange Hall", "Mossford", 4000,
                ((items.TIMBER_PLANK, 120), (items.STONE, 60), (items.WOOLEN_CLOTH, 10)),
                (9, 7), 5,
-               "Festival fairs hold a produce contest at the Grange.",
+               "Every inn holds the fair's produce contest, with the elders' prizes.",
                "The old grange burned a generation ago; Mossford still talks of raising it again."),
     ProjectDef("deep_forge", "Cinderhope Deep Forge", "Cinderhope", 6000,
                ((items.STONE, 140), (items.IRON_BAR, 24), (items.COAL, 60),
