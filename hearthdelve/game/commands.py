@@ -87,9 +87,9 @@ _HERB_ITEM = {
 
 
 def _npc_at(state: GameState, x: int, y: int):
-    """A villager standing on (x, y), if any (surface only)."""
-    if state.world.is_dungeon:
-        return None
+    """Someone standing on (x, y), if any — a villager above ground, or one
+    of the dwarves in Khazgrim (their town is a dungeon floor, and you could
+    walk straight onto Thrunn at his forge)."""
     for n in state.world.npcs:
         if (n.x, n.y) == (x, y):
             return n
@@ -101,9 +101,11 @@ def _entity_at(state: GameState, x: int, y: int) -> bool:
     should never barrel onto one."""
     if combat.mob_at(state, x, y) is not None:
         return True
+    if _npc_at(state, x, y) is not None:
+        return True
     if not state.world.is_dungeon:
         from . import husbandry
-        if husbandry.animal_at(state, x, y) is not None or _npc_at(state, x, y) is not None:
+        if husbandry.animal_at(state, x, y) is not None:
             return True
     return False
 
