@@ -254,9 +254,24 @@ def _find_npc(state: GameState, name: str):
     return None
 
 
+def _fills(state: GameState, it) -> list:
+    """What you carry that answers a favour for `it`: the thing itself, and —
+    for a dish that is only ever cooked as a named variant (nobody can make
+    plain "Sashimi"; the pan gives Tuna Sashimi, Minnow Sashimi…) — any of
+    its kind, by family, the way tastes match. Cheapest first, so the humble
+    plate goes over before the fine one."""
+    kin = f"dish:{it.name}"
+    held = {e[0] for e in state.player.inventory.slots
+            if e[0] is it or e[0].family == kin}
+    return sorted(held, key=lambda i: (i.value, i.name))
+
+
 def can_fulfil(state: GameState, req: dict) -> bool:
     it = items.by_name(req["item"])
-    return it is not None and state.player.inventory.count(it) >= req["qty"]
+    if it is None:
+        return False
+    inv = state.player.inventory
+    return sum(inv.count(i) for i in _fills(state, it)) >= req["qty"]
 
 
 def deliver(state: GameState, req: dict) -> bool:
@@ -265,12 +280,19 @@ def deliver(state: GameState, req: dict) -> bool:
     from . import karma, skills
     it = items.by_name(req["item"])
     inv = state.player.inventory
-    if it is None or inv.count(it) < req["qty"]:
+    if it is None or not can_fulfil(state, req):
         state.log.add(f"You don't have {req['qty']} {req['item']} to hand.", C.DIM)
         return False
     # Lowest-quality stock goes over first, but fine goods still earn their
     # stars: +20% of the fee per average star handed over.
-    avg_q = inv.pop_quality(it, req["qty"])
+    owed, stars = req["qty"], 0.0
+    for held in _fills(state, it):
+        take = min(owed, inv.count(held))
+        stars += inv.pop_quality(held, take) * take
+        owed -= take
+        if not owed:
+            break
+    avg_q = stars / req["qty"]
     bonus = round(req["gold"] * 0.2 * avg_q)
     paid = req["gold"] + bonus
     if req in state.requests:
