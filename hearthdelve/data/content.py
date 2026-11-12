@@ -2974,15 +2974,19 @@ def counter_price(it: Item, markup: float = COUNTER_MARKUP) -> int:
 
 
 # General store stock: (seed, buy price)
+# Seed for a crop you sow afresh each time is cheap: you pay for it again at
+# every harvest, where a kale or a strawberry is bought once and picked all
+# season. At the old prices (parsnip 20, potato 50, cabbage 90...) the sown
+# crops earned a third to a fifth of what the regrowers did.
 GENERAL_STOCK: list[tuple[Item, int]] = [
-    (items.PARSNIP_SEEDS, 20), (items.POTATO_SEEDS, 50), (items.CAULIFLOWER_SEEDS, 80),
+    (items.PARSNIP_SEEDS, 15), (items.POTATO_SEEDS, 35), (items.CAULIFLOWER_SEEDS, 55),
     (items.PUMPKIN_SEEDS, 100), (items.TOMATO_SEEDS, 50), (items.STRAWBERRY_SEEDS, 100),
     (items.BLUEBERRY_SEEDS, 80), (items.GRAPE_SEEDS, 60),
     (items.CHERRY_SAPLING, 600), (items.PEACH_SAPLING, 600),
     (items.APPLE_SAPLING, 700), (items.PEAR_SAPLING, 700), (items.ORANGE_SAPLING, 700),
-    (items.CARROT_SEEDS, 30), (items.KALE_SEEDS, 70), (items.CORN_SEEDS, 90),
-    (items.CUCUMBER_SEEDS, 45), (items.CABBAGE_SEEDS, 90), (items.BEET_SEEDS, 55),
-    (items.LEEK_SEEDS, 60),
+    (items.CARROT_SEEDS, 20), (items.KALE_SEEDS, 70), (items.CORN_SEEDS, 90),
+    (items.CUCUMBER_SEEDS, 30), (items.CABBAGE_SEEDS, 60), (items.BEET_SEEDS, 35),
+    (items.LEEK_SEEDS, 40),
     (items.BARLEY_SEEDS, 30), (items.WHEAT_SEEDS, 35), (items.RICE_SEEDS, 45),
     (items.SUGARCANE_SEEDS, 55), (items.COTTON_SEEDS, 45), (items.FLAX_SEEDS, 40),
     (items.TULIP_SEEDS, 40), (items.SUNFLOWER_SEEDS, 50), (items.ASTER_SEEDS, 50),
