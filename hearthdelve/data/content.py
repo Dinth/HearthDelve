@@ -1104,6 +1104,21 @@ def _hybrid(name: str, glyph: str, color, season: str, days: int, regrow_days: i
 
 
 HYBRID_PARENTS: dict[str, tuple] = {}      # hybrid name -> (parent, parent)
+# A stand of grain or flax is cut as a sheaf, not picked as a single head: one
+# plot gives two or three measures. (At one, a plot of wheat earned 30g a
+# season against a strawberry's 500g, and a plot of flax earned nothing.)
+SHEAF = (2, 3)
+
+
+def harvest_measures(crop) -> tuple:
+    """(fewest, most) units one harvest of ``crop`` brings in. Grain and fibre
+    that are sown afresh each time come in by the sheaf; a cane or a cotton
+    bush that keeps cropping is picked, like everything else, one at a time."""
+    if not crop.regrows and crop.category in ("grain", "fiber"):
+        return SHEAF
+    return (1, 1)
+
+
 HYBRIDS: list[Crop] = []
 for _args in (
     ("Romanesco", "%", (172, 210, 112), "Spring", 12, 0, 300, "vegetable", ("Cauliflower", "Kale"),

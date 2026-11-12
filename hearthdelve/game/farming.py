@@ -211,7 +211,8 @@ def harvest(state: GameState, x: int, y: int) -> bool:
         q = min(5, q + 1)                     # nitre-fed soil bears finer
     soil_lvl = state.world.soil.get((x, y), 0)
     q = min(5, q + soil_lvl // 2)             # rich, long-worked loam bears finer still
-    state.player.inventory.add(crop.produce, 1, quality=q)
+    measures = random.randint(*content.harvest_measures(crop))
+    state.player.inventory.add(crop.produce, measures, quality=q)
     state.happen("harvest", x, y, quality=q)
     if q >= 5:
         state.bump("five_star_harvests")      # for the Gold Standard goal
@@ -243,7 +244,9 @@ def harvest(state: GameState, x: int, y: int) -> bool:
         state.log.add(f"You harvest a {crop.produce.name.lower()}. It will fruit again.", (180, 230, 160))
     else:
         del state.world.crops[(x, y)]
-        state.log.add(f"You harvest a {crop.produce.name.lower()}!", (180, 230, 160))
+        state.log.add(f"You cut {measures} measures of {crop.produce.name.lower()}!"
+                      if measures > 1 else
+                      f"You harvest a {crop.produce.name.lower()}!", (180, 230, 160))
     state.player.energy = max(0, state.player.energy - C.HARVEST_COST[0])
     turns.advance_time(state, C.HARVEST_COST[1])
     return True
