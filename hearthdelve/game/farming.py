@@ -229,6 +229,13 @@ def harvest(state: GameState, x: int, y: int) -> bool:
         # away the player's own watering can — and since the dawn rain/sprinkler
         # passes skip ripe plots, the plant then entered the next dawn bone dry
         # and _WITHER_DAYS["Clear"] == 1 killed it outright.
+        # And when it has had none: a ripe plant never asks for water (it
+        # doesn't thirst, the ledger doesn't count it dry), so nobody waters
+        # the one they are about to pick — and the pick turns it back into a
+        # growing plant on the spot. Give it one dawn's grace, so the first
+        # dry morning after a harvest only leaves it thirsty.
+        if not plot.watered:
+            plot.thirst = -1
         state.log.add(f"You harvest a {crop.produce.name.lower()}. It will fruit again.", (180, 230, 160))
     else:
         del state.world.crops[(x, y)]
