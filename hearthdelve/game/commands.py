@@ -1339,6 +1339,7 @@ def _notable_nearby(state: GameState, ignore: frozenset = frozenset(),
     means something when you're moving."""
     p = state.player
     rng = _notice_range(state)
+    seen = state.world.visible                         # the dark's field of view; None above
     for npc in state.world.npcs:
         if id(npc) in ignore:
             continue                                   # already acknowledged
@@ -1349,6 +1350,8 @@ def _notable_nearby(state: GameState, ignore: frozenset = frozenset(),
             continue                                   # hibernating — not around
         if not (m.alive and max(abs(m.x - p.x), abs(m.y - p.y)) <= rng):
             continue
+        if seen is not None and not seen[m.x, m.y]:
+            continue                                   # behind rock: you can't know it's there
         if _is_friendly(state, m) and id(m) in ignore:
             continue                                   # a grazing beast we ran past
         return f"a {m.name.lower()} is nearby"
