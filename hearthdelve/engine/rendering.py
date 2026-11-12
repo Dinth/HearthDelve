@@ -524,10 +524,34 @@ def _bar(con, x, y, label, cur, mx, color, width=12, low_frac=0.0):
     low = mx and low_frac and cur <= mx * low_frac
     con.print(x, y, f"{label}" + ("  LOW!" if low else ""),
               fg=C.DANGER_COLOR if low else C.WHITE)
-    filled = int(round(width * cur / mx)) if mx else 0
+    # (clamped: a buff over the maximum, or a blow below nothing, used to
+    # push the bar out through its own numbers or draw it backwards)
+    filled = max(0, min(width, int(round(width * cur / mx)))) if mx else 0
     bar = "█" * filled + "·" * (width - filled)
     con.print(x, y + 1, bar, fg=C.DANGER_COLOR if low else color)
     con.print(x + width + 1, y + 1, f"{cur}/{mx}", fg=C.DIM)
+
+
+def affliction_tags(status: dict, table: dict, is_disease, room: int) -> list:
+    """The panel's row of afflictions as (column, text, colour), fitted to
+    `room` columns. Written out in full when they fit ("☠ Poisoned"); when
+    two or three at once would run off the panel's edge — the second was
+    cut short and a third never showed — each falls back to its sign alone
+    ("☠ ≈ ♨"), so none is ever hidden. A disease keeps its days either way:
+    you need them to decide whether it is worth physicking away."""
+    known = [(k, table[k]) for k in status if table.get(k)]
+
+    def days(k) -> str:
+        return f" {status[k]}d" if is_disease(k) else ""
+
+    tags = [(info["tag"] + days(k), info["color"]) for k, info in known]
+    if sum(len(t) for t, _c in tags) + max(0, len(tags) - 1) > room:
+        tags = [(info["tag"].split()[0] + days(k).strip(), info["color"]) for k, info in known]
+    out, col = [], 0
+    for text, colour in tags:
+        out.append((col, text, colour))
+        col += len(text) + 1
+    return out
 
 
 def render_panel(con: tcod.console.Console, state: GameState, t: float | None = None) -> None:
@@ -553,15 +577,8 @@ def render_panel(con: tcod.console.Console, state: GameState, t: float | None = 
     _bar(con, x, 5, "♥ HP", p.hp, p.max_hp, C.HP_COLOR, low_frac=C.LOW_HP_FRAC)
     if p.status:                        # active afflictions: wounds and illness
         from ..game.combat import STATUS, is_disease
-        col = 0
-        for k in p.status:
-            info = STATUS.get(k)
-            if info:
-                # A disease runs on days, so show how many are left — you need it
-                # to decide whether the illness is worth physicking away.
-                tag = info["tag"] + (f" {p.status[k]}d" if is_disease(k) else "")
-                con.print(x + col, 7, tag, fg=info["color"])
-                col += len(tag) + 1
+        for col, tag, colour in affliction_tags(p.status, STATUS, is_disease, C.PANEL_W - 3):
+            con.print(x + col, 7, tag, fg=colour)
     _bar(con, x, 8, "✦ Stamina", p.energy, p.max_energy, C.ENERGY_COLOR,
          low_frac=C.LOW_ENERGY_FRAC)
     # Gold runs to its new amount rather than jumping — green as it rises, red
