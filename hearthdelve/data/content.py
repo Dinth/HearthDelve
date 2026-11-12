@@ -1269,8 +1269,10 @@ MACHINES: dict[str, MachineDef] = {
                           items.COPPER_BAR, "Smelts ore + coal into bars (alloys need two ores)."),
     "jar":     MachineDef("jar", "Preserves Jar", "J", (202, 170, 110), 240, "crop",
                           None, "Fruit->jam, veg->pickles, eel->jellied eel."),
-    "keg":     MachineDef("keg", "Keg", "K", (172, 110, 72), 2400, "fruit",
-                          items.WINE, "Ferments fruit into wine, honey into mead — a slow craft (days)."),
+    # A day's ferment. At 40 hours a keg added 80-150% where a jar adds 50% in
+    # four: per hour of machine, a seventh of the jar.
+    "keg":     MachineDef("keg", "Keg", "K", (172, 110, 72), 1440, "fruit",
+                          items.WINE, "Ferments fruit into wine, honey into mead — a slow craft (a full day)."),
     "sawmill": MachineDef("sawmill", "Sawmill", "≠", (176, 134, 90), 90, "wood",
                           items.TIMBER_PLANK, "Saws logs into timber planks (2 wood each)."),
     "beehive": MachineDef("beehive", "Beehive", "⌂", (222, 178, 84), 1440, "bees",
