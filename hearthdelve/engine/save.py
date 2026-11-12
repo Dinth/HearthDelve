@@ -157,6 +157,12 @@ def _item_from_key(tok):
     return items.by_name(tok)
 
 
+def _mail_item(it):
+    """A letter's enclosure as an item: letters written by an older build's
+    load hold names where newer ones hold the items themselves."""
+    return _by_name_or_none(it) if isinstance(it, str) else it
+
+
 _LOST: set = set()        # names of saved pieces this build couldn't rebuild (per load)
 
 
@@ -388,8 +394,11 @@ def save(state: GameState, path: str | None = None) -> None:
             n.name: _npc_to_rec(n) for n in state.dwarves},
         "delve": _delve_to_rec(state),
         "mail": [{"sender": m["sender"], "body": m["body"],
-                  "items": [[(it.name if hasattr(it, "name") else it), q, ql]
-                            for it, q, ql in m.get("items", [])],
+                  # By item key, not display name: an enclosed piece of gear
+                  # keeps its structured identity like one in the pack.
+                  "items": [[_item_key(_mail_item(it)), q, ql]
+                            for it, q, ql in m.get("items", [])
+                            if _mail_item(it) is not None],
                   **({"tax": True} if m.get("tax") else {}),
                   **({"until": m["until"]} if m.get("until") is not None else {})}
                  for m in state.mail],
@@ -409,7 +418,7 @@ def save(state: GameState, path: str | None = None) -> None:
                   for (x, y), t in surf.trees.items()},
         "berry_regrow": {f"{x},{y}": [bt, ready]
                          for (x, y), (bt, ready) in surf.berry_regrow.items()},
-        "machines": {f"{x},{y}": [m.kind, m.loaded_output.name if m.loaded_output else None,
+        "machines": {f"{x},{y}": [m.kind, _item_key(m.loaded_output),
                                    m.ready_at, m.has_queen, m.out_quality, m.build_kind, m.feed,
                                    m.out_qty]
                      for (x, y), m in surf.machines.items()},
@@ -541,7 +550,7 @@ def load(path: str | None = None) -> GameState:
         x, y = map(int, key.split(","))
         kind, out, ready = rec[0], rec[1], rec[2]
         m = Machine(kind=kind)
-        m.loaded_output = items.by_name(out) if out else None
+        m.loaded_output = _item_from_key(out) if out else None   # a name in older saves
         m.ready_at = ready
         if len(rec) > 3:
             m.has_queen = rec[3]
@@ -679,7 +688,11 @@ def load(path: str | None = None) -> GameState:
         state.dwarves = content.dwarf_npcs()
         for n in state.dwarves:
             _npc_apply_rec(n, raw_dwarves.get(n.name))
-    state.mail = data.get("mail", [])
+    # Enclosures come back as items (older saves held their names).
+    state.mail = [{**m, "items": [[it, q, ql] for it, q, ql in
+                                  ((_item_from_key(k), q, ql) for k, q, ql in m.get("items", []))
+                                  if it is not None]}
+                  for m in data.get("mail", [])]
     state.pending_build = data.get("pending_build", "")
     # Absent from older saves, whose lives were all begun (or, if the window
     # closed mid-creation, already skipped — nothing to tell those apart by).
