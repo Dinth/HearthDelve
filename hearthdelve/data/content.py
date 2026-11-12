@@ -1583,6 +1583,17 @@ RECIPES: list[Recipe] = [
            desc="Plant a fence panel on the faced tile; fence off wild land to claim it."),
     Recipe("Arrows", "item", ((items.WOOD, 1),), output=items.ARROW, out_qty=5,
            desc="Fletch 5 plain wooden arrows — weak, but free (aim & loose with t)."),
+    # Hide glue held every fletching in history; a slime's gel does the job
+    # here. Glued flights don't shed, so far fewer shafts are spoiled.
+    Recipe("Glued Arrows", "item", ((items.WOOD, 1), (items.SLIME_GEL, 1)),
+           output=items.ARROW, out_qty=12,
+           desc="Fletch with slime-gel glue: the flights hold, so 1 Wood yields 12 arrows, not 5."),
+    # A composite bow is a wooden core backed with horn and sinew, the whole
+    # laminated in glue — so it's built up from a yew bow, not carved fresh.
+    Recipe("Composite Long Bow", "item",
+           ((items.LONG_BOW, 1), (items.ANTLER, 2), (items.SLIME_GEL, 3), (items.FIBER, 2)),
+           output=make_ranged("Long Bow", "composite"), out_qty=1,
+           desc="Back a yew long bow with antler horn and sinew, laminated in slime-gel glue."),
     Recipe("Metal-tipped Arrows", "choose", ((items.WOOD, 1),), out_qty=5,
            desc="1 Wood + 1 metal ore -> 5 arrows tipped with that metal (pick the ore)."),
     Recipe("Sling Stones", "item", ((items.STONE, 1),), output=items.SLING_STONE, out_qty=4,
