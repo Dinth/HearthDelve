@@ -810,7 +810,7 @@ _TILE_DESC = {
     "glowcap": "a giant glowcap, shining softly — gather it with g.",
     "road": "a packed road — travel here is twice as quick.",
     "bridge": "a wooden bridge over the water.",
-    "well": "the village well.",
+    "well": "a well of cold, clear water — fill a waterskin here (g).",
     "lamp": "a lamp post — it glows warm after dark.",
     "stall": "a market stall.",
     "signpost": "a signpost at the crossroads.",

@@ -1478,6 +1478,9 @@ class Recipe:
     desc: str = ""
 
 
+# Vessels you drink from and keep: the full one -> the empty one it leaves.
+DRINK_VESSELS = {items.FULL_WATERSKIN: items.WATERSKIN}
+
 # Carry-capacity upgrades: recipe name -> (required current pack_bonus, new
 # pack_bonus). Each tier shows in the craft menu only when the prior is done,
 # and crafting it is the upgrade (see crafting.craft / visible_recipes).
@@ -1595,6 +1598,9 @@ RECIPES: list[Recipe] = [
     Recipe("Batwing Cloak", "item", ((items.BAT_WING, 4), (items.FIBER, 2)),
            output=make_gear("Cloak", "batwing"), out_qty=1,
            desc="Bat-wing membrane stitched into a cloak: light as silk, and as hard to land a blow on (+1 Dodge)."),
+    Recipe("Waterskin", "item", ((items.BAT_WING, 3), (items.FIBER, 2), (items.BEESWAX, 1)),
+           output=items.WATERSKIN, out_qty=1,
+           desc="Bat-wing membrane sewn into a skin and waxed tight. Fill it at a well; drink on the road."),
     Recipe("Fence Panels", "item", ((items.WOOD, 1),), output=items.FENCE, out_qty=2,
            desc="Timber fence panels for your pack — set them down with 'Set Fence'."),
     Recipe("Set Fence", "build", ((items.FENCE, 1),), machine="fence",

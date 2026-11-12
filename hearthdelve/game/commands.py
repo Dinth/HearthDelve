@@ -925,6 +925,9 @@ def _grab(state: GameState, where: list):
         if tk == "chest":
             _open_chest(state, gx, gy)
             return
+        if tk == "well":
+            _draw_water(state)
+            return
         if tk == "exhibit":                                  # a Hall of Wonders display case
             return {"donate": True}
         if tk == "hive":
@@ -1017,6 +1020,26 @@ def _grab(state: GameState, where: list):
                 return None
     state.log.add("Nothing here to gather.", C.DIM)
     return None
+
+
+def _draw_water(state: GameState) -> None:
+    """At a well: fill every empty skin you carry. Each takes its own while to
+    draw and stopper."""
+    from ..data import content
+    inv = state.player.inventory
+    filled = 0
+    for full, empty in content.DRINK_VESSELS.items():
+        n = inv.count(empty)
+        if n:
+            inv.remove(empty, n)
+            inv.add(full, n)
+            filled += n
+    if not filled:
+        state.log.add("Cold, clear well water. With a waterskin you could carry some off.", C.DIM)
+        return
+    state.log.add(f"You draw water and fill {'your waterskin' if filled == 1 else f'{filled} waterskins'}.",
+                  (170, 210, 230))
+    turns.advance_time(state, C.USE_SECONDS * filled)
 
 
 def _pick_berries(state: GameState, x: int, y: int) -> None:
@@ -1251,6 +1274,14 @@ def _eat(state: GameState, item, quality: int) -> None:
     heal = max(1, gain // 6) + item.heal
     p.energy = min(p.max_energy, p.energy + gain)
     p.hp = min(p.max_hp, p.hp + heal)
+    from ..data import content
+    empty = content.DRINK_VESSELS.get(item)
+    if empty is not None:                                # a drink, not a meal: the vessel is kept
+        p.inventory.add(empty, 1)
+        state.log.add(f"You drink the {empty.name.lower()} dry. (+{gain} stamina, +{heal} HP)",
+                      (170, 210, 230))
+        turns.advance_time(state, _eat_seconds(state))
+        return
     state.bump("meals_eaten")
     star = (" " + skills.stars(quality)) if quality else ""
     state.log.add(f"You eat the {item.name.lower()}{star}. (+{gain} stamina, +{heal} HP)", (180, 230, 160))
