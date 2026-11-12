@@ -511,9 +511,10 @@ def gift(state: GameState, npc: NPC, item, quality: int = 0) -> None:
         points *= BIRTHDAY_GIFT_MULT
     befriend(state, npc, points)
     npc.gifted_today = True
-    if npc._matches(item, npc.loves):                 # it shows on their face
+    taste = npc.taste(item)
+    if taste == "loves":                              # it shows on their face
         state.happen("emote", npc.x, npc.y, glyph="♥", colour=(255, 128, 168))
-    elif npc._matches(item, npc.dislikes):
+    elif taste == "dislikes":
         state.happen("emote", npc.x, npc.y, glyph="…", colour=(170, 170, 176))
     if points > 0:
         karma.adjust(state, 1)  # a small kindness
@@ -552,14 +553,7 @@ def giftable_items(state: GameState, npc: NPC | None = None):
            if it.kind in ("crop", "artisan", "material", "food", "fish", "animal", "gem")]
     if npc is not None:
         def taste(e):
-            it = e[0]
-            if npc._matches(it, npc.loves):
-                return 0
-            if npc._matches(it, npc.likes):
-                return 1
-            if npc._matches(it, npc.dislikes):
-                return 3
-            return 2
+            return {"loves": 0, "likes": 1, "": 2, "dislikes": 3}[npc.taste(e[0])]
         out.sort(key=taste)
     return out
 

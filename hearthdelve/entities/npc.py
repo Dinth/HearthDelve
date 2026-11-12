@@ -103,16 +103,38 @@ class NPC:
         # "dish:Meat Pie") is the dish they named.
         return any(p.family == item.family or item.family == f"dish:{p.name}" for p in pool)
 
+    def taste(self, item: Item) -> str:
+        """How this villager takes ``item`` as a gift: "loves", "likes",
+        "dislikes" or "" (indifferent). The one place taste is decided — the
+        gift screen's tags, the reaction and the points all ask here.
+
+        A bouquet is a present in itself: anyone is glad of one, whoever is
+        fond of its flower loves it, and only someone who can't abide that
+        flower turns it down."""
+        if item.family == "bouquet" and item.source is not None:
+            flower = item.source
+            if self._matches(flower, self.dislikes):
+                return "dislikes"
+            if self._matches(flower, self.loves) or self._matches(flower, self.likes):
+                return "loves"
+            return "likes"
+        for pool, word in ((self.loves, "loves"), (self.likes, "likes"),
+                           (self.dislikes, "dislikes")):
+            if self._matches(item, pool):
+                return word
+        return ""
+
     def gift_reaction(self, item: Item) -> tuple[int, str]:
         """Return (friendship_points, reaction line) for being given item."""
-        if self._matches(item, self.loves):
+        taste = self.taste(item)
+        if taste == "loves":
             # A loved but everyday trifle (a stick of wood, a lump of coal)
             # pleases without melting hearts — no farming friendship for 5g.
             if item.value < 20:
                 return 50, f"{self.name}: Ah, you remembered! Thank you."
             return 80, f"{self.name}: This is wonderful — I love it!"
-        if self._matches(item, self.likes):
+        if taste == "likes":
             return 45, f"{self.name}: Oh, thank you! How thoughtful."
-        if self._matches(item, self.dislikes):
+        if taste == "dislikes":
             return -20, f"{self.name}: ...thanks, I suppose."
         return 20, f"{self.name}: That's kind of you."

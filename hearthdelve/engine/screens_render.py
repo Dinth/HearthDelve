@@ -1392,14 +1392,9 @@ def render_gift(con: tcod.console.Console, state: GameState, npc, sel: int) -> N
         # Match the same family-aware taste logic the gift actually uses, so the
         # tag never lies (a "loves Jam" NPC tags any jam variant as loved). Colour
         # reinforces the tag so taste reads at a glance, not by text alone.
-        if npc._matches(it, npc.loves):
-            tag, fg = " (loves!)", (150, 220, 150)
-        elif npc._matches(it, npc.likes):
-            tag, fg = " (likes)", (196, 220, 176)
-        elif npc._matches(it, npc.dislikes):
-            tag, fg = " (dislikes)", (222, 150, 140)
-        else:
-            tag, fg = "", C.WHITE
+        tag, fg = {"loves": (" (loves!)", (150, 220, 150)),
+                   "likes": (" (likes)", (196, 220, 176)),
+                   "dislikes": (" (dislikes)", (222, 150, 140))}.get(npc.taste(it), ("", C.WHITE))
         star = (" " + skills.stars(ql)) if ql else ""
         m.text(2, dy, ui.cur(selected) + f"{q:>3} {it.name}{star}{tag}", fg=fg, bg=bg)
 

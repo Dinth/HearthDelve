@@ -1160,6 +1160,19 @@ for _f in _FRUIT_ITEMS:
         FRUIT_WINE[_f] = _variant(f"{_f.name} Wine", "ø", _f, WINE_MULT, "wine")
 VEG_PICKLE = {v: _variant(f"Pickled {v.name}", "■", v, PICKLE_MULT, "pickles") for v in _VEG_ITEMS}
 
+# Cut flowers tied into a bouquet — what a flower bed is for besides the bees.
+# A present in itself (see NPC.taste): anyone is glad of one, and whoever is
+# fond of the flower loves it. One per flower crop, named and priced for it.
+BOUQUET_STEMS = 3
+BOUQUET_MULT = 1.5
+FLOWER_BOUQUET = {
+    f: items.register(items.Item(
+        f"{f.name} Bouquet", "♣", "artisan",
+        f"A handful of {f.name.lower()}s tied with twine — a gift for anyone.",
+        value=round((f.value * BOUQUET_STEMS + items.FIBER.value) * BOUQUET_MULT),
+        family="bouquet", source=f))
+    for f in (c.produce for c in CROPS if c.category == "flower")}
+
 # The cellar (a farmhouse upgrade) matures every drink into an aged vintage —
 # same family, so a wine-lover's gift tastes cover the aged bottle too.
 AGE_MULT = 1.5
@@ -1687,6 +1700,11 @@ RECIPES: list[Recipe] = [
     Recipe("Truffle Pasta", "cook", ((items.NOODLES, 1), (items.TRUFFLE, 1), (items.BUTTER, 1)),
            output=items.TRUFFLE_PASTA, desc="Buttered noodles under shaved black truffle."),
 ]
+
+# A bouquet apiece for the flower crops: three stems and a twist of fibre.
+RECIPES += [Recipe(b.name, "item", ((f, BOUQUET_STEMS), (items.FIBER, 1)), output=b,
+                   desc=f"{BOUQUET_STEMS} {f.name.lower()}s tied with twine. A gift anyone is glad of.")
+            for f, b in FLOWER_BOUQUET.items()]
 
 
 # --- Recipe discovery ----------------------------------------------------------
