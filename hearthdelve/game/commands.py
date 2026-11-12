@@ -937,7 +937,9 @@ def _grab(state: GameState, where: list):
                 item, floor, col = items.CAVE_MUSHROOM, _floor_of(state.world), (206, 160, 190)
             else:                                        # a named wild species
                 item = _MUSHROOM_ITEM.get(state.world.tiles[gx, gy], items.BUTTON_MUSHROOM)
-                floor, col = tile.GRASS, (206, 176, 130)
+                floor = next((b for (mx, my, _sp, b) in state.world.mushroom_spots
+                              if (mx, my) == (gx, gy)), tile.GRASS)   # the ground it grew from
+                col = (206, 176, 130)
             state.world.tiles[gx, gy] = floor
             from . import skills
             q = skills.roll_quality(state, "Foraging")
@@ -1350,6 +1352,8 @@ def _notable_nearby(state: GameState, ignore: frozenset = frozenset(),
     for npc in state.world.npcs:
         if id(npc) in ignore:
             continue                                   # already acknowledged
+        if seen is not None and not seen[npc.x, npc.y]:
+            continue
         if max(abs(npc.x - p.x), abs(npc.y - p.y)) <= rng:
             return f"{npc.name} is nearby"
     for m in state.world.monsters:
