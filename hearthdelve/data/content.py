@@ -1295,7 +1295,10 @@ APOTHECARY_POTIONS: list = [
 
 # The vodka chain. The keg ferments a grain or potato into a mash; the apothecary
 # still then distils the mash into vodka. (source item -> how many per mash.)
-MASH_SOURCES: dict = {items.POTATO: 1, items.BARLEY: 2, items.WHEAT: 2}
+# Tritordeum, the wheat-barley cross, is worth both its parents' measure, so
+# one ear makes a mash — the hybrid grain's one use beyond the shipping bin.
+MASH_SOURCES: dict = {items.POTATO: 1, items.BARLEY: 2, items.WHEAT: 2,
+                      CROP_BY_NAME["Tritordeum"].produce: 1}
 
 # Farmhouse fittings Tomas installs for a price — sited automatically (the oven
 # indoors, the cellar dug by the back wall), no placing needed.
