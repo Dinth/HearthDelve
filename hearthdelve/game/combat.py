@@ -783,9 +783,10 @@ def projectile_landing(state: GameState, tx: int, ty: int, rng: int) -> tuple[in
     bx, by = p.x, p.y
     for nx, ny in _line(p.x, p.y, tx, ty):
         if (max(abs(nx - p.x), abs(ny - p.y)) > rng
-                or not state.world.in_bounds(nx, ny)
-                or not state.world.walkable(nx, ny)):
+                or not state.world.open_to_flight(nx, ny)):
             break                               # can't fly past a wall / its range
+        # (Water is no wall: a spitter across a pool could see you and shoot,
+        # while your own arrow dropped at the water's edge.)
         bx, by = nx, ny
         if mob_at(state, nx, ny) or (nx, ny) == (tx, ty):
             break
@@ -945,7 +946,7 @@ def reach_target(state: GameState, tx: int, ty: int):
         between = mob_at(state, mx, my)
         if between is not None:
             return between
-        if not state.world.walkable(mx, my):
+        if not state.world.open_to_flight(mx, my):
             return None                               # a wall in the way
     return mob_at(state, tx, ty)
 

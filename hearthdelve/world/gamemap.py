@@ -89,6 +89,14 @@ class GameMap:
             return False
         return bool(_WALKABLE[self.tiles[x, y]])
 
+    def open_to_flight(self, x: int, y: int) -> bool:
+        """Whether a shot, a spit or a spear-thrust can pass over (x, y): any
+        ground you could walk, and open water — exactly what you can see
+        across (see transparency), so what can see you to shoot can be shot."""
+        if not self.in_bounds(x, y):
+            return False
+        return bool(_TRANSPARENT[self.tiles[x, y]])
+
     def tile_at(self, x: int, y: int) -> tile.TileType:
         return tile.TILES[self.tiles[x, y]]
 
