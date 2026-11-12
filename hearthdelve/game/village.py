@@ -925,7 +925,7 @@ def purchase(state: GameState, row: ShopRow) -> None:
             state.log.add("You can't afford that.", C.DIM)
             return
         p.gold -= row.price
-        p.energy = min(p.max_energy, p.energy + row.stam)
+        p.gain_energy(row.stam)
         p.hp = min(p.max_hp, p.hp + row.hp)
         state.bump("meals_eaten")
         from . import turns

@@ -417,6 +417,9 @@ def new_day(state: GameState, rested: bool = True) -> None:
 
     p = state.player
     p.energy = p.max_energy if rested else p.max_energy // 2
+    if rested:                          # a quilt on the bed, a tapestry on the wall
+        from . import home
+        p.energy += home.comfort(state)
     p.hp = p.max_hp if rested else max(1, p.max_hp // 2)
     p.stamina = p.max_stamina
 

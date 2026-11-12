@@ -1085,6 +1085,13 @@ def describe(state: GameState, x: int, y: int) -> str:
         fn = fruit.name.lower() if fruit else "berry"
         return f"a {fn} shrub, ripe — pick it (g) and it bears again; machete clears it{theft}."
     base = _TILE_DESC.get(t.name, f"{t.name.replace('_', ' ')}.")
+    surf = state.surface
+    if state.world is surf and surf is not None and surf.bed:
+        from ..game import home, husbandry
+        if (x, y) == tuple(surf.bed):
+            base = home.describe_bed(state)
+        elif t.name == "house_wall" and husbandry.in_house(state, x, y):
+            base = home.describe_wall(state)
     if t.name == "tilled":
         base = base.rstrip(".") + f".{_soil_word(state, x, y)}"
     # Whose ground is this? Note owned/claimed land on open, workable tiles.

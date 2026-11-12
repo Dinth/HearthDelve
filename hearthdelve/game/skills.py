@@ -70,7 +70,7 @@ def gain_char_xp(state: GameState, amount: int) -> None:
         p.max_hp += 8
         p.max_energy += 12
         p.hp = min(p.max_hp, p.hp + 8)
-        p.energy = min(p.max_energy, p.energy + 12)
+        p.gain_energy(12)
         state.log.add(f"You reach level {p.level}! (+8 max HP, +12 max stamina)", (240, 220, 140))
         _celebrate(state, f"Level {p.level}", (240, 220, 140))
     if p.level >= MAX_CHAR_LEVEL:

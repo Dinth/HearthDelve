@@ -75,6 +75,12 @@ class Player:
     sign: str = ""                               # birth sign id (content.ZODIAC); "" = unsigned
     attrs: dict = field(default_factory=dict)    # birth attributes {St..Pe}; absent key reads 10
 
+    def gain_energy(self, n: int) -> None:
+        """Restore stamina, up to the full measure — but never take away what
+        a good night at home left over it (see game.home.comfort). Capping at
+        the maximum outright made a meal at dawn cost you the quilt's bonus."""
+        self.energy = max(self.energy, min(self.max_energy, self.energy + n))
+
     @property
     def active_tool(self) -> Item | None:
         if 0 <= self.active_slot < len(self.hotbar):

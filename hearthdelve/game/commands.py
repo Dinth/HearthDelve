@@ -268,7 +268,7 @@ def _pray(state: GameState) -> None:
         mend = 6 + k // 12
         p = state.player
         p.hp = min(p.max_hp, p.hp + mend)
-        p.energy = min(p.max_energy, p.energy + mend)
+        p.gain_energy(mend)
         msg += " The season's grace mends you a little, too."
     state.log.add(msg, (232, 216, 150))
     karma.adjust(state, 1)
@@ -306,7 +306,7 @@ def _bathe(state: GameState) -> None:
         return
     cured = "sick" in p.status
     p.status.pop("sick", None)
-    p.energy = min(p.max_energy, p.energy + 120)
+    p.gain_energy(120)
     msg = "You soak in the warm bath — the weariness melts away (+stamina)"
     if cured:
         msg += ", and the marsh-sickness sweats out of you"
@@ -928,6 +928,10 @@ def _grab(state: GameState, where: list):
         if tk == "well":
             _draw_water(state)
             return
+        if tk in ("bed", "wall"):                            # furnish the farmhouse
+            from . import home
+            if home.furnish(state, gx, gy):
+                return
         if tk == "exhibit":                                  # a Hall of Wonders display case
             return {"donate": True}
         if tk == "hive":
@@ -1272,7 +1276,7 @@ def _eat(state: GameState, item, quality: int) -> None:
         return
     gain = round(item.energy * (1 + 0.12 * quality))     # tastier food goes further
     heal = max(1, gain // 6) + item.heal
-    p.energy = min(p.max_energy, p.energy + gain)
+    p.gain_energy(gain)
     p.hp = min(p.max_hp, p.hp + heal)
     from ..data import content
     empty = content.DRINK_VESSELS.get(item)

@@ -1155,7 +1155,9 @@ def bin_value(state: GameState, item, quality: int) -> int:
     the market craves this kind of goods (requests.demand_mult), and again once
     Saltmere's Market Cross draws the coast trade in."""
     from . import requests, projects, events
+    from . import home
     v = slot_value(item, quality) * requests.demand_mult(state, item)
+    v *= home.ribbon_mult(state, quality)  # prize ribbons on the farmhouse wall
     if projects.done(state, "market_cross"):
         v *= MARKET_CROSS_MULT
     v *= events.ship_mult(state)          # a caravan in the valley buys handsomely
