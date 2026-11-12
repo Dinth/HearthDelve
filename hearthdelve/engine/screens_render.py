@@ -1186,9 +1186,21 @@ def render_shop(con: tcod.console.Console, state: GameState, npc, sel: int, line
             star = (" " + skills.stars(e.quality)) if e.quality else ""
             m.text(2, dy, pre + f"Sell {e.item.name}{star}", fg=(200, 220, 160), bg=rowbg)
             m.text(w - 10, dy, f"+{e.price}g", fg=C.GOLD_COLOR, bg=rowbg)
+        elif e.kind == "order":
+            from ..game import skills
+            if e.item is None:
+                note = (f"House order: {e.label} (wants {e.left} more)" if e.left > 0
+                        else f"House order: {e.label} (filled for the week)")
+                m.text(2, dy, pre + note[:w - 6], fg=(222, 200, 150) if e.left > 0 else C.DIM,
+                       bg=rowbg)
+            else:
+                star = (" " + skills.stars(e.quality)) if e.quality else ""
+                m.text(2, dy, pre + f"House order: sell {e.item.name}{star}"[:w - 14],
+                       fg=(222, 200, 150), bg=rowbg)
+                m.text(w - 10, dy, f"+{e.price}g", fg=C.GOLD_COLOR, bg=rowbg)
         elif e.kind == "prize":
-            what = f"{e.label}: {e.name or e.item.name}"
-            m.text(2, dy, pre + f"Trade a ribbon for {what}"[:w - 14],
+            what = f"{e.name} recipe" if e.name else e.item.name
+            m.text(2, dy, pre + f"Ribbon prize: {what}"[:w - 14],
                    fg=(232, 200, 120), bg=rowbg)
             m.text(w - 10, dy, "1 ribbon", fg=(232, 200, 120), bg=rowbg)
         elif e.kind == "cancel_build":

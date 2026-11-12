@@ -875,7 +875,7 @@ class ShopScreen(Screen):
             if picked.kind == "contest":     # the fair: pick an entry to judge
                 ui.push(ContestScreen(self.npc))
             else:
-                village.purchase(state, picked)
+                village.purchase(state, picked, self.npc)
 
 
 class ContestScreen(Screen):

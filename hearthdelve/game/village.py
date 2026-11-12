@@ -20,7 +20,7 @@ class ShopRow:
     and the purchase dispatch can never drift out of step on a shape.
 
     kinds: buy · meal · recipe · sellto · commission · housejob ·
-           cancel_build · tradebuy · upgrade · contest · prize
+           cancel_build · tradebuy · upgrade · contest · prize · order
     """
     kind: str
     label: str = ""            # left-column text (item / meal / job name)
@@ -581,6 +581,96 @@ def _inn_purchases(state: GameState):
     return out
 
 
+# --- the house order ----------------------------------------------------------
+# Each week every innkeeper has one dish they want for the house table, and
+# pays well over the bin for it — a few servings, then the table's full. A
+# cooked dish had nowhere to go but your own mouth or the bin; this is its
+# market. Which dish is the luck of the week, never the same at two inns.
+ORDER_PREMIUM = 1.5         # over the dish's quality-scaled value
+ORDER_SERVINGS = 4          # servings an inn takes of its order each week
+
+
+def _order_pool() -> list:
+    """Dishes an inn might ask for: every cooked dish that is a meal in itself
+    (not a staple that only goes into other dishes)."""
+    staples = {it for r in content.RECIPES if r.kind == "cook" for it, _q in r.inputs}
+    return sorted((r.output for r in content.RECIPES
+                   if r.kind == "cook" and r.output is not None
+                   and r.output.value > 0 and r.output not in staples),
+                  key=lambda it: it.name)
+
+
+def _order_week(state: GameState) -> int:
+    return state.day // 7
+
+
+def tavern_order(state: GameState, npc: NPC):
+    """The dish this innkeeper wants this week."""
+    import random as _random
+    pool = _order_pool()
+    rng = _random.Random((state.seed * 15_485_863 + _order_week(state) * 32_452_843) & 0x7FFFFFFF)
+    rng.shuffle(pool)
+    keepers = sorted({n.name for n in (state.surface.npcs if state.surface else [])
+                      if n.role == "innkeeper"} | {npc.name})
+    return pool[keepers.index(npc.name) % len(pool)]
+
+
+def _order_key(state: GameState, npc: NPC) -> str:
+    return f"inn_order_{_order_week(state)}_{npc.name}"
+
+
+def order_left(state: GameState, npc: NPC) -> int:
+    return max(0, ORDER_SERVINGS - int(state.stats.get(_order_key(state, npc), 0)))
+
+
+def fills_order(item, dish) -> bool:
+    """Whether ``item`` is the ordered dish — or that dish made with a named
+    ingredient (a tuna sashimi fills an order for sashimi, and pays as tuna)."""
+    return item is dish or getattr(item, "family", "") == f"dish:{dish.name}"
+
+
+def order_rows(state: GameState, npc: NPC) -> list:
+    """The order on the counter: a row per carried serving that fills it (each
+    kind and star grade), or one row that just says what is wanted."""
+    from . import skills
+    dish, left = tavern_order(state, npc), order_left(state, npc)
+    rows = []
+    if left > 0:
+        for it, n, ql in state.player.inventory.slots:
+            if n > 0 and fills_order(it, dish):
+                price = round(it.value * skills.value_mult(ql) * ORDER_PREMIUM)
+                rows.append(ShopRow("order", label=dish.name, item=it, price=price,
+                                    quality=ql, left=left))
+        rows.sort(key=lambda r: -r.price)
+    return rows or [ShopRow("order", label=dish.name, left=left)]
+
+
+def _fill_order(state: GameState, row: ShopRow, npc: NPC | None) -> None:
+    from . import skills
+    p = state.player
+    if row.item is None:
+        state.log.add(f"\"The house table's full of {row.label.lower()} for this week — thank you.\""
+                      if row.left <= 0 else
+                      f"\"Bring me {row.label.lower()} this week and I'll pay half again "
+                      f"what the bin would. I can take {row.left}.\"", (222, 200, 150))
+        return
+    if npc is None or order_left(state, npc) <= 0 \
+            or p.inventory.count(row.item, row.quality) <= 0:
+        return
+    p.inventory.remove(row.item, 1, quality=row.quality)
+    p.gold += row.price
+    state.bump("gold_earned", row.price)
+    key = _order_key(state, npc)
+    for old in [k for k in state.stats if k.startswith("inn_order_") and
+                not k.startswith(f"inn_order_{_order_week(state)}_")]:
+        del state.stats[old]                           # last week's tallies
+    state.stats[key] = int(state.stats.get(key, 0)) + 1
+    befriend(state, npc, 15)
+    star = (" " + skills.stars(row.quality)) if row.quality else ""
+    state.log.add(f"{npc.name} takes your {row.item.name.lower()}{star} for the house table: "
+                  f"{row.price}g.", (240, 214, 120))
+
+
 # --- a ribbon's worth ---------------------------------------------------------
 # A first-prize ribbon can be handed back to any innkeeper (they judge the
 # contest) for something off the prize table: things that otherwise come by
@@ -850,7 +940,7 @@ def shop_entries(shop: str, state: GameState | None = None,
             if r.kind in ("buy", "tradebuy") and r.item is not None:
                 price = max(price, crafting.bin_ceiling(r.item) + 1)
             r = dataclasses.replace(r, price=price)
-        elif r.price > 0 and r.kind == "sellto":
+        elif r.price > 0 and r.kind in ("sellto", "order"):
             r = dataclasses.replace(r, price=max(1, round(r.price * sm)))
         out.append(r)
     return out
@@ -897,7 +987,8 @@ def _shop_entries(shop: str, state: GameState | None = None,
                  if state is not None and name not in state.known_recipes]
         if state is None:
             return meals + cards
-        return prize_rows(state) + meals + cards + _inn_purchases(state)
+        order = order_rows(state, npc) if npc is not None else []
+        return prize_rows(state) + order + meals + cards + _inn_purchases(state)
     if shop == "carpenter":
         jobs = [ShopRow("commission", label=label, build=kind, price=gold, mats=tuple(mats))
                 for (label, kind, gold, mats) in content.CARPENTER_JOBS]
@@ -949,9 +1040,12 @@ def _job_for(kind: str):
     return None
 
 
-def purchase(state: GameState, row: ShopRow) -> None:
-    """Perform a shop row's transaction. One dispatch, on named fields."""
-    if row.kind == "buy":
+def purchase(state: GameState, row: ShopRow, npc: NPC | None = None) -> None:
+    """Perform a shop row's transaction. One dispatch, on named fields. ``npc``
+    is who stands behind the counter, for the rows that are theirs alone."""
+    if row.kind == "order":
+        _fill_order(state, row, npc)
+    elif row.kind == "buy":
         if row.key and state.stats.get(row.key, 0) >= DEEP_BARS_PER_WEEK:
             state.log.add("That's all of those until the week turns.", C.DIM)
             return
