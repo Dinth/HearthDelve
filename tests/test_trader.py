@@ -123,15 +123,55 @@ class TestTheWagonsSaplingIsTheStoresPrice(unittest.TestCase):
         self.assertGreater(seen, 0)
 
 
-class TestWillaGatedOnTheCauseway(unittest.TestCase):
-    def test_her_wagon_opens_only_once_the_causeway_stands(self):
-        from hearthdelve.game import projects, village
-        st = fresh_state(1337)
+class TestWillaBeforeTheCauseway(unittest.TestCase):
+    """Her wagon did not open at all until the causeway stood. Now the
+    flooded road only makes her load lighter and her prices higher."""
+
+    def _willa(self, st):
         willa = next((n for n in st.surface.npcs if n.name == "Willa"), None)
         self.assertIsNotNone(willa, "Fenwick should have its trader")
-        self.assertIsNone(village.npc_shop(st, willa))
-        projects.get(st, "causeway")["state"] = "done"
-        self.assertEqual(village.npc_shop(st, willa), "trader")
+        return willa
+
+    def _stock(self, st):
+        from hearthdelve.game import village
+        return {r.label: r.price for r in village.trader_entries(st, self._willa(st))
+                if r.kind == "tradebuy"}
+
+    def test_she_trades_from_the_start(self):
+        from hearthdelve.game import village
+        st = fresh_state(1337)
+        self.assertEqual(village.npc_shop(st, self._willa(st)), "trader")
+        self.assertTrue(self._stock(st))
+
+    def test_the_flooded_road_costs_a_quarter_more(self):
+        from hearthdelve.game import projects, village
+        for day in range(0, 60, 5):
+            st = fresh_state(1337)
+            st.day = day
+            before = self._stock(st)
+            projects.get(st, "causeway")["state"] = "done"
+            after = self._stock(st)
+            for name, price in before.items():
+                if "Sapling" in name:                 # a sapling is always the store's price
+                    self.assertEqual(price, after[name])
+                    continue
+                with self.subTest(day=day, item=name):
+                    self.assertGreater(price, after[name])
+                    self.assertAlmostEqual(price / after[name], village.FLOOD_ROAD_MARKUP,
+                                           delta=0.06)
+
+    def test_the_causeway_fills_her_wagon(self):
+        from hearthdelve.entities import items
+        from hearthdelve.game import projects
+        seen_before, seen_after = set(), set()
+        for day in range(0, 120, 4):
+            st = fresh_state(1337)
+            st.day = day
+            seen_before |= set(self._stock(st))
+            projects.get(st, "causeway")["state"] = "done"
+            seen_after |= set(self._stock(st))
+        self.assertNotIn(items.SILK_CLOTH.name, seen_before)
+        self.assertIn(items.SILK_CLOTH.name, seen_after)
 
 
 if __name__ == "__main__":

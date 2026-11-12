@@ -823,14 +823,11 @@ def enter_contest(state: GameState, item, ql: int, judge: NPC | None = None) -> 
 def npc_shop(state: GameState, npc: NPC) -> str | None:
     """The shop an NPC keeps *right now*. Derived, never stored on the NPC
     (NPCs are regenerated from content on every load): traders open their
-    wagons by role, and Willa's only once the Fenwick causeway lets goods
-    through."""
+    wagons by role. (Willa's too — before the Fenwick causeway she comes with
+    less and asks more; see trader_entries.)"""
     if npc.shop:
         return npc.shop
     if npc.role == "trader":
-        from . import projects
-        if npc.name == "Willa" and not projects.done(state, "causeway"):
-            return None
         return "trader"
     return None
 
@@ -875,6 +872,9 @@ _CARD_POOL: tuple[str, ...] = tuple(sorted(
     and r.name not in content.STARTER_RECIPES))
 
 
+FLOOD_ROAD_MARKUP = 1.25    # what Willa adds while her road still floods
+
+
 def trader_entries(state: GameState, npc: NPC) -> list:
     """A trader's wagon this window: a few dear, rare things — the non-crafter's
     road to high-tier gear, priced at 3-4x its worth. Slots are drawn
@@ -884,7 +884,12 @@ def trader_entries(state: GameState, npc: NPC) -> list:
     import zlib
     window, wseed = trader_window(state.seed, state.day)
     rng = _random.Random(wseed ^ zlib.crc32(npc.name.encode()))
-    deep = npc.name in ("Willa", "Kazrik")           # causeway & tunnel traders dig deeper
+    # Willa's wagon has one road in, and it floods: until the Fenwick causeway
+    # is laid she gets through with a lighter load and asks more for it. (She
+    # used not to trade at all before it.)
+    from . import projects
+    mired = npc.name == "Willa" and not projects.done(state, "causeway")
+    deep = npc.name in ("Willa", "Kazrik") and not mired   # causeway & tunnel traders dig deeper
     slots: list[tuple] = []                          # ("tradebuy", item, price) pre-key
 
     for _ in range(2):                               # high-tier gear, sometimes affixed
@@ -912,6 +917,8 @@ def trader_entries(state: GameState, npc: NPC) -> list:
 
     out = []
     for i, (it, price) in enumerate(slots):
+        if mired and it.kind != "sapling":           # (a sapling stays at the store's price)
+            price = content._round5(price * FLOOD_ROAD_MARKUP)
         key = f"trader_{npc.name}_{window}_{i}"
         if not state.stats.get(key):                 # sold slots stay sold this window
             out.append(ShopRow("tradebuy", label=it.name, item=it, price=price, key=key))

@@ -3193,7 +3193,7 @@ PROJECTS: dict[str, ProjectDef] = {p.id: p for p in (
     ProjectDef("causeway", "Fenwick Causeway", "Fenwick", 4500,
                ((items.STONE, 160), (items.TIMBER_PLANK, 80), (items.IRON_BAR, 6)),
                (3, 3), 4,
-               "Willa's wagon opens for trade; the fen road is paved and lit.",
+               "Willa's wagon comes full and at fair prices; the fen road is paved and lit.",
                "One road in, and it floods twice a year. Pave it, and the world reaches Fenwick."),
     # A second wave — a village can host more than one great work over time.
     ProjectDef("shrine", "Mossford Shrine of the Seasons", "Mossford", 4500,
