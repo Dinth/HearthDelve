@@ -130,7 +130,18 @@ def _request_pool(state: GameState, role: str) -> list:
     pool = pools.get(role, default) or default
     # A flower or crop request must still be growable/forageable — pools above
     # already season-filter crops; everything else is season-free.
-    return [p for p in pool if p.value > 0]
+    return [p for p in pool if p.value > 0 and _within_reach(state, p)]
+
+
+def _within_reach(state: GameState, it) -> bool:
+    """Whether a good can be made yet. A hybrid's jam, wine or pickle needs the
+    hybrid: until the player has bred that cross, no villager has heard of it."""
+    src = getattr(it, "source", None)
+    crop = _HYBRID_OF_PRODUCE.get(src) or _HYBRID_OF_PRODUCE.get(it)
+    return crop is None or crop in state.hybrids_bred
+
+
+_HYBRID_OF_PRODUCE = {c.produce: c.name for c in content.HYBRIDS}
 
 
 _FLAVOR = {

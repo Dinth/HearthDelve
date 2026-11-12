@@ -368,6 +368,7 @@ def save(state: GameState, path: str | None = None) -> None:
         "last_tax_day": state.last_tax_day,
         "quests_done": list(state.quests_done),
         "known_recipes": sorted(state.known_recipes),
+        "hybrids_bred": sorted(state.hybrids_bred),
         "donated": sorted(state.donated),
         "seen_events": sorted(state.seen_events),
         "event": dict(state.event),
@@ -643,6 +644,12 @@ def load(path: str | None = None) -> GameState:
     # A save from before recipe discovery knew every recipe — keep it that way.
     state.known_recipes = (set(kr) if kr is not None else
                            {r.name for r in content.RECIPES if r.kind == "cook"})
+    hb = data.get("hybrids_bred")
+    # A save from before the record: one that has bred any hybrid keeps them all
+    # askable, as they were; one that hasn't starts the record empty.
+    state.hybrids_bred = (set(hb) if hb is not None else
+                          ({c.name for c in content.HYBRIDS}
+                           if state.stats.get("hybrids_found") else set()))
     state.donated = set(data.get("donated", []))
     state.seen_events = set(data.get("seen_events", []))
     state.event = dict(data.get("event") or {})

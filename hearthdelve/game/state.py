@@ -108,6 +108,9 @@ class GameState:
     # cook recipes the player has learned (recipe names): plain fare to start,
     # the rest gathered around the Vale (friends, taverns, practice, favours)
     known_recipes: set = field(default_factory=_starter_recipes)
+    # Hybrid crops (by name) the player has bred: nobody asks a favour of a
+    # frostberry jam before a frostberry has ever grown.
+    hybrids_bred: set = field(default_factory=set)
     # item names donated to the Hall of Wonders (first-of-each specimen)
     donated: set = field(default_factory=set)
     # heart events already witnessed, keyed "NPC:hearts" (one scene per tier)

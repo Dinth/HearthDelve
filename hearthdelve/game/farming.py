@@ -756,6 +756,7 @@ def _save_seed(state: GameState, plot) -> None:
         n = 1 + (random.random() < 0.5)
         state.player.inventory.add(hybrid.seed, n)
         state.bump("hybrids_found")
+        state.hybrids_bred.add(hybrid.name)
         state.log.add(f"  The {plot.crop.name.lower()} had crossed — you save {n} "
                       f"{hybrid.seed.name.lower()}!", (190, 220, 150))
         plot.cross = ""
