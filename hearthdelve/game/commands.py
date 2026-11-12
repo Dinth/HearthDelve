@@ -667,6 +667,11 @@ def _gather_drop(state: GameState, item, target) -> None:
         elif cat == "blade" and target.kind in ("foliage", "shrub") and random.random() < 0.4:
             inv.add(items.FIBER, 1)
             state.log.add("  (+1 Fiber)", C.DIM)
+        elif cat == "blade" and target.kind == "shrub_berry":
+            fruit = content.SHRUB_FRUIT.get(target.name)
+            if fruit:                                  # what the bush was carrying, bruised
+                inv.add(fruit, 1)
+                state.log.add(f"  (+1 {fruit.name} — a weapon wastes most of the bush)", C.DIM)
         return
     # An under-tiered pick mangles what it breaks: per band it falls short, a
     # rising chance the vein's riches come away as worthless rubble. The deeps
