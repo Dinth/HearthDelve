@@ -176,13 +176,14 @@ class TestSourceDerivedDishes(unittest.TestCase):
         self.assertEqual(mn.name, "Minnow Sashimi")
         self.assertEqual(mn.family, tn.family)          # variants share a family
 
-    def test_only_fish_dishes_use_the_picker(self):
+    def test_staples_other_recipes_ask_for_keep_one_plain_output(self):
         from hearthdelve.data import content
         from hearthdelve.game import crafting
         picker = {r.name for r in content.RECIPES if crafting.is_choice_dish(r)}
-        self.assertEqual(picker, {"Sashimi", "Sushi", "Fish Cakes", "Seafood Chowder"})
-        # an egg/milk dish keeps a single fixed output (no awkward variants)
-        self.assertFalse(crafting.is_choice_dish(next(r for r in content.RECIPES if r.name == "Omelette")))
+        self.assertLessEqual({"Sashimi", "Sushi", "Fish Cakes", "Seafood Chowder"}, picker)
+        # noodles and mayonnaise go into other dishes by name; a one-member
+        # family (sausages) has nothing to choose between
+        self.assertFalse(picker & {"Noodles", "Mayonnaise", "Sausage Roll"})
 
     def test_cook_picks_a_fish_and_consumes_it(self):
         from hearthdelve.data import content

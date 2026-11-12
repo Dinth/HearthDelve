@@ -97,7 +97,11 @@ class NPC:
         'loves Jam' is satisfied by a raspberry jam, a strawberry jam, and so on."""
         if item in pool:
             return True
-        return bool(item.family) and any(p.family == item.family for p in pool)
+        if not item.family:
+            return False
+        # ...and a dish cooked as a named variant ("Beef Pie", family
+        # "dish:Meat Pie") is the dish they named.
+        return any(p.family == item.family or item.family == f"dish:{p.name}" for p in pool)
 
     def gift_reaction(self, item: Item) -> tuple[int, str]:
         """Return (friendship_points, reaction line) for being given item."""

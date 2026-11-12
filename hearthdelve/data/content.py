@@ -3435,24 +3435,41 @@ ALL_SEEDS = [c.seed for c in CROPS] + [t.sapling for t in TREES]
 # same way gear tracks its metal and jam tracks its fruit. Memoized like the gear
 # factory; a resolver rebuilds a variant from its saved name on load.
 COOK_MARGIN = 1.3
-# Families whose dishes track their ingredient. Fish first: the widest value
-# spread (a 15g minnow to a 420g moonfish) and names that read cleanly ("Tuna
-# Sashimi"). Meat could follow once its names are handled ("Chicken Meat" would
-# double up in "…Meat Pie"); egg/milk/cheese have too little spread to bother.
-SOURCE_DISH_FAMILIES = ("fish",)
+# Families whose dishes track their ingredient, in the order one is chosen to
+# name a dish that takes several ("Cheese Omelette" is named for its cheese,
+# a custard for its egg). Fish first: the widest spread (a 15g minnow to a 420g
+# moonfish), and every fish names its dish ("Minnow Sashimi"). For the rest the
+# humblest of the family makes the plain dish, and only a finer cut, egg, milk
+# or cheese makes a named one ("Beef Pie", "Duck Egg Omelette").
+SOURCE_DISH_FAMILIES = ("fish", "cheese", "meat", "egg", "milk")
 _DISHES: dict = {}
 _FAMILY_ITEMS: dict | None = None
+_STAPLES: set | None = None
 
 
 def dish_wildcard(recipe):
     """The AnyOf input a cook recipe is built around (the fish/meat), or None.
     A recipe may carry other wildcards too (fish cakes want any egg, a chowder
-    any milk): the one whose family names its dishes wins, wherever it sits."""
+    any milk): the one whose family ranks first in SOURCE_DISH_FAMILIES names
+    its dishes, wherever it sits."""
     wilds = [it for it, _q in recipe.inputs if isinstance(it, AnyOf)]
-    for it in wilds:
-        if it.family in SOURCE_DISH_FAMILIES:
-            return it
+    ranked = [it for it in wilds if it.family in SOURCE_DISH_FAMILIES]
+    if ranked:
+        return min(ranked, key=lambda it: SOURCE_DISH_FAMILIES.index(it.family))
     return wilds[0] if wilds else None
+
+
+def dish_varies(recipe) -> bool:
+    """Whether a cook recipe makes a dish named and priced for what went into
+    it. Not a kitchen staple other recipes ask for by name (noodles, mayonnaise):
+    a "Duck Egg Mayonnaise" would no longer be the mayonnaise a sandwich wants."""
+    global _STAPLES
+    if _STAPLES is None:
+        _STAPLES = {it for r in RECIPES for it, _q in r.inputs if not isinstance(it, AnyOf)}
+    wc = dish_wildcard(recipe)
+    return (recipe.kind == "cook" and wc is not None and recipe.output is not None
+            and wc.family in SOURCE_DISH_FAMILIES and recipe.output not in _STAPLES
+            and len(_family_items(wc.family)) > 1)
 
 
 def _family_floor(fam: str) -> int:
@@ -3472,27 +3489,51 @@ def _family_items(fam: str) -> list:
     return _FAMILY_ITEMS.get(fam, [])
 
 
+def dish_name(recipe, source) -> str:
+    """What ``recipe``'s dish is called when made with ``source``. A fish goes
+    in front ("Tuna Sashimi"). Elsewhere the source takes the place of its
+    kind's word where the dish has one ("Meat Pie" -> "Beef Pie", "Fried Egg"
+    -> "Fried Duck Egg") and goes in front where it hasn't ("Duck Egg Cake")."""
+    base, fam = recipe.output.name, dish_wildcard(recipe).family
+    word = fam.capitalize()
+    if fam != "fish" and word in base:
+        return base.replace(word, source.name, 1)
+    return f"{source.name} {base}"
+
+
 def cooked_dish(recipe, source):
     """The variant of ``recipe``'s dish made with ``source`` — value derived from
     the real ingredients (so a better catch makes a costlier dish), everything
-    else (glyph, stamina, buff) inherited from the base dish."""
+    else (glyph, stamina, buff) inherited from the base dish. Outside fish, the
+    humblest of the family (a hen's egg, plain cheese) makes the plain dish."""
     key = (recipe.name, source.name)
     if key in _DISHES:
         return _DISHES[key]
     base = recipe.output
     wc = dish_wildcard(recipe)
+    name = dish_name(recipe, source)
+    if wc.family == "fish":
+        def worth(it) -> int:
+            if it is wc:
+                return source.value                 # the fish the dish is named for
+            if isinstance(it, AnyOf):
+                return _family_floor(it.family)     # any egg, any milk: not the fish
+            return it.value
 
-    def worth(it) -> int:
-        if it is wc:
-            return source.value                 # the fish the dish is named for
-        if isinstance(it, AnyOf):
-            return _family_floor(it.family)     # any egg, any milk: not the fish
-        return it.value
-
-    total = sum(worth(it) * q for it, q in recipe.inputs)
-    val = max(1, round(total * COOK_MARGIN / max(1, recipe.out_qty)))
+        total = sum(worth(it) * q for it, q in recipe.inputs)
+        val = max(1, round(total * COOK_MARGIN / max(1, recipe.out_qty)))
+    else:
+        # The plain dish is priced for the humblest of the family; a finer one
+        # adds what it cost over that, with the cook's margin on top — so no
+        # variant is ever worth less than the plain plate.
+        over = source.value - _family_floor(wc.family)
+        if over <= 0 or name == base.name:
+            _DISHES[key] = base
+            return base
+        q = sum(q for it, q in recipe.inputs if it is wc)
+        val = base.value + round(over * q * COOK_MARGIN / max(1, recipe.out_qty))
     it = items.register(items.Item(
-        f"{source.name} {base.name}", base.glyph, base.kind,
+        name, base.glyph, base.kind,
         f"{base.desc} Made with {source.name.lower()}.",
         value=val, energy=base.energy, buff=base.buff,
         family=f"dish:{base.name}", source=source))
@@ -3506,11 +3547,10 @@ def _resolve_cooked_dish(name: str):
     for r in RECIPES:
         if r.kind != "cook":
             continue
-        wc = dish_wildcard(r)
-        if wc is None:
+        if not dish_varies(r):
             continue
-        for src in _family_items(wc.family):
-            if f"{src.name} {r.output.name}" == name:
+        for src in _family_items(dish_wildcard(r).family):
+            if dish_name(r, src) == name:
                 return cooked_dish(r, src)
     return None
 

@@ -174,11 +174,10 @@ def arrow_choice_options(state: GameState) -> list:
 
 
 def is_choice_dish(recipe) -> bool:
-    """A cook recipe built around a value-tracking wildcard (a fish) — cooked via
-    a source picker so the dish's value tracks the ingredient chosen."""
-    wc = content.dish_wildcard(recipe)
-    return (recipe.kind == "cook" and wc is not None
-            and wc.family in content.SOURCE_DISH_FAMILIES)
+    """A cook recipe built around a value-tracking wildcard (a fish, a cheese, a
+    cut of meat) — cooked via a source picker so the dish's value tracks the
+    ingredient chosen."""
+    return content.dish_varies(recipe)
 
 
 def dish_choice_options(state: GameState, recipe) -> list:
@@ -190,22 +189,24 @@ def dish_choice_options(state: GameState, recipe) -> list:
     if wc is None:
         return []
     sources = sorted({e[0] for e in inv.slots if e[0].family == wc.family},
-                     key=lambda i: i.value)
+                     key=lambda i: (i.value, i.name))
     opts = []
     for src in sources:
-        # Only the dish's own wildcard becomes the chosen fish. Any other
+        # Only the dish's own wildcard becomes the chosen source. Any other
         # (the egg in fish cakes, the milk in a chowder) is filled from the
-        # pack like in any recipe — pinning those to the fish too cooked the
-        # dish without them and priced it as if it were all fish.
-        pinned = [((src if it is wc else _resolve_any(inv, it, q)), q)
-                  for it, q in recipe.inputs]
-        if any(it is None for it, _q in pinned):
+        # pack like in any recipe, cheapest first — pinning those to the fish
+        # too cooked the dish without them and priced it as if it were all fish.
+        pinned = resolve_inputs(inv, [((src if it is wc else it), q)
+                                      for it, q in recipe.inputs])
+        if pinned is None:
             continue
         need: dict = {}
         for it, q in pinned:                     # one item asked for twice adds up
             need[it] = need.get(it, 0) + q
-        if all(inv.count(it) >= q for it, q in need.items()):
-            opts.append({"inputs": pinned, "output": content.cooked_dish(recipe, src),
+        out = content.cooked_dish(recipe, src)
+        if all(inv.count(it) >= q for it, q in need.items()) \
+                and not any(o["output"] is out for o in opts):   # two cuts, one plain pie
+            opts.append({"inputs": pinned, "output": out,
                          "out_qty": recipe.out_qty, "cook": True})
     return opts
 
@@ -737,11 +738,32 @@ def machine_load_options(state: GameState, mdef) -> list:
                 continue
             if r.name not in state.known_recipes:
                 continue
-            doubled = resolve_inputs(inv, [(it, q * 2) for it, q in r.inputs])
-            if doubled is not None and all(inv.count(it) >= q for it, q in doubled):
-                qf = max(doubled, key=lambda e: e[0].value)[0]
-                opts.append({"inputs": doubled, "output": r.output, "out_qty": 2,
-                             "quality_from": qf, "quality_bonus": 1, "label": r.name})
+            # A dish named for what goes in it (Beef Pie, Goat Cheese Pizza)
+            # bakes as that dish here too: one batch per source you hold enough
+            # of, then the plain recipe for a mixed handful.
+            batches = []
+            if content.dish_varies(r):
+                wc = content.dish_wildcard(r)
+                for src in sorted({e[0] for e in inv.slots if e[0].family == wc.family},
+                                  key=lambda i: (i.value, i.name)):
+                    batches.append((content.cooked_dish(r, src),
+                                    [((src if it is wc else it), q * 2) for it, q in r.inputs]))
+            batches.append((r.output, [(it, q * 2) for it, q in r.inputs]))
+            offered = set()
+            for out, wanted in batches:
+                if out in offered:
+                    continue
+                doubled = resolve_inputs(inv, wanted)
+                if doubled is None:
+                    continue
+                need: dict = {}
+                for it, q in doubled:
+                    need[it] = need.get(it, 0) + q
+                if all(inv.count(it) >= q for it, q in need.items()):
+                    offered.add(out)
+                    qf = max(doubled, key=lambda e: e[0].value)[0]
+                    opts.append({"inputs": doubled, "output": out, "out_qty": 2,
+                                 "quality_from": qf, "quality_bonus": 1, "label": out.name})
     elif a == "brew":
         # Remedies are brewed only here (they can't be made by hand). A double
         # batch of any remedy the herbalist knows — twice the herbs in, two out,

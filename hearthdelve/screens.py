@@ -662,9 +662,13 @@ class CraftScreen(Screen):
             elif crafting.is_choice_dish(r) and r.name in state.known_recipes:
                 # pick which fish/meat to cook with — the dish is worth what it's made of
                 opts = crafting.dish_choice_options(state, r)
-                if opts:
+                if len(opts) > 1:
                     ui.replace(LoadMachineScreen(
                         {"options": opts, "sel": 0, "name": r.name, "cook": True}))
+                elif opts:                       # one thing it could be made with: no question
+                    crafting.cook_choice(state, opts[0])
+                elif crafting.has_inputs(state, r):
+                    crafting.craft(state, r)     # a mixed handful (a hen's egg and a duck's)
                 else:
                     state.log.add(f"You've nothing on hand to cook {r.name} with.", C.DIM)
             else:
