@@ -24,7 +24,21 @@ from .game.state import GameState, MessageLog
 from .world import worldgen
 
 
-def new_game(seed: int = 1337) -> GameState:
+def fresh_seed() -> int:
+    """The seed for a brand-new vale: ``$HEARTHDELVE_SEED`` when set (to share
+    a world, or replay one), else drawn from the system's entropy — so each new
+    life gets its own map, weather and deeps. Kept under a million: plenty of
+    vales, and comfortably inside every seeded generator's range."""
+    wanted = os.environ.get("HEARTHDELVE_SEED", "").strip()
+    if wanted.lstrip("-").isdigit():
+        return abs(int(wanted)) % 1_000_000 or 1
+    import random
+    return random.SystemRandom().randrange(1, 1_000_000)
+
+
+def new_game(seed: int | None = None) -> GameState:
+    if seed is None:
+        seed = fresh_seed()
     world = worldgen.generate(seed)
     sx, sy = world.spawn
     player = Player(x=sx, y=sy)
