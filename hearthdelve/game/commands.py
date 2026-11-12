@@ -777,7 +777,9 @@ def _gather_drop(state: GameState, item, target) -> None:
         if item is items.PICKAXE and (target.name == "ore_vein"
                                       or actions.loose_rock(state.world, target)):
             return items.STONE
-        if item is items.MACHETE and target.kind in ("tall_grass", "foliage", "shrub", "shrub_berry"):
+        if item is items.MACHETE and target.name == "tall_grass":
+            return items.CUT_GRASS                     # tall grass is plain terrain by kind
+        if item is items.MACHETE and target.kind in ("foliage", "shrub", "shrub_berry"):
             return items.FIBER
         return None
 
