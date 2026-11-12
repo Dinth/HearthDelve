@@ -40,6 +40,12 @@ STATUS = {
     "burn":   {"dmg": 3, "pct": 0.022, "turns": 3, "chance": 0.50, "color": (240, 150, 80),
                "tag": "♨ Burning", "on": "You're set alight — burning!",
                "off": "The burns cool."},
+    # Not a wound: goo underfoot. It hurts nothing, but a mired mob moves at
+    # half pace until it pulls free (see energy_gain). Only a sticky bomb lays
+    # it, and only on mobs.
+    "mired":  {"dmg": 0, "pct": 0.0, "turns": 8, "chance": 1.0, "color": (150, 200, 120),
+               "tag": "≋ Mired", "on": "You're stuck fast in goo!",
+               "off": "You pull free of the goo."},
     # A wasting illness — the fen's miasma, a ghoul's filthy claws. It costs you
     # days, not turns: you wake poorly rested, with less of a day in you. The
     # brimstone salve won't touch it; a charcoal tincture, a panacea or the
@@ -84,6 +90,15 @@ def apply_status(state: GameState, kind: str, turns: int = 0, target=None) -> No
     if target is None and state.player.sign == "serpent":
         dur = max(1, dur - 1)            # born in the dry heat: afflictions pass sooner
     holder.status[kind] = max(holder.status.get(kind, 0), dur)
+
+
+def energy_gain(m) -> int:
+    """What a mob adds to its energy this turn: its speed — or nothing, every
+    other turn, while it's mired. Half pace, whatever its speed (halving the
+    number would have frozen a speed-1 crawler outright)."""
+    if m.status.get("mired", 0) % 2:
+        return 0
+    return m.speed
 
 
 def _tick_status(holder) -> list:
@@ -477,7 +492,9 @@ def monsters_act(state: GameState) -> None:
                 _on_kill(state, m)
                 continue
             if expired and w.visible is not None and w.visible[m.x, m.y]:
-                state.log.add(f"The {m.name.lower()}'s wounds close.", C.DIM)
+                freed = all(kind == "mired" for kind, _info in expired)
+                state.log.add(f"The {m.name.lower()} pulls free of the goo." if freed
+                              else f"The {m.name.lower()}'s wounds close.", C.DIM)
         if not m.awake and w.visible is not None and w.visible[m.x, m.y]:
             m.awake = True
             state.happen("wake", m.x, m.y)       # it has seen you
@@ -491,7 +508,7 @@ def monsters_act(state: GameState) -> None:
             if w.visible is not None and w.visible[m.x, m.y]:
                 state.log.add(f"The {m.name.lower()} roars — wounded, it fights twice as hard!",
                               (240, 130, 90))
-        m.energy += m.speed
+        m.energy += energy_gain(m)
         while m.energy >= 2 and m.alive and p.hp > 0:
             m.energy -= 2
             _step(state, m)
@@ -669,7 +686,9 @@ _BREAKABLE = {"rock", "ore_vein", "gem_vein", "ruins_wall",
 # What each bomb kind does: (blast radius in tiles, damage). The gunpowder
 # charge is the delver's answer to deep rock — a wide blast that cracks veins
 # no matter what pickaxe you carry.
-BOMB_STATS = {items.BOMB: (1, 8), items.BLAST_CHARGE: (2, 16)}
+BOMB_STATS = {items.BOMB: (1, 8), items.BLAST_CHARGE: (2, 16), items.STICKY_BOMB: (1, 5)}
+# Turns of goo a bomb leaves on whatever survives its blast (see STATUS["mired"]).
+BOMB_MIRE = {items.STICKY_BOMB: 8}
 
 # --- noise -----------------------------------------------------------------------
 # Loud work underground carries. A sleeping thing within earshot may wake and
@@ -711,7 +730,7 @@ def _carried_bomb(state: GameState):
     ready = p.equipment.get("ammo")
     if ready is not None and ready.kind == "bomb" and p.inventory.count(ready) > 0:
         return ready
-    for b in (items.BOMB, items.BLAST_CHARGE, items.FIRECRACKER):
+    for b in (items.BOMB, items.STICKY_BOMB, items.BLAST_CHARGE, items.FIRECRACKER):
         if p.inventory.count(b) > 0:
             return b
     return None
@@ -807,8 +826,9 @@ def in_bomb_range(state: GameState, tx: int, ty: int) -> bool:
 
 
 def _detonate(state: GameState, bx: int, by: int, radius: int = 1,
-              dmg: int = BOMB_DAMAGE) -> None:
-    """Resolve the blast at (bx, by): damage mobs, shatter rock/ore/gems."""
+              dmg: int = BOMB_DAMAGE, mire: int = 0) -> None:
+    """Resolve the blast at (bx, by): damage mobs, shatter rock/ore/gems.
+    ``mire`` turns of goo cling to whatever lives through it."""
     hit = []
     for x in range(bx - radius, bx + radius + 1):
         for y in range(by - radius, by + radius + 1):
@@ -824,9 +844,16 @@ def _detonate(state: GameState, bx: int, by: int, radius: int = 1,
             if t.name in _BREAKABLE and (t.name != "ruins_wall"
                                          or actions.loose_rock(state.world, t)):
                 _shatter(state, x, y, t)
+    mired = 0
     for m in hit:                               # snapshot: _on_kill mutates the list
         if not m.alive:
             _on_kill(state, m)
+        elif mire:
+            apply_status(state, "mired", mire, target=m)
+            mired += 1
+    if mired:
+        state.log.add("Goo spatters wide — " + ("it is" if mired == 1 else f"{mired} are")
+                      + " mired, and move at half pace.", STATUS["mired"]["color"])
 
 
 def throw_bomb_at(state: GameState, tx: int, ty: int) -> bool:
@@ -854,13 +881,15 @@ def throw_bomb_at(state: GameState, tx: int, ty: int) -> bool:
     else:
         radius, dmg = BOMB_STATS.get(bomb, (1, BOMB_DAMAGE))
         state.log.add("You set a blast charge flying — a THUNDERCLAP rolls through the rock!"
-                      if bomb is items.BLAST_CHARGE else "You hurl a bomb — BOOM!",
+                      if bomb is items.BLAST_CHARGE else
+                      "You hurl a sticky bomb — a wet, heavy WHUMP!"
+                      if bomb is items.STICKY_BOMB else "You hurl a bomb — BOOM!",
                       (236, 180, 90))
         state.happen("blast", bx, by, radius=radius, delay=flight)
         state.happen("shake", p.x, p.y, delay=flight, strength=2 if radius > 1 else 1)
         if state.world.is_dungeon:                 # the roof sheds its dust
             state.happen("dust", bx, by, delay=flight + 0.1, radius=radius)
-        _after(state, flight, _detonate, state, bx, by, radius, dmg)
+        _after(state, flight, _detonate, state, bx, by, radius, dmg, BOMB_MIRE.get(bomb, 0))
         reach = BLAST_NOISE if bomb is items.BLAST_CHARGE else BOMB_NOISE
         stirred = _after(state, flight, make_noise, state, bx, by, reach)
         if stirred:

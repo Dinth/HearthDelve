@@ -241,7 +241,16 @@ def act(state: GameState) -> None:
         if max(abs(m.x - p.x), abs(m.y - p.y)) > ACTIVE_RADIUS:
             m.energy = 0                        # dormant until you come near
             continue
-        m.energy += m.speed
+        if m.status:
+            # What's on a critter runs its course out here too: a fire arrow's
+            # burn or a ruby blade's never bit a wolf, and goo would never dry.
+            from . import combat
+            combat._tick_status(m)
+            if not m.alive:
+                combat._on_kill(state, m)
+                continue
+        from .combat import energy_gain
+        m.energy += energy_gain(m)
         while m.energy >= 2 and m.alive and p.hp > 0:   # stop piling on a downed player
             m.energy -= 2
             _behave(state, m)

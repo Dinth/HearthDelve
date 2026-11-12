@@ -191,7 +191,7 @@ def camera_origin(state: GameState) -> tuple[int, int]:
 
 # Precedence when a mob carries more than one affliction — the most vivid wins
 # the tile's background tint. Kept small; the log carries the detail.
-_STATUS_TINT_ORDER = ("burn", "bleed", "poison")
+_STATUS_TINT_ORDER = ("burn", "bleed", "poison", "mired")
 
 
 def _status_bg(m, default):
@@ -911,7 +911,8 @@ def _signpost_text(state: GameState, x: int, y: int) -> str:
     return "A signpost points the way — " + ", ".join(s for _d, s in ranked) + "."
 
 
-_STATUS_ADJ = {"burn": "burning", "poison": "poisoned", "bleed": "bleeding", "sick": "sick"}
+_STATUS_ADJ = {"burn": "burning", "poison": "poisoned", "bleed": "bleeding", "sick": "sick",
+               "mired": "mired in goo"}
 
 # How enriched ground reads in look-mode (index = soil level 1..4).
 _SOIL_WORDS = ("", " The soil is freshly worked.", " Good dark earth, well worked.",
