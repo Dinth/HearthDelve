@@ -179,7 +179,7 @@ def _finish_busy(state: GameState, b: dict) -> None:
     _pick_rings(state, b["item"], b["tx"], b["ty"])
     if b.get("steal"):
         from . import land
-        land.penalize(state, b["tx"], b["ty"], "growth")
+        land.penalize(state, b["tx"], b["ty"], b["steal"])
 
 
 # Ground soft enough to take a footprint: sand, always; open ground, when
@@ -553,13 +553,13 @@ def use_tool(state: GameState) -> dict | None:
     from . import land
     steal = False
     if land.owned_by_other(state, tx, ty):
-        if item is items.HOE or new_tile == tile.TILLED:
-            state.log.add(f"You can't work {land.owner_label(state, tx, ty)} land.", C.DIM)
-            return None
-        gate = land.check_take(state, tx, ty, "growth")
+        # Breaking another's ground is the same trespass as felling their tree
+        # (it used to be refused outright, while the tree was only frowned on).
+        trespass = "ground" if (item is items.HOE or new_tile == tile.TILLED) else "growth"
+        gate = land.check_take(state, tx, ty, trespass)
         if gate == "confirm":
             return None
-        steal = gate == "steal"
+        steal = trespass if gate == "steal" else False
 
     if p.energy <= 0:
         state.log.add("You're too exhausted. Eat something, or sleep.", C.DIM)
@@ -628,7 +628,7 @@ def use_tool(state: GameState) -> dict | None:
         _gather_drop(state, item, target)
     _pick_rings(state, item, tx, ty)
     if steal:
-        land.penalize(state, tx, ty, "growth")
+        land.penalize(state, tx, ty, steal)
     elif new_tile == tile.TILLED:
         land.note_claim(state, [(tx, ty)])
     return None
