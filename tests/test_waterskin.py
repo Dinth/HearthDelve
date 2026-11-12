@@ -96,5 +96,64 @@ class TestWaterskin(unittest.TestCase):
         self.assertEqual(back.player.inventory.count(items.FULL_WATERSKIN), 2)
 
 
+class TestAWellOfYourOwn(unittest.TestCase):
+    """Wells stood only in the villages and the dwarf hall, so a skin could
+    not be filled at home."""
+
+    def _dig(self, st):
+        from hearthdelve.data import content
+        from hearthdelve.game import crafting, land
+        p = st.player
+        r = next(r for r in content.RECIPES if r.name == "Well")
+        for it, q in r.inputs:
+            p.inventory.add(it, q)
+        w = st.world
+        def open_ground(x, y):
+            return (w.in_bounds(x, y) and w.tile_at(x, y).name in land.FENCEABLE
+                    and (x, y) not in w.machines and (x, y) not in w.crops
+                    and (x, y) not in w.trees and not land.owned_by_other(st, x, y))
+        hx, hy = p.x, p.y
+        for d in range(1, 12):                       # the yard by the door
+            for x in range(hx - d, hx + d + 1):
+                for y in range(hy - d, hy + d + 1):
+                    if open_ground(x, y) and open_ground(x + 1, y):
+                        p.x, p.y, p.facing = x, y, (1, 0)
+                        return crafting.craft(st, r), (x + 1, y), r
+        self.fail("no open ground beside the farmer")
+
+    def test_it_is_dug_where_you_face_and_fills_a_skin(self):
+        from hearthdelve.entities import items
+        from hearthdelve.game import commands
+        st = fresh_state(65)
+        ok, spot, r = self._dig(st)
+        self.assertTrue(ok)
+        self.assertEqual(st.world.tile_at(*spot).kind, "well")
+        for it, _q in r.inputs:
+            self.assertEqual(st.player.inventory.count(it), 0)
+        st.player.inventory.add(items.WATERSKIN, 1)
+        commands.do_grab(st)
+        self.assertEqual(st.player.inventory.count(items.FULL_WATERSKIN), 1)
+
+    def test_it_is_still_there_after_a_save(self):
+        from hearthdelve.engine import save
+        st = fresh_state(65)
+        _ok, spot, _r = self._dig(st)
+        path = os.path.join(tempfile.mkdtemp(), "well.sav")
+        save.save(st, path)
+        back = save.load(path)
+        self.assertEqual(back.world.tile_at(*spot).kind, "well")
+
+    def test_not_underground(self):
+        from hearthdelve.data import content
+        from hearthdelve.game import crafting
+        from tests.test_noise import _below
+        st = _below()
+        r = next(r for r in content.RECIPES if r.name == "Well")
+        for it, q in r.inputs:
+            st.player.inventory.add(it, q)
+        self.assertFalse(crafting.craft(st, r))
+        self.assertEqual(st.player.inventory.count(r.inputs[0][0]), r.inputs[0][1])
+
+
 if __name__ == "__main__":
     unittest.main()
