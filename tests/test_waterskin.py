@@ -98,61 +98,90 @@ class TestWaterskin(unittest.TestCase):
 
 class TestAWellOfYourOwn(unittest.TestCase):
     """Wells stood only in the villages and the dwarf hall, so a skin could
-    not be filled at home."""
+    not be filled at home. Tomas will sink one: a well is a tradesman's job."""
 
-    def _dig(self, st):
-        from hearthdelve.data import content
-        from hearthdelve.game import crafting, land
+    def _row(self, st):
+        from hearthdelve.game import village
+        return next(r for r in village.shop_entries("carpenter", st)
+                    if r.kind == "commission" and r.build == "well")
+
+    def _order(self, st):
+        from hearthdelve.game import village
+        row = self._row(st)
         p = st.player
-        r = next(r for r in content.RECIPES if r.name == "Well")
-        for it, q in r.inputs:
+        p.gold = row.price
+        for it, q in row.mats:
             p.inventory.add(it, q)
-        w = st.world
-        def open_ground(x, y):
-            return (w.in_bounds(x, y) and w.tile_at(x, y).name in land.FENCEABLE
-                    and (x, y) not in w.machines and (x, y) not in w.crops
-                    and (x, y) not in w.trees and not land.owned_by_other(st, x, y))
-        hx, hy = p.x, p.y
-        for d in range(1, 12):                       # the yard by the door
-            for x in range(hx - d, hx + d + 1):
-                for y in range(hy - d, hy + d + 1):
-                    if open_ground(x, y) and open_ground(x + 1, y):
-                        p.x, p.y, p.facing = x, y, (1, 0)
-                        return crafting.craft(st, r), (x + 1, y), r
-        self.fail("no open ground beside the farmer")
+        village.purchase(st, row)
+        return row
 
-    def test_it_is_dug_where_you_face_and_fills_a_skin(self):
+    def _site(self, st):
+        from hearthdelve.game import husbandry
+        px, py = st.player.x, st.player.y
+        for d in range(2, 14):
+            for dx in range(-d, d + 1):
+                for dy in range(-d, d + 1):
+                    if husbandry.place_commission_at(st, px + dx, py + dy):
+                        return px + dx, py + dy
+        self.fail("no ground for a well near the house")
+
+    def test_the_farmer_cannot_dig_one_alone(self):
+        from hearthdelve.data import content
+        self.assertNotIn("Well", [r.name for r in content.RECIPES])
+
+    def test_tomas_takes_gold_and_stone_for_it(self):
         from hearthdelve.entities import items
-        from hearthdelve.game import commands
         st = fresh_state(65)
-        ok, spot, r = self._dig(st)
-        self.assertTrue(ok)
-        self.assertEqual(st.world.tile_at(*spot).kind, "well")
-        for it, _q in r.inputs:
-            self.assertEqual(st.player.inventory.count(it), 0)
-        st.player.inventory.add(items.WATERSKIN, 1)
-        commands.do_grab(st)
-        self.assertEqual(st.player.inventory.count(items.FULL_WATERSKIN), 1)
+        row = self._order(st)
+        self.assertEqual(st.pending_build, "well")
+        self.assertEqual(st.player.gold, 0)
+        self.assertEqual(st.player.inventory.count(items.STONE), 0)
+        self.assertIn(items.STONE, [it for it, _q in row.mats])
 
-    def test_it_is_still_there_after_a_save(self):
-        from hearthdelve.engine import save
+    def test_it_takes_one_tile_and_two_mornings(self):
+        self._dug()
+
+    def _dug(self):
+        from hearthdelve.game import husbandry
+        from hearthdelve.world import tile
         st = fresh_state(65)
-        _ok, spot, _r = self._dig(st)
+        self._order(st)
+        spot = self._site(st)
+        self.assertEqual(st.pending_build, "")
+        self.assertEqual(int((st.surface.tiles == tile.SCAFFOLD).sum()), 1)
+        self.assertNotEqual(st.surface.tile_at(*spot).kind, "well")     # not yet
+        st.day += husbandry.BUILD_DAYS + 1
+        husbandry._finish_construction(st)
+        self.assertEqual(st.surface.tile_at(*spot).kind, "well")
+        self.assertNotIn(spot, st.surface.machines)
+        return st, spot
+
+    def test_the_finished_well_fills_a_skin_and_keeps(self):
+        from hearthdelve.entities import items
+        from hearthdelve.engine import save
+        from hearthdelve.game import commands
+        st, (wx, wy) = self._dug()
+        p = st.player
+        w = st.surface
+        dx, dy = next((dx, dy) for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1))
+                      if w.walkable(wx + dx, wy + dy))
+        p.x, p.y, p.facing = wx + dx, wy + dy, (-dx, -dy)
+        p.inventory.add(items.WATERSKIN, 1)
+        commands.do_grab(st)
+        self.assertEqual(p.inventory.count(items.FULL_WATERSKIN), 1)
         path = os.path.join(tempfile.mkdtemp(), "well.sav")
         save.save(st, path)
-        back = save.load(path)
-        self.assertEqual(back.world.tile_at(*spot).kind, "well")
+        self.assertEqual(save.load(path).surface.tile_at(wx, wy).kind, "well")
 
-    def test_not_underground(self):
-        from hearthdelve.data import content
-        from hearthdelve.game import crafting
-        from tests.test_noise import _below
-        st = _below()
-        r = next(r for r in content.RECIPES if r.name == "Well")
-        for it, q in r.inputs:
-            st.player.inventory.add(it, q)
-        self.assertFalse(crafting.craft(st, r))
-        self.assertEqual(st.player.inventory.count(r.inputs[0][0]), r.inputs[0][1])
+    def test_a_half_dug_well_survives_a_save(self):
+        from hearthdelve.engine import save
+        st = fresh_state(65)
+        self._order(st)
+        spot = self._site(st)
+        path = os.path.join(tempfile.mkdtemp(), "site.sav")
+        save.save(st, path)
+        back = save.load(path)
+        self.assertEqual(back.surface.machines[spot].build_kind, "well")
 
 
 if __name__ == "__main__":

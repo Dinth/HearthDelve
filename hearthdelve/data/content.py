@@ -1266,6 +1266,11 @@ MACHINES: dict[str, MachineDef] = {
     "weathervane": MachineDef("weathervane", "Weathervane", "Ϯ", (190, 186, 178), 0, "sky",
                               None, "Points to tomorrow's sky — read it (g) for the coming weather.",
                               footprint=(1, 1)),
+    # Never a standing machine: only what Tomas's site is called while he digs.
+    # Finished, it is a WELL tile — the same well a village has.
+    "well":       MachineDef("well", "Well", "o", (180, 190, 205), 0, "water",
+                             None, "Cold, clear water at home — fill a waterskin here (g).",
+                             footprint=(1, 1)),
     "spinner":    MachineDef("spinner", "Spinning Wheel", "Ø", (196, 176, 140), 120, "fiber",
                              None, "Spins wool, cotton, flax or spider silk into yarn & thread."),
     "loom":       MachineDef("loom", "Loom", "π", (176, 150, 110), 180, "weave",
@@ -1601,9 +1606,6 @@ RECIPES: list[Recipe] = [
     Recipe("Waterskin", "item", ((items.BAT_WING, 3), (items.FIBER, 2), (items.BEESWAX, 1)),
            output=items.WATERSKIN, out_qty=1,
            desc="Bat-wing membrane sewn into a skin and waxed tight. Fill it at a well; drink on the road."),
-    Recipe("Well", "build", ((items.STONE, 20), (items.TIMBER_PLANK, 4), (items.FIBER, 4)),
-           machine="well",
-           desc="Dig and line a well on the faced ground: water for your skins without the walk to a village."),
     Recipe("Fence Panels", "item", ((items.WOOD, 1),), output=items.FENCE, out_qty=2,
            desc="Timber fence panels for your pack — set them down with 'Set Fence'."),
     Recipe("Set Fence", "build", ((items.FENCE, 1),), machine="fence",
@@ -3072,6 +3074,10 @@ CARPENTER_JOBS: list = [
      ((items.TIMBER_PLANK, 22), (items.STONE, 8))),
     ("Weathervane (reads tomorrow's sky)", "weathervane", 350,
      ((items.TIMBER_PLANK, 8), (items.COPPER_BAR, 1))),
+    # Sinking a shaft to water and lining it is a tradesman's job, not an
+    # afternoon with a spade: you bring the stone, he brings the knowing how.
+    ("Well (water at home for your waterskins)", "well", 300,
+     ((items.STONE, 20), (items.TIMBER_PLANK, 4), (items.FIBER, 4))),
 ]
 
 

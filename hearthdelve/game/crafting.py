@@ -287,39 +287,10 @@ def _place_fence(state: GameState) -> bool:
     return True
 
 
-def _dig_well(state: GameState) -> bool:
-    """Sink a well on the faced tile. It's ground, not a machine: a stone-lined
-    shaft is there for good, and it is the same well a village has."""
-    from . import land
-    from ..world import tile
-    p = state.player
-    surf = state.world
-    if surf.is_dungeon or (state.surface is not None and surf is not state.surface):
-        state.log.add("A well wants digging at home, in the Vale.", C.DIM)
-        return False
-    tx, ty = p.x + p.facing[0], p.y + p.facing[1]
-    if not surf.in_bounds(tx, ty) or surf.tile_at(tx, ty).name not in land.FENCEABLE:
-        state.log.add("A well needs open ground to be dug in.", C.DIM)
-        return False
-    if land.owned_by_other(state, tx, ty):
-        state.log.add(f"You can't dig a well on {land.owner_label(state, tx, ty)} land.", C.DIM)
-        return False
-    if (tx, ty) in surf.crops or (tx, ty) in surf.trees or (tx, ty) in surf.machines:
-        state.log.add("Something's in the way there.", C.DIM)
-        return False
-    surf.tiles[tx, ty] = tile.WELL
-    land.claim(state, [(tx, ty)])
-    state.log.add("You dig down to water and line the shaft with stone. A well of your own.",
-                  (170, 210, 230))
-    return True
-
-
 def _place_machine(state: GameState, kind: str) -> bool:
     p = state.player
     if kind == "fence":
         return _place_fence(state)
-    if kind == "well":
-        return _dig_well(state)
     if state.world.is_dungeon:
         # Machines (and the animals a coop would house) live only on the farm;
         # placed underground they'd be lost when the floor re-rolls.

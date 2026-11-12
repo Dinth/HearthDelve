@@ -403,6 +403,15 @@ def _finish_construction(state: GameState) -> None:
             land.claim(state, [(x, y)])
             state.log.add("Your weathervane is up — it'll point to tomorrow's sky.",
                           (200, 230, 170))
+        elif m.build_kind == "well":
+            # Ground, not a machine: the shaft is there for good, and it is
+            # the same well a village has (see commands._draw_water).
+            del surf.machines[(x, y)]
+            surf.tiles[x, y] = tile.WELL
+            from . import land
+            land.claim(state, [(x, y)])
+            state.log.add("Tomas has struck water and lined the shaft — you've a well "
+                          "of your own.", (170, 210, 230))
         else:
             _raise_building(state, x, y, m.build_kind)
 
