@@ -683,6 +683,16 @@ def _carve_pond_beside(gm: GameMap, b: dict, placed: list):
             if (xx - px) ** 2 + (yy - py) ** 2 <= r * r:
                 gm.tiles[xx, yy] = tile.WATER
     placed.append((px - r - 1, py - r - 1, 2 * r + 3, 2 * r + 3))
+    # A grassy margin all round the water, and the bank itself. In the hills
+    # "clear ground" can be solid rock (rock is buildable-over), which walled
+    # the pond in and stood the fisher inside the stone to work.
+    for xx in range(px - r - 1, px + r + 2):
+        for yy in range(py - r - 1, py + r + 2):
+            if (gm.in_bounds(xx, yy) and gm.tiles[xx, yy] != tile.WATER
+                    and not gm.walkable(xx, yy)):
+                gm.tiles[xx, yy] = tile.GRASS
+    if gm.in_bounds(*bank) and not gm.walkable(*bank) and gm.tiles[bank] != tile.WATER:
+        gm.tiles[bank] = tile.GRASS
     return bank if (gm.in_bounds(*bank) and gm.walkable(*bank)) else (px, py + r + 1)
 
 
@@ -695,7 +705,9 @@ def _carve_docks(gm: GameMap, vx: int, vy: int, coast: np.ndarray, rng) -> list:
             continue
         cyc = int(coast[px])
         for y in range(cyc - 1, cyc + 5):
-            if gm.in_bounds(px, y) and gm.tiles[px, y] in (tile.WATER, tile.SAND):
+            # (the river too: where its mouth met a pier's foot the planks
+            # stopped short, and the pier floated off the shore)
+            if gm.in_bounds(px, y) and gm.tiles[px, y] in (tile.WATER, tile.SAND, tile.RIVER):
                 gm.tiles[px, y] = tile.BRIDGE
                 if y >= cyc:
                     piers.append((px, y))
