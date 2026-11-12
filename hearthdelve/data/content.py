@@ -2835,12 +2835,21 @@ def solo_npcs() -> list[NPC]:
 # literal, so a future tuning pass can't reopen the hole. See
 # tests/test_shop_prices.py, which asserts the invariant across every counter.
 COUNTER_MARKUP = 1.35
+# The most the bin can add to a good nobody craves: the Market Cross, a caravan
+# and the Coin sign at once (crafting.bin_ceiling; a test holds the two equal).
+# The markup alone fell short of it, so the counter charged more than the price
+# it listed for young stock, cloth garments and shot — and reputation's
+# discount, taken off the lower list price, never showed on them.
+BIN_BEST_MULTS = (1.10, 1.25, 1.03)
 
 
 def counter_price(it: Item, markup: float = COUNTER_MARKUP) -> int:
     """What a shop charges for one unit: its worth plus the shopkeeper's cut,
-    and never less than 1g above that worth."""
-    return max(it.value + 1, int(round(it.value * markup)))
+    and never less than 1g above the best the bin could pay for it."""
+    best = float(it.value)
+    for m in BIN_BEST_MULTS:                # multiplied in the bin's own order, so
+        best *= m                           # the two round to the same gold piece
+    return max(it.value + 1, int(round(it.value * markup)), int(round(best)) + 1)
 
 
 # General store stock: (seed, buy price)
@@ -2906,8 +2915,10 @@ def blacksmith_stock() -> list[tuple[Item, int]]:
     out = [(items.COAL, 25), (items.CHARCOAL, 20), (items.COKE, 55)]
     out += [(b, _round5(b.value * 2.0)) for b in SMITH_BARS]
     out += [(it, _round5(it.value * smith_markup(it))) for it in _SMITH_WEAPONS]
-    out += [(items.SLING, 45), (make_ranged("Short Bow", "birch"), 110),
-            (make_ranged("Long Bow", "yew"), 260),
+    out += [(it, max(price, counter_price(it)))      # the literal, or what clears the bin
+            for it, price in ((items.SLING, 45), (make_ranged("Short Bow", "birch"), 110),
+                              (make_ranged("Long Bow", "yew"), 260))]
+    out += [
             # Ammo is priced off its own value, not a literal: the margin pass
             # rewrites these and a hard-coded 1g put the sling stone below what
             # the bin paid for it.
