@@ -306,6 +306,32 @@ _GEAR: dict[tuple, Item] = {}   # (base, material, prefix, suffix, gems) -> Item
 _GEAR_BASE: dict[Item, str] = {}   # gear item -> its base type (for re-embedding gems)
 
 
+def forge_cost(base: str) -> int:
+    """How many bars it takes to forge a piece of the given base. A weapon
+    takes metal by its size: a dagger one bar, the great two-handers three.
+    (Every weapon took two, so a dagger and a greatsword held the same iron.)"""
+    if base in WEAPON_BASES:
+        worth = WEAPON_BASES[base][5]
+        return 1 if worth < 50 else 3 if worth >= 140 else 2
+    return {"Armour": 3, "Leggings": 2}.get(base, 1)
+
+
+def _forged_floor(base: str, material: str, pfx=None, sfx=None) -> int:
+    """A forged piece is worth the bars (or scales) hammered into it plus a
+    craft's 25%, times any affix it carries — like a tailored garment and
+    every other made thing. Valued by its base alone, an iron sword was 60g
+    of work from 240g of iron, and the smith sold it for a quarter of what he
+    asked for the two bars. 0 for anything not forged from a bar."""
+    bar = MATERIALS[material].bar
+    if bar is None or base in _SOFT_BASES or base not in _ALL_BASES:
+        return 0
+    v = bar.value * forge_cost(base) * CRAFT_MARGIN
+    for affix in (pfx, sfx):
+        if affix:
+            v *= affix.value_mult
+    return math.ceil(v)
+
+
 def _tailored_floor(base: str, material: str, pfx=None, sfx=None) -> int:
     """A garment tailored at the loom is worth its bolt of cloth plus a
     craft's 25%, like every other made thing (times any affix it carries).
@@ -361,9 +387,16 @@ def _compose_name(base: str, material: str, prefix: str, suffix: str, gems: tupl
 
 
 def _gem_worth(gems: tuple) -> float:
-    """The value a set of embedded gems adds to a piece (part of the cut stones'
-    worth is realised in the finished gear)."""
-    return sum(GEM_WORTH.get(g, 0) for g in gems) * 0.4
+    """The value a set of embedded gems adds to a piece: the cut stones, plus
+    the setter's 25%. (At 40% of the stone, setting a 240g topaz into a 165g
+    armour made a 156g armour.)"""
+    return sum(GEM_WORTH.get(g, 0) for g in gems) * CRAFT_MARGIN
+
+
+def _unset_value(base: str, material: str, prefix: str, suffix: str, gems: tuple) -> int:
+    """What a gem-set piece was worth before the stones went in: the plain
+    piece's value, floors and all. A set piece is never worth less than that."""
+    return make_gear(base, material, prefix, suffix).value if gems else 0
 
 
 def make_gear(base: str, material: str, prefix: str = "", suffix: str = "",
@@ -387,7 +420,8 @@ def make_gear(base: str, material: str, prefix: str = "", suffix: str = "",
             d = gem_embed_delta(g, "weapon")
             db += d.get("dmg", 0)
             to_hit += d.get("to_hit", 0)
-        val = _affix_value(bval, mat, pfx, sfx) + round(_gem_worth(gems))
+        val = max(_affix_value(bval, mat, pfx, sfx), _forged_floor(base, material, pfx, sfx),
+                  _unset_value(base, material, prefix, suffix, gems)) + round(_gem_worth(gems))
         if it is None:
             it = items.register(items.Item(name, glyph, "weapon", desc, stackable=False,
                                             value=val, material=material, prefix=prefix,
@@ -406,8 +440,9 @@ def make_gear(base: str, material: str, prefix: str = "", suffix: str = "",
             d = gem_embed_delta(g, "armor")
             dv += d.get("dv", 0)
             pv += d.get("pv", 0)
-        val = max(_affix_value(bval, mat, pfx, sfx), _tailored_floor(base, material, pfx, sfx)) \
-            + round(_gem_worth(gems))
+        val = max(_affix_value(bval, mat, pfx, sfx), _tailored_floor(base, material, pfx, sfx),
+                  _forged_floor(base, material, pfx, sfx),
+                  _unset_value(base, material, prefix, suffix, gems)) + round(_gem_worth(gems))
         if it is None:                           # literal can drift off the curve (or be forge-flipped)
             it = items.register(items.Item(name, "]", "armor", f"Armour worn on the {slot}.",
                                             stackable=False, value=val, material=material,
@@ -590,6 +625,12 @@ TROPHY_RELIC: dict = {
         "The abyssal pearl set to hang at the throat — the deep's own slippery grace.",
         {"dv": 3, "crit": 0.03}, 690),
 }
+# A relic is worth the trophy and the silver bar it's set on, plus the
+# jeweller's 25%. (By its listed value a Trolltooth Charm was 300g of work from
+# a 200g tusk and a 180g bar.)
+for _trophy, _rel in TROPHY_RELIC.items():
+    object.__setattr__(_rel, "value", max(_rel.value, math.ceil(
+        (_trophy.value + items.SILVER_BAR.value) * CRAFT_MARGIN)))
 RELIC_ITEMS = set(TROPHY_RELIC.values())
 
 
@@ -1461,13 +1502,6 @@ TOOL_AFFIX_NAMES = {
     items.WATERING_CAN: "of Tending",
     items.FISHING_ROD:  "of the Angler",
 }
-
-
-def forge_cost(base: str) -> int:
-    """How many bars it takes to forge a piece of the given base."""
-    if base in WEAPON_BASES:
-        return 2
-    return {"Armour": 3, "Leggings": 2}.get(base, 1)
 
 
 # --- Recipes (the crafting / build / cook menu) ------------------------------
@@ -3708,6 +3742,10 @@ def _floor_worn_crafts() -> None:
         floor = _tailored_floor(base, material, PREFIXES.get(prefix), SUFFIXES.get(suffix))
         if floor:
             object.__setattr__(it, "value", max(it.value, floor + round(_gem_worth(gems))))
+    for (base, material, prefix, suffix, gems), it in list(_GEAR.items()):
+        if gems:                       # set after its plain piece was lifted: follow it up
+            plain = make_gear(base, material, prefix, suffix).value
+            object.__setattr__(it, "value", max(it.value, plain + round(_gem_worth(gems))))
     for (base, metal, gemkey), it in list(_JEWEL.items()):
         object.__setattr__(it, "value", max(it.value, _jewel_floor(metal, gemkey)))
 
