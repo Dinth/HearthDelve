@@ -597,7 +597,9 @@ def _build_garden(gm: GameMap, b: dict, rng, placed: list) -> None:
 
 def _grave_layout(tb: dict, step: tuple):
     """Origin, back-door and gate for a churchyard in direction `step` off the
-    chapel wall."""
+    chapel wall. The gate is a gap in the fence ring itself, on the side that
+    faces the chapel (it used to be cut one cell inside the ring, which left
+    every churchyard in the Vale fenced shut)."""
     x, y, w, h = tb["x"], tb["y"], tb["w"], tb["h"]
     cxm, cym = x + w // 2, y + h // 2
     gw, gh = 9, 7
@@ -605,12 +607,12 @@ def _grave_layout(tb: dict, step: tuple):
         gx0 = (x + w + 2) if step[0] > 0 else (x - 2 - gw)
         gy0 = cym - gh // 2
         bd = (x + w - 1 if step[0] > 0 else x, min(max(cym + 2, y + 1), y + h - 2))
-        gate = (gx0 if step[0] > 0 else gx0 + gw - 1, gy0 + gh // 2)
+        gate = (gx0 - 1 if step[0] > 0 else gx0 + gw, gy0 + gh // 2)
     else:                                             # north / south
         gy0 = (y + h + 2) if step[1] > 0 else (y - 2 - gh)
         gx0 = cxm - gw // 2
         bd = (min(max(cxm + 2, x + 1), x + w - 2), y + h - 1 if step[1] > 0 else y)
-        gate = (gx0 + gw // 2, gy0 if step[1] > 0 else gy0 + gh - 1)
+        gate = (gx0 + gw // 2, gy0 - 1 if step[1] > 0 else gy0 + gh)
     return gx0, gy0, gw, gh, bd, gate
 
 
@@ -639,8 +641,18 @@ def _carve_graveyard(gm: GameMap, tb: dict, vx: int, vy: int, placed: list, rng)
                     gm.tiles[xx, yy] = tile.GRAVE
         if gm.in_bounds(*bd) and gm.tiles[bd] == tile.HOUSE_WALL:
             gm.tiles[bd] = tile.DOOR                    # back door to the churchyard
-        for cxp in (gate[0] - 2, gate[0] + 2):          # cypress flank the gate
-            cyp = gate[1] + step[1]
+        # The strip between the chapel's back wall and the yard is the walk
+        # from that door to the gate: in the hills it could be solid rock or
+        # a stand of pine, which shut the yard as surely as the fence did.
+        ax, ay = bd[0] + step[0], bd[1] + step[1]       # just outside the back door
+        bx, by = gate[0] - step[0], gate[1] - step[1]   # just outside the gate
+        for xx in range(min(ax, bx), max(ax, bx) + 1):
+            for yy in range(min(ay, by), max(ay, by) + 1):
+                if gm.in_bounds(xx, yy) and not gm.walkable(xx, yy):
+                    gm.tiles[xx, yy] = tile.GRASS
+        inner = (gate[0] + step[0], gate[1] + step[1])  # the first cell inside the gate
+        for cxp in (inner[0] - 2, inner[0] + 2):        # cypress flank the gate
+            cyp = inner[1] + step[1]
             if gm.in_bounds(cxp, cyp) and gm.tiles[cxp, cyp] in (tile.GRASS, tile.MEADOW):
                 gm.tiles[cxp, cyp] = tile.TREE_SPRUCE
         # the churchyard sits on open grass right behind the chapel — you step
