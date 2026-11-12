@@ -305,8 +305,12 @@ def _dry_cut_grass(state: GameState) -> None:
 _WITHER_DAYS = {"Clear": 1, "Cloudy": 3, "Fog": 3, "Snow": 3}
 
 
-def new_day(state: GameState, rested: bool = True) -> None:
-    """Advance to the next morning: sell shipment, grow crops, roll weather."""
+def new_day(state: GameState, rested: bool = True, rest: float | None = None) -> None:
+    """Advance to the next morning: sell shipment, grow crops, roll weather.
+    ``rested`` is a night in your own bed (full) or a collapse (half);
+    ``rest`` names the share of a full night's rest got somewhere else — an
+    inn's bed, the bare ground — which is never topped up by the comforts of
+    home."""
     from . import crafting
     crafting.sell_shipment(state)
     from . import waystation
@@ -420,10 +424,13 @@ def new_day(state: GameState, rested: bool = True) -> None:
 
     p = state.player
     p.energy = p.max_energy if rested else p.max_energy // 2
-    if rested:                          # a quilt on the bed, a tapestry on the wall
+    p.hp = p.max_hp if rested else max(1, p.max_hp // 2)
+    if rest is not None:                # an inn's bed, or the ground
+        p.energy = round(p.max_energy * rest)
+        p.hp = max(1, round(p.max_hp * rest))
+    elif rested:                        # a quilt on the bed, a tapestry on the wall
         from . import home
         p.energy += home.comfort(state)
-    p.hp = p.max_hp if rested else max(1, p.max_hp // 2)
     p.stamina = p.max_stamina
 
     # The night sweats out wounds; an illness has to run its course, and takes
@@ -672,6 +679,36 @@ def sleep(state: GameState) -> None:
     state.log.add("You sleep soundly. A new day dawns.", (180, 200, 240))
     new_day(state, rested=True)
     state.happen("dawn", state.player.x, state.player.y)   # the morning comes up on screen
+
+
+ROUGH_REST = 0.7        # the share of a night's rest the bare ground gives
+INN_ROOM_PRICE = 60     # a bed for the night at any inn
+
+
+def can_sleep_rough(state: GameState) -> bool:
+    """Whether you could bed down right here. Anywhere under the Vale's open
+    sky will do; the dark below and the Westreach are no place to close your
+    eyes (the night's reckoning is kept on the Vale's map)."""
+    return state.world is state.surface and state.surface is not None
+
+
+def sleep_rough(state: GameState) -> None:
+    """A night on the ground where you stand: you keep your purse and your
+    pack, and wake stiff, with most of a night's rest."""
+    state.log.add("You bed down where you are, and sleep as well as the ground allows.",
+                  (180, 200, 240))
+    new_day(state, rest=ROUGH_REST)
+    state.log.add(f"You wake stiff and damp — about {round(ROUGH_REST * 100)}% rested.",
+                  (200, 190, 160))
+    state.happen("dawn", state.player.x, state.player.y)
+
+
+def sleep_at_inn(state: GameState) -> None:
+    """A paid bed: a full night's rest, wherever the day ended."""
+    state.log.add("You take a room for the night. Clean sheets; a new day dawns.",
+                  (180, 200, 240))
+    new_day(state, rest=1.0)
+    state.happen("dawn", state.player.x, state.player.y)
 
 
 def collapse(state: GameState, reason: str) -> None:

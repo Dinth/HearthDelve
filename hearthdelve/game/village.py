@@ -20,7 +20,7 @@ class ShopRow:
     and the purchase dispatch can never drift out of step on a shape.
 
     kinds: buy · meal · recipe · sellto · commission · housejob ·
-           cancel_build · tradebuy · upgrade · contest · prize · order
+           cancel_build · tradebuy · upgrade · contest · prize · order · room
     """
     kind: str
     label: str = ""            # left-column text (item / meal / job name)
@@ -931,7 +931,7 @@ def trader_entries(state: GameState, npc: NPC) -> list:
 
 # What the player pays for (buy_mult) vs is paid for (sell_mult) — the rest
 # (civic commissions, house jobs, contest entry) are unaffected by reputation.
-_PAY_KINDS = {"buy", "meal", "recipe", "tradebuy", "upgrade"}
+_PAY_KINDS = {"buy", "meal", "recipe", "tradebuy", "upgrade", "room"}
 
 
 def shop_entries(shop: str, state: GameState | None = None,
@@ -1005,7 +1005,12 @@ def _shop_entries(shop: str, state: GameState | None = None,
         if state is None:
             return meals + cards
         order = order_rows(state, npc) if npc is not None else []
-        return prize_rows(state) + order + meals + cards + _inn_purchases(state)
+        # A bed for the night — the Vale's inns only (the night is reckoned on
+        # the Vale's map; see farming.can_sleep_rough).
+        from . import farming
+        room = ([ShopRow("room", label="A room for the night", price=farming.INN_ROOM_PRICE)]
+                if farming.can_sleep_rough(state) else [])
+        return prize_rows(state) + order + meals + room + cards + _inn_purchases(state)
     if shop == "carpenter":
         jobs = [ShopRow("commission", label=label, build=kind, price=gold, mats=tuple(mats))
                 for (label, kind, gold, mats) in content.CARPENTER_JOBS]
@@ -1109,6 +1114,16 @@ def purchase(state: GameState, row: ShopRow, npc: NPC | None = None) -> None:
         star = (" " + skills.stars(row.quality)) if row.quality else ""
         state.log.add(f"The innkeeper takes your {row.item.name.lower()}{star} for {row.price}g.",
                       (240, 214, 120))
+    elif row.kind == "room":
+        from . import farming
+        p = state.player
+        if not farming.can_sleep_rough(state):
+            return
+        if p.gold < row.price:
+            state.log.add("You can't afford that.", C.DIM)
+            return
+        p.gold -= row.price
+        farming.sleep_at_inn(state)
     elif row.kind == "prize":
         _claim_prize(state, row)
     elif row.kind == "cancel_build":

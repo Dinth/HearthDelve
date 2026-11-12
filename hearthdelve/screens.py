@@ -291,8 +291,18 @@ class PlayScreen(Screen):
         elif cmd == "sleep":
             if farming.can_sleep(state):
                 farming.sleep(state)
+            elif cmds._threat_near(state) is not None:
+                state.log.add(f"Not with a {cmds._threat_near(state).name.lower()} so near.", C.DIM)
+            elif farming.can_sleep_rough(state):
+                pct = round(farming.ROUGH_REST * 100)
+                ui.push(ConfirmScreen(
+                    "Sleep rough?",
+                    f"Bed down here for the night? You'll wake about {pct}% rested.",
+                    lambda ui: farming.sleep_rough(ui.state),
+                    f"Your own bed rests you fully; an inn's does for {farming.INN_ROOM_PRICE}g."))
             else:
-                state.log.add("You can only sleep in your bed.", C.DIM)
+                state.log.add("This is no place to close your eyes — make for the Vale's "
+                              "open sky, an inn, or your own bed.", C.DIM)
         elif cmd == "craft":
             ui.push(CraftScreen())
         elif cmd == "eat":
@@ -875,7 +885,10 @@ class ShopScreen(Screen):
             if picked.kind == "contest":     # the fair: pick an entry to judge
                 ui.push(ContestScreen(self.npc))
             else:
+                day = state.day
                 village.purchase(state, picked, self.npc)
+                if state.day != day:             # a night at the inn: it's morning now
+                    ui.pop()
 
 
 class ContestScreen(Screen):

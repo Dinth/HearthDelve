@@ -1205,6 +1205,10 @@ def render_shop(con: tcod.console.Console, state: GameState, npc, sel: int, line
                 m.text(2, dy, pre + f"House order: sell {e.item.name}{star}"[:w - 14],
                        fg=(222, 200, 150), bg=rowbg)
                 m.text(w - 10, dy, f"+{e.price}g", fg=C.GOLD_COLOR, bg=rowbg)
+        elif e.kind == "room":
+            m.text(2, dy, pre + e.label, fg=C.WHITE if afford else C.DIM, bg=rowbg)
+            m.text(w - 22, dy, "full rest", fg=(150, 210, 150), bg=rowbg)
+            m.text(w - 8, dy, f"{e.price}g", fg=C.GOLD_COLOR if afford else C.DIM, bg=rowbg)
         elif e.kind == "prize":
             what = f"{e.name} recipe" if e.name else e.item.name
             m.text(2, dy, pre + f"Ribbon prize: {what}"[:w - 14],
