@@ -851,7 +851,10 @@ def _almanac_rows(state: GameState) -> list:
     return rows
 
 
-def render_journal(con: tcod.console.Console, state: GameState, tab: int = 0) -> None:
+def render_journal(con: tcod.console.Console, state: GameState, tab: int = 0,
+                   scroll: int = 0) -> int:
+    """Draw the journal's page `tab`, scrolled `scroll` rows down. Returns the
+    scroll clamped to the page, for the screen to keep."""
     """The journal, in pages (←→): quest goals, the open notice-board favours,
     the market's mood, a homestead status overview, the village projects, the
     Hall's collection and the almanac — the planning surfaces that used to
@@ -960,14 +963,26 @@ def render_journal(con: tcod.console.Console, state: GameState, tab: int = 0) ->
     title = (f"Journal — Goals ({done}/{total})" if tab == 0
              else f"Journal — {_JOURNAL_TABS[tab]}")
     w = 76
+    # A row too wide for the page runs on to the next line instead of being
+    # cut (a goal's reward sits at the end of its row), and a page too long
+    # for the window scrolls (the third year's goals outgrew it).
+    rows = [(indent + (2 if k else 0), part, color)
+            for indent, text, color in rows
+            for k, part in enumerate(ui.wrap(text, w - 6 - indent)
+                                     if len(text) > w - 4 - indent else [text])]
     h = min(C.SCREEN_H - 4, max(10, len(rows) + 6))
     m = ui.Modal(con, w, h, title)
     tabs = " ".join((f"[{n}]" if i == tab else f" {n} ") for i, n in enumerate(_JOURNAL_TABS))
     m.text(2, 1, tabs[:w - 4], fg=(224, 204, 128))
     body = h - 5
-    for row, (indent, text, color) in enumerate(rows[:body]):
+    max_scroll = max(0, len(rows) - body)
+    scroll = max(0, min(scroll, max_scroll))
+    for row, (indent, text, color) in enumerate(rows[scroll:scroll + body]):
         m.text(2 + indent, 3 + row, text[:w - 4 - indent], fg=color)
-    m.footer("← → page   j / Esc close")
+    m.arrows(scroll > 0, scroll < max_scroll, 3, h - 3)
+    m.footer("← → page   ↑ ↓ scroll   j / Esc close" if max_scroll
+             else "← → page   j / Esc close")
+    return scroll
 
 
 _SPOT_LABEL = {"home": "at home", "work": "at work", "inn": "at the inn",

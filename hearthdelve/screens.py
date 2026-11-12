@@ -941,17 +941,28 @@ class DonateScreen(Screen):
 
 
 class JournalScreen(Screen):
+    """The journal: ←→ turns the page, ↑↓ and PgUp/PgDn scroll a long one."""
+
+    PAGE = 12                                # rows a PgUp/PgDn moves
+
     def __init__(self) -> None:
         self.tab = 0
+        self.scroll = 0
 
     def render(self, ui: UI, con) -> None:
-        rendering.render_journal(con, ui.state, self.tab)
+        # the renderer knows how long the page is; keep its clamped value
+        self.scroll = rendering.render_journal(con, ui.state, self.tab, self.scroll)
 
     def handle(self, ui: UI, cmd: str, action: tuple) -> None:
         if cmd in ("cancel", "journal", "quit"):
             ui.pop()
         elif cmd == "move" and action[1]:
             self.tab = (self.tab + action[1]) % len(rendering._JOURNAL_TABS)
+            self.scroll = 0
+        elif cmd == "move" and action[2]:
+            self.scroll = max(0, self.scroll + action[2])
+        elif cmd == "scroll":                # ("scroll", 1) is PgUp: back up the page
+            self.scroll = max(0, self.scroll - action[1] * self.PAGE)
 
 
 class RelationsScreen(Screen):
