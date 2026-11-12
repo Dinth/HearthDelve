@@ -3179,8 +3179,11 @@ def _collection_catalogue() -> dict:
                  items.SPORE_SAC, items.GRAVE_DUST, items.EMBER_CORE, items.WYRM_SCALE)
     trophies = (items.TROLL_TUSK, items.WARDEN_SIGIL, items.MOLTEN_HEART,
                 items.BONE_CROWN, items.ABYSSAL_PEARL)
+    # One case by the door for the Vale's own contest: a first-prize ribbon.
+    grange = (items.FAIR_RIBBON,)
     return {"Herbarium": herbarium, "Angler's Cabinet": anglers,
-            "Lapidary": lapidary, "Reliquary": reliquary, "Trophies": trophies}
+            "Lapidary": lapidary, "Reliquary": reliquary, "Trophies": trophies,
+            "Grange Case": grange}
 
 
 COLLECTION: dict[str, tuple] = _collection_catalogue()

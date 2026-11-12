@@ -1186,6 +1186,11 @@ def render_shop(con: tcod.console.Console, state: GameState, npc, sel: int, line
             star = (" " + skills.stars(e.quality)) if e.quality else ""
             m.text(2, dy, pre + f"Sell {e.item.name}{star}", fg=(200, 220, 160), bg=rowbg)
             m.text(w - 10, dy, f"+{e.price}g", fg=C.GOLD_COLOR, bg=rowbg)
+        elif e.kind == "prize":
+            what = f"{e.label}: {e.name or e.item.name}"
+            m.text(2, dy, pre + f"Trade a ribbon for {what}"[:w - 14],
+                   fg=(232, 200, 120), bg=rowbg)
+            m.text(w - 10, dy, "1 ribbon", fg=(232, 200, 120), bg=rowbg)
         elif e.kind == "cancel_build":
             m.text(2, dy, pre + "Cancel current order", fg=(224, 180, 120), bg=rowbg)
             m.text(w - 12, dy, "refund", fg=(190, 180, 150), bg=rowbg)

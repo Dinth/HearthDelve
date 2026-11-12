@@ -20,7 +20,7 @@ class ShopRow:
     and the purchase dispatch can never drift out of step on a shape.
 
     kinds: buy · meal · recipe · sellto · commission · housejob ·
-           cancel_build · tradebuy · upgrade · contest
+           cancel_build · tradebuy · upgrade · contest · prize
     """
     kind: str
     label: str = ""            # left-column text (item / meal / job name)
@@ -581,6 +581,45 @@ def _inn_purchases(state: GameState):
     return out
 
 
+# --- a ribbon's worth ---------------------------------------------------------
+# A first-prize ribbon can be handed back to any innkeeper (they judge the
+# contest) for something off the prize table: things that otherwise come by
+# luck. The table turns over with the week, so it's never the same three.
+_PRIZE_SAPLINGS = (items.CHERRY_SAPLING, items.PEACH_SAPLING, items.APPLE_SAPLING,
+                   items.PEAR_SAPLING, items.ORANGE_SAPLING)
+GRANGE_CASE_EDGE = 0.5      # what a ribbon in the Hall of Wonders adds to an entry's score
+
+
+def prize_rows(state: GameState) -> list:
+    """What a carried ribbon could be traded for today — nothing without one."""
+    import random as _random
+    from . import requests as gamereq
+    if state.player.inventory.count(items.FAIR_RIBBON) <= 0:
+        return []
+    rng = _random.Random((state.seed * 7_919 + (state.day // 7) * 104_729) & 0x7FFFFFFF)
+    rows = []
+    pool = sorted(gamereq.unknown_recipes(state))
+    if pool:
+        rows.append(ShopRow("prize", label="a recipe card", name=rng.choice(pool)))
+    rows.append(ShopRow("prize", label="a live bee queen", item=items.BEE_QUEEN))
+    rows.append(ShopRow("prize", label="a fruit sapling", item=rng.choice(_PRIZE_SAPLINGS)))
+    return rows
+
+
+def _claim_prize(state: GameState, row: ShopRow) -> None:
+    inv = state.player.inventory
+    if not inv.remove(items.FAIR_RIBBON, 1):
+        return
+    if row.item is not None:
+        inv.add(row.item, 1)
+        state.log.add(f"The innkeeper takes your ribbon back for the Grange and hands over "
+                      f"the {row.item.name.lower()}.", (232, 200, 120))
+    else:
+        from . import requests as gamereq
+        if not gamereq.learn_recipe(state, row.name, teacher="The innkeeper"):
+            inv.add(items.FAIR_RIBBON, 1)                 # known since the table was read
+
+
 # --- the festival produce contest (held at the Grange Hall) -------------------
 def _contest_key(state: GameState) -> str | None:
     fest = content.festival_on(state.season, state.day_of_season)
@@ -634,6 +673,9 @@ def enter_contest(state: GameState, item, ql: int, judge: NPC | None = None) -> 
                       if n.role == "innkeeper" and n.village == "Mossford"), None)
     home = getattr(judge, "village", "") or "Mossford"
     mine = ql * 1.6 + min(3.5, item.value / 140.0) + rng.uniform(0.0, 1.2)
+    from . import collection
+    if collection.perk_earned(state, "Grange Case"):     # a ribbon in the Hall of Wonders
+        mine += GRANGE_CASE_EDGE
     place = 1 + sum(1 for s in rival_scores if s > mine)
     star = (" " + skills.stars(ql)) if ql else ""
     entry = f"{item.name.lower()}{star}"
@@ -853,7 +895,9 @@ def _shop_entries(shop: str, state: GameState | None = None,
         cards = [ShopRow("recipe", name=name, price=price)
                  for name, price in content.TAVERN_RECIPES
                  if state is not None and name not in state.known_recipes]
-        return meals + cards + (_inn_purchases(state) if state is not None else [])
+        if state is None:
+            return meals + cards
+        return prize_rows(state) + meals + cards + _inn_purchases(state)
     if shop == "carpenter":
         jobs = [ShopRow("commission", label=label, build=kind, price=gold, mats=tuple(mats))
                 for (label, kind, gold, mats) in content.CARPENTER_JOBS]
@@ -954,6 +998,8 @@ def purchase(state: GameState, row: ShopRow) -> None:
         star = (" " + skills.stars(row.quality)) if row.quality else ""
         state.log.add(f"The innkeeper takes your {row.item.name.lower()}{star} for {row.price}g.",
                       (240, 214, 120))
+    elif row.kind == "prize":
+        _claim_prize(state, row)
     elif row.kind == "cancel_build":
         job = _job_for(row.build)
         if not state.pending_build or job is None:

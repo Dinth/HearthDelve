@@ -98,6 +98,7 @@ WING_PERK = {
     "Lapidary": "a jeweller's eye is yours — you cut finer stones.",
     "Reliquary": "the deep's trophies have taught you — your blows earn more Combat mastery.",
     "Trophies": "the champions of the deep are yours to boast — your killing eye sharpens (+crit).",
+    "Grange Case": "your name is known at the fair — the judges look kindly on what you enter.",
 }
 
 
