@@ -32,15 +32,36 @@ def _resolve_any(inv, it, qty):
 
 
 def resolve_inputs(inv, inputs):
-    """Recipe inputs with every AnyOf pinned to a real carried item — so the
+    """Recipe inputs with every AnyOf pinned to real carried items — so the
     rest of crafting (counts, quality, removal) never sees a family wildcard.
-    None when some input can't be satisfied."""
+    None when some wildcard can't be satisfied.
+
+    A wildcard is filled ACROSS its family, cheapest first: "any egg ×2" takes
+    a hen's egg and a duck's when you hold one of each (it used to want two of
+    one kind), so it may come back as more than one entry. What the recipe
+    asks for by name is set aside first, so a wildcard never counts on it."""
+    left: dict = {}
+    for it, qty, _q in inv.slots:
+        left[it] = left.get(it, 0) + qty
+    for it, qty in inputs:
+        if not isinstance(it, content.AnyOf):
+            left[it] = left.get(it, 0) - qty
     out = []
     for it, qty in inputs:
-        r = _resolve_any(inv, it, qty)
-        if r is None:
+        if not isinstance(it, content.AnyOf):
+            out.append((it, qty))
+            continue
+        need = qty
+        for cand in sorted((c for c, n in left.items() if n > 0 and c.family == it.family),
+                           key=lambda c: (c.value, c.name)):
+            take = min(need, left[cand])
+            out.append((cand, take))
+            left[cand] -= take
+            need -= take
+            if not need:
+                break
+        if need:
             return None
-        out.append((r, qty))
     return out
 
 
