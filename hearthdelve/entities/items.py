@@ -406,8 +406,10 @@ SUNFLOWER_OIL = Item("Sunflower Oil", "ó", "artisan", "Golden oil pressed from 
 MAYONNAISE  = Item("Mayonnaise",  "◓", "artisan", "Whisked egg and oil — a creamy staple.", value=230, energy=15)
 BUTTER      = Item("Butter",      "▪", "artisan", "A golden pat of churned butter.", value=130, energy=20)
 KETCHUP     = Item("Ketchup",     "■", "artisan", "A tangy-sweet tomato sauce.", value=270)
-CIDER       = Item("Cider",       "ø", "artisan", "Crisp fermented apple cider.", value=220, family="cider", source=None)
-PERRY       = Item("Perry",       "ø", "artisan", "Fermented pear perry; delicate and dry.", value=230, family="perry", source=None)
+# Family "wine": a wine-lover's taste (matched by family) covers the orchard's
+# drinks too — on their own families nobody in the Vales cared for either.
+CIDER       = Item("Cider",       "ø", "artisan", "Crisp fermented apple cider.", value=220, family="wine", source=None)
+PERRY       = Item("Perry",       "ø", "artisan", "Fermented pear perry; delicate and dry.", value=230, family="wine", source=None)
 # Textiles: raw fibre -> yarn (spinning wheel) -> cloth (loom) -> garments.
 WOOL_YARN   = Item("Wool Yarn",   ";", "material", "Wool spun into yarn.", value=70)
 COTTON_YARN = Item("Cotton Thread", ";", "material", "Cotton spun into thread.", value=70)
