@@ -125,6 +125,11 @@ MATERIALS: dict[str, Material] = {
     "linen":      Material("linen",      3, a_pv=3.0, density=0.6, value_mult=1.0),
     "silk":       Material("silk",       4, a_dv=1, a_pv=4.0, density=0.3, value_mult=2.5),
     "fur":        Material("fur",        4, a_pv=4.0, density=1.5, value_mult=1.4),   # wolf-pelt warmth
+    # Bat-wing membrane, stretched and cured: thin as silk and as easy to move
+    # in, so it evades like silk — the delver's road to a light cloak, where
+    # silk is the farmer's. Stitched by hand (see the Batwing Cloak recipe),
+    # never woven, so it stays out of CLOTHS and the loom.
+    "batwing":    Material("batwing",    3, a_dv=1, a_pv=3.0, density=0.3, value_mult=2.2),
     # Beast scales (armour only): a combat-earned path that rivals mined metal —
     # forged at the anvil from the scale drops themselves (see SCALE_FORGE), not
     # from bars. Drake hide is tough yet supple (it evades); wyrm scale is the
@@ -1587,6 +1592,9 @@ RECIPES: list[Recipe] = [
     Recipe("Hide Cloak", "item", ((items.WOLF_PELT, 2), (items.FIBER, 2)),
            output=make_gear("Cloak", "fur"), out_qty=1,
            desc="A thick wolf-pelt cloak — the Westreach wind means nothing to it."),
+    Recipe("Batwing Cloak", "item", ((items.BAT_WING, 4), (items.FIBER, 2)),
+           output=make_gear("Cloak", "batwing"), out_qty=1,
+           desc="Bat-wing membrane stitched into a cloak: light as silk, and as hard to land a blow on (+1 Dodge)."),
     Recipe("Fence Panels", "item", ((items.WOOD, 1),), output=items.FENCE, out_qty=2,
            desc="Timber fence panels for your pack — set them down with 'Set Fence'."),
     Recipe("Set Fence", "build", ((items.FENCE, 1),), machine="fence",

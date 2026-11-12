@@ -194,7 +194,7 @@ COKE        = Item("Coke",        "♦", "material", "Coal baked in a kiln; the 
 # Dungeon reagents: foraged fungus and creature drops (cook/sell/gift).
 CAVE_MUSHROOM = Item("Cave Mushroom", "τ", "material", "An earthy cave fungus — good in a stew.", value=30)
 SLIME_GEL     = Item("Slime Gel",     "*", "material", "Sticky residue from a cave slime; it sets hard as glue, or seals a cask.",       value=15)
-BAT_WING      = Item("Bat Wing",      "~", "material", "A leathery wing from a cave bat.",         value=20)
+BAT_WING      = Item("Bat Wing",      "~", "material", "A leathery wing from a cave bat; the membrane cures into a thin, tough skin.",         value=20)
 BOAR_HIDE     = Item("Boar Hide",     "u", "material", "Tough hide from a wild boar; tans into leather armour.", value=40)
 WOLF_PELT     = Item("Wolf Pelt",     "u", "material", "A thick grey pelt from an ash wolf; makes a fine hide cloak.", value=60)
 RAW_HIDE      = Item("Raw Hide",      "u", "material", "A raw skin from a wild beast; cure it on a tanning rack.", value=28)
