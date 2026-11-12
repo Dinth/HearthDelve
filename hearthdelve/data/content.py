@@ -2841,15 +2841,21 @@ COUNTER_MARKUP = 1.35
 # it listed for young stock, cloth garments and shot — and reputation's
 # discount, taken off the lower list price, never showed on them.
 BIN_BEST_MULTS = (1.10, 1.25, 1.03)
+# The best haggle a spotless reputation earns (karma.buy_mult at its height).
+# A list price leaves room for it above the bin's best, so a saint's tenth off
+# shows on every good and still can't be posted at a profit.
+BEST_HAGGLE = 0.90
 
 
 def counter_price(it: Item, markup: float = COUNTER_MARKUP) -> int:
-    """What a shop charges for one unit: its worth plus the shopkeeper's cut,
-    and never less than 1g above the best the bin could pay for it."""
+    """What a shop lists one unit at: its worth plus the shopkeeper's cut, and
+    enough that the best haggle still lands 1g above the bin's best price."""
     best = float(it.value)
     for m in BIN_BEST_MULTS:                # multiplied in the bin's own order, so
         best *= m                           # the two round to the same gold piece
-    return max(it.value + 1, int(round(it.value * markup)), int(round(best)) + 1)
+    import math
+    room = math.ceil((int(round(best)) + 1) / BEST_HAGGLE)
+    return max(it.value + 1, int(round(it.value * markup)), room)
 
 
 # General store stock: (seed, buy price)
