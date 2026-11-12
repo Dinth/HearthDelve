@@ -565,6 +565,10 @@ class InventoryScreen(Screen):
             it, _q, ql = self._picked(state)
             if it.energy > 0 or it.heal > 0:
                 cmds._eat(state, it, ql)
+                cmds.check_faint(state)          # a meal takes time: a blow may land
+                if any(h.kind == "faint" for h in state.fx):
+                    ui.pop()                     # struck down: back to the map to come round
+                    return
             elif it.kind in _EQUIP_KINDS:
                 cmds._equip(state, it)
             else:
