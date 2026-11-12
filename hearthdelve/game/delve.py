@@ -139,9 +139,29 @@ def _go_to_floor(state: GameState, depth: int, descending: bool) -> None:
         state.stats["dwarfhold_deepest"] = max(lift.deepest(state), depth)
     # arrive at the up-stairs when descending into a floor, down-stairs when rising
     state.player.x, state.player.y = gm.stairs_up if descending else gm.stairs_down
+    make_room(state)
     update_fov(state)
     state.happen("stairs", state.player.x, state.player.y)   # the dark gives way to the new floor
     state.log.add(_feeling(gm), (176, 180, 216))
+
+
+def make_room(state: GameState) -> None:
+    """Shove aside anything standing where you've just arrived. A monster
+    left on the stairs (or by the lift) shared your tile: it could not be
+    struck — a bump needs a neighbour — and never struck you. It takes the
+    nearest free tile beside you, and is roused by the jostling."""
+    p, w = state.player, state.world
+    for m in w.monsters:
+        if not m.alive or (m.x, m.y) != (p.x, p.y):
+            continue
+        taken = {(o.x, o.y) for o in w.monsters if o.alive and o is not m}
+        taken |= {(n.x, n.y) for n in w.npcs}
+        for dx, dy in ((0, 1), (1, 0), (-1, 0), (0, -1), (1, 1), (-1, 1), (1, -1), (-1, -1)):
+            spot = (p.x + dx, p.y + dy)
+            if w.walkable(*spot) and spot not in taken and spot not in w.machines:
+                m.x, m.y = spot
+                m.awake = True
+                break
 
 
 def enter(state: GameState, kind: str) -> None:

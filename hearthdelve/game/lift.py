@@ -72,6 +72,7 @@ def ride(state: GameState, to: int) -> bool:
             if w.walkable(x, y) and (x, y) not in w.machines:
                 state.player.x, state.player.y = x, y
                 break
+        delve.make_room(state)
         delve.update_fov(state)
     where = "Khazgrim" if to == dwarftown.TOWN_DEPTH else f"floor {to}"
     state.log.add(f"The cage rattles {'down' if down else 'up'} the old shaft to {where}. ({cost}g)",

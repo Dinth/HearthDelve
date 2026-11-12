@@ -536,7 +536,7 @@ def _sidesteps(sx: int, sy: int) -> tuple:
 
 def _step(state: GameState, m) -> None:
     p = state.player
-    if _dist(m, p) == 1:
+    if _dist(m, p) <= 1:                   # beside you — or, somehow, on your very tile
         _attack_player(state, m)
         return
     # summoners raise the lesser dead while they hold ground, then close in
