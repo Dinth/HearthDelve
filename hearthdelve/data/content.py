@@ -3431,11 +3431,21 @@ _FAMILY_ITEMS: dict | None = None
 
 
 def dish_wildcard(recipe):
-    """The AnyOf input of a cook recipe (the fish/meat it's built around), or None."""
-    for it, _q in recipe.inputs:
-        if isinstance(it, AnyOf):
+    """The AnyOf input a cook recipe is built around (the fish/meat), or None.
+    A recipe may carry other wildcards too (fish cakes want any egg, a chowder
+    any milk): the one whose family names its dishes wins, wherever it sits."""
+    wilds = [it for it, _q in recipe.inputs if isinstance(it, AnyOf)]
+    for it in wilds:
+        if it.family in SOURCE_DISH_FAMILIES:
             return it
-    return None
+    return wilds[0] if wilds else None
+
+
+def _family_floor(fam: str) -> int:
+    """What the humblest member of a family is worth — how a wildcard that
+    isn't the dish's own (the egg in fish cakes) is counted in its value."""
+    vals = [x.value for x in _family_items(fam) if x.value > 0]
+    return min(vals) if vals else 0
 
 
 def _family_items(fam: str) -> list:
@@ -3456,8 +3466,16 @@ def cooked_dish(recipe, source):
     if key in _DISHES:
         return _DISHES[key]
     base = recipe.output
-    total = sum((source.value if isinstance(it, AnyOf) else it.value) * q
-                for it, q in recipe.inputs)
+    wc = dish_wildcard(recipe)
+
+    def worth(it) -> int:
+        if it is wc:
+            return source.value                 # the fish the dish is named for
+        if isinstance(it, AnyOf):
+            return _family_floor(it.family)     # any egg, any milk: not the fish
+        return it.value
+
+    total = sum(worth(it) * q for it, q in recipe.inputs)
     val = max(1, round(total * COOK_MARGIN / max(1, recipe.out_qty)))
     it = items.register(items.Item(
         f"{source.name} {base.name}", base.glyph, base.kind,

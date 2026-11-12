@@ -172,8 +172,18 @@ def dish_choice_options(state: GameState, recipe) -> list:
                      key=lambda i: i.value)
     opts = []
     for src in sources:
-        pinned = [((src if isinstance(it, content.AnyOf) else it), q) for it, q in recipe.inputs]
-        if all(inv.count(it) >= q for it, q in pinned):
+        # Only the dish's own wildcard becomes the chosen fish. Any other
+        # (the egg in fish cakes, the milk in a chowder) is filled from the
+        # pack like in any recipe — pinning those to the fish too cooked the
+        # dish without them and priced it as if it were all fish.
+        pinned = [((src if it is wc else _resolve_any(inv, it, q)), q)
+                  for it, q in recipe.inputs]
+        if any(it is None for it, _q in pinned):
+            continue
+        need: dict = {}
+        for it, q in pinned:                     # one item asked for twice adds up
+            need[it] = need.get(it, 0) + q
+        if all(inv.count(it) >= q for it, q in need.items()):
             opts.append({"inputs": pinned, "output": content.cooked_dish(recipe, src),
                          "out_qty": recipe.out_qty, "cook": True})
     return opts
