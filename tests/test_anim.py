@@ -152,12 +152,33 @@ class TestOneOffEffects(unittest.TestCase):
 
 
 
-def _clear_line(st, reach):
-    """A direction from the player with `reach` open, walkable cells in a row."""
+def _to_open_ground(st, reach):
+    """Walk the player to the nearest spot with `reach` cells of open, walkable
+    ground on every side. (The doorstep is hemmed in: the door behind, the
+    post box and the bin either side, the plot's fence ahead.)"""
     p, w = st.player, st.world
-    for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
-        if all(w.walkable(p.x + dx * k, p.y + dy * k) for k in range(1, reach + 1)):
-            return dx, dy
+    for r in range(1, 40):
+        for dx in range(-r, r + 1):
+            for dy in range(-r, r + 1):
+                if max(abs(dx), abs(dy)) != r:
+                    continue
+                x, y = p.x + dx, p.y + dy
+                if all(w.walkable(x + i, y + j) and (x + i, y + j) not in w.crops
+                       for i in range(-reach, reach + 1) for j in range(-reach, reach + 1)):
+                    p.x, p.y = x, y
+                    return
+    raise AssertionError("no open ground near the player")
+
+
+def _clear_line(st, reach):
+    """A direction from the player with `reach` open, walkable cells in a row
+    — stepping out to open ground first if where they stand has none."""
+    p, w = st.player, st.world
+    for _attempt in range(2):
+        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            if all(w.walkable(p.x + dx * k, p.y + dy * k) for k in range(1, reach + 1)):
+                return dx, dy
+        _to_open_ground(st, reach)
     raise AssertionError("boxed in")
 
 
@@ -608,8 +629,16 @@ class TestVillagersChat(unittest.TestCase):
         p = st.player
         dx, dy = _clear_line(st, 4)
         a, b = st.surface.npcs[0], st.surface.npcs[1]
-        a.x, a.y = p.x + dx * 2 + dy, p.y + dy * 2 + dx
-        b.x, b.y = a.x + dx * apart, a.y + dy * apart
+
+        def stand():
+            a.x, a.y = p.x + dx * 2 + dy, p.y + dy * 2 + dx
+            b.x, b.y = a.x + dx * apart, a.y + dy * apart
+            return st.world.walkable(a.x, a.y) and st.world.walkable(b.x, b.y)
+
+        if not stand():                          # a fence or a furrow where they'd stand
+            _to_open_ground(st, 4 + apart)
+            dx, dy = _clear_line(st, 4)
+            self.assertTrue(stand())
         return st, a, b
 
     def _said_over(self, st, npc, seconds=40.0):

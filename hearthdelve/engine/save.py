@@ -477,6 +477,13 @@ def load(path: str | None = None) -> GameState:
     for bx, by in np.argwhere(_fresh == _tile.NOTICE_BOARD):
         if world.tiles[bx, by] == _tile.COBBLE:
             world.tiles[bx, by] = _tile.NOTICE_BOARD
+    # The post box: every world made before it was kept clear of the road had
+    # it paved over, so no letter could be opened. Stand it back up where the
+    # ground is still road or wild (never over something the player built).
+    for bx, by in np.argwhere(_fresh == _tile.POST_BOX):
+        if world.tiles[bx, by] in (_tile.ROAD, _tile.GRASS, _tile.MEADOW,
+                                   _tile.TALL_GRASS, _tile.DIRT_PATH):
+            world.tiles[bx, by] = _tile.POST_BOX
     # Signposts: older worldgen sprinkled them down every hill switchback —
     # any post the fresh world no longer plants reverts to its natural ground.
     extra_posts = (world.tiles == _tile.SIGNPOST) & (_fresh != _tile.SIGNPOST)

@@ -67,7 +67,11 @@ def grow_veins(tiles, w, h, host_id, ore_veins, max_len, gems, rng) -> None:
 ROAD_BLOCK = {"house_wall", "house_floor", "door", "bed", "shipping_bin",
               "fence", "tilled", "dungeon_down", "well", "lamp", "stall",
               "statue", "hearth", "table", "counter", "barrel", "altar", "grave",
-              "tent", "campfire", "notice_board"}
+              "tent", "campfire", "notice_board",
+              # The farm's post box stands by the door, right where the road
+              # home arrives: it was paved over in every world, and with it
+              # went every letter — invitations, gifts, tax notices.
+              "post_box"}
 _ROAD_NAMES = ("road", "bridge", "cobble")
 _ROAD_KINDS = ("road", "bridge", "cobble")
 
