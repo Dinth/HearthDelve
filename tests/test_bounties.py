@@ -38,6 +38,17 @@ class TestBounties(unittest.TestCase):
             d = depth[_bounty(st, seed)["bounty"]]
             self.assertTrue(10 - requests.BOUNTY_REACH <= d <= 10, d)
 
+    def test_a_veteran_past_the_last_new_monster_is_not_sent_after_slimes(self):
+        from hearthdelve.data import content
+        depth = {m.name: m.min_depth for m in content.MONSTERS}
+        last = max(depth.values())
+        for deepest in (last + 1, 15, 40):
+            st = fresh_state(211)
+            st.stats["deepest_depth"] = deepest
+            for seed in range(1, 25):
+                with self.subTest(deepest=deepest, seed=seed):
+                    self.assertGreaterEqual(depth[_bounty(st, seed)["bounty"]], last - 4)
+
     def test_only_kills_after_it_was_pinned_count(self):
         from hearthdelve.game import requests
         st = fresh_state(211)

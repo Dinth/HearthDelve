@@ -207,7 +207,12 @@ _BOUNTY_FLAVOR = "They've grown bold below. Put down {want} and it won't go unth
 
 
 def _bounty_marks(state: GameState) -> list:
-    deepest = max(1, int(state.stats.get("deepest_depth", 0)))
+    # No new kind of monster appears below the last one's floor, so a delver
+    # past it is still asked for the deepest kinds. (Measured from the floor
+    # itself, the window slid off the end of the roster: at floor 15 it was
+    # empty, and the fallback sent a veteran after slimes and bats.)
+    last = max(m.min_depth for m in content.MONSTERS)
+    deepest = min(last, max(1, int(state.stats.get("deepest_depth", 0))))
     return [m for m in content.MONSTERS
             if deepest - BOUNTY_REACH <= m.min_depth <= deepest] or \
            [m for m in content.MONSTERS if m.min_depth <= 1]
