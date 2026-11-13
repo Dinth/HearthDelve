@@ -89,16 +89,15 @@ def render_requests(con: tcod.console.Console, state: GameState, sel: int,
     sel = max(0, min(sel, n_rows - 1)) if n_rows else 0
     row = 0
     for i, r in enumerate(reqs):
-        it = I.by_name(r["item"])
-        have = state.player.inventory.count(it) if it else 0
+        have = gamereq.progress(state, r)
         can = gamereq.can_fulfil(state, r)
         bg = ui.SEL_BG if i == sel else ui.BASE_BG
         if i == sel:
             m.highlight(2 + row)
         days = r["expires"] - state.day
-        m.text(2, 2 + row, ui.cur(i == sel) + f"{r['npc']}: {r['qty']} {r['item']}",
+        m.text(2, 2 + row, ui.cur(i == sel) + f"{r['npc']}: {gamereq.want_text(r)}",
                fg=C.WHITE if can else C.DIM, bg=bg)
-        m.text(w - 20, 2 + row, f"have {have:>2}",
+        m.text(w - 20, 2 + row, f"{'slain' if r.get('bounty') else 'have'} {have:>2}",
                fg=(150, 210, 150) if can else (150, 110, 110), bg=bg)
         m.text(w - 10, 2 + row, f"{r['gold']}g", fg=C.GOLD_COLOR, bg=bg)
         row += 1
@@ -928,14 +927,15 @@ def render_journal(con: tcod.console.Console, state: GameState, tab: int = 0,
         from ..game import requests as gamereq
         from ..entities import items as I
         for r in state.requests:
-            it = I.by_name(r["item"])
-            have = state.player.inventory.count(it) if it else 0
+            have = gamereq.progress(state, r)
             can = gamereq.can_fulfil(state, r)
             days = r["expires"] - state.day
-            rows.append((0, f"{r['npc']}: {r['qty']} {r['item']}  ·  {r['gold']}g  ·  "
+            rows.append((0, f"{r['npc']}: {gamereq.want_text(r)}  ·  {r['gold']}g  ·  "
                             f"{days} day{'s' if days != 1 else ''} left",
                          C.WHITE if can else C.DIM))
-            rows.append((2, f"have {have}/{r['qty']} — deliver at a village notice board (g)",
+            rows.append((2, (f"slain {have}/{r['qty']} — report at a village notice board (g)"
+                             if r.get("bounty") else
+                             f"have {have}/{r['qty']} — deliver at a village notice board (g)"),
                          (150, 210, 150) if can else C.DIM))
         rows.append((0, "", C.WHITE))
         rows.append((0, "Favours pay over the odds and warm a friendship.", C.DIM))

@@ -195,6 +195,54 @@ def _new_request(state: GameState, rng) -> dict | None:
             "flavor": _FLAVOR.get(npc.role, _FLAVOR_DEFAULT).format(want=want)}
 
 
+# --- bounties ------------------------------------------------------------------
+# Now and then the board asks for a culling instead of goods: so many of one
+# kind of monster, counted from the day it was pinned (the bestiary keeps the
+# tally). It asks for what haunts the floors you've actually walked — a
+# newcomer is sent after slimes and bats, a deep delver after wights.
+BOUNTY_CHANCE = 0.3           # of a fresh favour being a bounty (one open at a time)
+BOUNTY_REACH = 4              # floors above your deepest a bounty may look back
+_BOUNTY_POSTERS = ("blacksmith", "mason", "priest", "trapper", "innkeeper", "forester")
+_BOUNTY_FLAVOR = "They've grown bold below. Put down {want} and it won't go unthanked."
+
+
+def _bounty_marks(state: GameState) -> list:
+    deepest = max(1, int(state.stats.get("deepest_depth", 0)))
+    return [m for m in content.MONSTERS
+            if deepest - BOUNTY_REACH <= m.min_depth <= deepest] or \
+           [m for m in content.MONSTERS if m.min_depth <= 1]
+
+
+def _new_bounty(state: GameState, rng) -> dict | None:
+    posters = [n for n in getattr(state.surface, "npcs", ()) if n.role in _BOUNTY_POSTERS
+               and n.name not in {r["npc"] for r in state.requests}]
+    if not posters or any(r.get("bounty") for r in state.requests):
+        return None
+    npc, mark = rng.choice(posters), rng.choice(_bounty_marks(state))
+    qty = rng.randint(3, 6)
+    gold = int(math.ceil(qty * (25 + 20 * mark.min_depth) * rng.uniform(0.9, 1.2) / 5.0)) * 5
+    plural = mark.name + ("es" if mark.name.endswith(("s", "ch")) else "s")
+    return {"npc": npc.name, "item": plural, "qty": qty, "gold": gold,
+            "bounty": mark.name, "from": int(state.bestiary.get(mark.name, 0)),
+            "expires": state.day + rng.randint(7, 12),
+            "flavor": _BOUNTY_FLAVOR.format(want=f"{qty} {plural.lower()}")}
+
+
+def progress(state: GameState, req: dict) -> int:
+    """How much of a favour is in hand: goods carried, or kills since a bounty
+    was pinned."""
+    if req.get("bounty"):
+        return max(0, int(state.bestiary.get(req["bounty"], 0)) - int(req.get("from", 0)))
+    it = items.by_name(req["item"])
+    return sum(state.player.inventory.count(i) for i in _fills(state, it)) if it else 0
+
+
+def want_text(req: dict) -> str:
+    """What a favour asks, as the board words it."""
+    return (f"slay {req['qty']} {req['item']}" if req.get("bounty")
+            else f"{req['qty']} {req['item']}")
+
+
 def _year_finale():
     """(season, day, name) of the year's last festival — the fireworks night."""
     order = {s: i for i, s in enumerate(C.SEASONS)}
@@ -242,13 +290,14 @@ def new_day(state: GameState) -> None:
     _fireworks_commission(state)
     for r in state.requests:
         if r["expires"] == state.day + 1:     # last chance — say so at dawn
-            state.log.add(f"{r['npc']}'s favour ({r['qty']} {r['item']}) comes down "
+            state.log.add(f"{r['npc']}'s favour ({want_text(r)}) comes down "
                           "from the board tomorrow.", (224, 180, 120))
     rng = random.Random((state.seed * 811 + state.day * 2903) & 0x7FFFFFFF)
     for chance in (0.45, 0.30):
         if len(state.requests) >= MAX_OPEN or rng.random() > chance:
             continue
-        req = _new_request(state, rng)
+        req = (_new_bounty(state, rng) if rng.random() < BOUNTY_CHANCE else None) \
+            or _new_request(state, rng)
         if req:
             state.requests.append(req)
             state.log.add(f"A new favour is pinned to the village notice boards. ({req['npc']})",
@@ -278,6 +327,8 @@ def _fills(state: GameState, it) -> list:
 
 
 def can_fulfil(state: GameState, req: dict) -> bool:
+    if req.get("bounty"):
+        return progress(state, req) >= req["qty"]
     it = items.by_name(req["item"])
     if it is None:
         return False
@@ -285,10 +336,38 @@ def can_fulfil(state: GameState, req: dict) -> bool:
     return sum(inv.count(i) for i in _fills(state, it)) >= req["qty"]
 
 
+def _claim_bounty(state: GameState, req: dict) -> bool:
+    """Report a finished culling at the board: the fee, the poster's regard."""
+    from . import karma, skills
+    done = progress(state, req)
+    if done < req["qty"]:
+        state.log.add(f"{req['npc']} wants {req['qty']} {req['item'].lower()} put down — "
+                      f"you've accounted for {done} so far.", C.DIM)
+        return False
+    if req in state.requests:
+        state.requests.remove(req)
+    state.player.gold += req["gold"]
+    state.bump("gold_earned", req["gold"])
+    state.bump("requests_filled")
+    state.bump("bounties_claimed")
+    karma.adjust(state, 1)
+    npc = _find_npc(state, req["npc"])
+    if npc is not None:
+        from . import village
+        village.befriend(state, npc, karma.scale(state.player.karma, FRIEND_POINTS))
+        npc.met = True
+    state.log.add(f"You report the culling to {req['npc']} — {req['gold']}g, and the Vale "
+                  "sleeps easier.", (232, 200, 120))
+    skills.gain_char_xp(state, 30)
+    return True
+
+
 def deliver(state: GameState, req: dict) -> bool:
     """Hand over a favour's goods at the board: premium gold, the poster's
     friendship, a nudge of karma — and now and then a recipe in the envelope."""
     from . import karma, skills
+    if req.get("bounty"):
+        return _claim_bounty(state, req)
     it = items.by_name(req["item"])
     inv = state.player.inventory
     if it is None or not can_fulfil(state, req):
