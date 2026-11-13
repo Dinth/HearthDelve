@@ -7,9 +7,14 @@ over your usual full measure, the more for a finer piece. Prize ribbons are
 pinned up on the wall beside it; a farm known for its ribbons sells its starred
 goods a little dearer.
 
-All of it lives in ``state.stats`` (plain counters, saved as they are):
-``home_quilt`` and ``home_tapestry`` hold the piece's stars + 1 (0 = bare), and
-``home_ribbons`` how many are pinned up.
+The farmhouse's second room, once Tomas has built it, is a trophy room: a
+boss's trophy mounted on its wall (g, facing it) is a thing to wake up proud
+under, and each one adds a little to the same waking stamina.
+
+All of it lives in ``state.stats`` (saved as it is): ``home_quilt`` and
+``home_tapestry`` hold the piece's stars + 1 (0 = bare), ``home_ribbons`` how
+many are pinned up, and ``home_trophies`` the mounted trophies' names, joined
+by "|".
 """
 from __future__ import annotations
 
@@ -18,6 +23,8 @@ from ..entities import items
 from .state import GameState
 
 QUILT, TAPESTRY, RIBBONS = "home_quilt", "home_tapestry", "home_ribbons"
+TROPHIES = "home_trophies"
+TROPHY_COMFORT = 4        # waking stamina each mounted boss trophy adds
 
 # A piece's waking stamina: a plain one, and what each star adds.
 COMFORT_BASE, COMFORT_PER_STAR = 6, 3
@@ -34,7 +41,41 @@ def _piece_comfort(level: int) -> int:
 def comfort(state: GameState) -> int:
     """Stamina over the full measure that a night at home now gives."""
     return (_piece_comfort(state.stats.get(QUILT, 0))
-            + _piece_comfort(state.stats.get(TAPESTRY, 0)))
+            + _piece_comfort(state.stats.get(TAPESTRY, 0))
+            + TROPHY_COMFORT * len(trophies(state)))
+
+
+def trophies(state: GameState) -> list:
+    """Names of the boss trophies mounted in the second room."""
+    return [n for n in str(state.stats.get(TROPHIES, "") or "").split("|") if n]
+
+
+def _trophy_room(state: GameState, x: int, y: int) -> bool:
+    """Whether (x, y) is part of the farmhouse's second room (walls included)."""
+    from . import husbandry
+    rects = husbandry.house_rects(state)
+    return len(rects) > 1 and any(x0 <= x < x0 + w and y0 <= y < y0 + h
+                                  for x0, y0, w, h in rects[1:])
+
+
+def _mount_trophy(state: GameState) -> bool:
+    """Hang the first carried boss trophy that isn't on the wall yet."""
+    from ..data import content
+    up = trophies(state)
+    inv = state.player.inventory
+    held = [t for t in content.COLLECTION["Trophies"] if inv.count(t) > 0]
+    if not held:
+        return False
+    fresh = next((t for t in held if t.name not in up), None)
+    if fresh is None:
+        state.log.add(f"A {held[0].name.lower()} hangs there already — one of each is boast "
+                      "enough.", C.DIM)
+        return True
+    inv.remove(fresh, 1)
+    state.stats[TROPHIES] = "|".join(up + [fresh.name])
+    state.log.add(f"You mount the {fresh.name.lower()} on the wall. A thing to wake up proud "
+                  f"under: you'll rise with +{comfort(state)} stamina now.", _WARM)
+    return True
 
 
 def ribbons(state: GameState) -> int:
@@ -91,6 +132,8 @@ def furnish(state: GameState, x: int, y: int) -> bool:
                     "The quilt on your bed is every bit as fine as this one.")
     if t.name != "house_wall" or not husbandry.in_house(state, x, y):
         return False
+    if _trophy_room(state, x, y) and _mount_trophy(state):
+        return True
     if _lay(state, items.WALL_TAPESTRY, TAPESTRY,
             "You hang the tapestry{stars} on the wall. The house keeps its warmth: "
             "you'll wake with +{comfort} stamina now.",
@@ -123,8 +166,15 @@ def describe_bed(state: GameState) -> str:
     return f"your bed, under a quilt{_stars(lvl)}. Sleep here (s) to end the day."
 
 
-def describe_wall(state: GameState) -> str:
+def describe_wall(state: GameState, x: int | None = None, y: int | None = None) -> str:
     lvl, n = int(state.stats.get(TAPESTRY, 0)), ribbons(state)
+    if x is not None and _trophy_room(state, x, y):
+        up = trophies(state)
+        if up:
+            return ("the wall of your trophy room, hung with the "
+                    + ", the ".join(t.lower() for t in up) + ".")
+        return ("the wall of your second room — bare. A boss's trophy would hang well "
+                "here (g).")
     hung = []
     if lvl:
         hung.append(f"a tapestry{_stars(lvl)}")

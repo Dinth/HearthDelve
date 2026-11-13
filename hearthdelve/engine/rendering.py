@@ -1096,7 +1096,7 @@ def describe(state: GameState, x: int, y: int) -> str:
         if (x, y) == tuple(surf.bed):
             base = home.describe_bed(state)
         elif t.name == "house_wall" and husbandry.in_house(state, x, y):
-            base = home.describe_wall(state)
+            base = home.describe_wall(state, x, y)
     if t.name == "tilled":
         base = base.rstrip(".") + f".{_soil_word(state, x, y)}"
     # Whose ground is this? Note owned/claimed land on open, workable tiles.
