@@ -25,21 +25,37 @@ class TestWetWork(unittest.TestCase):
         for weather in ("Clear", "Cloudy", "Fog", "Snow"):
             self.assertEqual(commands.rain_toll(_outdoors(weather)), 0)
 
-    def test_rain_costs_a_point_and_a_storm_two(self):
+    def test_rain_and_storm_each_cost_a_quarter_more(self):
         from hearthdelve.game import commands
-        self.assertEqual(commands.rain_toll(_outdoors("Rain")), 1)
-        self.assertEqual(commands.rain_toll(_outdoors("Storm")), 2)
+        self.assertEqual(commands.rain_toll(_outdoors("Rain")), 0.25)
+        self.assertEqual(commands.rain_toll(_outdoors("Storm")), 0.25)
 
-    def test_any_cloak_sheds_a_point(self):
+    def test_a_cloak_keeps_off_the_rain_and_half_a_storm(self):
         from hearthdelve.game import commands
         for cloak in ("wool", "fur", "leather"):
             with self.subTest(cloak=cloak):
                 self.assertEqual(commands.rain_toll(_outdoors("Rain", cloak)), 0)
-                self.assertEqual(commands.rain_toll(_outdoors("Storm", cloak)), 1)
+                self.assertEqual(commands.rain_toll(_outdoors("Storm", cloak)), 0.125)
 
     def test_a_batwing_cloak_sheds_it_all(self):
         from hearthdelve.game import commands
         self.assertEqual(commands.rain_toll(_outdoors("Storm", "batwing")), 0)
+
+    def test_a_quarter_of_a_point_is_carried_till_it_makes_one(self):
+        from hearthdelve.game import commands
+        st = _outdoors("Rain")
+        charged = [commands.rain_points(st, 3) for _ in range(8)]      # eight hoe strokes
+        self.assertEqual(sum(charged), 6)                              # 24 stamina, a quarter more
+        self.assertEqual(max(charged), 1)
+        self.assertIn(0, charged)                                      # not a point on every stroke
+
+    def test_a_long_wet_morning_costs_a_quarter_more_whatever_the_task(self):
+        from hearthdelve.game import commands
+        for cost in (2, 3, 6, 8):
+            st = _outdoors("Storm")
+            extra = sum(commands.rain_points(st, cost) for _ in range(40))
+            with self.subTest(cost=cost):
+                self.assertEqual(extra, cost * 40 // 4)
 
     def test_not_under_your_own_roof_or_below_ground(self):
         from hearthdelve.game import commands
@@ -69,18 +85,18 @@ class TestWetWork(unittest.TestCase):
         commands.use_tool(st)
         return before - p.energy
 
-    def test_a_hoe_in_the_rain_costs_that_much_more(self):
+    def test_one_hoe_stroke_is_never_charged_more_than_a_point(self):
         dry = self._till_cost("Clear")
         self.assertGreater(dry, 0)
-        self.assertEqual(self._till_cost("Rain"), dry + 1)
-        self.assertEqual(self._till_cost("Storm"), dry + 2)
+        self.assertIn(self._till_cost("Rain") - dry, (0, 1))
+        self.assertIn(self._till_cost("Storm") - dry, (0, 1))
         self.assertEqual(self._till_cost("Storm", "batwing"), dry)
 
     def test_it_is_said_once_a_day(self):
         from hearthdelve.game import commands
         st = _outdoors("Rain")
         st.stats["rain_told"] = st.day
-        self.assertEqual(commands.rain_toll(st), 1)
+        self.assertEqual(commands.rain_toll(st), 0.25)
 
 
 if __name__ == "__main__":

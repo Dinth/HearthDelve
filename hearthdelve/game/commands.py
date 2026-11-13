@@ -613,14 +613,14 @@ def use_tool(state: GameState) -> dict | None:
     # meals that spare it.
     if state.world.is_dungeon:
         stamina += state.world.depth // 3
-    wet = rain_toll(state)
-    if wet:
-        stamina += wet
+    share = rain_toll(state)
+    if share:
+        stamina += rain_points(state, stamina)
         if state.stats.get("rain_told") != state.day:      # said once a day, not at every swing
             state.stats["rain_told"] = state.day
             cloaked = state.player.equipment.get("cloak") is not None
-            state.log.add(f"Wet work: the {state.weather.lower()} costs you +{wet} stamina a "
-                          "task out of doors today."
+            state.log.add(f"Wet work: the {state.weather.lower()} costs you "
+                          f"{round(share * 100)}% more stamina on tasks out of doors today."
                           + (" Your cloak takes the worst of it." if cloaked
                              else " A cloak would turn it."), C.DIM)
     if new_tile is not None and state.world.is_dungeon and new_tile == tile.GRASS:
@@ -1265,26 +1265,44 @@ def _under_threat(state: GameState) -> bool:
     return False
 
 
-# Working in the wet tires you: this much more stamina a tool task out of
-# doors. Any cloak sheds a point of it; a batwing cloak, waterproof membrane,
-# sheds it all.
-RAIN_TOLL = {"Rain": 1, "Storm": 2}
+# Working in the wet tires you: a quarter more stamina on a tool task out of
+# doors, rain or storm. A cloak keeps the rain off altogether and half a
+# storm; a batwing cloak, waterproof membrane, keeps off both.
+# (It was a flat point in rain and two in a storm, which on a 3-stamina hoe
+# stroke came to a third more, and two thirds more in a storm.)
+RAIN_TOLL = 0.25
+_WET = ("Rain", "Storm")
 _ROOFED = ("house_floor", "bed")
 
 
-def rain_toll(state: GameState) -> int:
-    """Extra stamina a tool task costs right now for the weather: none below
-    ground, under a roof or glass, or on a dry day."""
+def rain_toll(state: GameState) -> float:
+    """The share of a tool task's stamina the weather adds right now: none
+    below ground, under a roof or glass, or on a dry day."""
     w, p = state.world, state.player
-    toll = RAIN_TOLL.get(state.weather, 0)
-    if not toll or w.is_dungeon:
-        return 0
+    if state.weather not in _WET or w.is_dungeon:
+        return 0.0
     if w.tile_at(p.x, p.y).name in _ROOFED or farming.in_greenhouse(w, p.x, p.y):
-        return 0
+        return 0.0
     cloak = p.equipment.get("cloak")
-    if cloak is not None:
-        toll = 0 if getattr(cloak, "material", "") == "batwing" else toll - 1
-    return max(0, toll)
+    if cloak is None:
+        return RAIN_TOLL
+    if getattr(cloak, "material", "") == "batwing" or state.weather == "Rain":
+        return 0.0
+    return RAIN_TOLL / 2
+
+
+def rain_points(state: GameState, stamina: int) -> int:
+    """Whole points of stamina the weather adds to a task costing ``stamina``.
+    Stamina is counted in whole points and most tasks cost two or three, so a
+    quarter of one is carried forward (``rain_carry``) until it makes a point:
+    over a morning's work the wet costs a quarter more, not a third or nothing."""
+    share = rain_toll(state)
+    if not share:
+        return 0
+    owed = float(state.stats.get("rain_carry", 0.0)) + stamina * share
+    whole = int(owed + 1e-9)
+    state.stats["rain_carry"] = round(owed - whole, 4)
+    return whole
 
 
 def drinks_left(state: GameState) -> int:
