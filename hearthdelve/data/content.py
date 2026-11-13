@@ -1685,7 +1685,7 @@ RECIPES: list[Recipe] = [
            desc="A thick wolf-pelt cloak — the Westreach wind means nothing to it."),
     Recipe("Batwing Cloak", "item", ((items.BAT_WING, 4), (items.FIBER, 2)),
            output=make_gear("Cloak", "batwing"), out_qty=1,
-           desc="Bat-wing membrane stitched into a cloak: light as silk, and as hard to land a blow on (+1 Dodge)."),
+           desc="Bat-wing membrane stitched into a cloak: light as silk (+1 Dodge), and rain runs off it."),
     Recipe("Waterskin", "item", ((items.BAT_WING, 3), (items.FIBER, 2), (items.BEESWAX, 1)),
            output=items.WATERSKIN, out_qty=1,
            desc="Bat-wing membrane sewn into a skin and waxed tight. Fill it at a well; drink on the road."),
