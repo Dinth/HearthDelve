@@ -886,6 +886,9 @@ def load_machine_choice(state: GameState, m: Machine, mdef, opt) -> None:
         # Brewing past your skill: the batch turned. The herbs are gone, and
         # you're a little wiser for it.
         skills.gain(state, "Herbalism", 10)
+        at = next((pos for pos, mm in state.world.machines.items() if mm is m), None)
+        if at is not None:
+            state.happen("spoil", *at)
         state.log.add(f"The {output.name.lower()} clouds and turns in the still — the batch is "
                       "spoiled. A surer hand at herbalism would lose fewer.", (216, 170, 110))
         return

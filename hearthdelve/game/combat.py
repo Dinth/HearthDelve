@@ -621,6 +621,8 @@ def _step(state: GameState, m) -> None:
 
 def _attack_player(state: GameState, m) -> None:
     hi = m.dmg[1]                       # its top-end swing, to judge a soaked hit below
+    state.happen("lunge", m.x, m.y, to=(state.player.x, state.player.y),
+                 colour=tuple(m.color))            # who it was that struck at you
     res = _resolve(m.to_hit, m.dmg, 0, 0.0, player_dv(state), player_pv(state))
     if res is None:
         p = state.player
@@ -914,6 +916,8 @@ def throw_bomb_at(state: GameState, tx: int, ty: int) -> bool:
                       if bomb is items.STICKY_BOMB else "You hurl a bomb — BOOM!",
                       (236, 180, 90))
         state.happen("blast", bx, by, radius=radius, delay=flight)
+        if BOMB_MIRE.get(bomb):                    # the goo it throws lies about a while
+            state.happen("goo", bx, by, radius=radius, delay=flight + 0.1)
         state.happen("shake", p.x, p.y, delay=flight, strength=2 if radius > 1 else 1)
         if state.world.is_dungeon:                 # the roof sheds its dust
             state.happen("dust", bx, by, delay=flight + 0.1, radius=radius)

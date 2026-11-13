@@ -1720,3 +1720,252 @@ def footprint(f: anim.Frame, h, age: float) -> None:
     _blend(f.con, sx, sy, "bg", (0, 0, 0), 0.24 * fresh)            # the dent
     ground = f.con.rgb["bg"][sx, sy].astype(np.float32)
     _write(f, sx, sy, "∙", tuple(int(c) for c in ground * (1.0 - 0.5 * fresh)))
+
+
+# ==============================================================================
+# Goo, turned earth, a drink, working machines, a lunge, a spoiled brew, and
+# the farmhouse's furnishings
+# ==============================================================================
+_GOO = (150, 214, 118)
+
+
+@anim.ongoing(anim.OVERLAY, 61)
+def mired(f: anim.Frame) -> None:
+    """A mired creature wears its goo: it sits in a green slick that pulses
+    slow and heavy, and strings of it sag off and drip to the floor."""
+    st, t = f.state, f.t
+    for i, m in enumerate(st.world.monsters):
+        if "mired" not in getattr(m, "status", {}):
+            continue
+        cell = f.cell(m.x, m.y)
+        if cell is None:
+            continue
+        sx, sy = cell
+        salt = 5.3 + i
+        _blend(f.con, sx, sy, "bg", (58, 110, 44), 0.55 + 0.2 * math.sin(t * 2.2 + salt))
+        _blend(f.con, sx, sy, "fg", _GOO, 0.35)
+        age = anim.burst_age(t, 1.1, 0.85, 0.9, salt)
+        if age is not None and sy + 1 < f.vh and (sx, sy + 1) not in f.occupied:
+            _write(f, sx, sy + 1, "'" if age < 0.25 else "," if age < 0.55 else "·",
+                   tuple(int(c * (1.0 - 0.6 * age / 0.9)) for c in _GOO))
+
+
+@anim.one_off("goo", life=2.2)
+def goo_spatter(f: anim.Frame, h, age: float) -> None:
+    """A sticky bomb bursts: a wet green ring slaps outward, and what it threw
+    lies about the floor a while before it soaks away."""
+    cell = f.cell(h.x, h.y)
+    if cell is None:
+        return
+    sx, sy = cell
+    reach = h.data.get("radius", 1) + 1
+    for dx in range(-reach, reach + 1):
+        for dy in range(-reach, reach + 1):
+            x, y = sx + dx, sy + dy
+            if not (0 <= x < f.vw and 0 <= y < f.vh):
+                continue
+            d = math.hypot(dx * 0.75, dy)
+            if d > reach:
+                continue
+            arrives = 0.12 * d                         # the ring's edge reaches it
+            if age < arrives:
+                continue
+            k = max(0.0, 1.0 - (age - arrives) / (2.2 - arrives))
+            _blend(f.con, x, y, "bg", (60, 124, 46), 0.75 * k)
+            if (x, y) in f.occupied:
+                continue
+            blob = anim.h1(dx * 7 + dy * 13, 3.1)
+            if age - arrives < 0.15:
+                _write(f, x, y, "*", (200, 240, 150))
+            elif blob < 0.6 and k > 0.25:
+                _write(f, x, y, "≈" if blob < 0.3 else ",", tuple(int(c * k) for c in _GOO))
+
+
+@anim.one_off("till", life=0.55)
+def till(f: anim.Frame, h, age: float) -> None:
+    """The hoe bites: clods jump out to either side and fall back, and the
+    turned earth shows dark and fresh before it settles to its own colour."""
+    cell = f.cell(h.x, h.y)
+    if cell is None:
+        return
+    sx, sy = cell
+    _blend(f.con, sx, sy, "bg", (96, 62, 30), 0.8 * (1.0 - age / 0.55))
+    clod = (170, 122, 72)
+    rise = 2 if age < 0.18 else 1 if age < 0.36 else 0
+    for side in (-1, 1):
+        x, y = sx + side, sy - rise
+        if 0 <= x < f.vw and 0 <= y < f.vh and (x, y) not in f.occupied:
+            _write(f, x, y, "'" if rise == 2 else "," if rise == 1 else "·", clod)
+
+
+@anim.one_off("sow", life=0.7)
+def sow(f: anim.Frame, h, age: float) -> None:
+    """A seed goes in: it drops from the hand into the furrow, and the soil
+    closes over it with a small pale mark that fades."""
+    cell = f.cell(h.x, h.y)
+    if cell is None:
+        return
+    sx, sy = cell
+    if age < 0.3:
+        y = sy - 2 + int(age / 0.15)
+        if 0 <= y < sy and (sx, y) not in f.occupied:
+            _write(f, sx, y, "•", (232, 214, 150))
+    else:
+        k = 1.0 - (age - 0.3) / 0.4
+        _blend(f.con, sx, sy, "bg", (120, 92, 50), 0.7 * k)
+        _write(f, sx, sy, "·", tuple(int(c * (0.5 + 0.5 * k)) for c in (232, 214, 150)))
+
+
+@anim.one_off("refresh", life=1.3)
+def refresh(f: anim.Frame, h, age: float) -> None:
+    """Food or drink goes down: what it gave you lifts off you and fades —
+    stamina in gold, a drink of water in blue."""
+    cell = f.cell(h.x, h.y)
+    if cell is None:
+        return
+    sx, sy = cell
+    text = f"+{h.data.get('amount', 0)}"
+    colour = (150, 200, 240) if h.data.get("drink") else (236, 206, 110)
+    fade = 1.0 if age < 0.7 else max(0.3, 1.0 - (age - 0.7) / 0.6)
+    _write(f, sx - len(text) // 2, sy - 1 - int(age / 0.35), text,
+           tuple(int(c * fade) for c in colour))
+
+
+# Machines that show their work: (ember/bubble colour, what rises, how often).
+_FIRE_WORK = ("furnace", "kiln", "oven", "smoker")
+_BREW_WORK = ("keg", "jar", "apothecary", "cellar", "churn")
+
+
+@anim.ongoing(anim.OVERLAY, 31)
+def machines_at_work(f: anim.Frame) -> None:
+    """A loaded machine shows it is busy: a furnace, kiln, oven or smoker
+    glows and breathes with the fire inside and lifts a spark or a curl of
+    smoke; a keg, jar, churn or still gives up a slow bubble now and then."""
+    st, t = f.state, f.t
+    w = st.world
+    if w.is_dungeon:
+        return
+    now = st.abs_minutes
+    for (mx, my), m in w.machines.items():
+        pos = f.screen(mx, my)
+        if pos is None or m.loaded_output is None or now >= m.ready_at:
+            continue
+        sx, sy = pos
+        salt = mx * 0.37 + my * 0.91
+        if m.kind in _FIRE_WORK:
+            glow = 0.45 + 0.25 * math.sin(t * 5.0 + salt) * math.sin(t * 3.1 + salt * 2)
+            _blend(f.con, sx, sy, "bg", (214, 96, 28), glow)
+            _blend(f.con, sx, sy, "fg", (255, 214, 130), 0.6)
+            smoke = m.kind == "smoker"
+            age = anim.burst_age(t, 0.9 if not smoke else 1.4, 0.8, 0.8, salt)
+            if age is not None:
+                x = sx + int(round(math.sin(t * 2.0 + salt)))
+                y = sy - 1 - int(age / 0.3)
+                if 0 <= x < f.vw and 0 <= y < f.vh and (x, y) not in f.occupied:
+                    k = 1.0 - age / 0.8
+                    if smoke:
+                        g = int(90 + 90 * k)
+                        _write(f, x, y, "°", (g, g, g - 10))
+                    else:
+                        _write(f, x, y, "*" if age < 0.3 else "·",
+                               (255, int(150 + 80 * k), int(40 + 40 * k)))
+        elif m.kind in _BREW_WORK:
+            _blend(f.con, sx, sy, "fg", (236, 220, 170), 0.35 + 0.15 * math.sin(t * 1.7 + salt))
+            age = anim.burst_age(t, 2.2, 0.7, 1.0, salt)
+            if age is not None:
+                y = sy - 1 - int(age / 0.5)
+                if 0 <= y < f.vh and (sx, y) not in f.occupied:
+                    tint = (160, 214, 170) if m.kind == "apothecary" else (214, 190, 150)
+                    _write(f, sx, y, "°" if age < 0.6 else "·",
+                           tuple(int(c * (1.0 - 0.5 * age)) for c in tint))
+
+
+@anim.one_off("lunge", life=0.28)
+def lunge(f: anim.Frame, h, age: float) -> None:
+    """Something strikes at you: it flares in its own colour as it commits and
+    its glyph goes white-hot, and the cell it struck at darkens under the
+    blow — so with three things round you, you can see which one it was.
+    (Neighbours share an edge: there is no cell between for it to cross.)"""
+    cell = f.cell(h.x, h.y)
+    if cell is None:
+        return
+    sx, sy = cell
+    k = 1.0 - age / 0.28
+    _blend(f.con, sx, sy, "bg", h.data.get("colour", (230, 120, 100)), 0.7 * k)
+    _blend(f.con, sx, sy, "fg", (255, 240, 220), 0.9 * k)
+    tcell = f.cell(*h.data.get("to", (h.x, h.y)))
+    if tcell is not None and 0.05 <= age < 0.2:
+        _blend(f.con, tcell[0], tcell[1], "bg", (120, 30, 26), 0.6)
+
+
+@anim.one_off("spoil", life=1.6)
+def spoil(f: anim.Frame, h, age: float) -> None:
+    """A brew turns in the still: a foul green-grey belch rolls up off the
+    bench and drifts apart."""
+    cell = f.cell(h.x, h.y)
+    if cell is None:
+        return
+    sx, sy = cell
+    if age < 0.3:
+        _blend(f.con, sx, sy, "bg", (96, 120, 60), 0.8 * (1.0 - age / 0.3))
+    for i in range(4):
+        rise = age * 2.4 + i * 0.5
+        y = sy - 1 - int(rise)
+        x = sx + int(round((i - 1.5) * (0.4 + age)))
+        k = max(0.0, 1.0 - age / 1.6)
+        if 0 <= x < f.vw and 0 <= y < f.vh and (x, y) not in f.occupied and rise < 4.5:
+            _write(f, x, y, "§" if rise < 1.5 else "°" if rise < 3 else "·",
+                   tuple(int(c * (0.4 + 0.6 * k)) for c in (150, 176, 96)))
+
+
+_QUILT_HUES = ((196, 120, 96), (206, 150, 96), (150, 170, 200), (176, 200, 140),
+               (214, 170, 196), (236, 206, 120))
+_TROPHY_GLYPH = "♆"
+
+
+@anim.ongoing(anim.OVERLAY, 62)        # last: a drifting petal must not rub out a tapestry
+def home_furnishings(f: anim.Frame) -> None:
+    """The farmhouse shows what you've done with it: the bed lies under its
+    quilt (richer the finer it is), the tapestry and the pinned ribbons hang
+    on the back wall, and the second room's wall carries its trophies."""
+    st = f.state
+    surf = st.surface
+    if st.world is not surf or surf is None or not surf.bed:
+        return
+    from ..game import home, husbandry
+    quilt = int(st.stats.get(home.QUILT, 0))
+    bx, by = surf.bed
+    cell = f.screen(bx, by)
+    if quilt and cell is not None and cell not in f.occupied:
+        hue = _QUILT_HUES[min(quilt, len(_QUILT_HUES)) - 1]
+        f.con.rgb["ch"][cell] = ord("▤")
+        f.con.rgb["fg"][cell] = hue
+        _blend(f.con, cell[0], cell[1], "bg", hue, 0.25)
+    rects = husbandry.house_rects(st)
+    if not rects:
+        return
+
+    def wall_cells(rect, skip=()):
+        x0, y0, w, h = rect
+        out = [(x, y0) for x in range(x0 + 1, x0 + w - 1)]            # the back (north) wall
+        out += [(x0, y) for y in range(y0 + 1, y0 + h - 1)]           # then the west
+        return [c for c in out if surf.tile_at(*c).name == "house_wall" and c not in skip]
+
+    hung = []
+    tap = int(st.stats.get(home.TAPESTRY, 0))
+    if tap:
+        hung.append(("▦", _QUILT_HUES[min(tap, len(_QUILT_HUES)) - 1]))
+    hung += [("⚑", (232, 200, 120))] * home.ribbons(st)
+    main = wall_cells(rects[0])
+    for (wx, wy), (glyph, colour) in zip(main, hung):
+        c = f.screen(wx, wy)
+        if c is not None:
+            f.con.rgb["ch"][c] = ord(glyph)
+            f.con.rgb["fg"][c] = colour
+    if len(rects) > 1:
+        used = set(main[:len(hung)])
+        for (wx, wy), _name in zip(wall_cells(rects[1], skip=used), home.trophies(st)):
+            c = f.screen(wx, wy)
+            if c is not None:
+                f.con.rgb["ch"][c] = ord(_TROPHY_GLYPH)
+                f.con.rgb["fg"][c] = (224, 214, 196)

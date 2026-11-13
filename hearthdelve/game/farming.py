@@ -120,6 +120,7 @@ def plant(state: GameState, x: int, y: int, seed: Item) -> None:
         plot.watered = True
     turns.advance_time(state, C.PLANT_COST[1])
     state.player.energy = max(0, state.player.energy - C.PLANT_COST[0])
+    state.happen("sow", x, y)
     state.log.add(f"You plant {crop.name.lower()} seeds.")
 
 

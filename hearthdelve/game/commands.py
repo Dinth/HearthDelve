@@ -643,6 +643,8 @@ def use_tool(state: GameState) -> dict | None:
     _felled(state, target, new_tile, tx, ty)
     if item is items.WATERING_CAN and target.name == "tilled":
         state.happen("water", tx, ty)
+    if new_tile == tile.TILLED:
+        state.happen("till", tx, ty)
     if new_tile is not None:
         state.world.tiles[tx, ty] = new_tile
     p.energy = max(0, p.energy - stamina)
@@ -1340,6 +1342,7 @@ def _eat(state: GameState, item, quality: int) -> None:
                           "it does nothing more for you today.", C.DIM)
         else:
             p.gain_energy(item.energy)
+            state.happen("refresh", p.x, p.y, amount=item.energy, drink=True)
             left = drinks_left(state)
             state.log.add(f"You drink the {empty.name.lower()} dry. (+{item.energy} stamina"
                           + (")" if left else "; that's your thirst slaked for today)"),
@@ -1349,6 +1352,7 @@ def _eat(state: GameState, item, quality: int) -> None:
     gain = round(item.energy * (1 + 0.12 * quality))     # tastier food goes further
     heal = max(1, gain // 6) + item.heal
     p.gain_energy(gain)
+    state.happen("refresh", p.x, p.y, amount=gain)
     p.hp = min(p.max_hp, p.hp + heal)
     state.bump("meals_eaten")
     star = (" " + skills.stars(quality)) if quality else ""

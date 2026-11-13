@@ -39,10 +39,11 @@ class TestOneEngine(unittest.TestCase):
         self.assertEqual(names[anim.VEIL], ["westreach_weather"])
         self.assertEqual(names[anim.OVERLAY], ["weather", "shooting_stars", "fish_rising",
                                                "seasonal_motes",
-                                               "living_fire", "festival_bunting", "crossings",
+                                               "living_fire", "machines_at_work",
+                                               "festival_bunting", "crossings",
                                                "fireworks",
                                                "songs_at_the_inn", "chatter", "underground_life",
-                                               "afflictions"])
+                                               "afflictions", "mired", "home_furnishings"])
 
     def test_effects_in_a_layer_draw_lowest_order_first(self):
         from hearthdelve.engine import anim
