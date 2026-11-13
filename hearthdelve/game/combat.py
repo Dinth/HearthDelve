@@ -417,13 +417,22 @@ def _resolve(to_hit: int, dmg_range, dmg_bonus: int, crit_chance: float,
 
 
 # --- player attacks ----------------------------------------------------------
+# The deep tires a fighter, but gently: a point of stamina a blow for every six
+# floors down, and never more than three. At a point per three floors without
+# limit, a kill on floor 15 cost a fully mithril-clad veteran a sixth of the
+# day's stamina and one in steel a third — food, not danger, set how far down
+# anyone could fight.
+FIGHT_FATIGUE_FLOORS = 6
+FIGHT_FATIGUE_MOST = 3
+
+
 def fight_stamina(state: GameState) -> int:
-    """Stamina one blow or shot costs: a base, plus the deep's fatigue (a third
-    of the depth), less what worn jewellery spares — the amethyst's ease,
-    which used to lighten only tool work, though the codex promised it in a
-    fight too. Never less than 1."""
+    """Stamina one blow or shot costs: a base, plus the deep's fatigue (see
+    FIGHT_FATIGUE_FLOORS), less what worn jewellery spares — the amethyst's
+    ease, which used to lighten only tool work, though the codex promised it
+    in a fight too. Never less than 1."""
     from . import jewelry
-    cost = C.ATTACK_COST[0] + state.world.depth // 3
+    cost = C.ATTACK_COST[0] + min(FIGHT_FATIGUE_MOST, state.world.depth // FIGHT_FATIGUE_FLOORS)
     return max(1, cost - round(jewelry.cozy_bonus(state, "energy")))
 
 

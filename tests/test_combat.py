@@ -247,7 +247,7 @@ class TestABlastedGemVeinKnowsItsDepth(unittest.TestCase):
 class TestJewellerySparesYourStrengthInAFight(unittest.TestCase):
     """The codex tells you to wear jewellery that spares your strength for the
     deep's fatigue — but an amethyst's ease only lightened tool work; every
-    blow and shot cost the full 3 + depth/3."""
+    blow and shot cost the full depth-tired price."""
 
     def _stamina_spent(self, ring, shoot=False):
         from unittest import mock
@@ -256,7 +256,7 @@ class TestJewellerySparesYourStrengthInAFight(unittest.TestCase):
         from hearthdelve.entities.monster import Mob
         from hearthdelve.game import combat
         st = fresh_state(1)
-        st.world.depth = 12                       # deep: the blow costs 3 + 4
+        st.world.depth = 12                       # deep: the blow costs 3 + 2
         if ring:
             st.player.equipment["ring1"] = content.make_jewel("Ring", "gold", "amethyst")
             st.player.equip_quality["ring1"] = 5
@@ -274,8 +274,8 @@ class TestJewellerySparesYourStrengthInAFight(unittest.TestCase):
         return before - st.player.energy
 
     def test_a_worn_amethyst_lightens_a_blow(self):
-        self.assertEqual(self._stamina_spent(ring=False), 7)
-        self.assertLess(self._stamina_spent(ring=True), 7)
+        self.assertEqual(self._stamina_spent(ring=False), 5)
+        self.assertLess(self._stamina_spent(ring=True), 5)
 
     def test_and_a_shot(self):
         self.assertLess(self._stamina_spent(ring=True, shoot=True),
@@ -287,6 +287,31 @@ class TestJewellerySparesYourStrengthInAFight(unittest.TestCase):
         st = fresh_state(1)
         with mock.patch.object(jewelry, "cozy_bonus", return_value=50.0):
             self.assertEqual(combat.fight_stamina(st), 1)
+
+
+class TestTheDeepTiresGently(unittest.TestCase):
+    """A point of stamina a blow per three floors, without limit, made a kill
+    on floor 15 cost full mithril a sixth of the day and full steel a third."""
+
+    def _cost(self, depth):
+        from hearthdelve.game import combat
+        st = fresh_state(1)
+        st.world.depth = depth
+        return combat.fight_stamina(st)
+
+    def test_the_surface_and_the_first_floors_cost_the_base(self):
+        from hearthdelve.engine import constants as C
+        for depth in (0, 1, 5):
+            self.assertEqual(self._cost(depth), C.ATTACK_COST[0])
+
+    def test_it_climbs_a_point_every_six_floors(self):
+        self.assertEqual([self._cost(d) for d in (6, 12, 18)], [4, 5, 6])
+
+    def test_and_stops_climbing(self):
+        self.assertEqual(self._cost(18), self._cost(60))
+
+    def test_a_blow_on_floor_fifteen_costs_well_under_double_one_at_the_top(self):
+        self.assertLess(self._cost(15), 2 * self._cost(1))
 
 
 class TestTheDiceHaveTheLastWord(unittest.TestCase):
