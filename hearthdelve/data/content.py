@@ -1708,6 +1708,8 @@ RECIPES: list[Recipe] = [
            desc="Back a yew long bow with antler horn and sinew, laminated in slime-gel glue."),
     Recipe("Metal-tipped Arrows", "choose", ((items.WOOD, 1),), out_qty=5,
            desc="1 Wood + 1 metal ore -> 5 arrows tipped with that metal (pick the ore)."),
+    Recipe("Bait", "item", ((items.MINNOW, 1),), output=items.BAIT, out_qty=4,
+           desc="Chop a minnow into four baits. Carry them: each cast spends one for a likelier, rarer bite."),
     Recipe("Sling Stones", "item", ((items.STONE, 1),), output=items.SLING_STONE, out_qty=4,
            desc="Knap stones for a sling."),
     # --- Cooking: makes a carryable dish; eat it (x) for stamina -------------
@@ -1907,6 +1909,16 @@ FISH: list[Fish] = [
     Fish(items.STURGEON, 4, ("Winter",)),
 ]
 FISH_CATCH_CHANCE = 0.75
+# Bait on the hook: a likelier bite, and the scarce fish of a water (those at
+# or under BAIT_SHY_WEIGHT in its table) twice as apt to be the one that takes.
+BAIT_BITE = 0.12
+BAIT_SHY_WEIGHT = 12
+BAIT_SHY_MULT = 2
+
+
+def baited_table(table: list) -> list:
+    """A water's fish table as a baited hook finds it."""
+    return [(f, w * BAIT_SHY_MULT if w <= BAIT_SHY_WEIGHT else w) for f, w in table]
 
 # What the dwarves' Underriver carries down — panned with a rod (no minigame).
 # Common ore dominates; precious metal and gems are the rare glint in the gravel.

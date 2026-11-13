@@ -146,6 +146,12 @@ def begin(state: GameState, tx: int, ty: int):
     from . import skills
     kind = water_kind(state, tx, ty)
     chance, table = bite_odds(state, kind)
+    from ..entities import items
+    if table and p.inventory.count(items.BAIT) > 0:   # a baited hook, one bait a cast
+        p.inventory.remove(items.BAIT, 1)
+        chance += content.BAIT_BITE
+        table = content.baited_table(table)
+        state.log.add("You bait the hook.", C.DIM)
     if not table or random.random() > chance:
         wait = random.uniform(1.2, 2.2)              # the float sits, and nothing comes
         state.happen("float", tx, ty, life=wait)

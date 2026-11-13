@@ -512,6 +512,7 @@ VENOM_ARROW = Item("Venom Arrow", "/", "ammo",   "A gland-smeared arrow whose wo
 # --- Consumables -------------------------------------------------------------
 BOMB        = Item("Bomb",        "*", "bomb",     "Aim & throw (t): harms monsters and shatters rock/ore.", value=0)
 BLAST_CHARGE= Item("Blast Charge","*", "bomb",     "A gunpowder charge: a wide, vein-cracking blast. Ready it in the ammo slot to throw it first.", value=0)
+BAIT        = Item("Bait",        ",", "material", "Chopped minnow for the hook: carried, one is spent on each cast. More bites, and the shy fish come to it.", value=5)
 SLIME_TRAP  = Item("Slime Trap",  "≈", "material", "A skin of slime gel to spread on a dungeon floor (craft menu: Set Slime Trap). The first monster to step in it is mired.", value=22)
 STICKY_BOMB = Item("Sticky Bomb", "*", "bomb",     "A bomb smeared thick with slime gel: a lighter blast, but what it doesn't kill it mires — they move at half pace a while.", value=0)
 FIRECRACKER = Item("Firecracker", "*", "bomb",     "A harmless CRACK-BANG: scares crop-raiding wildlife off your land for days. The festivals love them.", value=40)
