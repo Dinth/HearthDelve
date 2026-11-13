@@ -100,9 +100,10 @@ def _spooked(state: GameState) -> bool:
 def _eat_crops(state: GameState, m) -> bool:
     if _spooked(state):
         return False
+    from .crafting import scarecrow_guards
     for cx, cy in [(m.x, m.y)] + _neighbours(m):
         plot = state.world.crops.get((cx, cy))
-        if plot is not None and not plot.dead:
+        if plot is not None and not plot.dead and not scarecrow_guards(state.world, cx, cy):
             del state.world.crops[(cx, cy)]
             _notice(state, m, f"A {m.name.lower()} nibbles your {plot.crop.name.lower()} to the ground!",
                     (224, 170, 110))
@@ -128,9 +129,10 @@ def _nearest_food(state: GameState, m):
     """Closest reachable morsel of this critter's diet within FORAGE_RADIUS."""
     best, best_d = None, FORAGE_RADIUS + 1
     if m.diet == "crops":
+        from .crafting import scarecrow_guards
         for (cx, cy), plot in state.world.crops.items():
-            if plot.dead:
-                continue
+            if plot.dead or scarecrow_guards(state.world, cx, cy):
+                continue                          # a straw man stands over that one
             d = max(abs(cx - m.x), abs(cy - m.y))
             if d < best_d:
                 best, best_d = (cx, cy), d

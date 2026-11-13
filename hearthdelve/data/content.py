@@ -1329,6 +1329,12 @@ MACHINES: dict[str, MachineDef] = {
     "well":       MachineDef("well", "Well", "o", (180, 190, 205), 0, "water",
                              None, "Cold, clear water at home — fill a waterskin here (g).",
                              footprint=(1, 1)),
+    # Farmyard fixtures that work by standing where they are (no loading).
+    "bellows":    MachineDef("bellows", "Forge Bellows", "≋", (176, 140, 110), 0, "",
+                             None, "Bat-wing bellows: a furnace or kiln beside them burns a "
+                                   "third faster."),
+    "scarecrow":  MachineDef("scarecrow", "Scarecrow", "☨", (214, 186, 110), 0, "",
+                             None, "Keeps crop-raiding wildlife off the plots around it."),
     "spinner":    MachineDef("spinner", "Spinning Wheel", "Ø", (196, 176, 140), 120, "fiber",
                              None, "Spins wool, cotton, flax or spider silk into yarn & thread."),
     "loom":       MachineDef("loom", "Loom", "π", (176, 150, 110), 180, "weave",
@@ -1534,6 +1540,13 @@ class Recipe:
     desc: str = ""
 
 
+# A bellows standing beside a furnace or kiln (any of the 8 tiles round it)
+# feeds the fire: the burn takes this share of its usual time.
+BELLOWS_TIME = 0.67
+BELLOWS_FIRES = ("furnace", "kiln")
+# How far a scarecrow's watch reaches (a square around it, in tiles).
+SCARECROW_REACH = 5
+
 # Leather a tanned skin yields, where it's more than one.
 HIDE_LEATHER = {items.WOLF_PELT: 2}
 
@@ -1574,6 +1587,12 @@ RECIPES: list[Recipe] = [
            desc="Add a bee queen; honey & wax, boosted by nearby flowers."),
     Recipe("Oil Press", "build", ((items.TIMBER_PLANK, 6), (items.STONE, 4), (items.COPPER_BAR, 1)),
            machine="press", desc="Presses sunflowers into oil."),
+    Recipe("Forge Bellows", "build", ((items.BAT_WING, 4), (items.TIMBER_PLANK, 3)),
+           machine="bellows",
+           desc="Bat-wing membrane on a plank frame. Set beside a furnace or kiln: it burns a third faster."),
+    Recipe("Scarecrow", "build", ((items.WOOD, 3), (items.STRAW, 4), (items.FIBER, 2)),
+           machine="scarecrow",
+           desc="A straw man on a pole. Deer and rabbits leave the crops around it alone."),
     Recipe("Sprinkler", "build", ((items.COPPER_BAR, 1),), machine="sprinkler",
            desc="Auto-waters nearby soil."),
     Recipe("Little Coop", "build", ((items.TIMBER_PLANK, 6), (items.FIBER, 4)), machine="coop_small",

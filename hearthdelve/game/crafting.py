@@ -464,6 +464,14 @@ def interact_machine(state: GameState, x: int, y: int) -> bool:
     if m.kind == "sprinkler":
         state.log.add("The sprinkler waters the soil around it each morning.", C.DIM)
         return True
+    if m.kind == "bellows":
+        state.log.add("The bellows feed any furnace or kiln beside them: it burns a third "
+                      "faster.", C.DIM)
+        return True
+    if m.kind == "scarecrow":
+        state.log.add(f"The scarecrow keeps deer and rabbits off the crops within "
+                      f"{content.SCARECROW_REACH} tiles of it.", C.DIM)
+        return True
 
     if m.kind == "chest":
         return {"storage": True}          # a home store — the player opens the chest UI
@@ -817,6 +825,25 @@ def machine_load_options(state: GameState, mdef) -> list:
     return opts
 
 
+def bellows_beside(state: GameState, m: Machine) -> bool:
+    """Whether a bellows stands on one of the eight tiles round machine ``m``."""
+    surf = state.surface
+    if surf is None:
+        return False
+    pos = next((p for p, mm in surf.machines.items() if mm is m), None)
+    if pos is None:
+        return False
+    return any(getattr(surf.machines.get((pos[0] + dx, pos[1] + dy)), "kind", "") == "bellows"
+               for dx in (-1, 0, 1) for dy in (-1, 0, 1) if dx or dy)
+
+
+def scarecrow_guards(world, x: int, y: int) -> bool:
+    """Whether a scarecrow watches over (x, y)."""
+    r = content.SCARECROW_REACH
+    return any(mm.kind == "scarecrow" and abs(sx - x) <= r and abs(sy - y) <= r
+               for (sx, sy), mm in world.machines.items())
+
+
 def load_machine_choice(state: GameState, m: Machine, mdef, opt) -> None:
     """Load a machine with the option the player picked (see the load menu)."""
     import random
@@ -851,6 +878,8 @@ def load_machine_choice(state: GameState, m: Machine, mdef, opt) -> None:
     out_qty = opt.get("out_qty", 1)
     minutes = round(opt.get("minutes", mdef.minutes) * (skills.smith_speed_mult(state)
                     if mdef.kind in ("furnace", "anvil", "kiln") else 1.0))
+    if mdef.kind in content.BELLOWS_FIRES and bellows_beside(state, m):
+        minutes = round(minutes * content.BELLOWS_TIME)
     minutes = max(1, minutes)
     # Cut gems take their quality from the cutter's Gemcutting; other processed
     # goods inherit the input's quality nudged by the cook's skill.
