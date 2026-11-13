@@ -544,8 +544,26 @@ def _move_toward(state: GameState, m, away: bool = False) -> bool:
         if (ax or ay) and _can_move(state, m, ax, ay):
             m.x += ax
             m.y += ay
+            _stepped_in_goo(state, m)
             return True
     return False
+
+
+GOO_TRAP_TURNS = 12         # a laid trap holds longer than a bomb's spatter
+
+
+def _stepped_in_goo(state: GameState, m) -> None:
+    """A monster that walks into a laid slime trap is mired, and the goo is
+    spent: the floor is bare again."""
+    w = state.world
+    if w.tile_at(m.x, m.y).kind != "goo":
+        return
+    from . import commands
+    w.tiles[m.x, m.y] = commands._floor_of(w)
+    apply_status(state, "mired", GOO_TRAP_TURNS, target=m)
+    if w.visible is None or w.visible[m.x, m.y]:
+        state.log.add(f"The {m.name.lower()} blunders into your slime trap — mired!",
+                      STATUS["mired"]["color"])
 
 
 def _sidesteps(sx: int, sy: int) -> tuple:
@@ -586,6 +604,7 @@ def _step(state: GameState, m) -> None:
             if _can_move(state, m, dx, dy):
                 m.x += dx
                 m.y += dy
+                _stepped_in_goo(state, m)
                 return
         return
     fleeing = m.behavior == "erratic" and m.hp <= m.max_hp * 0.35

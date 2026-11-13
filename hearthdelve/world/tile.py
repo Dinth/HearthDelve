@@ -229,5 +229,8 @@ STALAGMITE    = _add(TileType("stalagmite",  "▲", (150, 152, 158),(20, 24, 26)
 PILLAR        = _add(TileType("pillar",      "║", (176, 170, 158),(28, 27, 24), walkable=False, kind="wall"))
 BRAZIER       = _add(TileType("brazier",     "Ω", (244, 180, 90), (36, 26, 16), walkable=False, kind="brazier"))
 MINE_TIMBER   = _add(TileType("mine_timber", "Π", (156, 122, 84), (32, 26, 19), walkable=False, kind="wall"))
+# A slime trap set by the delver: a patch of goo on a dungeon floor that mires
+# the first monster to step in it (see combat._stepped_in_goo).
+GOO           = _add(TileType("goo",         "≈", (150, 210, 120),(26, 38, 24), kind="goo"))
 
 TILE_COUNT = len(TILES)

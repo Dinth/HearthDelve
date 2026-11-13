@@ -287,10 +287,33 @@ def _place_fence(state: GameState) -> bool:
     return True
 
 
+def _set_goo(state: GameState) -> bool:
+    """Spread a slime trap on the faced dungeon floor. It is ground, like a
+    fence panel: it stays until something steps in it."""
+    from ..world import tile
+    from . import combat, commands
+    p, w = state.player, state.world
+    if not w.is_dungeon:
+        state.log.add("The goo would dry to a crust in the open air — it wants the damp below.",
+                      C.DIM)
+        return False
+    tx, ty = p.x + p.facing[0], p.y + p.facing[1]
+    if (not w.in_bounds(tx, ty) or int(w.tiles[tx, ty]) != commands._floor_of(w)
+            or combat.mob_at(state, tx, ty) is not None):
+        state.log.add("The goo needs a clear patch of bare floor.", C.DIM)
+        return False
+    w.tiles[tx, ty] = tile.GOO
+    state.log.add("You spread the goo across the floor. Whatever steps there first will "
+                  "wish it hadn't.", (150, 210, 120))
+    return True
+
+
 def _place_machine(state: GameState, kind: str) -> bool:
     p = state.player
     if kind == "fence":
         return _place_fence(state)
+    if kind == "goo":
+        return _set_goo(state)
     if state.world.is_dungeon:
         # Machines (and the animals a coop would house) live only on the farm;
         # placed underground they'd be lost when the floor re-rolls.

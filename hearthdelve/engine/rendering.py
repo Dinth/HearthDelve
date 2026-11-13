@@ -768,6 +768,7 @@ _TILE_DESC = {
     "rock": "solid rock. A pickaxe could break it.",
     "ore_vein": "an ore vein glinting with metal.",
     "house_wall": "the wall of your farmhouse.",
+    "goo": "a slime trap you laid — the first monster to step in it is mired.",
     "house_floor": "the floorboards of your home.",
     "door": "your front door.",
     "bed": "your bed. Sleep here (s) to end the day.",
