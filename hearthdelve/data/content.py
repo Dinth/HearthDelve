@@ -98,12 +98,15 @@ class Material:
 
 # The metal ladder — deeper & rarer is stronger and pricier. Leather is the base
 # soft armour; the woods (birch/willow/yew/composite) are bow materials.
+# As weapons each metal is one clear step over the last, and copper a step
+# over the rusty iron you start with: a sword runs rusty 2-6 at +1, copper 2-6
+# at +2, bronze 3-7, iron 4-8, steel 5-9 at +3.
 MATERIALS: dict[str, Material] = {
     "hide":       Material("hide",       0, a_pv=1.5, density=2.0, value_mult=0.4),
     "leather":    Material("leather",    1, a_pv=2.0, density=2.5, value_mult=0.6),
-    "copper":     Material("copper",     2, w_to_hit=-1, w_dmg=-2, a_pv=3.0, density=7.0, value_mult=0.6, bar=items.COPPER_BAR),
-    "bronze":     Material("bronze",     3, w_to_hit=-1, w_dmg=-1, a_pv=4.0, density=7.5, value_mult=0.9, bar=items.BRONZE_BAR),
-    "iron":       Material("iron",       4,                        a_pv=5.0, density=8.0, value_mult=1.0, bar=items.IRON_BAR),
+    "copper":     Material("copper",     2, w_to_hit=0,  w_dmg=-1, a_pv=3.0, density=7.0, value_mult=0.6, bar=items.COPPER_BAR),
+    "bronze":     Material("bronze",     3, w_to_hit=0,  w_dmg=0,  a_pv=4.0, density=7.5, value_mult=0.9, bar=items.BRONZE_BAR),
+    "iron":       Material("iron",       4, w_to_hit=0,  w_dmg=1,  a_pv=5.0, density=8.0, value_mult=1.0, bar=items.IRON_BAR),
     "steel":      Material("steel",      5, w_to_hit=1,  w_dmg=2,  a_dv=-1, a_pv=6.0, density=7.5, value_mult=1.9, bar=items.STEEL_BAR),
     "silver":     Material("silver",     6, w_to_hit=1,  w_dmg=2,  a_pv=6.0, density=7.0, value_mult=2.6, bar=items.SILVER_BAR),
     "mithril":    Material("mithril",    7, w_to_hit=2,  w_dmg=3,  w_dv=1,  a_pv=7.0, density=3.5, value_mult=4.5, bar=items.MITHRIL_BAR),
@@ -173,7 +176,10 @@ class Affix:
 # "ranged", else they'd charge for a stat the bow can't use (or hand it a free
 # upside). Only to-hit/damage affixes carry the "ranged" tag.
 PREFIXES: dict[str, Affix] = {
-    "rusty":      Affix("Rusty",      to_hit=-1, pv=-1, value_mult=0.5),
+    # Rust bites: it dulls the edge as well as the aim. (At to-hit alone, the
+    # rusty iron sword every farmer starts with out-cut a new copper or bronze
+    # one, so the first two rungs of the ladder were steps down.)
+    "rusty":      Affix("Rusty",      to_hit=-1, dmg=-2, pv=-1, value_mult=0.5),
     "cracked":    Affix("Cracked",    dmg=-1, pv=-1, value_mult=0.5),
     "fine":       Affix("Fine",       to_hit=1, value_mult=1.6, kinds=("weapon", "armor", "ranged")),
     "keen":       Affix("Keen",       to_hit=2, value_mult=1.8, kinds=("weapon", "ranged")),
